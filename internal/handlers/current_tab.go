@@ -69,18 +69,6 @@ func NewCurrentTabStore() *CurrentTabStore {
 	}
 }
 
-// SetCap overrides the eviction cap (mainly for tests). A cap of 0 or
-// less leaves the existing cap unchanged.
-func (s *CurrentTabStore) SetCap(n int) {
-	if s == nil || n <= 0 {
-		return
-	}
-	s.mu.Lock()
-	s.cap = n
-	s.evictExcessLocked()
-	s.mu.Unlock()
-}
-
 func (s *CurrentTabStore) Get(scope currentTabScope) (string, bool) {
 	if s == nil || scope.IsGlobal() || scope.key == "" {
 		return "", false

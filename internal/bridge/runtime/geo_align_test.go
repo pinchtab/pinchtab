@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/config/geo"
-	"github.com/pinchtab/pinchtab/internal/stealth"
 )
 
 func TestApplyGeoAlignment_ZeroInfo(t *testing.T) {
@@ -86,7 +86,7 @@ func TestBuildChromeArgsWithBundleUsesProvidedGeoAlignment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildBrowserArgsWithBundle() error = %v", err)
 	}
-	if !stealth.HasLaunchArg(args, "--fingerprint-locale=en-GB") {
+	if !slices.Contains(args, "--fingerprint-locale=en-GB") {
 		t.Fatalf("cached geo flag missing from args: %v", args)
 	}
 }
@@ -191,10 +191,10 @@ func TestApplyGeoAlignment_CloakExplicitWinsOverDerivedGeo(t *testing.T) {
 		}
 	}
 	// Other derived fields still emitted (no explicit override).
-	if !stealth.HasLaunchArg(flags, "--fingerprint-locale=en-GB") {
+	if !slices.Contains(flags, "--fingerprint-locale=en-GB") {
 		t.Errorf("expected derived locale, got %v", flags)
 	}
-	if !stealth.HasLaunchArg(flags, "--fingerprint-webrtc-ip=203.0.113.7") {
+	if !slices.Contains(flags, "--fingerprint-webrtc-ip=203.0.113.7") {
 		t.Errorf("expected derived webrtc-ip, got %v", flags)
 	}
 }
@@ -231,7 +231,7 @@ func TestBuildBrowserArgs_ChromeDoesNotApplyProxyGeoFlagsByDefault(t *testing.T)
 		"--lang=en-GB",
 		"--webrtc-ip-handling-policy=disable_non_proxied_udp",
 	} {
-		if stealth.HasLaunchArg(args, blocked) {
+		if slices.Contains(args, blocked) {
 			t.Errorf("BuildBrowserArgs() included proxy-derived geo flag %q in %v", blocked, args)
 		}
 	}
@@ -253,15 +253,15 @@ func TestBuildBrowserArgs_CloakAppliesGeoFlagsAndRespectsExplicit(t *testing.T) 
 	}
 	args := BuildBrowserArgs(cfg, 9222)
 	// Locale derived (no explicit cloak locale)
-	if !stealth.HasLaunchArg(args, "--fingerprint-locale=en-GB") {
+	if !slices.Contains(args, "--fingerprint-locale=en-GB") {
 		t.Errorf("expected --fingerprint-locale=en-GB in %v", args)
 	}
 	// Explicit cloak timezone preserved
-	if !stealth.HasLaunchArg(args, "--fingerprint-timezone=America/New_York") {
+	if !slices.Contains(args, "--fingerprint-timezone=America/New_York") {
 		t.Errorf("expected explicit cloak timezone in %v", args)
 	}
 	// Derived timezone NOT emitted
-	if stealth.HasLaunchArg(args, "--fingerprint-timezone=Europe/London") {
+	if slices.Contains(args, "--fingerprint-timezone=Europe/London") {
 		t.Errorf("derived timezone leaked despite explicit cloak override in %v", args)
 	}
 }

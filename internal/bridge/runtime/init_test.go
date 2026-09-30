@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -13,7 +14,6 @@ import (
 	_ "github.com/pinchtab/pinchtab/internal/browsers/chrome"
 	_ "github.com/pinchtab/pinchtab/internal/browsers/cloak"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/stealth"
 )
 
 func TestBrowserNeedsNoSandbox(t *testing.T) {
@@ -131,7 +131,7 @@ func TestBuildBrowserArgs_CloakProviderUsesNativeFingerprintFlags(t *testing.T) 
 		"--fingerprint-fonts-dir=/opt/fonts",
 		"--fingerprint-storage-quota=2048",
 	} {
-		if !stealth.HasLaunchArg(args, want) {
+		if !slices.Contains(args, want) {
 			t.Fatalf("BuildBrowserArgs() missing %q in %v", want, args)
 		}
 	}
@@ -141,11 +141,11 @@ func TestBuildBrowserArgs_CloakProviderUsesNativeFingerprintFlags(t *testing.T) 
 		"--disable-blink-features=AutomationControlled",
 		"--enable-network-information-downlink-max",
 	} {
-		if stealth.HasLaunchArg(args, blocked) {
+		if slices.Contains(args, blocked) {
 			t.Fatalf("BuildBrowserArgs() included PinchTab stealth arg %q in native Cloak mode: %v", blocked, args)
 		}
 	}
-	if stealth.HasLaunchArgPrefix(args, "--user-agent=") {
+	if slices.ContainsFunc(args, func(a string) bool { return strings.HasPrefix(a, "--user-agent=") }) {
 		t.Fatalf("BuildBrowserArgs() included PinchTab user-agent override in native Cloak mode: %v", args)
 	}
 }
@@ -174,11 +174,11 @@ func TestBuildBrowserArgs_DefaultChromeProviderKeepsChromeLaunchContract(t *test
 		"--lang=en-US",
 		"--disable-extensions",
 	} {
-		if !stealth.HasLaunchArg(args, want) {
+		if !slices.Contains(args, want) {
 			t.Fatalf("BuildBrowserArgs() missing Chrome provider arg %q in %v", want, args)
 		}
 	}
-	if !stealth.HasLaunchArgPrefix(args, "--user-agent=Mozilla/5.0") {
+	if !slices.ContainsFunc(args, func(a string) bool { return strings.HasPrefix(a, "--user-agent=Mozilla/5.0") }) {
 		t.Fatalf("BuildBrowserArgs() missing Chrome provider user-agent in %v", args)
 	}
 	for _, blockedPrefix := range []string{
@@ -190,7 +190,7 @@ func TestBuildBrowserArgs_DefaultChromeProviderKeepsChromeLaunchContract(t *test
 		"--fingerprint-fonts-dir=",
 		"--fingerprint-storage-quota=",
 	} {
-		if stealth.HasLaunchArgPrefix(args, blockedPrefix) {
+		if slices.ContainsFunc(args, func(a string) bool { return strings.HasPrefix(a, blockedPrefix) }) {
 			t.Fatalf("BuildBrowserArgs() included Cloak flag prefix %q in Chrome provider mode: %v", blockedPrefix, args)
 		}
 	}

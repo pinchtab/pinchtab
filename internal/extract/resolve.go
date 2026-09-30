@@ -100,10 +100,6 @@ func sharedMatcher() semantic.ElementMatcher {
 	return defaultMatcher
 }
 
-func Resolve(schema Schema, nodes []observe.A11yNode, opts Options) Result {
-	return ResolveContext(context.Background(), schema, nodes, opts)
-}
-
 func ResolveContext(ctx context.Context, schema Schema, nodes []observe.A11yNode, opts Options) Result {
 	opts.ctx = ctx
 	if opts.Threshold <= 0 {

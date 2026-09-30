@@ -47,20 +47,6 @@ func (r *Registry) MustRegister(s Solver) {
 	}
 }
 
-// Unregister removes a solver by name. No-op if not found.
-func (r *Registry) Unregister(name string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	delete(r.solvers, name)
-	for i, n := range r.order {
-		if n == name {
-			r.order = append(r.order[:i], r.order[i+1:]...)
-			break
-		}
-	}
-}
-
 // Get returns a solver by name.
 func (r *Registry) Get(name string) (Solver, bool) {
 	r.mu.RLock()

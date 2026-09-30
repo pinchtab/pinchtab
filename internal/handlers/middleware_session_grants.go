@@ -32,11 +32,6 @@ var (
 	noCoveringGrantMsg  = "; no grant covers it, so it is reachable only with the server token"
 )
 
-func sessionRequestAllowed(r *http.Request, sess *session.Session) bool {
-	_, refused := sessionRequestRefusal(r, sess)
-	return !refused
-}
-
 // sessionRequestRefusal is the one decision and its reason. Returning the reason
 // beside the verdict is what stops the two from drifting: a refusal that has to be
 // re-derived by the caller describes the rule as the caller remembers it.

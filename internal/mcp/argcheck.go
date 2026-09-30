@@ -28,14 +28,6 @@ var schemaArgTypesOnce = sync.OnceValue(func() map[string]map[string]string {
 	return types
 })
 
-// typedArgsOf reads the argument types out of the tool's own schema, so the
-// declaration that documents an argument is the one that validates it. A second
-// hand-written list of numeric arguments would drift the first time a tool gains
-// one.
-func typedArgsOf(tool mcp.Tool) map[string]string {
-	return typedOnly(propertiesOf(tool))
-}
-
 func propertiesOf(tool mcp.Tool) map[string]string {
 	raw, err := json.Marshal(tool.InputSchema)
 	if err != nil {

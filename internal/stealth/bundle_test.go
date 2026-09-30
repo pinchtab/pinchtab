@@ -3,6 +3,7 @@ package stealth
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -227,7 +228,7 @@ func TestBuildLaunchContractOwnsStealthLaunchFlags(t *testing.T) {
 		"--enable-network-information-downlink-max",
 		"--lang=en-US",
 	} {
-		if !HasLaunchArg(launch.Args, want) {
+		if !slices.Contains(launch.Args, want) {
 			t.Fatalf("expected stealth launch arg %q in %v", want, launch.Args)
 		}
 	}

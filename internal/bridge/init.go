@@ -19,11 +19,3 @@ func InitBrowser(cfg *config.RuntimeConfig, bundle *stealth.Bundle) (context.Con
 		QuarantineCorruptedProfile: quarantineCorruptedProfile,
 	})
 }
-
-func baseBrowserFlagArgs() []string {
-	return bridgeruntime.BaseBrowserFlagArgs()
-}
-
-func buildBrowserArgs(cfg *config.RuntimeConfig, port int) []string {
-	return bridgeruntime.BuildBrowserArgs(cfg, port)
-}

@@ -58,20 +58,6 @@ func ValidateCurrentFile() (string, []error, []string, error) {
 	return configPath, config.ValidateFileConfig(fc), config.FileConfigAdvisories(fc), nil
 }
 
-func UpdateValue(path, value string) (*config.RuntimeConfig, bool, error) {
-	change, err := PrepareSetValue(path, value)
-	if err != nil {
-		return nil, false, fmt.Errorf("set %s: %w", path, err)
-	}
-	if len(change.ValidationErrors) > 0 {
-		return nil, false, change.ValidationErrors[0]
-	}
-	if err := SavePreparedChange(change); err != nil {
-		return nil, false, err
-	}
-	return config.Load(), true, nil
-}
-
 func InitDefaultConfig(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create config directory: %w", err)

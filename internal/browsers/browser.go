@@ -157,9 +157,3 @@ func sortedKeysLocked() []string {
 	sort.Strings(out)
 	return out
 }
-
-func resetForTesting() {
-	mu.Lock()
-	defer mu.Unlock()
-	registry = map[string]Browser{}
-}

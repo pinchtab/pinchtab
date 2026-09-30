@@ -438,10 +438,6 @@ func IdleTabLifecycle(policy string) bool {
 	return policy == "close_idle" || policy == "freeze_idle"
 }
 
-func ValidLifecyclePolicies() []string {
-	return slices.Clone(lifecyclePolicies)
-}
-
 func isValidStrategy(strategy string) bool {
 	return slices.Contains(strategies, strategy)
 }
@@ -452,18 +448,6 @@ func isValidAllocationPolicy(policy string) bool {
 
 func isValidAttachScheme(scheme string) bool {
 	return slices.Contains(attachSchemes, scheme)
-}
-
-func ValidStealthLevels() []string {
-	return slices.Clone(stealthLevels)
-}
-
-func ValidEvictionPolicies() []string {
-	return slices.Clone(evictionPolicies)
-}
-
-func ValidStrategies() []string {
-	return slices.Clone(strategies)
 }
 
 // validateIDPIConfig validates the security.idpi sub-section.
@@ -549,14 +533,6 @@ func validateTrustedCIDRList(field string, items []string) []error {
 		}
 	}
 	return errs
-}
-
-func ValidAllocationPolicies() []string {
-	return slices.Clone(allocationPolicies)
-}
-
-func ValidAttachSchemes() []string {
-	return slices.Clone(attachSchemes)
 }
 
 func validateBrowsersBlock(fc FileConfig) []error {

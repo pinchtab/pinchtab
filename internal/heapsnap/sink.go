@@ -36,5 +36,3 @@ func (s *Sink) WriteChunk(chunk string) error {
 }
 
 func (s *Sink) Bytes() int64 { return s.bytes }
-
-func (s *Sink) Err() error { return s.err }

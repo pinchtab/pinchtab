@@ -188,8 +188,7 @@ func TestHandleBatchPartialFailure(t *testing.T) {
 	s, mux, executor := setupHandlerTest(t)
 	defer executor.Close()
 
-	// Reduce per-agent limit to force rejection on second task.
-	s.queue.SetLimits(s.cfg.MaxQueueSize, 1)
+	s.queue.maxPerAgent = 1
 
 	body := `{
 		"agentId": "a1",

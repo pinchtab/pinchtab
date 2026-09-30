@@ -205,14 +205,14 @@ func TestEveryGatedSolverKeyReachesTheNormalisedConfig(t *testing.T) {
 		if cfg.APIKey(solver.Name) == "" {
 			t.Errorf("%s is key-gated but its key never reaches the config the catalog reads; add it to autoSolverAPIKeys beside %s", solver.Name, solver.ConfigKey)
 		}
-		if catalog.IsAvailable(solver.Name, cfg) == solver.Planned {
+		if slices.Contains(catalog.Available(cfg), solver.Name) == solver.Planned {
 			t.Errorf("%s available = %v with its key configured, want %v (planned = %v)", solver.Name, solver.Planned, !solver.Planned, solver.Planned)
 		}
 	}
 
 	keyless := (&Handlers{Config: &config.RuntimeConfig{}}).normalizedAutoSolverConfig()
 	for _, solver := range gated {
-		if catalog.IsAvailable(solver.Name, keyless) {
+		if slices.Contains(catalog.Available(keyless), solver.Name) {
 			t.Errorf("%s is available with no key configured", solver.Name)
 		}
 	}

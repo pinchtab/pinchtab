@@ -41,18 +41,6 @@ func (q *TaskQueue) signal() {
 	}
 }
 
-// SetLimits updates queue capacity at runtime.
-func (q *TaskQueue) SetLimits(maxTotal, maxPerAgent int) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	if maxTotal > 0 {
-		q.maxTotal = maxTotal
-	}
-	if maxPerAgent > 0 {
-		q.maxPerAgent = maxPerAgent
-	}
-}
-
 // Enqueue adds a task. Returns the queue position or an error if limits are hit.
 func (q *TaskQueue) Enqueue(t *Task) (int, error) {
 	q.mu.Lock()

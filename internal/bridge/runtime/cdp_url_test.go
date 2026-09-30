@@ -17,7 +17,7 @@ import (
 
 func TestNormalizeCDPURL_BrowserWebSocket(t *testing.T) {
 	in := "ws://127.0.0.1:9222/devtools/browser/abc123"
-	got, err := NormalizeCDPURL(in)
+	got, err := NormalizeCDPURLWithAllowlist(in, defaultCDPAllowHosts, defaultCDPAllowSchemes)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -28,7 +28,7 @@ func TestNormalizeCDPURL_BrowserWebSocket(t *testing.T) {
 
 func TestNormalizeCDPURL_RejectsPageLevel(t *testing.T) {
 	in := "ws://127.0.0.1:9222/devtools/page/xyz"
-	_, err := NormalizeCDPURL(in)
+	_, err := NormalizeCDPURLWithAllowlist(in, defaultCDPAllowHosts, defaultCDPAllowSchemes)
 	if err == nil {
 		t.Fatalf("expected error for page-level URL")
 	}
@@ -38,22 +38,22 @@ func TestNormalizeCDPURL_RejectsPageLevel(t *testing.T) {
 }
 
 func TestNormalizeCDPURL_RejectsEmpty(t *testing.T) {
-	if _, err := NormalizeCDPURL(""); err == nil {
+	if _, err := NormalizeCDPURLWithAllowlist("", defaultCDPAllowHosts, defaultCDPAllowSchemes); err == nil {
 		t.Fatalf("expected error for empty cdpUrl")
 	}
-	if _, err := NormalizeCDPURL("   "); err == nil {
+	if _, err := NormalizeCDPURLWithAllowlist("   ", defaultCDPAllowHosts, defaultCDPAllowSchemes); err == nil {
 		t.Fatalf("expected error for whitespace cdpUrl")
 	}
 }
 
 func TestNormalizeCDPURL_RejectsUnsupportedScheme(t *testing.T) {
-	if _, err := NormalizeCDPURL("ftp://x/devtools/browser/y"); err == nil {
+	if _, err := NormalizeCDPURLWithAllowlist("ftp://x/devtools/browser/y", defaultCDPAllowHosts, defaultCDPAllowSchemes); err == nil {
 		t.Fatalf("expected error for ftp scheme")
 	}
 }
 
 func TestNormalizeCDPURL_RejectsNonLoopbackByDefault(t *testing.T) {
-	_, err := NormalizeCDPURL("ws://169.254.169.254:9222/devtools/browser/abc")
+	_, err := NormalizeCDPURLWithAllowlist("ws://169.254.169.254:9222/devtools/browser/abc", defaultCDPAllowHosts, defaultCDPAllowSchemes)
 	if err == nil {
 		t.Fatalf("expected non-loopback remote CDP host to be rejected")
 	}
@@ -83,7 +83,7 @@ func TestNormalizeCDPURL_RejectsDisallowedAttachScheme(t *testing.T) {
 }
 
 func TestNormalizeCDPURL_RejectsWsWithoutBrowserPath(t *testing.T) {
-	if _, err := NormalizeCDPURL("ws://127.0.0.1:9222/something/else"); err == nil {
+	if _, err := NormalizeCDPURLWithAllowlist("ws://127.0.0.1:9222/something/else", defaultCDPAllowHosts, defaultCDPAllowSchemes); err == nil {
 		t.Fatalf("expected error for missing /devtools/browser/")
 	}
 }
@@ -98,7 +98,7 @@ func TestNormalizeCDPURL_HTTPOriginResolves(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	got, err := NormalizeCDPURL(srv.URL)
+	got, err := NormalizeCDPURLWithAllowlist(srv.URL, defaultCDPAllowHosts, defaultCDPAllowSchemes)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestNormalizeCDPURL_HTTPOriginRewritesLoopbackDebuggerHost(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	got, err := NormalizeCDPURL(srv.URL)
+	got, err := NormalizeCDPURLWithAllowlist(srv.URL, defaultCDPAllowHosts, defaultCDPAllowSchemes)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestNormalizeCDPURL_HTTPJSONVersionResolves(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	got, err := NormalizeCDPURL(srv.URL + "/json/version")
+	got, err := NormalizeCDPURLWithAllowlist(srv.URL+"/json/version", defaultCDPAllowHosts, defaultCDPAllowSchemes)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestProbeCDPVersionBrowserWebSocket(t *testing.T) {
 }
 
 func TestNormalizeCDPURL_HTTPRejectsArbitraryPath(t *testing.T) {
-	if _, err := NormalizeCDPURL("http://127.0.0.1:9222/some/other/path"); err == nil {
+	if _, err := NormalizeCDPURLWithAllowlist("http://127.0.0.1:9222/some/other/path", defaultCDPAllowHosts, defaultCDPAllowSchemes); err == nil {
 		t.Fatalf("expected error for arbitrary HTTP path")
 	}
 }
@@ -203,7 +203,7 @@ func TestNormalizeCDPURL_HTTPDoesNotFollowRedirects(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := NormalizeCDPURL(srv.URL)
+	_, err := NormalizeCDPURLWithAllowlist(srv.URL, defaultCDPAllowHosts, defaultCDPAllowSchemes)
 	if err == nil {
 		t.Fatalf("expected redirect response to fail")
 	}
@@ -218,7 +218,7 @@ func TestNormalizeCDPURL_HTTPVersionBodyIsCapped(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := NormalizeCDPURL(srv.URL)
+	_, err := NormalizeCDPURLWithAllowlist(srv.URL, defaultCDPAllowHosts, defaultCDPAllowSchemes)
 	if err == nil {
 		t.Fatalf("expected oversized response to fail")
 	}

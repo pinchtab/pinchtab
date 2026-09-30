@@ -93,10 +93,6 @@ func AssessSecurityPosture(cfg *config.RuntimeConfig) SecurityPosture {
 	}
 }
 
-func assessSecurityPosture(cfg *config.RuntimeConfig) SecurityPosture {
-	return AssessSecurityPosture(cfg)
-}
-
 func AssessSecurityWarnings(cfg *config.RuntimeConfig) []SecurityWarning {
 	if cfg == nil {
 		return nil
@@ -193,10 +189,6 @@ func AssessSecurityWarnings(cfg *config.RuntimeConfig) []SecurityWarning {
 	}
 
 	return warnings
-}
-
-func assessSecurityWarnings(cfg *config.RuntimeConfig) []SecurityWarning {
-	return AssessSecurityWarnings(cfg)
 }
 
 func LogSecurityWarnings(cfg *config.RuntimeConfig) {

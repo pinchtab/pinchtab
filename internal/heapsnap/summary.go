@@ -1,7 +1,6 @@
 package heapsnap
 
 import (
-	"io"
 	"sort"
 )
 
@@ -70,20 +69,4 @@ func head[T any](items []T, n int) []T {
 		items = items[:n]
 	}
 	return append(make([]T, 0, len(items)), items...)
-}
-
-func Summarize(r io.Reader, top int) (Summary, error) {
-	agg, err := Parse(r)
-	if err != nil {
-		return Summary{}, err
-	}
-	return agg.Summary(top), nil
-}
-
-func SummarizeFile(path string, top int) (Summary, error) {
-	agg, err := ParseFile(path)
-	if err != nil {
-		return Summary{}, err
-	}
-	return agg.Summary(top), nil
 }

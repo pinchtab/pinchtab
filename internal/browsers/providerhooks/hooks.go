@@ -47,16 +47,6 @@ func CleanupProfile(browserID, profileDir string) {
 	hooks.CleanupProfile(profileDir)
 }
 
-func Shutdown(browserID string) {
-	mu.RLock()
-	hooks, ok := registry[browserID]
-	mu.RUnlock()
-	if !ok || hooks.Shutdown == nil {
-		return
-	}
-	hooks.Shutdown()
-}
-
 // ShutdownAll runs every registered provider's shutdown cleanup. Used at
 // signal time so no provider's browser processes can be orphaned regardless
 // of which browser is the configured default. Hooks are copied out under the

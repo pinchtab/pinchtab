@@ -171,18 +171,6 @@ func IsPrimaryChromeBinaryMacOS(binary string) bool {
 	return runtime.GOOS == "darwin" && strings.TrimSpace(binary) == primaryChromeAppMacOS
 }
 
-// ResolvesToPrimaryChromeMacOS reports whether, absent an explicit binary
-// override, Chrome discovery would launch the user's daily Google Chrome on
-// macOS — the configuration that triggers the issue #583 LaunchServices
-// collision (automation blocks the user's normal Chrome from opening).
-func ResolvesToPrimaryChromeMacOS(binaryOverride string) bool {
-	if runtime.GOOS != "darwin" || strings.TrimSpace(binaryOverride) != "" {
-		return false
-	}
-	d := browserprobe.DiscoverBinary(BinaryNames(), CommonPaths(runtime.GOOS))
-	return IsPrimaryChromeBinaryMacOS(d.Found)
-}
-
 func (Browser) DiscoverBinary() browsers.BinaryDiscovery {
 	d := browserprobe.DiscoverBinary(BinaryNames(), CommonPaths(runtime.GOOS))
 	return browsers.BinaryDiscovery{Found: d.Found, Probed: d.Probed}

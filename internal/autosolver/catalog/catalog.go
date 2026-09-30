@@ -65,16 +65,6 @@ func Available(cfg autosolver.Config) []string {
 	return names
 }
 
-// IsAvailable reports whether one name can run under this config.
-func IsAvailable(name string, cfg autosolver.Config) bool {
-	for _, available := range Available(cfg) {
-		if available == name {
-			return true
-		}
-	}
-	return false
-}
-
 // KeyGated reports the solvers that only register when their API key is set.
 // Naming one without its key is a missing-key mistake, not an unknown solver.
 // The set itself is owned by autosolver.KeyGatedSolvers, which also carries the

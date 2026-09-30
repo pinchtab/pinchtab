@@ -9,10 +9,6 @@ import (
 	"github.com/pinchtab/semantic"
 )
 
-func (h *Handlers) applySemanticActionSelector(ctx context.Context, tabID string, sel selector.Selector, req *bridge.ActionRequest) (bool, error) {
-	return h.applySemanticActionSelectorInScope(ctx, tabID, h.selectorFrameID(tabID), 0, sel, req)
-}
-
 func (h *Handlers) applySemanticActionSelectorInFrame(ctx context.Context, tabID, frameID string, sel selector.Selector, req *bridge.ActionRequest) (bool, error) {
 	return h.applySemanticActionSelectorInScope(ctx, tabID, frameID, 0, sel, req)
 }

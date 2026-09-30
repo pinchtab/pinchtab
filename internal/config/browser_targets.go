@@ -430,44 +430,6 @@ func applyTargetToRuntime(out *RuntimeConfig, t BrowserTargetConfig) {
 	}
 }
 
-// ResolveRequestedTarget validates a public target parameter. New call sites
-// should use ResolveDefaultBrowserTarget or ResolveExplicitBrowserTarget so the
-// empty-string semantics are explicit.
-func ResolveRequestedTarget(cfg *RuntimeConfig, requested string) (targetName, provider string, err error) {
-	var resolved *ResolvedBrowserTarget
-	if strings.TrimSpace(requested) == "" {
-		resolved, err = ResolveDefaultBrowserTarget(cfg)
-	} else {
-		resolved, err = ResolveExplicitBrowserTarget(cfg, requested)
-	}
-	if err != nil || resolved == nil {
-		return "", "", err
-	}
-	if resolved.Legacy {
-		return "", "", nil
-	}
-	return resolved.Name, resolved.Provider, nil
-}
-
-// ApplyTargetOverride is a legacy compatibility wrapper for older tests and
-// callers. New code should use ResolveDefaultBrowserTarget or
-// ResolveExplicitBrowserTarget and pass the returned effective Config through
-// the launch path.
-func ApplyTargetOverride(cfg *RuntimeConfig, targetName string) *RuntimeConfig {
-	if cfg == nil {
-		return cfg
-	}
-	targetName = strings.TrimSpace(targetName)
-	if targetName == "" {
-		return cfg
-	}
-	resolved, err := ResolveExplicitBrowserTarget(cfg, targetName)
-	if err != nil {
-		return cfg
-	}
-	return resolved.Config
-}
-
 // mergeCloakConfig deep-merges target over global: target wins on non-zero/non-nil fields.
 func mergeCloakConfig(global CloakBrowserRuntimeConfig, target CloakBrowserConfig) CloakBrowserRuntimeConfig {
 	out := global

@@ -96,13 +96,3 @@ func (m *LockManager) Get(tabID string) *LockInfo {
 		ExpiresAt: l.expires,
 	}
 }
-
-// trackedForTest reports how many leases the manager is holding, including any
-// that have expired but not yet been dropped. Tests assert on retention, which
-// is not observable through Get: Get reports an expired lease as absent while
-// its entry is still in the map.
-func (m *LockManager) trackedForTest() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return len(m.locks)
-}

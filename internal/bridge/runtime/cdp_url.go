@@ -30,26 +30,6 @@ type CDPVersionProbe struct {
 	WebSocketDebuggerURL string
 }
 
-// NormalizeCDPURL accepts any of:
-//   - browser-level WebSocket URL: ws://host:port/devtools/browser/<id>
-//   - HTTP DevTools origin:        http://host:port (or http://host:port/)
-//   - HTTP /json/version URL:      http://host:port/json/version
-//
-// It returns the browser-level WebSocket URL suitable for chromedp.NewRemoteAllocator.
-//
-// Page-level URLs (containing /devtools/page/) are rejected in this slice.
-func NormalizeCDPURL(raw string) (string, error) {
-	return NormalizeCDPURLWithAllowedHosts(raw, defaultCDPAllowHosts)
-}
-
-// NormalizeCDPURLWithAllowedHosts resolves and pins the endpoint host. Loopback
-// CDP endpoints are always accepted; non-loopback endpoints must match
-// allowedHosts (or "*"). HTTP probes never follow redirects and response bodies
-// are capped.
-func NormalizeCDPURLWithAllowedHosts(raw string, allowedHosts []string) (string, error) {
-	return NormalizeCDPURLWithAllowlist(raw, allowedHosts, defaultCDPAllowSchemes)
-}
-
 // NormalizeCDPURLWithAllowlist resolves and pins the endpoint host while
 // enforcing the caller's attach host and input-scheme allowlists.
 func NormalizeCDPURLWithAllowlist(raw string, allowedHosts, allowedSchemes []string) (string, error) {

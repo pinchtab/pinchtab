@@ -44,35 +44,6 @@ func RestoreSecurityDefaults() (string, bool, error) {
 	return configPath, true, nil
 }
 
-func UpdateContentGuard(mode string) (*config.RuntimeConfig, bool, error) {
-	change, err := prepareChange(func(fc *config.FileConfig) error {
-		scan := mode == "both" || mode == "scan"
-		wrap := mode == "both" || mode == "wrap"
-		for _, item := range []struct {
-			path  string
-			value bool
-		}{
-			{path: "security.idpi.scanContent", value: scan},
-			{path: "security.idpi.wrapContent", value: wrap},
-		} {
-			if err := config.SetConfigValue(fc, item.path, fmt.Sprintf("%t", item.value)); err != nil {
-				return fmt.Errorf("set %s: %w", item.path, err)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, false, err
-	}
-	if len(change.ValidationErrors) > 0 {
-		return nil, false, change.ValidationErrors[0]
-	}
-	if err := SavePreparedChange(change); err != nil {
-		return nil, false, err
-	}
-	return config.Load(), true, nil
-}
-
 // guardsDownExcludedCapability is the one capability the guards-down preset does not
 // bulk-enable: stateExport writes cookies and browser storage to disk, and enabling
 // disk export as a side effect of "turn the guards off for local dev" is a surprise

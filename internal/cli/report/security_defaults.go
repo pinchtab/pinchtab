@@ -4,7 +4,6 @@ import (
 	"sort"
 
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/config/workflow"
 	"github.com/pinchtab/pinchtab/internal/routes"
 )
 
@@ -23,22 +22,6 @@ func capabilityDisableLines() []string {
 	}
 	sort.Strings(lines)
 	return lines
-}
-
-func ApplyRecommendedSecurityDefaults(fc *config.FileConfig) {
-	workflow.ApplyRecommendedSecurityDefaults(fc)
-}
-
-func applyRecommendedSecurityDefaults(fc *config.FileConfig) {
-	ApplyRecommendedSecurityDefaults(fc)
-}
-
-func RestoreSecurityDefaults() (string, bool, error) {
-	return workflow.RestoreSecurityDefaults()
-}
-
-func restoreSecurityDefaults() (string, bool, error) {
-	return RestoreSecurityDefaults()
 }
 
 func RecommendedSecurityDefaultLines(cfg *config.RuntimeConfig) []string {

@@ -482,13 +482,6 @@ type SecurityConfig struct {
 	IDPI                   *IDPIConfig  `json:"idpi,omitempty"`
 }
 
-func (s *SecurityConfig) ensureIDPI() *IDPIConfig {
-	if s.IDPI == nil {
-		s.IDPI = &IDPIConfig{}
-	}
-	return s.IDPI
-}
-
 func (s SecurityConfig) EffectiveIDPI() IDPIConfig {
 	if s.IDPI == nil {
 		return IDPIConfig{}

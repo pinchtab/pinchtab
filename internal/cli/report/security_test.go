@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/config/workflow"
 )
 
 func TestAssessSecurityWarnings(t *testing.T) {
@@ -27,7 +28,7 @@ func TestAssessSecurityWarnings(t *testing.T) {
 			},
 		}
 
-		warnings := assessSecurityWarnings(cfg)
+		warnings := AssessSecurityWarnings(cfg)
 		if len(warnings) != 0 {
 			t.Fatalf("expected no warnings, got %+v", warnings)
 		}
@@ -49,7 +50,7 @@ func TestAssessSecurityWarnings(t *testing.T) {
 			},
 		}
 
-		for _, warning := range assessSecurityWarnings(cfg) {
+		for _, warning := range AssessSecurityWarnings(cfg) {
 			if warning.ID == "non_loopback_bind" || warning.ID == "attach_external_hosts" {
 				t.Errorf("loopback-only config warned %s: %s", warning.ID, warning.Message)
 			}
@@ -63,7 +64,7 @@ func TestAssessSecurityWarnings(t *testing.T) {
 			AttachAllowHosts: []string{"foo.localhost"},
 		}
 
-		for _, warning := range assessSecurityWarnings(cfg) {
+		for _, warning := range AssessSecurityWarnings(cfg) {
 			if warning.ID == "attach_external_hosts" {
 				return
 			}
@@ -84,7 +85,7 @@ func TestAssessSecurityWarnings(t *testing.T) {
 			},
 		}
 
-		warnings := assessSecurityWarnings(cfg)
+		warnings := AssessSecurityWarnings(cfg)
 		ids := make(map[string]bool, len(warnings))
 		for _, warning := range warnings {
 			ids[warning.ID] = true
@@ -127,7 +128,7 @@ func TestAssessSecurityWarnings(t *testing.T) {
 			},
 		}
 
-		warnings := assessSecurityWarnings(cfg)
+		warnings := AssessSecurityWarnings(cfg)
 		ids := make(map[string]bool, len(warnings))
 		for _, warning := range warnings {
 			ids[warning.ID] = true
@@ -150,7 +151,7 @@ func TestAssessSecurityWarnings(t *testing.T) {
 			},
 		}
 
-		warnings := assessSecurityWarnings(cfg)
+		warnings := AssessSecurityWarnings(cfg)
 		ids := make(map[string]bool, len(warnings))
 		var wildcardWarning SecurityWarning
 		for _, warning := range warnings {
@@ -179,7 +180,7 @@ func TestAssessSecurityWarnings(t *testing.T) {
 			AttachAllowSchemes: []string{"ws", "wss"},
 		}
 
-		warnings := assessSecurityWarnings(cfg)
+		warnings := AssessSecurityWarnings(cfg)
 		ids := make(map[string]bool, len(warnings))
 		for _, warning := range warnings {
 			ids[warning.ID] = true
@@ -207,7 +208,7 @@ func TestAssessSecurityPosture(t *testing.T) {
 			},
 		}
 
-		posture := assessSecurityPosture(cfg)
+		posture := AssessSecurityPosture(cfg)
 		if posture.Passed != posture.Total {
 			t.Fatalf("expected all checks to pass, got %d/%d", posture.Passed, posture.Total)
 		}
@@ -231,7 +232,7 @@ func TestAssessSecurityPosture(t *testing.T) {
 			},
 		}
 
-		posture := assessSecurityPosture(cfg)
+		posture := AssessSecurityPosture(cfg)
 		for _, check := range posture.Checks {
 			if check.ID != "attach_local_only" {
 				continue
@@ -257,7 +258,7 @@ func TestAssessSecurityPosture(t *testing.T) {
 			},
 		}
 
-		posture := assessSecurityPosture(cfg)
+		posture := AssessSecurityPosture(cfg)
 		if posture.Passed >= 3 {
 			t.Fatalf("expected exposed posture below 3 passed checks, got %d/%d", posture.Passed, posture.Total)
 		}
@@ -288,7 +289,7 @@ func TestApplyRecommendedSecurityDefaults(t *testing.T) {
 		},
 	}
 
-	applyRecommendedSecurityDefaults(fc)
+	workflow.ApplyRecommendedSecurityDefaults(fc)
 
 	if fc.Server.Port != "9999" {
 		t.Fatalf("expected port to be preserved, got %q", fc.Server.Port)
@@ -313,7 +314,7 @@ func TestApplyRecommendedSecurityDefaults(t *testing.T) {
 func TestApplyRecommendedSecurityDefaults_LeavesAMissingTokenAlone(t *testing.T) {
 	fc := &config.FileConfig{}
 
-	applyRecommendedSecurityDefaults(fc)
+	workflow.ApplyRecommendedSecurityDefaults(fc)
 
 	if fc.Server.Token != "" {
 		t.Fatalf("applying security defaults generated a token %q; whether one may be added to an existing config is ProvisionFileToken's decision, and generating here bypasses the operator-config refusal", fc.Server.Token)
@@ -348,15 +349,15 @@ func TestRestoreSecurityDefaults(t *testing.T) {
 		t.Fatalf("SaveFileConfig() error = %v", err)
 	}
 
-	gotPath, changed, err := restoreSecurityDefaults()
+	gotPath, changed, err := workflow.RestoreSecurityDefaults()
 	if err != nil {
-		t.Fatalf("restoreSecurityDefaults() error = %v", err)
+		t.Fatalf("workflow.RestoreSecurityDefaults() error = %v", err)
 	}
 	if gotPath != configPath {
-		t.Fatalf("restoreSecurityDefaults() path = %q, want %q", gotPath, configPath)
+		t.Fatalf("workflow.RestoreSecurityDefaults() path = %q, want %q", gotPath, configPath)
 	}
 	if !changed {
-		t.Fatalf("restoreSecurityDefaults() changed = false, want true")
+		t.Fatalf("workflow.RestoreSecurityDefaults() changed = false, want true")
 	}
 
 	saved, err := os.ReadFile(configPath)
@@ -399,9 +400,9 @@ func TestRestoreSecurityDefaults_RefusesToProvisionIntoAnOperatorConfig(t *testi
 		t.Fatal(err)
 	}
 
-	_, _, err = restoreSecurityDefaults()
+	_, _, err = workflow.RestoreSecurityDefaults()
 	if !errors.Is(err, config.ErrOperatorConfigToken) {
-		t.Fatalf("restoreSecurityDefaults() error = %v, want the operator-config refusal; this path used to generate a credential into the operator's file and discard the error", err)
+		t.Fatalf("workflow.RestoreSecurityDefaults() error = %v, want the operator-config refusal; this path used to generate a credential into the operator's file and discard the error", err)
 	}
 
 	after, err := os.ReadFile(configPath)
@@ -464,12 +465,12 @@ func TestRestoreSecurityDefaults_TokenOnlyChangeOnTheDefaultPathIsSaved(t *testi
 		t.Fatalf("SaveFileConfig() error = %v", err)
 	}
 
-	_, changed, err := restoreSecurityDefaults()
+	_, changed, err := workflow.RestoreSecurityDefaults()
 	if err != nil {
-		t.Fatalf("restoreSecurityDefaults() error = %v", err)
+		t.Fatalf("workflow.RestoreSecurityDefaults() error = %v", err)
 	}
 	if !changed {
-		t.Fatalf("restoreSecurityDefaults() changed = false, want true")
+		t.Fatalf("workflow.RestoreSecurityDefaults() changed = false, want true")
 	}
 
 	loaded, _, err := config.LoadFileConfig()

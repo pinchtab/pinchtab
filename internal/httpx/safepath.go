@@ -7,16 +7,6 @@ import (
 	"strings"
 )
 
-// SafePath resolves a user-provided path against a base directory and ensures
-// the result stays within that directory for file creation. Existing symlinked
-// components are rejected. Returns the cleaned absolute path.
-//
-// The implementation uses the filepath.Abs + strings.HasPrefix pattern
-// recommended by CodeQL (go/path-injection) and OWASP path-traversal guidance.
-func SafePath(base, userPath string) (string, error) {
-	return SafeCreatePath(base, userPath)
-}
-
 // SafeCreatePath resolves a user-provided path against a base directory and
 // rejects any existing symlinked component in the resolved path. It is intended
 // for paths that may be created later.

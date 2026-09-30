@@ -429,40 +429,6 @@ func TestPositionalWrapperOverSemanticFormReachesTheMatcherWithItsIndex(t *testi
 	}
 }
 
-func TestFromConstructors(t *testing.T) {
-	if s := FromRef("e5"); s.Kind != KindRef || s.Value != "e5" {
-		t.Errorf("FromRef(\"e5\"): %+v", s)
-	}
-	if s := FromCSS("#x"); s.Kind != KindCSS || s.Value != "#x" {
-		t.Errorf("FromCSS(\"#x\"): %+v", s)
-	}
-	if s := FromXPath("//a"); s.Kind != KindXPath || s.Value != "//a" {
-		t.Errorf("FromXPath(\"//a\"): %+v", s)
-	}
-	if s := FromText("hi"); s.Kind != KindText || s.Value != "hi" {
-		t.Errorf("FromText(\"hi\"): %+v", s)
-	}
-	if s := FromSemantic("btn"); s.Kind != KindSemantic || s.Value != "btn" {
-		t.Errorf("FromSemantic(\"btn\"): %+v", s)
-	}
-
-	empties := []struct {
-		name string
-		fn   func(string) Selector
-	}{
-		{"FromRef", FromRef},
-		{"FromCSS", FromCSS},
-		{"FromXPath", FromXPath},
-		{"FromText", FromText},
-		{"FromSemantic", FromSemantic},
-	}
-	for _, e := range empties {
-		if s := e.fn(""); !s.IsEmpty() {
-			t.Errorf("%s(\"\") should be empty, got %+v", e.name, s)
-		}
-	}
-}
-
 func TestParse_Roundtrip(t *testing.T) {
 	inputs := []string{
 		"e5",

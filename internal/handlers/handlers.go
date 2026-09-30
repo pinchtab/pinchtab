@@ -131,18 +131,6 @@ func (h *Handlers) StartBackgroundCleanup() {
 	go CleanupStaleUploads(h.Config.StateDir)
 }
 
-// SetEmptyPointerPolicy configures behavior when an identified caller
-// omits tabId and has no stored scoped current tab. Default is lazy.
-func (h *Handlers) SetEmptyPointerPolicy(p EmptyPointerPolicy) {
-	if h == nil {
-		return
-	}
-	if p == "" {
-		p = EmptyPointerLazy
-	}
-	h.emptyPointerPolicy = p
-}
-
 // EmptyPointerPolicy returns the active empty-pointer policy. Defaults to
 // lazy when not configured.
 func (h *Handlers) EmptyPointerPolicy() EmptyPointerPolicy {

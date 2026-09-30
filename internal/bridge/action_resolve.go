@@ -405,10 +405,6 @@ const jsNormalizeHelper = `const normalize = (value) => String(value || "")
 		.replace(/\s+/g, " ")
 		.trim();`
 
-func ResolveTextToNodeID(ctx context.Context, text string) (int64, error) {
-	return ResolveTextToNodeIDInFrame(ctx, "", text)
-}
-
 func ResolveTextToNodeIDInFrame(ctx context.Context, frameID, text string) (int64, error) {
 	return resolveSelectorAtInFrame(ctx, frameID, selector.Selector{Kind: selector.KindText, Value: text}, 0, false, false)
 }
@@ -728,10 +724,6 @@ func resolveNested(ctx context.Context, scope resolveScope, raw string, refCache
 	return resolveParsed(ctx, scope, selector.Parse(raw), refCache, index, fromEnd, positional)
 }
 
-func ResolveXPathToNodeID(ctx context.Context, xpath string) (int64, error) {
-	return ResolveXPathToNodeIDInFrame(ctx, "", xpath)
-}
-
 func ResolveCSSToNodeID(ctx context.Context, css string) (int64, error) {
 	return ResolveCSSToNodeIDInFrame(ctx, "", css)
 }
@@ -848,8 +840,4 @@ func ResolveUnifiedSelectorWithinNode(ctx context.Context, sel selector.Selector
 	default:
 		return 0, fmt.Errorf("unknown selector kind: %q", sel.Kind)
 	}
-}
-
-func ResolveUnifiedSelector(ctx context.Context, sel selector.Selector, refCache *RefCache) (int64, error) {
-	return ResolveUnifiedSelectorInFrame(ctx, sel, refCache, "")
 }

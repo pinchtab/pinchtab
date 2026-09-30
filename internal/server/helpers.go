@@ -11,10 +11,6 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/readiness"
-
-	"github.com/pinchtab/pinchtab/internal/httpx"
-	"github.com/pinchtab/pinchtab/internal/orchestrator"
-	"github.com/pinchtab/pinchtab/internal/proxy"
 )
 
 // ProbeHealth is the single transport for /health-style readiness probes: it
@@ -92,30 +88,6 @@ var DefaultProxyShorthands = []string{
 	"GET /stealth/status", "POST /fingerprint/rotate",
 	"GET /screencast", "GET /screencast/tabs",
 	"POST /find", "POST /macro",
-}
-
-func RegisterDefaultProxyRoutes(mux *http.ServeMux, orch *orchestrator.Orchestrator) {
-	mux.HandleFunc("GET /tabs", func(w http.ResponseWriter, r *http.Request) {
-		target := orch.FirstRunningURL()
-		if target == "" {
-			httpx.JSON(w, 200, map[string]any{"tabs": []any{}})
-			return
-		}
-		proxy.HTTP(w, r, target+"/tabs")
-	})
-
-	for _, ep := range DefaultProxyShorthands {
-		endpoint := ep
-		mux.HandleFunc(endpoint, func(w http.ResponseWriter, r *http.Request) {
-			target := orch.FirstRunningURL()
-			if target == "" {
-				httpx.Error(w, 503, fmt.Errorf("no running instances — launch one from the Profiles tab"))
-				return
-			}
-			path := r.URL.Path
-			proxy.HTTP(w, r, target+path)
-		})
-	}
 }
 
 // ShutdownServer sends POST /shutdown to a running server and waits for it to exit.

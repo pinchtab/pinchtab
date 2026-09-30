@@ -85,7 +85,7 @@ func TestHeapSnapshotStreamsAValidV8Snapshot(t *testing.T) {
 	if len(header.Meta.NodeFields) == 0 || header.NodeCount == 0 {
 		t.Fatalf("header = %+v, want snapshot.meta with node fields and a node count", header)
 	}
-	agg, err := heapsnap.ParseFile(path)
+	agg, err := heapsnap.ParseFileWith(path, heapsnap.ParseOptions{})
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}

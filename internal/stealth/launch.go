@@ -70,21 +70,3 @@ func BuildLaunchContract(cfg *config.RuntimeConfig, level Level) LaunchContract 
 		Flags: flags,
 	}
 }
-
-func HasLaunchArg(args []string, want string) bool {
-	for _, arg := range args {
-		if arg == want {
-			return true
-		}
-	}
-	return false
-}
-
-func HasLaunchArgPrefix(args []string, prefix string) bool {
-	for _, arg := range args {
-		if strings.HasPrefix(arg, prefix) {
-			return true
-		}
-	}
-	return false
-}

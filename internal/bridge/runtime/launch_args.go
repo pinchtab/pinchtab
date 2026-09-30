@@ -1,9 +1,7 @@
 package runtime
 
 import (
-	"context"
 	"crypto/rand"
-	"log/slog"
 	"math/big"
 	"os"
 	"strings"
@@ -29,14 +27,6 @@ func appendExecAllocatorFlags(opts []chromedp.ExecAllocatorOption, flags []strin
 	return opts
 }
 
-func browserLaunchArgs(headless bool) []string {
-	return runtimekit.BaseFlagArgs("chrome", headless)
-}
-
-func BaseBrowserFlagArgs() []string {
-	return browserLaunchArgs(false)
-}
-
 func appendBrowserCompatibilityFlags(args []string) []string {
 	if launchNeedsNoSandbox() {
 		return append(args, "--no-sandbox")
@@ -47,25 +37,6 @@ func appendBrowserCompatibilityFlags(args []string) []string {
 func launchNeedsNoSandbox() bool {
 	_, err := os.Stat(containerMarkerPath)
 	return runtimekit.ChromeNeedsNoSandbox(runtimeGOOS, osGeteuid(), err == nil)
-}
-
-func BuildBrowserArgs(cfg *config.RuntimeConfig, port int) []string {
-	cfg, effective := effectiveLaunchTarget(cfg)
-	geoAlignment, err := resolveLaunchGeoAlignment(context.Background(), cfg)
-	if err != nil {
-		args, _, buildErr := buildBrowserArgsWithBundle(cfg, effective.Binary, nil, port, launchGeoAlignment{})
-		if buildErr != nil {
-			slog.Error("build browser args failed", "err", buildErr)
-			return nil
-		}
-		return args
-	}
-	args, _, err := buildBrowserArgsWithBundle(cfg, effective.Binary, nil, port, geoAlignment)
-	if err != nil {
-		slog.Error("build browser args failed", "err", err)
-		return nil
-	}
-	return args
 }
 
 func existingExtensionPaths(paths []string) []string {
@@ -105,10 +76,6 @@ func buildBrowserArgsWithBundle(cfg *config.RuntimeConfig, binary string, bundle
 
 	env := append([]string(nil), plan.env...)
 	return args, env, nil
-}
-
-func CloakBrowserFlagArgs(cfg *config.RuntimeConfig) []string {
-	return runtimekit.CloakBrowserFlagArgs(cfg)
 }
 
 func stripInProcessGPUFlag(flags []string) []string {

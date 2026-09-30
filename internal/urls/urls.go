@@ -44,12 +44,6 @@ func Sanitize(rawURL string) (string, error) {
 	return parsed.String(), nil
 }
 
-// IsValid returns true if URL is safe for navigation.
-func IsValid(rawURL string) bool {
-	_, err := Sanitize(rawURL)
-	return err == nil
-}
-
 // EnsureScheme is the ONE place a scheme-less target acquires one, so no consumer
 // has to hand-roll a bare-URL branch to find the host inside it.
 //

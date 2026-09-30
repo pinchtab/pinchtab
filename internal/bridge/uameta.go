@@ -9,10 +9,6 @@ func buildUserAgentOverride(userAgent, chromeVersion string) *emulation.SetUserA
 	return stealth.BuildUserAgentOverride(userAgent, chromeVersion)
 }
 
-func buildLocaleOverride(userAgent, chromeVersion string) *emulation.SetLocaleOverrideParams {
-	return stealth.BuildLocaleOverride(userAgent, chromeVersion)
-}
-
 // userAgentOverrideAction builds the CDP override for a caller-supplied identity: the
 // persona's client-hint metadata for that UA, with the caller's own platform and
 // accept-language laid over it. The metadata is the point — Chrome stops emitting every

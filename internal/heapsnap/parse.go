@@ -197,10 +197,6 @@ type parser struct {
 	graph      *graph
 }
 
-func Parse(r io.Reader) (*Aggregate, error) {
-	return ParseWith(r, ParseOptions{})
-}
-
 func ParseWith(r io.Reader, opts ParseOptions) (*Aggregate, error) {
 	p := &parser{
 		s:        newScanner(r),
@@ -217,10 +213,6 @@ func ParseWith(r io.Reader, opts ParseOptions) (*Aggregate, error) {
 		return nil, err
 	}
 	return p.aggregate()
-}
-
-func ParseFile(path string) (*Aggregate, error) {
-	return ParseFileWith(path, ParseOptions{})
 }
 
 func ParseFileWith(path string, opts ParseOptions) (*Aggregate, error) {

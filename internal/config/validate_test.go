@@ -617,39 +617,39 @@ func TestValidationError_Error(t *testing.T) {
 }
 
 func TestValidEnumValues(t *testing.T) {
-	for _, level := range ValidStealthLevels() {
+	for _, level := range stealthLevels {
 		if !isValidStealthLevel(level) {
-			t.Errorf("ValidStealthLevels contains %q but isValidStealthLevel returns false", level)
+			t.Errorf("StealthLevels contains %q but isValidStealthLevel returns false", level)
 		}
 	}
 
-	for _, policy := range ValidEvictionPolicies() {
+	for _, policy := range evictionPolicies {
 		if !isValidEvictionPolicy(policy) {
-			t.Errorf("ValidEvictionPolicies contains %q but isValidEvictionPolicy returns false", policy)
+			t.Errorf("EvictionPolicies contains %q but isValidEvictionPolicy returns false", policy)
 		}
 	}
 
-	for _, strategy := range ValidStrategies() {
+	for _, strategy := range strategies {
 		if !isValidStrategy(strategy) {
-			t.Errorf("ValidStrategies contains %q but isValidStrategy returns false", strategy)
+			t.Errorf("Strategies contains %q but isValidStrategy returns false", strategy)
 		}
 	}
 
-	for _, policy := range ValidAllocationPolicies() {
+	for _, policy := range allocationPolicies {
 		if !isValidAllocationPolicy(policy) {
-			t.Errorf("ValidAllocationPolicies contains %q but isValidAllocationPolicy returns false", policy)
+			t.Errorf("AllocationPolicies contains %q but isValidAllocationPolicy returns false", policy)
 		}
 	}
 
-	for _, scheme := range ValidAttachSchemes() {
+	for _, scheme := range attachSchemes {
 		if !isValidAttachScheme(scheme) {
-			t.Errorf("ValidAttachSchemes contains %q but isValidAttachScheme returns false", scheme)
+			t.Errorf("AttachSchemes contains %q but isValidAttachScheme returns false", scheme)
 		}
 	}
 
-	for _, policy := range ValidLifecyclePolicies() {
+	for _, policy := range lifecyclePolicies {
 		if !isValidLifecyclePolicy(policy) {
-			t.Errorf("ValidLifecyclePolicies contains %q but isValidLifecyclePolicy returns false", policy)
+			t.Errorf("LifecyclePolicies contains %q but isValidLifecyclePolicy returns false", policy)
 		}
 	}
 

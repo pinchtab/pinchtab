@@ -54,15 +54,6 @@ func VocabForAction(base, requestedTab string) (vocabTab, token string) {
 	return tab, ""
 }
 
-// VocabTokenFor returns the token stored for a resolved tab id, or "".
-func VocabTokenFor(base, tabID string) string {
-	if tabID == "" {
-		return ""
-	}
-	_, token := VocabForAction(base, tabID)
-	return token
-}
-
 func storeVocabToken(base, tabID, token string, implicit bool) {
 	if tabID == "" || token == "" {
 		return

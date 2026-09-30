@@ -161,46 +161,6 @@ func IsRef(s string) bool {
 	return true
 }
 
-// FromRef creates a Selector from a ref string.
-func FromRef(ref string) Selector {
-	if ref == "" {
-		return Selector{}
-	}
-	return Selector{Kind: KindRef, Value: ref}
-}
-
-// FromCSS creates a Selector from a CSS selector string.
-func FromCSS(css string) Selector {
-	if css == "" {
-		return Selector{}
-	}
-	return Selector{Kind: KindCSS, Value: css}
-}
-
-// FromXPath creates a Selector from an XPath expression.
-func FromXPath(xpath string) Selector {
-	if xpath == "" {
-		return Selector{}
-	}
-	return Selector{Kind: KindXPath, Value: xpath}
-}
-
-// FromText creates a Selector from a text content query.
-func FromText(text string) Selector {
-	if text == "" {
-		return Selector{}
-	}
-	return Selector{Kind: KindText, Value: text}
-}
-
-// FromSemantic creates a Selector from a semantic/natural-language query.
-func FromSemantic(query string) Selector {
-	if query == "" {
-		return Selector{}
-	}
-	return Selector{Kind: KindSemantic, Value: query}
-}
-
 // Validate returns an error if the selector is invalid.
 func (s Selector) Validate() error {
 	if s.IsEmpty() {

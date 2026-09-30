@@ -69,6 +69,17 @@ jobs:
       - name: Build
         run: go build -o pinchtab ./cmd/pinchtab
 
+      - name: Deadcode report
+        continue-on-error: true
+        run: |
+          go run golang.org/x/tools/cmd/deadcode@v0.50.0 ./cmd/... | tee deadcode.log
+          {
+            echo "### Unreachable funcs ($(wc -l < deadcode.log))"
+            echo '```'
+            cat deadcode.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Agent preamble budget
         run: |
           set +e
