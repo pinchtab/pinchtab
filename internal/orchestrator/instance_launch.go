@@ -116,7 +116,6 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 		return nil, fmt.Errorf("instance already running for profile %q", name)
 	}
 
-	previous := o.instances[instanceID]
 	placeholder := &InstanceInternal{
 		Instance: bridge.Instance{
 			ID:          instanceID,
@@ -131,7 +130,7 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 	reserved := true
 	defer func() {
 		if reserved {
-			o.releaseLaunchReservation(instanceID, placeholder, previous)
+			o.releaseLaunchReservation(instanceID, placeholder)
 		}
 	}()
 
@@ -272,14 +271,10 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 	return &snapshot, nil
 }
 
-func (o *Orchestrator) releaseLaunchReservation(instanceID string, placeholder, previous *InstanceInternal) {
+func (o *Orchestrator) releaseLaunchReservation(instanceID string, placeholder *InstanceInternal) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if o.instances[instanceID] != placeholder {
-		return
-	}
-	if previous != nil {
-		o.instances[instanceID] = previous
 		return
 	}
 	delete(o.instances, instanceID)

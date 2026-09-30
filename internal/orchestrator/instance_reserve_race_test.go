@@ -119,13 +119,14 @@ func TestFailedRelaunchKeepsThePreviousErrorRecord(t *testing.T) {
 	stubPortAvailability(t, func(int) bool { return true })
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true, runErr: errors.New("exec format error")})
 
-	previous := &InstanceInternal{Instance: bridge.Instance{ID: "inst_previous", ProfileName: "relaunch", Status: "error", Error: "chrome crashed"}}
-	o.instances[previous.ID] = previous
+	previousID := o.idMgr.InstanceID(o.idMgr.ProfileID("relaunch"), "relaunch")
+	previous := &InstanceInternal{Instance: bridge.Instance{ID: previousID, ProfileName: "relaunch", Status: "error", Error: "chrome crashed"}}
+	o.instances[previousID] = previous
 
 	if _, err := o.LaunchWithOptions("relaunch", "", true, LaunchOptions{}); err == nil {
 		t.Fatal("relaunch succeeded, want the spawn failure")
 	}
-	if len(o.instances) != 1 || o.instances[previous.ID] != previous || previous.Instance.Error != "chrome crashed" {
+	if len(o.instances) != 1 || o.instances[previousID] != previous || previous.Instance.Error != "chrome crashed" {
 		t.Fatalf("registry after failed relaunch = %+v, want only the previous error record", o.instances)
 	}
 }
