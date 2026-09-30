@@ -100,7 +100,7 @@ func patchConfigObject(onDisk []jsonMember, full, shipped map[string]any) []json
 			out = append(out, jsonMember{key: key, value: encodeJSONObject(members)})
 			continue
 		}
-		if sameJSONValue(value, shipped[key]) {
+		if value == nil || sameJSONValue(value, shipped[key]) {
 			continue
 		}
 		raw, err := json.Marshal(value)
@@ -158,7 +158,7 @@ func renderMinimalConfig(fc *FileConfig, existing []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	shipped, err := configAsMap(savedConfigBaseline())
+	shipped, err := configAsMap(minimalSaveBaseline())
 	if err != nil {
 		return nil, err
 	}

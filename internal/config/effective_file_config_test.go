@@ -1,6 +1,11 @@
 package config
 
-import "testing"
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestEffectiveFileConfigFillsUnsetKeysFromRuntimeDefaults(t *testing.T) {
 	fc := FileConfig{}
@@ -39,4 +44,84 @@ func TestEffectiveFileConfigFillsUnsetKeysFromRuntimeDefaults(t *testing.T) {
 	if got.Server.StateDir != "" || got.Browser.ExtensionPaths != nil {
 		t.Error("host-derived paths must stay as the file has them")
 	}
+}
+
+func TestSavingTheEffectiveConfigOfAnUntouchedFileLeavesItByteIdentical(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	original := []byte("{\n  \"server\": {\n    \"port\": \"9999\"\n  }\n}\n")
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	onDisk := savedConfigBaseline()
+	if err := json.Unmarshal(original, onDisk); err != nil {
+		t.Fatal(err)
+	}
+
+	effective := EffectiveFileConfig(*onDisk)
+	if err := SaveFileConfig(&effective, path); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(original) {
+		t.Errorf("an untouched GET→PUT round-trip rewrote the file:\n%s", got)
+	}
+}
+
+func TestEffectiveDefaultsAndTheSaveBaselineAgree(t *testing.T) {
+	hostDerivedOrStartupStamped := map[string]bool{
+		"$schema":                true,
+		"configVersion":          true,
+		"security.idpi":          true,
+		"server.stateDir":        true,
+		"browser.extensionPaths": true,
+	}
+	effective := EffectiveFileConfig(FileConfig{})
+	left, err := configAsMap(&effective)
+	if err != nil {
+		t.Fatal(err)
+	}
+	right, err := configAsMap(minimalSaveBaseline())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b := flattenConfigMap("", left), flattenConfigMap("", right)
+	for key := range hostDerivedOrStartupStamped {
+		delete(a, key)
+		delete(b, key)
+	}
+	for key, value := range a {
+		if other, ok := b[key]; !ok || other != value {
+			t.Errorf("%s: effective default %s, save baseline %s", key, value, other)
+		}
+	}
+	for key, value := range b {
+		if _, ok := a[key]; !ok {
+			t.Errorf("%s: save baseline has %s, effective default has nothing", key, value)
+		}
+	}
+}
+
+func flattenConfigMap(prefix string, value any, into ...map[string]string) map[string]string {
+	out := map[string]string{}
+	if len(into) > 0 {
+		out = into[0]
+	}
+	obj, ok := value.(map[string]any)
+	if !ok {
+		raw, _ := json.Marshal(value)
+		out[prefix] = string(raw)
+		return out
+	}
+	for key, nested := range obj {
+		path := key
+		if prefix != "" {
+			path = prefix + "." + key
+		}
+		flattenConfigMap(path, nested, out)
+	}
+	return out
 }

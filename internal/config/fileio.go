@@ -76,6 +76,13 @@ func savedConfigBaseline() *FileConfig {
 	return &defaults
 }
 
+func minimalSaveBaseline() *FileConfig {
+	baseline := EffectiveFileConfig(*savedConfigBaseline())
+	baseline.ConfigVersion = ""
+	baseline.Security.IDPI = nil
+	return &baseline
+}
+
 // LoadFileConfig loads a FileConfig from the default or specified path.
 // Returns the config and the path it was loaded from.
 func LoadFileConfig() (*FileConfig, string, error) {

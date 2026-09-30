@@ -56,13 +56,13 @@ func TestPatchingAnAgentSessionKeyPersistsIt(t *testing.T) {
 	}
 
 	fc := &FileConfig{}
-	if err := PatchConfigJSON(fc, `{"sessions":{"agent":{"enabled":true,"mode":"header"}}}`); err != nil {
+	if err := PatchConfigJSON(fc, `{"sessions":{"agent":{"enabled":false,"mode":"header"}}}`); err != nil {
 		t.Fatalf("PatchConfigJSON: %v", err)
 	}
 
 	agent := agentBlockOnDisk(t, saveAndReload(t, fc, path))
-	if agent["enabled"] != true {
-		t.Errorf("sessions.agent.enabled on disk = %v, want true", agent["enabled"])
+	if agent["enabled"] != false {
+		t.Errorf("sessions.agent.enabled on disk = %v, want false", agent["enabled"])
 	}
 	if agent["mode"] != "header" {
 		t.Errorf("sessions.agent.mode on disk = %v, want %q", agent["mode"], "header")
@@ -81,7 +81,7 @@ func TestTheEditorAddressesAgentSessionKeysAndTheySurviveASave(t *testing.T) {
 
 	fc := &FileConfig{}
 	for _, tc := range []struct{ key, value, want string }{
-		{"sessions.agent.enabled", "true", "true"},
+		{"sessions.agent.enabled", "false", "false"},
 		{"sessions.agent.mode", "header", "header"},
 		{"sessions.agent.idleTimeoutSec", "900", "900"},
 		{"sessions.agent.maxLifetimeSec", "7200", "7200"},
@@ -99,7 +99,7 @@ func TestTheEditorAddressesAgentSessionKeysAndTheySurviveASave(t *testing.T) {
 	}
 
 	agent := agentBlockOnDisk(t, saveAndReload(t, fc, path))
-	if agent["enabled"] != true || agent["mode"] != "header" {
+	if agent["enabled"] != false || agent["mode"] != "header" {
 		t.Errorf("agent block on disk = %v, want the values just set", agent)
 	}
 	if agent["idleTimeoutSec"] != float64(900) || agent["maxLifetimeSec"] != float64(7200) {
