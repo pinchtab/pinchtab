@@ -6,18 +6,19 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/sanitize"
 )
 
 func TestConsoleLogStore_AddAndGet(t *testing.T) {
 	store := NewConsoleLogStore(100)
 
-	store.AddConsoleLog("tab1", LogEntry{
+	store.AddConsoleLog("tab1", types.ConsoleLogEntry{
 		Timestamp: time.Now(),
 		Level:     "log",
 		Message:   "Hello world",
 	})
-	store.AddConsoleLog("tab1", LogEntry{
+	store.AddConsoleLog("tab1", types.ConsoleLogEntry{
 		Timestamp: time.Now(),
 		Level:     "warn",
 		Message:   "Warning message",
@@ -35,7 +36,7 @@ func TestConsoleLogStore_AddAndGet(t *testing.T) {
 func TestConsoleLogStore_AddAndGetErrors(t *testing.T) {
 	store := NewConsoleLogStore(100)
 
-	store.AddErrorLog("tab1", ErrorEntry{
+	store.AddErrorLog("tab1", types.ErrorLogEntry{
 		Timestamp: time.Now(),
 		Message:   "Uncaught ReferenceError: x is not defined",
 		URL:       "http://example.com/script.js",
@@ -56,7 +57,7 @@ func TestConsoleLogStore_Limit(t *testing.T) {
 	store := NewConsoleLogStore(5)
 
 	for i := 0; i < 10; i++ {
-		store.AddConsoleLog("tab1", LogEntry{
+		store.AddConsoleLog("tab1", types.ConsoleLogEntry{
 			Timestamp: time.Now(),
 			Level:     "log",
 			Message:   string(rune('0' + i)),
@@ -77,7 +78,7 @@ func TestConsoleLogStore_GetWithLimit(t *testing.T) {
 	store := NewConsoleLogStore(100)
 
 	for i := 0; i < 10; i++ {
-		store.AddConsoleLog("tab1", LogEntry{
+		store.AddConsoleLog("tab1", types.ConsoleLogEntry{
 			Timestamp: time.Now(),
 			Level:     "log",
 			Message:   string(rune('0' + i)),
@@ -99,12 +100,12 @@ func TestConsoleLogStore_GetWithLimit_ClampsToMaxLines(t *testing.T) {
 	store := NewConsoleLogStore(5)
 
 	for i := 0; i < 5; i++ {
-		store.AddConsoleLog("tab1", LogEntry{
+		store.AddConsoleLog("tab1", types.ConsoleLogEntry{
 			Timestamp: time.Now(),
 			Level:     "log",
 			Message:   string(rune('0' + i)),
 		})
-		store.AddErrorLog("tab1", ErrorEntry{
+		store.AddErrorLog("tab1", types.ErrorLogEntry{
 			Timestamp: time.Now(),
 			Message:   string(rune('0' + i)),
 		})
@@ -131,8 +132,8 @@ func TestConsoleLogStore_ClampsConfiguredMaxLines(t *testing.T) {
 func TestConsoleLogStore_Clear(t *testing.T) {
 	store := NewConsoleLogStore(100)
 
-	store.AddConsoleLog("tab1", LogEntry{Level: "log", Message: "test"})
-	store.AddErrorLog("tab1", ErrorEntry{Message: "error"})
+	store.AddConsoleLog("tab1", types.ConsoleLogEntry{Level: "log", Message: "test"})
+	store.AddErrorLog("tab1", types.ErrorLogEntry{Message: "error"})
 
 	store.ClearConsoleLogs("tab1")
 	logs := store.GetConsoleLogs("tab1", 0)
@@ -156,8 +157,8 @@ func TestConsoleLogStore_Clear(t *testing.T) {
 func TestConsoleLogStore_RemoveTab(t *testing.T) {
 	store := NewConsoleLogStore(100)
 
-	store.AddConsoleLog("tab1", LogEntry{Level: "log", Message: "test"})
-	store.AddConsoleLog("tab2", LogEntry{Level: "log", Message: "other"})
+	store.AddConsoleLog("tab1", types.ConsoleLogEntry{Level: "log", Message: "test"})
+	store.AddConsoleLog("tab2", types.ConsoleLogEntry{Level: "log", Message: "other"})
 
 	store.RemoveTab("tab1")
 
@@ -194,12 +195,12 @@ func TestConsoleLogStore_NonexistentTab(t *testing.T) {
 func TestConsoleLogStore_TruncatesOversizedFields(t *testing.T) {
 	store := NewConsoleLogStore(10)
 
-	store.AddConsoleLog("tab1", LogEntry{
+	store.AddConsoleLog("tab1", types.ConsoleLogEntry{
 		Level:   strings.Repeat("L", maxConsoleLevelBytes+10),
 		Message: strings.Repeat("界", 3000),
 		Source:  strings.Repeat("s", maxConsoleSourceBytes+10),
 	})
-	store.AddErrorLog("tab1", ErrorEntry{
+	store.AddErrorLog("tab1", types.ErrorLogEntry{
 		Message: strings.Repeat("界", 3000),
 		Type:    strings.Repeat("t", maxErrorTypeBytes+10),
 		URL:     strings.Repeat("u", maxErrorURLBytes+10),

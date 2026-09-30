@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
-	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -62,7 +62,7 @@ func (h *Handlers) HandleGetConsoleLogs(w http.ResponseWriter, r *http.Request) 
 
 	logs := h.Bridge.GetConsoleLogs(tabID, limit)
 	if logs == nil {
-		logs = make([]bridge.LogEntry, 0)
+		logs = make([]types.ConsoleLogEntry, 0)
 	}
 
 	h.recordActivity(r, activity.Update{Action: "console.logs", TabID: tabID})
@@ -104,7 +104,7 @@ func (h *Handlers) HandleGetErrorLogs(w http.ResponseWriter, r *http.Request) {
 
 	errors := h.Bridge.GetErrorLogs(tabID, limit)
 	if errors == nil {
-		errors = make([]bridge.ErrorEntry, 0)
+		errors = make([]types.ErrorLogEntry, 0)
 	}
 
 	h.recordActivity(r, activity.Update{Action: "errors.logs", TabID: tabID})

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 )
 
@@ -17,11 +17,11 @@ func fullCollectors() Collectors {
 	return Collectors{
 		Title:      func() (string, error) { return "Fixture", nil },
 		Screenshot: func() ([]byte, error) { return []byte{0x89, 0x50}, nil },
-		Console: func() ([]bridge.LogEntry, error) {
-			return []bridge.LogEntry{{Timestamp: enrichTS, Level: "error", Message: "boom", Source: "app.js"}}, nil
+		Console: func() ([]types.ConsoleLogEntry, error) {
+			return []types.ConsoleLogEntry{{Timestamp: enrichTS, Level: "error", Message: "boom", Source: "app.js"}}, nil
 		},
-		JSErrors: func() ([]bridge.ErrorEntry, error) {
-			return []bridge.ErrorEntry{{
+		JSErrors: func() ([]types.ErrorLogEntry, error) {
+			return []types.ErrorLogEntry{{
 				Timestamp: enrichTS,
 				Message:   "Uncaught: ReferenceError: undefinedFn is not defined\n    at http://fixtures/page.html:5:64",
 				URL:       "http://fixtures/page.html",
@@ -190,7 +190,7 @@ func TestNewPageAuditError(t *testing.T) {
 }
 
 func TestMapConsoleLogs(t *testing.T) {
-	got := MapConsoleLogs([]bridge.LogEntry{{Timestamp: enrichTS, Level: "warn", Message: "careful", Source: "s"}})
+	got := MapConsoleLogs([]types.ConsoleLogEntry{{Timestamp: enrichTS, Level: "warn", Message: "careful", Source: "s"}})
 	want := []ConsoleLogEntry{{Timestamp: enrichTS, Level: "warn", Message: "careful", Source: "s"}}
 	if len(got) != 1 || got[0] != want[0] {
 		t.Errorf("MapConsoleLogs = %+v, want %+v", got, want)

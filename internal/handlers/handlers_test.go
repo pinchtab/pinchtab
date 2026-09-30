@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -200,14 +201,14 @@ func (m *mockBridge) GetDialogManager() *bridge.DialogManager {
 	return m.dialogManager
 }
 
-func (m *mockBridge) GetConsoleLogs(tabID string, limit int) []bridge.LogEntry {
+func (m *mockBridge) GetConsoleLogs(tabID string, limit int) []types.ConsoleLogEntry {
 	m.lastConsoleLimit = limit
 	return nil
 }
 
 func (m *mockBridge) ClearConsoleLogs(tabID string) {}
 
-func (m *mockBridge) GetErrorLogs(tabID string, limit int) []bridge.ErrorEntry {
+func (m *mockBridge) GetErrorLogs(tabID string, limit int) []types.ErrorLogEntry {
 	m.lastErrorLimit = limit
 	return nil
 }

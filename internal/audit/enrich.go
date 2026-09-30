@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"strings"
 
-	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 )
 
@@ -31,8 +31,8 @@ func DefaultPageOptions() PageOptions {
 type Collectors struct {
 	Title      func() (string, error)
 	Screenshot func() ([]byte, error)
-	Console    func() ([]bridge.LogEntry, error)
-	JSErrors   func() ([]bridge.ErrorEntry, error)
+	Console    func() ([]types.ConsoleLogEntry, error)
+	JSErrors   func() ([]types.ErrorLogEntry, error)
 	Network    func() ([]observe.NetworkEntry, error)
 	Snapshot   func() ([]observe.A11yNode, error)
 	PageFacts  func() (PageFacts, error)
@@ -157,7 +157,7 @@ func EnrichPage(url string, opts PageOptions, c Collectors) PageAudit {
 }
 
 // MapConsoleLogs converts bridge console entries to the audit schema.
-func MapConsoleLogs(logs []bridge.LogEntry) []ConsoleLogEntry {
+func MapConsoleLogs(logs []types.ConsoleLogEntry) []ConsoleLogEntry {
 	out := make([]ConsoleLogEntry, 0, len(logs))
 	for _, l := range logs {
 		out = append(out, ConsoleLogEntry{
@@ -171,7 +171,7 @@ func MapConsoleLogs(logs []bridge.LogEntry) []ConsoleLogEntry {
 }
 
 // MapJSErrors converts bridge uncaught-exception entries to the audit schema.
-func MapJSErrors(errors []bridge.ErrorEntry) []JSError {
+func MapJSErrors(errors []types.ErrorLogEntry) []JSError {
 	out := make([]JSError, 0, len(errors))
 	for _, e := range errors {
 		out = append(out, JSError{

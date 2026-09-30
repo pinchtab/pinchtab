@@ -2,8 +2,8 @@ package bridge
 
 import (
 	"sync"
-	"time"
 
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/sanitize"
 )
 
@@ -19,29 +19,10 @@ const (
 	maxErrorStackBytes        = 8 * 1024
 )
 
-// LogEntry represents a single console log entry.
-type LogEntry struct {
-	Timestamp time.Time `json:"timestamp"`
-	Level     string    `json:"level"`
-	Message   string    `json:"message"`
-	Source    string    `json:"source,omitempty"`
-}
-
-// ErrorEntry represents an uncaught error/exception.
-type ErrorEntry struct {
-	Timestamp time.Time `json:"timestamp"`
-	Message   string    `json:"message"`
-	Type      string    `json:"type,omitempty"`
-	URL       string    `json:"url,omitempty"`
-	Line      int64     `json:"line,omitempty"`
-	Column    int64     `json:"column,omitempty"`
-	Stack     string    `json:"stack,omitempty"`
-}
-
 // TabLogs holds console and error logs for a single tab.
 type TabLogs struct {
-	Console []LogEntry
-	Errors  []ErrorEntry
+	Console []types.ConsoleLogEntry
+	Errors  []types.ErrorLogEntry
 	mu      sync.RWMutex
 }
 
@@ -72,15 +53,15 @@ func (s *ConsoleLogStore) getOrCreateTab(tabID string) *TabLogs {
 		return t
 	}
 	t := &TabLogs{
-		Console: make([]LogEntry, 0),
-		Errors:  make([]ErrorEntry, 0),
+		Console: make([]types.ConsoleLogEntry, 0),
+		Errors:  make([]types.ErrorLogEntry, 0),
 	}
 	s.tabs[tabID] = t
 	return t
 }
 
 // AddConsoleLog adds a console log entry for a tab.
-func (s *ConsoleLogStore) AddConsoleLog(tabID string, entry LogEntry) {
+func (s *ConsoleLogStore) AddConsoleLog(tabID string, entry types.ConsoleLogEntry) {
 	t := s.getOrCreateTab(tabID)
 	entry = normalizeConsoleLogEntry(entry)
 	t.mu.Lock()
@@ -92,7 +73,7 @@ func (s *ConsoleLogStore) AddConsoleLog(tabID string, entry LogEntry) {
 }
 
 // AddErrorLog adds an error log entry for a tab.
-func (s *ConsoleLogStore) AddErrorLog(tabID string, entry ErrorEntry) {
+func (s *ConsoleLogStore) AddErrorLog(tabID string, entry types.ErrorLogEntry) {
 	t := s.getOrCreateTab(tabID)
 	entry = normalizeErrorLogEntry(entry)
 	t.mu.Lock()
@@ -104,7 +85,7 @@ func (s *ConsoleLogStore) AddErrorLog(tabID string, entry ErrorEntry) {
 }
 
 // GetConsoleLogs returns console logs for a tab. If limit > 0, returns at most limit entries.
-func (s *ConsoleLogStore) GetConsoleLogs(tabID string, limit int) []LogEntry {
+func (s *ConsoleLogStore) GetConsoleLogs(tabID string, limit int) []types.ConsoleLogEntry {
 	s.mu.RLock()
 	t, ok := s.tabs[tabID]
 	s.mu.RUnlock()
@@ -121,13 +102,13 @@ func (s *ConsoleLogStore) GetConsoleLogs(tabID string, limit int) []LogEntry {
 		limit = s.maxLines
 	}
 	start := count - limit
-	result := make([]LogEntry, limit)
+	result := make([]types.ConsoleLogEntry, limit)
 	copy(result, t.Console[start:])
 	return result
 }
 
 // GetErrorLogs returns error logs for a tab. If limit > 0, returns at most limit entries.
-func (s *ConsoleLogStore) GetErrorLogs(tabID string, limit int) []ErrorEntry {
+func (s *ConsoleLogStore) GetErrorLogs(tabID string, limit int) []types.ErrorLogEntry {
 	s.mu.RLock()
 	t, ok := s.tabs[tabID]
 	s.mu.RUnlock()
@@ -144,7 +125,7 @@ func (s *ConsoleLogStore) GetErrorLogs(tabID string, limit int) []ErrorEntry {
 		limit = s.maxLines
 	}
 	start := count - limit
-	result := make([]ErrorEntry, limit)
+	result := make([]types.ErrorLogEntry, limit)
 	copy(result, t.Errors[start:])
 	return result
 }
@@ -182,14 +163,14 @@ func (s *ConsoleLogStore) RemoveTab(tabID string) {
 	s.mu.Unlock()
 }
 
-func normalizeConsoleLogEntry(entry LogEntry) LogEntry {
+func normalizeConsoleLogEntry(entry types.ConsoleLogEntry) types.ConsoleLogEntry {
 	entry.Level = sanitize.TruncateUTF8BytesWithEllipsis(entry.Level, maxConsoleLevelBytes)
 	entry.Message = sanitize.TruncateUTF8BytesWithEllipsis(entry.Message, maxConsoleMessageBytes)
 	entry.Source = sanitize.TruncateUTF8BytesWithEllipsis(entry.Source, maxConsoleSourceBytes)
 	return entry
 }
 
-func normalizeErrorLogEntry(entry ErrorEntry) ErrorEntry {
+func normalizeErrorLogEntry(entry types.ErrorLogEntry) types.ErrorLogEntry {
 	entry.Message = sanitize.TruncateUTF8BytesWithEllipsis(entry.Message, maxErrorMessageBytes)
 	entry.Type = sanitize.TruncateUTF8BytesWithEllipsis(entry.Type, maxErrorTypeBytes)
 	entry.URL = sanitize.TruncateUTF8BytesWithEllipsis(entry.URL, maxErrorURLBytes)

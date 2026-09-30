@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/audit"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/bridge/observe"
@@ -178,10 +179,10 @@ func (h *Handlers) auditCollectors(tCtx context.Context, tabID string) audit.Col
 		Screenshot: func() ([]byte, error) {
 			return h.Bridge.CaptureScreenshot(tCtx, "png", 0, nil)
 		},
-		Console: func() ([]bridge.LogEntry, error) {
+		Console: func() ([]types.ConsoleLogEntry, error) {
 			return h.Bridge.GetConsoleLogs(tabID, 0), nil
 		},
-		JSErrors: func() ([]bridge.ErrorEntry, error) {
+		JSErrors: func() ([]types.ErrorLogEntry, error) {
 			return h.Bridge.GetErrorLogs(tabID, 0), nil
 		},
 		Network: func() ([]observe.NetworkEntry, error) {

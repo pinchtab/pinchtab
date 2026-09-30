@@ -12,6 +12,7 @@ import (
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
@@ -104,7 +105,7 @@ func (tm *TabManager) recordConsoleDomainMessage(rawCDPID string, msg consoleDom
 	}
 	switch msg.Source {
 	case "console-api":
-		tm.logStore.AddConsoleLog(rawCDPID, LogEntry{
+		tm.logStore.AddConsoleLog(rawCDPID, types.ConsoleLogEntry{
 			Timestamp: time.Now(),
 			Level:     msg.Level,
 			Message:   msg.Text,
@@ -114,7 +115,7 @@ func (tm *TabManager) recordConsoleDomainMessage(rawCDPID string, msg consoleDom
 		if msg.Level != "error" {
 			return
 		}
-		tm.logStore.AddErrorLog(rawCDPID, ErrorEntry{
+		tm.logStore.AddErrorLog(rawCDPID, types.ErrorLogEntry{
 			Timestamp: time.Now(),
 			Message:   msg.Text,
 			URL:       msg.URL,

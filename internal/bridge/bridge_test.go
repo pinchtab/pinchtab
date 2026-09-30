@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/target"
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
@@ -386,8 +387,8 @@ func TestPurgeTrackedTabStateByTargetID(t *testing.T) {
 	tm.accessed[tabID] = true
 	tm.currentTab = tabID
 	dm.SetPending(tabID, &DialogState{Type: "alert", Message: "secret"})
-	logStore.AddConsoleLog(cdpID, LogEntry{Level: "log", Message: "secret"})
-	logStore.AddErrorLog(cdpID, ErrorEntry{Message: "secret"})
+	logStore.AddConsoleLog(cdpID, types.ConsoleLogEntry{Level: "log", Message: "secret"})
+	logStore.AddErrorLog(cdpID, types.ErrorLogEntry{Message: "secret"})
 
 	if ok := tm.purgeTrackedTabStateByTargetID(cdpID); !ok {
 		t.Fatal("expected tab cleanup to succeed")

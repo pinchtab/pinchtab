@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"github.com/pinchtab/pinchtab/internal/cdptk"
@@ -506,13 +507,13 @@ func (m *healthTabsBridge) Execute(ctx context.Context, tabID string, task func(
 	return task(ctx)
 }
 
-func (m *healthTabsBridge) GetConsoleLogs(tabID string, limit int) []bridge.LogEntry {
+func (m *healthTabsBridge) GetConsoleLogs(tabID string, limit int) []types.ConsoleLogEntry {
 	return nil
 }
 
 func (m *healthTabsBridge) ClearConsoleLogs(tabID string) {}
 
-func (m *healthTabsBridge) GetErrorLogs(tabID string, limit int) []bridge.ErrorEntry {
+func (m *healthTabsBridge) GetErrorLogs(tabID string, limit int) []types.ErrorLogEntry {
 	return nil
 }
 

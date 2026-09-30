@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"github.com/pinchtab/pinchtab/internal/cdptk"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -74,9 +75,9 @@ type BridgeAPI interface {
 
 	GetDialogManager() *DialogManager
 
-	GetConsoleLogs(tabID string, limit int) []LogEntry
+	GetConsoleLogs(tabID string, limit int) []types.ConsoleLogEntry
 	ClearConsoleLogs(tabID string)
-	GetErrorLogs(tabID string, limit int) []ErrorEntry
+	GetErrorLogs(tabID string, limit int) []types.ErrorLogEntry
 	ClearErrorLogs(tabID string)
 
 	Navigate(ctx context.Context, url string, params NavigateParams) (*NavigateResult, error)

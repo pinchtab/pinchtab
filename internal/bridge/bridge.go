@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	bridgeruntime "github.com/pinchtab/pinchtab/internal/bridge/runtime"
@@ -360,7 +361,7 @@ func (b *Bridge) TabLockInfo(tabID string) *LockInfo {
 	return b.Locks.Get(tabID)
 }
 
-func (b *Bridge) GetConsoleLogs(tabID string, limit int) []LogEntry {
+func (b *Bridge) GetConsoleLogs(tabID string, limit int) []types.ConsoleLogEntry {
 	if b.LogStore == nil {
 		return nil
 	}
@@ -376,7 +377,7 @@ func (b *Bridge) ClearConsoleLogs(tabID string) {
 	}
 }
 
-func (b *Bridge) GetErrorLogs(tabID string, limit int) []ErrorEntry {
+func (b *Bridge) GetErrorLogs(tabID string, limit int) []types.ErrorLogEntry {
 	if b.LogStore == nil {
 		return nil
 	}

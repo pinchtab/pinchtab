@@ -79,8 +79,6 @@ var wireTwins = []wireTwin{
 	{name: "RouteAttempt", wire: types.RouteAttempt{}, source: browserops.RouteAttempt{}},
 	{name: "RouteMetadata", wire: types.RouteMetadata{}, source: browserops.RouteMetadata{}},
 	{name: "Session", wire: types.Session{}, source: session.Session{}},
-	{name: "ConsoleLogEntry", wire: types.ConsoleLogEntry{}, source: bridge.LogEntry{}},
-	{name: "ErrorLogEntry", wire: types.ErrorLogEntry{}, source: bridge.ErrorEntry{}},
 	// The served profile is profiles.profileResponse, which is unexported and sends
 	// every key unconditionally; Profile mirrors ProfileInfo's optionality instead,
 	// which the dashboard reads the same way since an optional key may be present.

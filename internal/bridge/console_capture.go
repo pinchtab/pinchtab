@@ -9,6 +9,8 @@ import (
 
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
+
+	"github.com/pinchtab/pinchtab/internal/api/types"
 )
 
 // setupConsoleCapture enables runtime domain and listens for console/exception events.
@@ -84,7 +86,7 @@ func (tm *TabManager) setupConsoleCapture(ctx context.Context, rawCDPID string) 
 				return
 			}
 
-			tm.logStore.AddConsoleLog(rawCDPID, LogEntry{
+			tm.logStore.AddConsoleLog(rawCDPID, types.ConsoleLogEntry{
 				Timestamp: ts,
 				Level:     string(ev.Type),
 				Message:   msg,
@@ -122,7 +124,7 @@ func (tm *TabManager) setupConsoleCapture(ctx context.Context, rawCDPID string) 
 				stack = ev.ExceptionDetails.Exception.Description
 			}
 
-			tm.logStore.AddErrorLog(rawCDPID, ErrorEntry{
+			tm.logStore.AddErrorLog(rawCDPID, types.ErrorLogEntry{
 				Timestamp: ts,
 				Message:   msg,
 				URL:       ev.ExceptionDetails.URL,
