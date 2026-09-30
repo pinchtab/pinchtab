@@ -59,10 +59,7 @@ func Wait(client *http.Client, base, token string, args []string, cmd *cobra.Com
 		body["timeout"] = timeoutMs
 	}
 
-	path := "/wait"
-	if tabID != "" {
-		path = "/tabs/" + tabID + "/wait"
-	}
+	path := apiclient.TabPath(tabID, "wait")
 
 	result := apiclient.DoPostQuiet(client, base, token, path, body)
 

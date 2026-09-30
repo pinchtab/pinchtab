@@ -15,10 +15,7 @@ func Dialog(client *http.Client, base, token string, action string, text string,
 		body["text"] = text
 	}
 	tabID, _ := cmd.Flags().GetString("tab")
-	path := "/dialog"
-	if tabID != "" {
-		path = "/tabs/" + tabID + "/dialog"
-	}
+	path := apiclient.TabPath(tabID, "dialog")
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {

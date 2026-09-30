@@ -13,6 +13,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
+	"github.com/pinchtab/pinchtab/internal/cli/clistate"
 	"github.com/pinchtab/pinchtab/internal/fileout"
 	"github.com/pinchtab/pinchtab/internal/readiness"
 	"github.com/spf13/cobra"
@@ -180,14 +181,7 @@ func RecordStatus(client *http.Client, base, token string) {
 }
 
 func recordingStateFile() string {
-	if dir := os.Getenv("XDG_STATE_HOME"); dir != "" {
-		return dir + "/pinchtab/current-recording"
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = os.TempDir()
-	}
-	return home + "/.local/state/pinchtab/current-recording"
+	return filepath.Join(clistate.Dir(), "current-recording")
 }
 
 func writeRecordingState(outFile string) {

@@ -38,10 +38,7 @@ func Find(client *http.Client, base, token string, query string, cmd *cobra.Comm
 		body["explain"] = true
 	}
 
-	path := "/find"
-	if tabID != "" {
-		path = "/tabs/" + tabID + "/find"
-	}
+	path := apiclient.TabPath(tabID, "find")
 	capture := apiclient.CaptureVocab(tabID == "")
 
 	if refOnly {

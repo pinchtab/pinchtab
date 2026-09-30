@@ -25,10 +25,7 @@ func Download(client *http.Client, base, token string, args []string, output, ta
 	params := url.Values{}
 	params.Set("url", targetURL)
 
-	path := "/download"
-	if tabID != "" {
-		path = "/tabs/" + url.PathEscape(tabID) + "/download"
-	}
+	path := apiclient.TabPath(tabID, "download")
 
 	body := apiclient.DoGetRaw(client, base, token, path, params)
 	if body == nil {

@@ -37,10 +37,7 @@ func Reload(client *http.Client, base, token string, cmd *cobra.Command) {
 // drift — reload used to discard the response and print a bare OK.
 func historyNav(client *http.Client, base, token, action string, cmd *cobra.Command) {
 	tabID, _ := cmd.Flags().GetString("tab")
-	path := "/" + action
-	if tabID != "" {
-		path = "/tabs/" + tabID + "/" + action
-	}
+	path := apiclient.TabPath(tabID, action)
 	path = appendDismissBannersQuery(path, cmd)
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
@@ -195,7 +192,7 @@ func buildNavigateRequest(url string, cmd *cobra.Command) navigateRequest {
 	// /navigate so the server can create/select a current tab. Explicit --tab
 	// remains strict and surfaces the 404.
 	if tabID != "" && !newTab {
-		path = "/tabs/" + tabID + "/navigate"
+		path = apiclient.TabPath(tabID, "navigate")
 		fallbackOnNotFound = !explicitTab
 	}
 

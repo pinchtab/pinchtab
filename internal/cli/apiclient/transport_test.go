@@ -123,3 +123,20 @@ func TestCaptureVocabStoresOnlyASuccessfulResponsesToken(t *testing.T) {
 		})
 	}
 }
+
+func TestTabPath(t *testing.T) {
+	tests := []struct {
+		tabID, suffix, want string
+	}{
+		{"a/b", "find", "/tabs/a%2Fb/find"},
+		{"", "find", "/find"},
+		{"tab1", "emulation/viewport", "/tabs/tab1/emulation/viewport"},
+		{"tab1", "/text", "/tabs/tab1/text"},
+		{"", "/text", "/text"},
+	}
+	for _, tt := range tests {
+		if got := TabPath(tt.tabID, tt.suffix); got != tt.want {
+			t.Errorf("TabPath(%q, %q) = %q, want %q", tt.tabID, tt.suffix, got, tt.want)
+		}
+	}
+}

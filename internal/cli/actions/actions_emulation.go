@@ -40,10 +40,7 @@ func SetViewport(client *http.Client, base, token string, cmd *cobra.Command, ar
 	}
 
 	tab, _ := cmd.Flags().GetString("tab")
-	path := "/emulation/viewport"
-	if tab != "" {
-		path = "/tabs/" + tab + "/emulation/viewport"
-	}
+	path := apiclient.TabPath(tab, "emulation/viewport")
 
 	result := apiclient.DoPostQuiet(client, base, token, path, body)
 	if result == nil {

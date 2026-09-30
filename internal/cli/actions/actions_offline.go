@@ -29,10 +29,7 @@ func SetOffline(client *http.Client, base, token string, cmd *cobra.Command, arg
 	}
 
 	tab, _ := cmd.Flags().GetString("tab")
-	path := "/emulation/offline"
-	if tab != "" {
-		path = "/tabs/" + tab + "/emulation/offline"
-	}
+	path := apiclient.TabPath(tab, "emulation/offline")
 
 	result := apiclient.DoPostQuiet(client, base, token, path, body)
 	if result == nil {

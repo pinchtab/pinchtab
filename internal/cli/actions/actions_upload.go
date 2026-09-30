@@ -3,7 +3,6 @@ package actions
 import (
 	"encoding/base64"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 
@@ -34,10 +33,7 @@ func Upload(client *http.Client, base, token string, args []string, selector, ta
 		body["selector"] = selector
 	}
 
-	path := "/upload"
-	if tabID != "" {
-		path = "/tabs/" + url.PathEscape(tabID) + "/upload"
-	}
+	path := apiclient.TabPath(tabID, "upload")
 
 	apiclient.DoPost(client, base, token, path, body)
 }

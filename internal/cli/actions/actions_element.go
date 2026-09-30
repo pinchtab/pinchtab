@@ -120,10 +120,7 @@ func postAction(client *http.Client, base, token string, cmd *cobra.Command, bod
 
 func postActionWithHeaders(client *http.Client, base, token string, cmd *cobra.Command, body map[string]any, headers map[string]string) {
 	tabID, _ := cmd.Flags().GetString("tab")
-	path := "/action"
-	if tabID != "" {
-		path = "/tabs/" + tabID + "/action"
-	}
+	path := apiclient.TabPath(tabID, "action")
 
 	if _, ok := body["vocab"]; !ok {
 		if vocabTab, tok := apiclient.VocabForAction(base, tabID); tok != "" {
@@ -185,10 +182,7 @@ func fetchAndPrintSnapshot(client *http.Client, base, token string, cmd *cobra.C
 }
 
 func fetchAndPrintText(client *http.Client, base, token, tabID string) {
-	path := "/text"
-	if tabID != "" {
-		path = "/tabs/" + tabID + "/text"
-	}
+	path := apiclient.TabPath(tabID, "text")
 	body := apiclient.DoGetRaw(client, base, token, path, nil)
 	var result struct {
 		Text string `json:"text"`

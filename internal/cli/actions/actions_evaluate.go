@@ -17,10 +17,7 @@ func Evaluate(client *http.Client, base, token string, args []string, cmd *cobra
 		body["awaitPromise"] = true
 	}
 	tabID, _ := cmd.Flags().GetString("tab")
-	path := "/evaluate"
-	if tabID != "" {
-		path = "/tabs/" + tabID + "/evaluate"
-	}
+	path := apiclient.TabPath(tabID, "evaluate")
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {

@@ -23,10 +23,7 @@ func SetCredentials(client *http.Client, base, token string, cmd *cobra.Command,
 	}
 
 	tab, _ := cmd.Flags().GetString("tab")
-	path := "/emulation/credentials"
-	if tab != "" {
-		path = "/tabs/" + tab + "/emulation/credentials"
-	}
+	path := apiclient.TabPath(tab, "emulation/credentials")
 
 	result := apiclient.DoPostQuiet(client, base, token, path, body)
 	if result == nil {

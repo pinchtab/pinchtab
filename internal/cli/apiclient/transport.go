@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/authn"
@@ -135,4 +136,12 @@ func OpenStream(client *http.Client, base, token, path string, params url.Values
 		return nil, fmt.Errorf("open stream %s: %w", u, err)
 	}
 	return resp, nil
+}
+
+func TabPath(tabID, suffix string) string {
+	suffix = "/" + strings.TrimPrefix(suffix, "/")
+	if tabID == "" {
+		return suffix
+	}
+	return fmt.Sprintf("/tabs/%s%s", url.PathEscape(tabID), suffix)
 }

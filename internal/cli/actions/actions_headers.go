@@ -28,10 +28,7 @@ func SetHeaders(client *http.Client, base, token string, cmd *cobra.Command, arg
 	}
 
 	tab, _ := cmd.Flags().GetString("tab")
-	path := "/emulation/headers"
-	if tab != "" {
-		path = "/tabs/" + tab + "/emulation/headers"
-	}
+	path := apiclient.TabPath(tab, "emulation/headers")
 
 	result := apiclient.DoPostQuiet(client, base, token, path, body)
 	if result == nil {

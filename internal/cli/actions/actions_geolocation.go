@@ -40,10 +40,7 @@ func SetGeolocation(client *http.Client, base, token string, cmd *cobra.Command,
 	}
 
 	tab, _ := cmd.Flags().GetString("tab")
-	path := "/emulation/geolocation"
-	if tab != "" {
-		path = "/tabs/" + tab + "/emulation/geolocation"
-	}
+	path := apiclient.TabPath(tab, "emulation/geolocation")
 
 	result := apiclient.DoPostQuiet(client, base, token, path, body)
 	if result == nil {

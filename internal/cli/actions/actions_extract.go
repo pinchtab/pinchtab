@@ -40,10 +40,7 @@ func Extract(client *http.Client, base, token string, cmd *cobra.Command) {
 		body["maxItems"] = maxItems
 	}
 
-	path := "/extract"
-	if tabID != "" {
-		path = "/tabs/" + tabID + "/extract"
-	}
+	path := apiclient.TabPath(tabID, "extract")
 	capture := apiclient.CaptureVocab(tabID == "")
 
 	if jsonOutput {

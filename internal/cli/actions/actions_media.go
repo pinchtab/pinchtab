@@ -23,10 +23,7 @@ func SetMedia(client *http.Client, base, token string, cmd *cobra.Command, args 
 	}
 
 	tab, _ := cmd.Flags().GetString("tab")
-	path := "/emulation/media"
-	if tab != "" {
-		path = "/tabs/" + tab + "/emulation/media"
-	}
+	path := apiclient.TabPath(tab, "emulation/media")
 
 	result := apiclient.DoPostQuiet(client, base, token, path, body)
 	if result == nil {
