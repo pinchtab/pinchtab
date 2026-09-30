@@ -23,7 +23,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/remedy"
 	"github.com/pinchtab/pinchtab/internal/routes"
 	"github.com/pinchtab/pinchtab/internal/selector"
-	"github.com/pinchtab/pinchtab/internal/session"
 	"github.com/pinchtab/semantic/recovery"
 )
 
@@ -1024,57 +1023,19 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 	if !rejectMultiStepSubmitClicks(w, req.Steps, "macro", "steps") {
 		return
 	}
-	// Browser resolution: use the first step's browser field as the request
-	// browser, then fall through session > instance > global default > chrome.
 	macroRequestBrowser, ok := rejectMixedBrowsers(w, req.Steps, "macro", "steps")
 	if !ok {
 		return
 	}
-	var macroSessionBrowser string
-	if sess, ok := session.FromRequest(r); ok && sess != nil {
-		macroSessionBrowser = sess.Browser
-	}
-	var macroInstanceBrowser string
-	if req.TabID != "" && h.Orchestrator != nil {
-		if inst, ok := h.Orchestrator.FindInstanceByTab(req.TabID); ok && inst != nil && inst.Browser != "" {
-			macroInstanceBrowser = inst.Browser
-		}
-	}
-	macroResolvedBrowser := config.ResolveBrowser(macroRequestBrowser, macroSessionBrowser, macroInstanceBrowser, h.Config.DefaultBrowser, h.Config.BrowsersAvailable)
-	if macroResolvedBrowser != config.BrowserChrome {
-		if _, err := config.ParseBrowser(macroResolvedBrowser, h.Config.BrowsersAvailable); err != nil {
-			httpx.Error(w, http.StatusBadRequest, err)
-			return
-		}
-	}
-	macroIntentBrowser := macroResolvedBrowser
-	macroHandleDecision, err := checkBrowserCanHandle(macroResolvedBrowser, browsers.RequestIntent{
+	routing, ok := h.resolveBrowserForRequest(w, r, req.TabID, macroRequestBrowser, browsers.RequestIntent{
 		Shape:         browsers.ShapeInteraction,
 		StateChanging: true,
 	})
-	if err != nil {
-		httpx.Error(w, http.StatusBadRequest, err)
-		return
-	}
-	if macroHandleDecision.Decision == browsers.DecisionSkip {
-		macroResolvedBrowser = config.BrowserChrome
-	}
-
-	macroEffectiveCfg, err := h.resolveEffectiveConfig(macroResolvedBrowser)
-	if err != nil {
-		var ambErr *config.AmbiguousBrowserError
-		if errors.As(err, &ambErr) {
-			httpx.ErrorCode(w, http.StatusBadRequest, "browser_ambiguous", err.Error(), false, map[string]any{
-				"browser": ambErr.Browser,
-				"targets": ambErr.Targets,
-			})
-		} else {
-			httpx.Error(w, http.StatusBadRequest, err)
-		}
+	if !ok {
 		return
 	}
 
-	stepTimeout := macroEffectiveCfg.ActionTimeout
+	stepTimeout := routing.EffectiveCfg.ActionTimeout
 	if req.StepTimeout > 0 && req.StepTimeout <= 60 {
 		stepTimeout = time.Duration(req.StepTimeout * float64(time.Second))
 	}
@@ -1116,20 +1077,13 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 
 		tCtx, cancel := context.WithTimeout(ctx, stepTimeout)
 		var result actionResult
-		result, ctx, resolvedTabID = h.runMultiStepActionTail(ctx, tCtx, r, w, &step, macroEffectiveCfg, resolvedTabID, i, selectorResolution.refMissing, func(err error) string {
+		result, ctx, resolvedTabID = h.runMultiStepActionTail(ctx, tCtx, r, w, &step, routing.EffectiveCfg, resolvedTabID, i, selectorResolution.refMissing, func(err error) string {
 			return err.Error()
 		})
 		cancel()
 		run.record(result)
 	}
 
-	macroRoute := routeMetadataFor(browserRouting{
-		Browser:        macroResolvedBrowser,
-		IntentBrowser:  macroIntentBrowser,
-		RequestBrowser: macroRequestBrowser,
-		EffectiveCfg:   macroEffectiveCfg,
-		Decision:       macroHandleDecision,
-	})
 	h.publishMultiStepVocab(w, run, resolvedTabID)
-	h.writeMultiStepActionResult(w, r, ctx, resolvedTabID, run.results, len(req.Steps), macroRoute, map[string]any{"kind": "macro"})
+	h.writeMultiStepActionResult(w, r, ctx, resolvedTabID, run.results, len(req.Steps), routeMetadataFor(routing), map[string]any{"kind": "macro"})
 }
