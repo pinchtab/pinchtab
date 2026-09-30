@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/chromedp"
@@ -237,6 +238,11 @@ func (rm *RouteManager) startInterception(ctx context.Context, tabID string, cla
 	return nil
 }
 
+// redirectLimitReleaseTimeout bounds handing Fetch back after a redirect-limited
+// navigation; the release runs detached from the navigation's own deadline so
+// an expired navigation cannot strand the tab with Fetch enabled and no dispatcher.
+const redirectLimitReleaseTimeout = 5 * time.Second
+
 // BeginRedirectLimit routes the tab's paused requests through limit until the
 // returned end func runs, sharing the Fetch domain with any route rules and
 // proxy auth instead of taking it over. end hands Fetch back exactly as
@@ -259,10 +265,15 @@ func (rm *RouteManager) BeginRedirectLimit(ctx context.Context, limit *bridgecdp
 	}
 	priorFetchEnabled := state.fetchEnabled
 	state.redirectLimit = limit
-	claim := rm.claimInterceptionLocked(ctx, state)
+	tabCtx := context.WithoutCancel(ctx)
+	claim := rm.claimInterceptionLocked(tabCtx, state)
 	rm.mu.Unlock()
 
-	end := func() { rm.endRedirectLimit(ctx, tabID, limit) }
+	end := func() {
+		releaseCtx, cancel := context.WithTimeout(tabCtx, redirectLimitReleaseTimeout)
+		defer cancel()
+		rm.endRedirectLimit(releaseCtx, tabID, limit)
+	}
 	if err := rm.startInterception(ctx, tabID, claim); err != nil {
 		rm.mu.Lock()
 		if s := rm.perTab[tabID]; s != nil {

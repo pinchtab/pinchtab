@@ -29,6 +29,14 @@ const (
 func newRedirectOrigin(t *testing.T) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/slow" {
+			select {
+			case <-r.Context().Done():
+			case <-time.After(3 * time.Second):
+			}
+			_, _ = io.WriteString(w, "<title>slow</title>slow")
+			return
+		}
 		if hops, ok := strings.CutPrefix(r.URL.Path, "/r/"); ok {
 			n, _ := strconv.Atoi(hops)
 			if n > 0 {
@@ -203,6 +211,31 @@ func TestRedirectLimitReleasesInterceptionOnReturn(t *testing.T) {
 	}
 	if err := bridgecdpops.NavigatePage(ctx, origin.URL+"/plain"); err != nil {
 		t.Fatalf("navigation after release: %v", err)
+	}
+	if got := bodyText(t, ctx); got != "origin" {
+		t.Fatalf("body = %q, want origin", got)
+	}
+}
+
+func TestTimedOutRedirectLimitedNavigationLeavesTabUsable(t *testing.T) {
+	origin := newRedirectOrigin(t)
+	ctx, tabID := newRedirectTab(t, "")
+	rm := NewRouteManager(nil)
+
+	navCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	err := bridgecdpops.NavigatePageWithRedirectLimit(navCtx, origin.URL+"/slow", 3, rm)
+	cancel()
+	if err == nil {
+		t.Fatal("navigation to a 3s page under a 500ms deadline succeeded")
+	}
+	rm.mu.Lock()
+	_, stillTracked := rm.perTab[tabID]
+	rm.mu.Unlock()
+	if stillTracked {
+		t.Fatal("tab interception state survived the timed-out navigation")
+	}
+	if err := bridgecdpops.NavigatePage(ctx, origin.URL+"/plain"); err != nil {
+		t.Fatalf("navigation after a timed-out redirect-limited navigation: %v", err)
 	}
 	if got := bodyText(t, ctx); got != "origin" {
 		t.Fatalf("body = %q, want origin", got)
