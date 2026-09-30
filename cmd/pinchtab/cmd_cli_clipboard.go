@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 
@@ -22,7 +21,7 @@ var clipboardReadCmd = &cobra.Command{
 	Short: "Read clipboard text",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			clipboardRead(rt.Client, rt.Base, rt.Token)
+			clipboardRead(rt)
 		})
 	},
 }
@@ -33,7 +32,7 @@ var clipboardWriteCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			clipboardWrite(rt.Client, rt.Base, rt.Token, args)
+			clipboardWrite(rt, args)
 		})
 	},
 }
@@ -44,7 +43,7 @@ var clipboardCopyCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			clipboardWrite(rt.Client, rt.Base, rt.Token, args)
+			clipboardWrite(rt, args)
 		})
 	},
 }
@@ -54,13 +53,13 @@ var clipboardPasteCmd = &cobra.Command{
 	Short: "Paste clipboard text (alias for read)",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			clipboardRead(rt.Client, rt.Base, rt.Token)
+			clipboardRead(rt)
 		})
 	},
 }
 
-func clipboardRead(client *http.Client, base, token string) {
-	result := apiclient.DoGetRaw(client, base, token, "/clipboard/read", nil)
+func clipboardRead(conn apiclient.Conn) {
+	result := conn.GetRaw("/clipboard/read", nil)
 	if result == nil {
 		fmt.Fprintln(os.Stderr, "Failed to read clipboard")
 		os.Exit(1)
@@ -77,8 +76,8 @@ func clipboardRead(client *http.Client, base, token string) {
 	fmt.Println(resp.Text)
 }
 
-func clipboardWrite(client *http.Client, base, token string, args []string) {
-	result := apiclient.DoPost(client, base, token, "/clipboard/write", map[string]any{
+func clipboardWrite(conn apiclient.Conn, args []string) {
+	result := conn.Post("/clipboard/write", map[string]any{
 		"text": strings.Join(args, " "),
 	})
 

@@ -7,8 +7,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 )
 
 // sessionServer captures the last request and serves a canned JSON response.
@@ -56,7 +54,7 @@ func TestSessionCLI_Create_SendsCorrectRequest(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		rt := srv.rt()
-		apiclient.DoPost(rt.Client, rt.Base, rt.Token, "/sessions", map[string]any{"agentId": "agent-1", "label": "ci"})
+		rt.Post("/sessions", map[string]any{"agentId": "agent-1", "label": "ci"})
 	})
 
 	if srv.lastMethod != "POST" {
@@ -89,7 +87,7 @@ func TestSessionCLI_Create_NoLabel_OmitsField(t *testing.T) {
 
 	captureStdout(t, func() {
 		rt := srv.rt()
-		apiclient.DoPost(rt.Client, rt.Base, rt.Token, "/sessions", map[string]any{"agentId": "agent-1"})
+		rt.Post("/sessions", map[string]any{"agentId": "agent-1"})
 	})
 
 	var sent map[string]any
@@ -107,7 +105,7 @@ func TestSessionCLI_List_SendsCorrectRequest(t *testing.T) {
 
 	captureStdout(t, func() {
 		rt := srv.rt()
-		apiclient.DoGet(rt.Client, rt.Base, rt.Token, "/sessions", nil)
+		rt.Get("/sessions", nil)
 	})
 
 	if srv.lastMethod != "GET" {
@@ -124,7 +122,7 @@ func TestSessionCLI_Info_SendsCorrectRequest(t *testing.T) {
 
 	captureStdout(t, func() {
 		rt := srv.rt()
-		apiclient.DoGet(rt.Client, rt.Base, rt.Token, "/sessions/me", nil)
+		rt.Get("/sessions/me", nil)
 	})
 
 	if srv.lastMethod != "GET" {
@@ -143,7 +141,7 @@ func TestSessionCLI_Revoke_SendsCorrectRequest(t *testing.T) {
 
 	captureStdout(t, func() {
 		rt := srv.rt()
-		apiclient.DoPost(rt.Client, rt.Base, rt.Token, "/sessions/"+sessionID+"/revoke", nil)
+		rt.Post("/sessions/"+sessionID+"/revoke", nil)
 	})
 
 	if srv.lastMethod != "POST" {
@@ -173,7 +171,7 @@ func TestSessionCLI_Info_SendsSessionAuthHeader(t *testing.T) {
 			Base:   srv.server.URL,
 			Token:  sessionToken,
 		}
-		apiclient.DoGet(rt.Client, rt.Base, rt.Token, "/sessions/me", nil)
+		rt.Get("/sessions/me", nil)
 	})
 
 	if gotAuth != "Session "+sessionToken {
