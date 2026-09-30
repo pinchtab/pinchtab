@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -18,6 +17,7 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
@@ -184,15 +184,19 @@ func TestTheVisiblePredicateNeverConsultsScrollOrViewport(t *testing.T) {
 // implementation that can drift from it — this card exists because two spellings
 // of one question disagreed.
 func TestTheOnScreenAnswerDelegatesToTheCapturePredicate(t *testing.T) {
-	src, err := os.ReadFile("visible.go")
-	if err != nil {
-		t.Fatal(err)
+	pkg := srccensus.Load(t, ".", 50)
+	onScreen, ok := pkg.Func("elementOnScreen")
+	if !ok {
+		t.Fatalf("elementOnScreen not found in %s; pin this property against whatever answers the visible endpoint's onScreen now", pkg.Dir())
 	}
-	if !strings.Contains(string(src), "bridge.IsOnScreen(") {
-		t.Fatal("visible.go no longer asks bridge.IsOnScreen; the endpoint would answer on-screen-ness with its own predicate and could disagree with the capture snapshot")
-	}
-	if !strings.Contains(string(src), "bridge.ElementBorderBox(") || !strings.Contains(string(src), "bridge.FetchLayout(") {
-		t.Fatal("visible.go no longer measures through the border box and layout the capture path uses")
+	for _, capture := range []string{"bridge.IsOnScreen", "bridge.ElementBorderBox", "bridge.FetchLayout"} {
+		delegated := false
+		for _, site := range pkg.Calls(t, capture) {
+			delegated = delegated || pkg.Contains(onScreen, site)
+		}
+		if !delegated {
+			t.Errorf("%s no longer calls %s; the endpoint would answer on-screen-ness with its own predicate and could disagree with the capture snapshot", onScreen.Name, capture)
+		}
 	}
 }
 

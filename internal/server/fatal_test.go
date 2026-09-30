@@ -3,13 +3,17 @@ package server
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"go/ast"
+	"go/token"
 	"io"
 	"log/slog"
 	"net"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 type fatalRun struct {
@@ -112,84 +116,101 @@ func TestStartupFatalHintsOnlyForAddressInUse(t *testing.T) {
 // pair must funnel through fatalStartup; this guards the funnel from a new
 // call site re-introducing a direct exit.
 func TestFatalStartupIsTheOnlyExitOneSite(t *testing.T) {
-	files, err := filepath.Glob("*.go")
-	if err != nil {
-		t.Fatalf("Glob() error = %v", err)
-	}
-	scanned := 0
+	fset, files := srccensus.Load(t, ".", 10).Syntax()
 	var offenders []string
-	for _, file := range files {
-		if strings.HasSuffix(file, "_test.go") {
-			continue
+	funnelExits := false
+	eachFuncCall(files, func(fn *ast.FuncDecl, call *ast.CallExpr) {
+		if !isExitOne(call) {
+			return
 		}
-		src, err := os.ReadFile(file)
-		if err != nil {
-			t.Fatalf("ReadFile(%s) error = %v", file, err)
+		if fn.Name.Name == "fatalStartup" {
+			funnelExits = true
+			return
 		}
-		scanned++
-		for i, line := range strings.Split(string(src), "\n") {
-			if !strings.Contains(line, "os.Exit(1)") && !strings.Contains(line, "exitProcess(1)") {
-				continue
-			}
-			if file == "server.go" && insideFatalStartup(string(src), i) {
-				continue
-			}
-			offenders = append(offenders, file+":"+line)
-		}
-	}
-	if scanned == 0 {
-		t.Fatal("scanned no package sources")
-	}
+		offenders = append(offenders, fmt.Sprintf("%s (in %s)", fset.Position(call.Pos()), fn.Name.Name))
+	})
 	if len(offenders) != 0 {
 		t.Fatalf("exit-1 outside fatalStartup: %v", offenders)
 	}
-	if !insideFatalStartupContainsExit() {
+	if !funnelExits {
 		t.Fatal("fatalStartup no longer exits with code 1")
 	}
 }
 
-func insideFatalStartup(src string, line int) bool {
-	lines := strings.Split(src, "\n")
-	start := -1
-	for i, l := range lines {
-		if strings.HasPrefix(l, "func fatalStartup(") {
-			start = i
-			continue
-		}
-		if start >= 0 && l == "}" {
-			return line > start && line < i
-		}
-	}
-	return false
-}
-
-func insideFatalStartupContainsExit() bool {
-	src, err := os.ReadFile("server.go")
-	if err != nil {
+func isExitOne(call *ast.CallExpr) bool {
+	name := calleeName(call)
+	if name != "os.Exit" && name != "exitProcess" || len(call.Args) != 1 {
 		return false
 	}
-	for i, line := range strings.Split(string(src), "\n") {
-		if strings.Contains(line, "exitProcess(1)") && insideFatalStartup(string(src), i) {
-			return true
+	code, ok := call.Args[0].(*ast.BasicLit)
+	return ok && code.Value == "1"
+}
+
+func eachFuncCall(files map[string]*ast.File, visit func(fn *ast.FuncDecl, call *ast.CallExpr)) {
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
+				continue
+			}
+			ast.Inspect(fn.Body, func(node ast.Node) bool {
+				if call, ok := node.(*ast.CallExpr); ok {
+					visit(fn, call)
+				}
+				return true
+			})
 		}
 	}
-	return false
+}
+
+func calleeName(call *ast.CallExpr) string {
+	switch fun := call.Fun.(type) {
+	case *ast.Ident:
+		return fun.Name
+	case *ast.SelectorExpr:
+		if recv, ok := fun.X.(*ast.Ident); ok {
+			return recv.Name + "." + fun.Sel.Name
+		}
+	}
+	return ""
 }
 
 // "dashboard started" must follow a successful bind; the bind is the step that
 // fails when the port is taken, so announcing it first misreports the failure.
 func TestDashboardStartedIsLoggedAfterBind(t *testing.T) {
-	src, err := os.ReadFile("server.go")
-	if err != nil {
-		t.Fatalf("ReadFile() error = %v", err)
+	_, files := srccensus.Load(t, ".", 10).Syntax()
+	calls := map[*ast.FuncDecl]map[string]token.Pos{}
+	eachFuncCall(files, func(fn *ast.FuncDecl, call *ast.CallExpr) {
+		marker := calleeName(call)
+		if marker == "slog.Info" && len(call.Args) > 0 {
+			if msg, ok := call.Args[0].(*ast.BasicLit); ok && msg.Value == `"dashboard started"` {
+				marker = "started"
+			}
+		}
+		if calls[fn] == nil {
+			calls[fn] = map[string]token.Pos{}
+		}
+		if _, seen := calls[fn][marker]; !seen {
+			calls[fn][marker] = call.Pos()
+		}
+	})
+
+	announcers := 0
+	for fn, markers := range calls {
+		started, ok := markers["started"]
+		if !ok {
+			continue
+		}
+		announcers++
+		bind, serve := markers["net.Listen"], markers["srv.Serve"]
+		if bind == token.NoPos || serve == token.NoPos {
+			t.Fatalf("%s logs \"dashboard started\" but no longer binds with net.Listen and serves with srv.Serve; pin the ordering against whatever binds the dashboard now", fn.Name.Name)
+		}
+		if bind >= started || started >= serve {
+			t.Fatalf("%s must bind, then log \"dashboard started\", then serve", fn.Name.Name)
+		}
 	}
-	bind := strings.Index(string(src), `net.Listen("tcp", srv.Addr)`)
-	started := strings.Index(string(src), `slog.Info("dashboard started"`)
-	serve := strings.Index(string(src), "srv.Serve(listener)")
-	if bind < 0 || started < 0 || serve < 0 {
-		t.Fatalf("missing bind/started/serve markers: bind=%d started=%d serve=%d", bind, started, serve)
-	}
-	if bind >= started || started >= serve {
-		t.Fatalf("expected bind < started < serve, got bind=%d started=%d serve=%d", bind, started, serve)
+	if announcers != 1 {
+		t.Fatalf("found %d functions logging \"dashboard started\", want 1", announcers)
 	}
 }

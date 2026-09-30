@@ -6,10 +6,11 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/browsers/ghostchrome/bridgekit"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 type optionalCapabilitySite struct {
@@ -30,21 +32,10 @@ type optionalCapabilitySite struct {
 
 func parseHandlerSources(t *testing.T, extra map[string]string) (*token.FileSet, []*ast.File) {
 	t.Helper()
-	paths, err := filepath.Glob("*.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fset := token.NewFileSet()
-	var files []*ast.File
-	for _, path := range paths {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
-		}
-		file, err := parser.ParseFile(fset, path, nil, 0)
-		if err != nil {
-			t.Fatalf("parse %s: %v", path, err)
-		}
-		files = append(files, file)
+	fset, parsed := srccensus.Load(t, ".", 50).Syntax()
+	files := make([]*ast.File, 0, len(parsed)+len(extra))
+	for _, name := range slices.Sorted(maps.Keys(parsed)) {
+		files = append(files, parsed[name])
 	}
 	for name, src := range extra {
 		file, err := parser.ParseFile(fset, name, src, 0)

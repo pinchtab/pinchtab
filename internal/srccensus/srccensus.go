@@ -46,6 +46,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -360,6 +361,13 @@ func (p *Package) Func(name string) (Func, bool) {
 		}
 	})
 	return found, ok
+}
+
+// Syntax exposes the parsed files, keyed by base name and sharing one FileSet, for a rule
+// the finders cannot express — a type check, or a match on call arguments. The scope is
+// still Load's, so a guard reaching for raw syntax keeps the derived file set and its floor.
+func (p *Package) Syntax() (*token.FileSet, map[string]*ast.File) {
+	return p.fset, maps.Clone(p.files)
 }
 
 // Dir is the directory the census read, for a not-found message that says where it looked.

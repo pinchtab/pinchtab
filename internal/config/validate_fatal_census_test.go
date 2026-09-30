@@ -5,11 +5,12 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 type fatalAtLoadMember struct {
@@ -25,25 +26,7 @@ var fatalAtLoadMembers = map[string]fatalAtLoadMember{
 }
 
 func TestFatalAtLoadMembershipIsExplicitAndExhaustive(t *testing.T) {
-	fset := token.NewFileSet()
-	paths, err := filepath.Glob("*.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	files := map[string]*ast.File{}
-	for _, path := range paths {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
-		}
-		file, err := parser.ParseFile(fset, path, nil, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-		files[path] = file
-	}
-	if len(files) == 0 {
-		t.Fatal("no config production files found; fatal-at-load census would pass vacuously")
-	}
+	_, files := srccensus.Load(t, ".", 20).Syntax()
 
 	fields, literals := fatalAtLoadDeclarations(files)
 	for _, problem := range fatalAtLoadCensusProblems(fields, literals, fatalAtLoadMembers) {

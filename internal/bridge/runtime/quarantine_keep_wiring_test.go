@@ -2,12 +2,12 @@ package runtime
 
 import (
 	"go/ast"
-	"go/parser"
 	"go/token"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 // The retention count is a config setting, and a setting that never reaches the deleter is
@@ -21,23 +21,10 @@ import (
 func TestQuarantineHookReceivesTheConfiguredKeepCount(t *testing.T) {
 	const field = "ProfileQuarantineKeep"
 
-	fset := token.NewFileSet()
-	files, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatal(err)
-	}
+	fset, files := srccensus.Load(t, ".", 3).Syntax()
 
-	scanned, calls := 0, 0
-	for _, entry := range files {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		scanned++
-		file, err := parser.ParseFile(fset, name, nil, 0)
-		if err != nil {
-			t.Fatalf("ParseFile(%s): %v", name, err)
-		}
+	calls := 0
+	for _, file := range files {
 		ast.Inspect(file, func(node ast.Node) bool {
 			call, ok := node.(*ast.CallExpr)
 			if !ok {
@@ -63,9 +50,6 @@ func TestQuarantineHookReceivesTheConfiguredKeepCount(t *testing.T) {
 		})
 	}
 
-	if scanned < 3 {
-		t.Fatalf("scanned only %d non-test files in this package, so this census read almost nothing", scanned)
-	}
 	if calls == 0 {
 		t.Fatalf("no call to QuarantineCorruptedProfile in this package; the guard has nothing to check — re-point it at whatever quarantines a profile now rather than deleting it")
 	}

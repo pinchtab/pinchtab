@@ -3,12 +3,10 @@ package autosolver
 import (
 	"go/ast"
 	"go/importer"
-	"go/parser"
-	"go/token"
 	"go/types"
-	"os"
-	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 // intentTypeReadCensus reports every read of an Intent's Type field in the
@@ -18,25 +16,10 @@ import (
 func intentTypeReadCensus(t *testing.T) (violations []string, allowed int) {
 	t.Helper()
 
-	fset := token.NewFileSet()
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var files []*ast.File
-	for _, entry := range entries {
-		name := entry.Name()
-		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		file, err := parser.ParseFile(fset, name, nil, 0)
-		if err != nil {
-			t.Fatalf("parse %s: %v", name, err)
-		}
+	fset, parsed := srccensus.Load(t, ".", 5).Syntax()
+	files := make([]*ast.File, 0, len(parsed))
+	for _, file := range parsed {
 		files = append(files, file)
-	}
-	if len(files) == 0 {
-		t.Fatal("census found no production sources; it would pass over nothing")
 	}
 
 	info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}}
