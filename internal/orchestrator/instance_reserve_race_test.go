@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"sync"
@@ -75,6 +76,60 @@ func TestConcurrentSameProfileLaunchRefusesTheSecondWhileTheFirstSpawns(t *testi
 	}
 }
 
+func TestStopDuringLaunchSpawnIsRefusedAndLaunchPublishes(t *testing.T) {
+	old := processAliveFunc
+	processAliveFunc = func(pid int) bool { return pid > 0 }
+	t.Cleanup(func() { processAliveFunc = old })
+	stubPortAvailability(t, func(int) bool { return true })
+
+	runner := &gatedRunner{entered: make(chan struct{}, 1), release: make(chan struct{})}
+	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+
+	launched := make(chan error, 1)
+	go func() {
+		_, err := o.LaunchWithOptions("stop-while-starting", "", true, LaunchOptions{})
+		launched <- err
+	}()
+	select {
+	case <-runner.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("launch never reached the spawn")
+	}
+
+	id := instanceIDNamed(o, "stop-while-starting")
+	stopErr := o.Stop(id)
+	close(runner.release)
+	if err := <-launched; err != nil {
+		t.Fatalf("launch: %v", err)
+	}
+	if stopErr == nil || !strings.Contains(stopErr.Error(), "still starting") {
+		t.Fatalf("Stop during spawn err = %v, want a still-starting refusal", stopErr)
+	}
+	o.mu.RLock()
+	inst, ok := o.instances[id]
+	running := ok && inst.cmd != nil
+	o.mu.RUnlock()
+	if !running {
+		t.Fatalf("launched instance missing from the registry after the refused stop")
+	}
+	t.Cleanup(func() { o.ForceShutdown() })
+}
+
+func TestFailedRelaunchKeepsThePreviousErrorRecord(t *testing.T) {
+	stubPortAvailability(t, func(int) bool { return true })
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true, runErr: errors.New("exec format error")})
+
+	previous := &InstanceInternal{Instance: bridge.Instance{ID: "inst_previous", ProfileName: "relaunch", Status: "error", Error: "chrome crashed"}}
+	o.instances[previous.ID] = previous
+
+	if _, err := o.LaunchWithOptions("relaunch", "", true, LaunchOptions{}); err == nil {
+		t.Fatal("relaunch succeeded, want the spawn failure")
+	}
+	if len(o.instances) != 1 || o.instances[previous.ID] != previous || previous.Instance.Error != "chrome crashed" {
+		t.Fatalf("registry after failed relaunch = %+v, want only the previous error record", o.instances)
+	}
+}
+
 func TestConcurrentSameNameExternalAttachLeavesOneInstance(t *testing.T) {
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
 
@@ -115,4 +170,13 @@ func countInstancesNamed(o *Orchestrator, name string) int {
 		}
 	}
 	return n
+}
+
+func instanceIDNamed(o *Orchestrator, name string) string {
+	for _, inst := range o.List() {
+		if inst.ProfileName == name {
+			return inst.ID
+		}
+	}
+	return ""
 }

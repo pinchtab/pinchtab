@@ -37,6 +37,10 @@ func (o *Orchestrator) Stop(id string) error {
 		o.markStopped(id)
 		return nil
 	}
+	if isSpawnReservation(inst) {
+		o.mu.Unlock()
+		return fmt.Errorf("instance %q is still starting", id)
+	}
 	inst.Status = "stopping"
 	o.mu.Unlock()
 
@@ -59,6 +63,10 @@ func (o *Orchestrator) Stop(id string) error {
 
 	o.markStopped(id)
 	return nil
+}
+
+func isSpawnReservation(inst *InstanceInternal) bool {
+	return inst.Status == "starting" && inst.cmd == nil && inst.AttachType == ""
 }
 
 // stopChildProcess runs the child shutdown escalation: ask the bridge to shut

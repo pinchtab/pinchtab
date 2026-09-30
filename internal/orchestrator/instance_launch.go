@@ -116,7 +116,8 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 		return nil, fmt.Errorf("instance already running for profile %q", name)
 	}
 
-	o.instances[instanceID] = &InstanceInternal{
+	previous := o.instances[instanceID]
+	placeholder := &InstanceInternal{
 		Instance: bridge.Instance{
 			ID:          instanceID,
 			ProfileID:   profileID,
@@ -125,13 +126,12 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 			Status:      "starting",
 		},
 	}
+	o.instances[instanceID] = placeholder
 	o.mu.Unlock()
 	reserved := true
 	defer func() {
 		if reserved {
-			o.mu.Lock()
-			delete(o.instances, instanceID)
-			o.mu.Unlock()
+			o.releaseLaunchReservation(instanceID, placeholder, previous)
 		}
 	}()
 
@@ -256,6 +256,11 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 	// snapshotWithFallbackMetadata already returns a detached copy for the
 	// fallback path; this makes the plain path agree.
 	o.mu.Lock()
+	if o.instances[instanceID] != placeholder {
+		o.mu.Unlock()
+		o.stopChildProcess(instanceID, inst)
+		return nil, fmt.Errorf("instance %q was stopped while starting", instanceID)
+	}
 	o.instances[instanceID] = inst
 	snapshot := inst.Instance
 	o.mu.Unlock()
@@ -265,6 +270,19 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 	o.startMonitor(inst)
 
 	return &snapshot, nil
+}
+
+func (o *Orchestrator) releaseLaunchReservation(instanceID string, placeholder, previous *InstanceInternal) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.instances[instanceID] != placeholder {
+		return
+	}
+	if previous != nil {
+		o.instances[instanceID] = previous
+		return
+	}
+	delete(o.instances, instanceID)
 }
 
 func (o *Orchestrator) childEnv(childConfigPath string) []string {
