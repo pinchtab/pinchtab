@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -15,6 +16,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/profiles"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 	internalurls "github.com/pinchtab/pinchtab/internal/urls"
 )
 
@@ -227,27 +229,30 @@ func (o *Orchestrator) AttachWithOptions(name, cdpURL string, opts AttachOptions
 	return &result, nil
 }
 
-func (o *Orchestrator) waitForChildBridgeHealthy(inst *InstanceInternal, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
+const childBridgeHealthPollInterval = 250 * time.Millisecond
+
+func (o *Orchestrator) waitForChildBridgeHealthy(ctx context.Context, inst *InstanceInternal, timeout time.Duration) error {
 	healthURL := strings.TrimRight(inst.URL, "/") + "/health"
-	for time.Now().Before(deadline) {
-		if healthy, _ := o.probeHealthURL(context.Background(), o.client, inst, healthURL); healthy {
-			{
-				o.mu.Lock()
-				// Only promote starting -> running. The concurrent monitor()
-				// goroutine may have already moved the instance to a terminal
-				// state (error on process exit, or stopping/stopped); a transient
-				// health 200 must not resurrect it.
-				if inst.Status == "starting" {
-					inst.Status = "running"
-				}
-				o.mu.Unlock()
-				return nil
-			}
-		}
-		time.Sleep(250 * time.Millisecond)
+	_, err := readiness.WaitUntil(ctx, timeout, childBridgeHealthPollInterval, func() (struct{}, bool, error) {
+		healthy, _ := o.probeHealthURL(ctx, o.client, inst, healthURL)
+		return struct{}{}, healthy, nil
+	})
+	if errors.Is(err, readiness.ErrNotReady) {
+		return fmt.Errorf("child bridge health check timed out after %v", timeout)
 	}
-	return fmt.Errorf("child bridge health check timed out after %v", timeout)
+	if err != nil {
+		return fmt.Errorf("child bridge health check: %w", err)
+	}
+	o.mu.Lock()
+	// Only promote starting -> running. The concurrent monitor()
+	// goroutine may have already moved the instance to a terminal
+	// state (error on process exit, or stopping/stopped); a transient
+	// health 200 must not resurrect it.
+	if inst.Status == "starting" {
+		inst.Status = "running"
+	}
+	o.mu.Unlock()
+	return nil
 }
 
 // AttachBridge registers an already-running bridge server as an attached instance.

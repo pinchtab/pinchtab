@@ -145,7 +145,21 @@ type AttachOptions struct {
 }
 
 var waitForChildBridgeHealthyFunc = func(o *Orchestrator, inst *InstanceInternal, timeout time.Duration) error {
-	return o.waitForChildBridgeHealthy(inst, timeout)
+	ctx, cancel := o.shutdownScopedContext()
+	defer cancel()
+	return o.waitForChildBridgeHealthy(ctx, inst, timeout)
+}
+
+func (o *Orchestrator) shutdownScopedContext() (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		select {
+		case <-o.shutdownCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, cancel
 }
 
 // generateInternalToken returns a random hex string used as the shared

@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -94,7 +95,7 @@ func TestWaitForChildBridgeHealthy_DoesNotOverwriteErrorStatus(t *testing.T) {
 	o.instances[inst.ID] = inst
 	o.mu.Unlock()
 
-	if err := o.waitForChildBridgeHealthy(inst, time.Second); err != nil {
+	if err := o.waitForChildBridgeHealthy(context.Background(), inst, time.Second); err != nil {
 		t.Fatalf("waitForChildBridgeHealthy returned error on 200: %v", err)
 	}
 	o.mu.RLock()
@@ -124,7 +125,7 @@ func TestWaitForChildBridgeHealthy_PromotesStartingToRunning(t *testing.T) {
 	o.instances[inst.ID] = inst
 	o.mu.Unlock()
 
-	if err := o.waitForChildBridgeHealthy(inst, time.Second); err != nil {
+	if err := o.waitForChildBridgeHealthy(context.Background(), inst, time.Second); err != nil {
 		t.Fatalf("waitForChildBridgeHealthy returned error: %v", err)
 	}
 	o.mu.RLock()

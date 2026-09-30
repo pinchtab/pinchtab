@@ -14,6 +14,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/browsers/providerhooks"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 )
 
 var (
@@ -69,14 +70,14 @@ func (o *Orchestrator) stopChildProcess(id string, inst *InstanceInternal) bool 
 
 	pid := inst.cmd.PID()
 	if pid > 0 {
-		if waitForProcessExit(pid, gracefulProcessStopTimeout) {
+		if waitForProcessExit(context.Background(), pid, gracefulProcessStopTimeout) {
 			return true
 		}
 
 		if err := killProcessGroup(pid, sigTERM); err != nil {
 			slog.Warn("failed to send SIGTERM to instance", "id", id, "pid", pid, "err", err)
 		}
-		if waitForProcessExit(pid, termProcessStopTimeout) {
+		if waitForProcessExit(context.Background(), pid, termProcessStopTimeout) {
 			return true
 		}
 
@@ -86,7 +87,7 @@ func (o *Orchestrator) stopChildProcess(id string, inst *InstanceInternal) bool 
 	}
 
 	inst.cmd.Cancel()
-	return pid <= 0 || waitForProcessExit(pid, killProcessStopTimeout)
+	return pid <= 0 || waitForProcessExit(context.Background(), pid, killProcessStopTimeout)
 }
 
 // requestChildShutdown asks a child bridge to shut itself down. Failures are
@@ -130,7 +131,7 @@ func (o *Orchestrator) stopRegisteredBridge(inst *InstanceInternal) error {
 	}
 	cancel()
 
-	if o.waitForBridgeEndpointExit(inst, registeredBridgeStopTimeout) {
+	if o.waitForBridgeEndpointExit(context.Background(), inst, registeredBridgeStopTimeout) {
 		return nil
 	}
 	if requestErr != nil {
@@ -139,22 +140,23 @@ func (o *Orchestrator) stopRegisteredBridge(inst *InstanceInternal) error {
 	return fmt.Errorf("registered bridge %q acknowledged shutdown but its endpoint is still reachable", inst.ID)
 }
 
-func (o *Orchestrator) waitForBridgeEndpointExit(inst *InstanceInternal, timeout time.Duration) bool {
+const (
+	bridgeEndpointExitPollInterval = 50 * time.Millisecond
+	bridgeEndpointProbeTimeout     = 250 * time.Millisecond
+)
+
+func (o *Orchestrator) waitForBridgeEndpointExit(ctx context.Context, inst *InstanceInternal, timeout time.Duration) bool {
 	healthURL, err := o.instancePathURL(inst, "/health", "")
 	if err != nil {
 		return false
 	}
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		probeCtx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+	_, err = readiness.WaitUntil(ctx, timeout, bridgeEndpointExitPollInterval, func() (struct{}, bool, error) {
+		probeCtx, cancel := context.WithTimeout(ctx, bridgeEndpointProbeTimeout)
+		defer cancel()
 		_, probeErr := o.probeHealthURL(probeCtx, o.client, inst, healthURL.String())
-		cancel()
-		if probeErr != nil {
-			return true
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	return false
+		return struct{}{}, probeErr != nil && ctx.Err() == nil, nil
+	})
+	return err == nil
 }
 
 func (o *Orchestrator) StopProfile(name string) error {

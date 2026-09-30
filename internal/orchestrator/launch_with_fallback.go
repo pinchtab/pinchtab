@@ -348,7 +348,7 @@ func (o *Orchestrator) tearDownFailedAttempt(instanceID string) {
 		o.stopDetachedFailedAttempt(instanceID, inst)
 	}()
 	if inst.cmd != nil {
-		if pid := inst.cmd.PID(); pid > 0 && !waitForProcessExit(pid, failedAttemptExitWait) {
+		if pid := inst.cmd.PID(); pid > 0 && !waitForProcessExit(context.Background(), pid, failedAttemptExitWait) {
 			slog.Warn("failed fallback attempt still running; next candidate may hit a locked profile", "id", instanceID, "pid", pid)
 		}
 	}

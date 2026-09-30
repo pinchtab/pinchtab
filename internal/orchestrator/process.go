@@ -1,12 +1,15 @@
 package orchestrator
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/readiness"
 )
 
 func instanceIsActive(inst *InstanceInternal) bool {
@@ -19,18 +22,16 @@ func instanceIsActive(inst *InstanceInternal) bool {
 	return inst.Status == "starting" || inst.Status == "running" || inst.Status == "stopping"
 }
 
-func waitForProcessExit(pid int, timeout time.Duration) bool {
+const processExitPollInterval = 150 * time.Millisecond
+
+func waitForProcessExit(ctx context.Context, pid int, timeout time.Duration) bool {
 	if pid <= 0 {
 		return true
 	}
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if !isProcessAlive(pid) {
-			return true
-		}
-		time.Sleep(150 * time.Millisecond)
-	}
-	return !isProcessAlive(pid)
+	_, err := readiness.WaitUntil(ctx, timeout, processExitPollInterval, func() (struct{}, bool, error) {
+		return struct{}{}, !isProcessAlive(pid), nil
+	})
+	return err == nil || !isProcessAlive(pid)
 }
 
 var processAliveFunc = processAlive
