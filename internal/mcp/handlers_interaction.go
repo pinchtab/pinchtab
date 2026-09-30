@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/scroll"
 )
 
@@ -121,19 +122,20 @@ func handleAction(c *Client, kind string) func(context.Context, mcp.CallToolRequ
 				if waitNav, ok := optBool(r, "waitNav"); ok && waitNav {
 					payload["waitNav"] = true
 				}
-				if mode := strings.ToLower(strings.TrimSpace(optTrimmedString(r, "mode"))); mode != "" {
-					if mode != "dom" && mode != "dispatch" {
-						return mcp.NewToolResultError("mode must be 'dom' or 'dispatch'"), nil
+				if rawMode := optTrimmedString(r, "mode"); rawMode != "" {
+					mode, err := bridge.ParseClickMode(rawMode)
+					if err != nil {
+						return mcp.NewToolResultError(err.Error()), nil
 					}
 					if humanizeSet && humanize {
 						return mcp.NewToolResultError("mode and humanize are mutually exclusive"), nil
 					}
 					payload["mode"] = mode
 				}
-				dialogAction := strings.ToLower(firstNonEmptyString(r, "dialogAction", "onDialog"))
-				if dialogAction != "" {
-					if dialogAction != "accept" && dialogAction != "dismiss" {
-						return mcp.NewToolResultError("dialogAction must be 'accept' or 'dismiss'"), nil
+				if rawDialogAction := firstNonEmptyString(r, "dialogAction", "onDialog"); rawDialogAction != "" {
+					dialogAction, err := bridge.ParseDialogAction("dialogAction", rawDialogAction)
+					if err != nil {
+						return mcp.NewToolResultError(err.Error()), nil
 					}
 					payload["dialogAction"] = dialogAction
 					if dialogText := firstNonEmptyString(r, "dialogText", "promptText"); dialogText != "" {

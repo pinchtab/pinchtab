@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
@@ -385,4 +386,39 @@ func (b *Bridge) AvailableActions() []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+const (
+	ClickModeDOM      = "dom"
+	ClickModeDispatch = "dispatch"
+
+	DialogActionAccept  = "accept"
+	DialogActionDismiss = "dismiss"
+)
+
+func ClickModes() []string { return []string{ClickModeDOM, ClickModeDispatch} }
+
+func DialogActions() []string { return []string{DialogActionAccept, DialogActionDismiss} }
+
+// ParseClickMode normalizes a click delivery mode and refuses one outside ClickModes.
+func ParseClickMode(mode string) (string, error) {
+	return parseVocab("mode", mode, ClickModes())
+}
+
+// ParseDialogAction normalizes a dialog action and refuses one outside DialogActions,
+// naming field in the refusal so each surface reports its own parameter.
+func ParseDialogAction(field, action string) (string, error) {
+	return parseVocab(field, action, DialogActions())
+}
+
+func parseVocab(field, value string, allowed []string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if slices.Contains(allowed, normalized) {
+		return normalized, nil
+	}
+	quoted := make([]string, len(allowed))
+	for i, candidate := range allowed {
+		quoted[i] = "'" + candidate + "'"
+	}
+	return "", fmt.Errorf("%s must be %s", field, strings.Join(quoted, " or "))
 }

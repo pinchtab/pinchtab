@@ -77,9 +77,11 @@ func configureBrowserFlags() {
 	clickCmd.Flags().Bool("dismiss-banners", false, "Dismiss cookie/consent banners after a wait-nav click (no-op without --wait-nav)")
 	clickCmd.Flags().Bool("dismiss-known-interstitials", false, "Dismiss a recognized portal interstitial before resolving the click target")
 	addPostActionFlags(clickCmd, "action", true)
-	clickCmd.Flags().String("dialog-action", "", "Auto-handle a JS dialog opened by the click: accept | dismiss")
+	clickCmd.Flags().String("dialog-action", "", "Auto-handle a JS dialog opened by the click: "+strings.Join(bridge.DialogActions(), " | "))
 	clickCmd.Flags().String("dialog-text", "", "Prompt response text (with --dialog-action accept on prompt())")
-	clickCmd.Flags().String("mode", "", "Click delivery mode override: dom | dispatch")
+	clickCmd.Flags().String("mode", "", "Click delivery mode override: "+strings.Join(bridge.ClickModes(), " | "))
+	addVocabRefusal(clickCmd, "mode", bridge.ParseClickMode)
+	addVocabRefusal(clickCmd, "dialog-action", func(v string) (string, error) { return bridge.ParseDialogAction("dialogAction", v) })
 	clickCmd.Flags().Bool("submit", false, "Dispatch one DOM click and report bounded post-submit state")
 
 	addPointerActionFlags(dblclickCmd, "dblclick")
@@ -548,6 +550,27 @@ func addPostActionFlags(cmd *cobra.Command, verb string, withText bool) {
 	cmd.Flags().Bool("snap-diff", false, "Output snapshot diff after "+verb+" (changes only)")
 	if withText {
 		cmd.Flags().Bool("text", false, "Output page text after "+verb+" (for verification)")
+	}
+}
+
+// addVocabRefusal refuses a flag value outside its bridge vocabulary before any request
+// is sent, with the wording MCP uses, and rewrites the flag to the normalized value.
+func addVocabRefusal(cmd *cobra.Command, flag string, parse func(string) (string, error)) {
+	previous := cmd.PreRunE
+	cmd.PreRunE = func(c *cobra.Command, args []string) error {
+		if raw, _ := c.Flags().GetString(flag); raw != "" {
+			normalized, err := parse(raw)
+			if err != nil {
+				return err
+			}
+			if err := c.Flags().Set(flag, normalized); err != nil {
+				return err
+			}
+		}
+		if previous != nil {
+			return previous(c, args)
+		}
+		return nil
 	}
 }
 
