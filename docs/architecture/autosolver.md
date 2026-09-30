@@ -10,7 +10,7 @@ The AutoSolver system provides modular, semantic-first browser automation for Pi
 
 2. **Semantic First** — The `pinchtab/semantic` package is the primary intelligence layer. LLM is used only as a last-resort fallback.
 
-3. **Pluggable Architecture** — Solvers are registered at runtime via a `Registry`. External solvers (Capsolver, 2Captcha) are optional plugins enabled via configuration.
+3. **Pluggable Architecture** — Solvers are registered at runtime via a `Registry`. External solvers (Capsolver, 2Captcha) are planned but not implemented: their config keys are accepted, but they never register, key or not.
 
 4. **Behavior > Spoofing** — Solvers interact with pages through legitimate browser actions (clicking, typing) rather than API hacks or fake tokens.
 
@@ -128,7 +128,7 @@ type Solver interface {
 |-------|----------|
 | 0–99 | Built-in solvers (Cloudflare, etc.) |
 | 100–199 | Semantic-based solvers |
-| 200–299 | External API solvers (Capsolver, 2Captcha) |
+| 200–299 | External API solvers (Capsolver, 2Captcha — planned, not implemented) |
 | 900+ | LLM fallback |
 
 ## Fallback Chain
@@ -178,7 +178,8 @@ the rest of this chain per attempt:
 ```
 
 External provider API keys are configured only in `autoSolver.external` in the
-config file.
+config file. Both providers are planned and not implemented yet, so setting a key
+does not enable them.
 
 ## Extension Guide
 

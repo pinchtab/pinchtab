@@ -378,7 +378,7 @@ export const defaultBackendConfig: BackendConfig = {
     solverTimeoutSec: 30,
     retryBaseDelayMs: 500,
     retryMaxDelayMs: 10000,
-    solvers: ["cloudflare", "semantic", "capsolver", "twocaptcha"],
+    solvers: ["cloudflare", "semantic"],
     llmProvider: "",
     llmFallback: false,
   },
