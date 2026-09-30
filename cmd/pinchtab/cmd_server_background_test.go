@@ -528,3 +528,37 @@ func TestEveryFlagTheServerDeclaresTravelsToTheDetachedChild(t *testing.T) {
 		}
 	}
 }
+
+func TestAutoStartKeepsLiveVerifiedPIDFile(t *testing.T) {
+	orig := readProcessCommand
+	readProcessCommand = func(pid int) (string, error) {
+		return "/tmp/pinchtab server --background-child marker-123", nil
+	}
+	defer func() { readProcessCommand = orig }()
+
+	stateDir := t.TempDir()
+	if err := writeServerPID(stateDir, serverPIDInfo{
+		PID:        os.Getpid(),
+		Executable: "/tmp/pinchtab",
+		Args:       []string{"server", backgroundChildFlag, "marker-123"},
+		Marker:     "marker-123",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(serverPIDFilePath(stateDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = autoStartServerIn(stateDir)
+	if err == nil || !strings.Contains(err.Error(), "already running") {
+		t.Fatalf("autoStartServerIn() error = %v, want already running", err)
+	}
+	after, err := os.ReadFile(serverPIDFilePath(stateDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatalf("pid file overwritten:\nbefore %s\nafter  %s", before, after)
+	}
+}

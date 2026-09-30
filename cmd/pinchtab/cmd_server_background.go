@@ -26,7 +26,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const backgroundStartTimeout = 30 * time.Second
+const (
+	backgroundStartTimeout  = 30 * time.Second
+	healthProbeTimeout      = 3 * time.Second
+	defaultGracefulStop     = 10 * time.Second
+	forceKillGrace          = 2 * time.Second
+	processExitPollInterval = 200 * time.Millisecond
+)
+
 const backgroundMarkerBytes = 16
 const backgroundHealthProbeHeader = "PinchTab-Background-Marker"
 
@@ -34,7 +41,6 @@ type serverPIDInfo struct {
 	PID        int      `json:"pid"`
 	Executable string   `json:"executable"`
 	Args       []string `json:"args"`
-	URL        string   `json:"url"`
 	Marker     string   `json:"marker"`
 	StartedAt  string   `json:"startedAt"`
 }
@@ -256,41 +262,50 @@ func spawnDetachedServer(stateDir, binary string, args []string) (int, error) {
 	return spawnDetachedChild(binary, args, logF)
 }
 
+var errServerPIDNotRecorded = errors.New("write pid file")
+
+func spawnRecordedServer(stateDir string, buildArgs func(marker string) []string) (pid int, marker string, err error) {
+	if info, ok := readServerPID(stateDir); ok {
+		if processAlive(info.PID) {
+			if err := verifyServerPIDInfo(info); err != nil {
+				return 0, "", fmt.Errorf("background PID file at %s points to a live process that cannot be verified: %w", serverPIDFilePath(stateDir), err)
+			}
+			return 0, "", fmt.Errorf("server already running (pid %d); stop with: pinchtab server stop", info.PID)
+		}
+		_ = os.Remove(serverPIDFilePath(stateDir))
+	}
+
+	binary, marker, err := prepareServerSpawn()
+	if err != nil {
+		return 0, "", err
+	}
+	args := buildArgs(marker)
+	pid, err = spawnDetachedServer(stateDir, binary, args)
+	if err != nil {
+		return 0, "", err
+	}
+	if err := recordServerPID(stateDir, pid, binary, args, marker); err != nil {
+		return pid, marker, fmt.Errorf("%w: %w", errServerPIDNotRecorded, err)
+	}
+	return pid, marker, nil
+}
+
 func runServerBackground(cfg *config.RuntimeConfig, opts serverBackgroundOptions, addressChanged bool) error {
 	if err := requireDetachedServerOwnership("background start", addressChanged); err != nil {
 		return err
 	}
 
 	stateDir := stateDirForConfig(cfg)
-	if info, ok := readServerPID(stateDir); ok {
-		if processAlive(info.PID) {
-			if err := verifyServerPIDInfo(info); err == nil {
-				return fmt.Errorf("server already running (pid %d); stop with: pinchtab server stop", info.PID)
-			} else {
-				return fmt.Errorf("background PID file at %s points to a live process that cannot be verified: %w", serverPIDFilePath(stateDir), err)
-			}
-		}
-		_ = os.Remove(serverPIDFilePath(stateDir))
-	}
-
 	baseURL := fmt.Sprintf("http://127.0.0.1:%s", cfg.Port)
 	if err := portBusyError(baseURL, config.ConfigFilePath()); err != nil {
 		return err
 	}
 
-	binary, marker, err := prepareServerSpawn()
+	pid, marker, err := spawnRecordedServer(stateDir, func(marker string) []string {
+		return backgroundServerArgs(marker, opts)
+	})
 	if err != nil {
 		return err
-	}
-
-	args := backgroundServerArgs(marker, opts)
-	pid, err := spawnDetachedServer(stateDir, binary, args)
-	if err != nil {
-		return err
-	}
-
-	if err := recordServerPID(stateDir, pid, binary, args, baseURL, marker); err != nil {
-		return fmt.Errorf("write pid file: %w", err)
 	}
 
 	if !waitForServerWith(baseURL, marker, backgroundStartTimeout, isBackgroundServerReady) {
@@ -376,7 +391,7 @@ func portBusyError(baseURL, configPath string) error {
 // PinchTab-shaped auth error, i.e. the occupant is a PinchTab server whose
 // token this config does not hold.
 func isAuthenticatedPinchTabServer(baseURL string) bool {
-	status, body, reachable := server.ProbeHealth(baseURL+"/health", 3*time.Second, nil)
+	status, body, reachable := server.ProbeHealth(baseURL+"/health", healthProbeTimeout, nil)
 	if !reachable {
 		return false
 	}
@@ -402,7 +417,7 @@ func isPinchTabHealthReady(url, marker string) bool {
 	if marker != "" {
 		headers = map[string]string{backgroundHealthProbeHeader: marker}
 	}
-	status, body, reachable := server.ProbeHealth(url, 3*time.Second, headers)
+	status, body, reachable := server.ProbeHealth(url, healthProbeTimeout, headers)
 	if !reachable || status != http.StatusOK {
 		return false
 	}
@@ -461,7 +476,7 @@ func runServerStop() error {
 	}
 
 	_ = forceKillProcess(pid)
-	if waitForExit(pid, 2*time.Second) {
+	if waitForExit(pid, forceKillGrace) {
 		_ = os.Remove(serverPIDFilePath(stateDir))
 		fmt.Printf("Force-stopped background server (pid %d) after %s grace\n", pid, grace)
 		return nil
@@ -470,15 +485,15 @@ func runServerStop() error {
 }
 
 func gracefulStopTimeout(cfg *config.RuntimeConfig) time.Duration {
-	d := 10 * time.Second
+	d := defaultGracefulStop
 	if cfg != nil && cfg.ShutdownTimeout > 0 {
 		d = cfg.ShutdownTimeout
 	}
-	return d + 2*time.Second
+	return d + forceKillGrace
 }
 
 func waitForExit(pid int, timeout time.Duration) bool {
-	if _, err := readiness.WaitUntil(context.Background(), timeout, 200*time.Millisecond, func() (struct{}, bool, error) {
+	if _, err := readiness.WaitUntil(context.Background(), timeout, processExitPollInterval, func() (struct{}, bool, error) {
 		return struct{}{}, !processAlive(pid), nil
 	}); err == nil {
 		return true
@@ -506,16 +521,11 @@ func writeServerPID(stateDir string, info serverPIDInfo) error {
 	return os.WriteFile(serverPIDFilePath(stateDir), data, 0o600)
 }
 
-// recordServerPID writes the PID record for a freshly spawned server child,
-// stamping the start time. Shared by the foreground auto-start and background
-// server paths (url is empty for the URL-less auto-start record); each caller
-// keeps its own write-error policy (best-effort vs fatal).
-func recordServerPID(stateDir string, pid int, binary string, args []string, url, marker string) error {
+func recordServerPID(stateDir string, pid int, binary string, args []string, marker string) error {
 	return writeServerPID(stateDir, serverPIDInfo{
 		PID:        pid,
 		Executable: binary,
 		Args:       append([]string(nil), args...),
-		URL:        url,
 		Marker:     marker,
 		StartedAt:  time.Now().UTC().Format(time.RFC3339Nano),
 	})

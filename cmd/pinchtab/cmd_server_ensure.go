@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -143,26 +144,16 @@ func autoStartServer() error {
 	if err := requireDetachedServerOwnership("automatic start", false); err != nil {
 		return err
 	}
+	return autoStartServerIn(stateDirForConfig(loadConfig()))
+}
 
-	stateDir := stateDirForConfig(loadConfig())
-	binary, marker, err := prepareServerSpawn()
-	if err != nil {
-		return err
-	}
-
-	args := autoStartServerArgs(marker)
-	pid, err := spawnDetachedServer(stateDir, binary, args)
-	if err != nil {
-		return err
-	}
-
-	// Track the auto-started server's PID so `pinchtab server stop` can reap
-	// it. Best-effort: failing to write the PID file is logged but not fatal.
-	if err := recordServerPID(stateDir, pid, binary, args, "", marker); err != nil {
+func autoStartServerIn(stateDir string) error {
+	_, _, err := spawnRecordedServer(stateDir, func(marker string) []string { return autoStartServerArgs(marker) })
+	if errors.Is(err, errServerPIDNotRecorded) {
 		slog.Warn("failed to write server pid file", "err", err)
+		return nil
 	}
-
-	return nil
+	return err
 }
 
 func autoStartServerArgs(marker ...string) []string {
