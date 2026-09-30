@@ -6,9 +6,11 @@ import (
 	"math/rand"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/dom"
+	"github.com/chromedp/cdproto/input"
 )
 
 func TestSetHumanRandSeed(t *testing.T) {
@@ -262,4 +264,71 @@ func TestHumanRand_ParallelMouseMoveAndTypeAreRaceFree(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+type recordedButton struct {
+	kind    input.MouseType
+	ctxLive bool
+}
+
+func stubClickSeams(t *testing.T, onDispatch func(kind input.MouseType)) *[]recordedButton {
+	t.Helper()
+	origApproach, origDispatch := approachTargetAction, dispatchMouseButtonAction
+	t.Cleanup(func() {
+		approachTargetAction = origApproach
+		dispatchMouseButtonAction = origDispatch
+	})
+	approachTargetAction = func(context.Context, float64, float64) error { return nil }
+	var mu sync.Mutex
+	var sent []recordedButton
+	dispatchMouseButtonAction = func(ctx context.Context, kind input.MouseType, _, _ float64) error {
+		mu.Lock()
+		sent = append(sent, recordedButton{kind: kind, ctxLive: ctx.Err() == nil})
+		mu.Unlock()
+		if onDispatch != nil {
+			onDispatch(kind)
+		}
+		return nil
+	}
+	return &sent
+}
+
+func TestClick_CancelBeforePressReturnsPromptlyWithoutPressing(t *testing.T) {
+	sent := stubClickSeams(t, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(5*time.Millisecond, cancel)
+
+	start := time.Now()
+	err := Click(ctx, 10, 10)
+	elapsed := time.Since(start)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Click error = %v, want context.Canceled", err)
+	}
+	if elapsed > 25*time.Millisecond {
+		t.Fatalf("Click returned %s after cancel at 5ms, want within ~20ms", elapsed)
+	}
+	if len(*sent) != 0 {
+		t.Fatalf("dispatched %v after cancellation before the press, want nothing", *sent)
+	}
+}
+
+func TestClick_ReleasesAfterPressEvenWhenCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sent := stubClickSeams(t, func(kind input.MouseType) {
+		if kind == input.MousePressed {
+			cancel()
+		}
+	})
+
+	err := Click(ctx, 10, 10)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Click error = %v, want context.Canceled from the interrupted hold", err)
+	}
+	want := []recordedButton{{kind: input.MousePressed, ctxLive: true}, {kind: input.MouseReleased, ctxLive: true}}
+	if len(*sent) != len(want) || (*sent)[0] != want[0] || (*sent)[1] != want[1] {
+		t.Fatalf("dispatched %+v, want press then release on a live context %+v", *sent, want)
+	}
 }

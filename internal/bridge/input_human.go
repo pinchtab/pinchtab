@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
@@ -122,8 +123,9 @@ func MouseMove(ctx context.Context, fromX, fromY, toX, toY float64) error {
 			return dispatchMouseMovedBounded(ctx, toX, toY)
 		}
 
-		delay := time.Duration(16+humanRand.Intn(8)) * time.Millisecond
-		time.Sleep(delay)
+		if err := sleepCtx(ctx, time.Duration(16+humanRand.Intn(8))*time.Millisecond); err != nil {
+			return err
+		}
 	}
 
 	// End-frame micro-jitter near target to emulate tiny hand stabilization.
@@ -138,7 +140,9 @@ func MouseMove(ctx context.Context, fromX, fromY, toX, toY float64) error {
 			// micro-jitter; the bezier already landed us at the target.
 			return nil
 		}
-		time.Sleep(10 * time.Millisecond)
+		if err := sleepCtx(ctx, 10*time.Millisecond); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -176,37 +180,50 @@ func approachTarget(ctx context.Context, x, y float64) error {
 
 var approachTargetAction = approachTarget
 
+const humanReleaseTimeout = 2 * time.Second
+
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+var dispatchMouseButtonAction = func(ctx context.Context, kind input.MouseType, x, y float64) error {
+	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return input.DispatchMouseEvent(kind, x, y).
+			WithButton(input.Left).
+			WithClickCount(1).
+			Do(ctx)
+	}))
+}
+
+// Click always follows an attempted press with a release on a context that survives ctx's
+// cancellation, so a cancelled click never leaves the button held down in the renderer.
 func Click(ctx context.Context, x, y float64) error {
 	if err := approachTargetAction(ctx, x, y); err != nil {
 		return err
 	}
-
-	time.Sleep(time.Duration(50+humanRand.Intn(150)) * time.Millisecond)
-
-	if err := chromedp.Run(ctx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return input.DispatchMouseEvent(input.MousePressed, x, y).
-				WithButton(input.Left).
-				WithClickCount(1).
-				Do(ctx)
-		}),
-	); err != nil {
+	if err := sleepCtx(ctx, time.Duration(50+humanRand.Intn(150))*time.Millisecond); err != nil {
 		return err
 	}
 
-	time.Sleep(time.Duration(30+humanRand.Intn(90)) * time.Millisecond)
+	pressErr := dispatchMouseButtonAction(ctx, input.MousePressed, x, y)
+	var holdErr error
+	if pressErr == nil {
+		holdErr = sleepCtx(ctx, time.Duration(30+humanRand.Intn(90))*time.Millisecond)
+	}
 
 	releaseX := x + (humanRand.Float64()-0.5)*2
 	releaseY := y + (humanRand.Float64()-0.5)*2
-
-	return chromedp.Run(ctx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return input.DispatchMouseEvent(input.MouseReleased, releaseX, releaseY).
-				WithButton(input.Left).
-				WithClickCount(1).
-				Do(ctx)
-		}),
-	)
+	releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), humanReleaseTimeout)
+	defer cancel()
+	releaseErr := dispatchMouseButtonAction(releaseCtx, input.MouseReleased, releaseX, releaseY)
+	return cmp.Or(pressErr, holdErr, releaseErr)
 }
 
 var scrollIntoViewIfNeededAction = func(ctx context.Context, backendNodeID cdp.BackendNodeID) error {
