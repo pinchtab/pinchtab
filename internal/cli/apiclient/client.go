@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/cli/clistate"
@@ -212,22 +211,4 @@ func DoDelete(client *http.Client, base, token, path string, params url.Values, 
 
 func DoRawE(client *http.Client, base, token, method, path string, opts ...RequestOption) ([]byte, error) {
 	return executeE(client, token, newRequest(method, base, path, opts...))
-}
-
-// ResolveInstanceBase fetches the named instance from the orchestrator and returns
-// a base URL pointing directly at that instance's API port.
-func ResolveInstanceBase(orchBase, token, instanceID, bind string) string {
-	c := &http.Client{Timeout: 10 * time.Second}
-	body := DoGetRaw(c, orchBase, token, fmt.Sprintf("/instances/%s", instanceID), nil)
-
-	var inst struct {
-		Port string `json:"port"`
-	}
-	if err := json.Unmarshal(body, &inst); err != nil {
-		fatal("failed to parse instance %q: %v", instanceID, err)
-	}
-	if inst.Port == "" {
-		fatal("instance %q has no port assigned (is it still starting?)", instanceID)
-	}
-	return fmt.Sprintf("http://%s:%s", bind, inst.Port)
 }

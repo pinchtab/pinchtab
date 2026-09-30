@@ -2,61 +2,8 @@ package apiclient
 
 import (
 	"fmt"
-	"io"
-	"net/http"
 	"os"
-	"strings"
-
-	"github.com/pinchtab/pinchtab/internal/authn"
 )
-
-// CheckServerAndGuide checks if pinchtab server is running and provides guidance
-func CheckServerAndGuide(client *http.Client, base, token string) bool {
-	req, err := http.NewRequest("GET", base+"/health", nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Invalid server URL %q: %v\n", base, err)
-		return false
-	}
-	authn.SetAuthorization(req.Header, token)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		if strings.Contains(err.Error(), "connection refused") || strings.Contains(err.Error(), "dial tcp") {
-			fmt.Fprintf(os.Stderr, "Pinchtab server is not running on %s\n", base)
-			fmt.Fprintln(os.Stderr)
-			fmt.Fprintln(os.Stderr, "To start the server")
-			fmt.Fprintln(os.Stderr, "  pinchtab # Run in foreground (recommended for beginners)")
-			fmt.Fprintln(os.Stderr, "  pinchtab & # Run in background")
-			fmt.Fprintln(os.Stderr, "  pinchtab server --port <port> # Use a different port")
-			fmt.Fprintln(os.Stderr)
-			fmt.Fprintln(os.Stderr, "Then try your command again")
-			fmt.Fprintf(os.Stderr, "  %s\n", strings.Join(os.Args, " "))
-			fmt.Fprintln(os.Stderr)
-			fmt.Fprintln(os.Stderr, "Learn more: https://github.com/pinchtab/pinchtab#quick-start")
-			return false
-		}
-		fmt.Fprintf(os.Stderr, "Cannot connect to Pinchtab server: %v\n", err)
-		return false
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == 401 {
-		fmt.Fprintln(os.Stderr, "Authentication required. Set PINCHTAB_TOKEN.")
-		return false
-	}
-
-	if resp.StatusCode >= 400 {
-		// The read error is discarded on purpose here, unlike in the transport: this
-		// body is only interpolated into an error message the caller is already
-		// failing on, so a partial read costs a few characters of context and
-		// nothing else.
-		body, _ := io.ReadAll(resp.Body)
-		fmt.Fprintf(os.Stderr, "Server error %d: %s\n", resp.StatusCode, string(body))
-		return false
-	}
-
-	return true
-}
 
 // SuggestNextAction provides helpful suggestions based on the current command and state
 func SuggestNextAction(cmd string, result map[string]any) {
@@ -125,11 +72,4 @@ func extractRefs(data map[string]any) []refInfo {
 	}
 
 	return refs
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

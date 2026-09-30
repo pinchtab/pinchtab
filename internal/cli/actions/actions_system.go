@@ -3,13 +3,10 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
 	"net/http"
 	"os"
 	"strings"
 
-	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/cli/output"
@@ -219,33 +216,6 @@ func decodeProfilesResponse(body []byte) ([]map[string]any, error) {
 		return profiles, nil
 	}
 	return nil, fmt.Errorf("expected /profiles to return a JSON array")
-}
-
-func getInstances(client *http.Client, base, token string) []map[string]any {
-	resp, err := http.NewRequest("GET", base+"/instances", nil)
-	if err != nil {
-		return nil
-	}
-	authn.SetAuthorization(resp.Header, token)
-
-	result, err := client.Do(resp)
-	if err != nil || result.StatusCode >= 400 {
-		return nil
-	}
-	defer func() { _ = result.Body.Close() }()
-
-	body, err := io.ReadAll(result.Body)
-	if err != nil {
-		log.Printf("warning: error reading instances response: %v", err)
-		return nil
-	}
-
-	instances, err := decodeInstancesResponse(body)
-	if err != nil {
-		log.Printf("warning: error decoding instances response: %v", err)
-		return nil
-	}
-	return instances
 }
 
 func decodeInstancesResponse(body []byte) ([]map[string]any, error) {

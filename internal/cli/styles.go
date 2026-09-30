@@ -29,14 +29,6 @@ var (
 	ValueStyle   = termstyle.NewStyle().Foreground(ColorTextPrimary)
 )
 
-func RenderStdout(style termstyle.Style, text string) string {
-	return StyleStdout(style, text)
-}
-
-func RenderStderr(style termstyle.Style, text string) string {
-	return StyleStderr(style, text)
-}
-
 func StyleStdout(style termstyle.Style, text string) string {
 	return renderToWriter(os.Stdout, style, text)
 }

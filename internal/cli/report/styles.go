@@ -22,7 +22,6 @@ var (
 	mutedStyle   = termstyle.NewStyle().Foreground(colorTextMuted)
 	successStyle = termstyle.NewStyle().Foreground(colorSuccess).Bold(true)
 	warningStyle = termstyle.NewStyle().Foreground(colorWarning).Bold(true)
-	errorStyle   = termstyle.NewStyle().Foreground(colorDanger).Bold(true)
 	valueStyle   = termstyle.NewStyle().Foreground(colorTextPrimary)
 )
 

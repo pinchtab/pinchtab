@@ -51,33 +51,6 @@ func TestNoAuthHeader(t *testing.T) {
 	}
 }
 
-func TestGetInstances_ArrayResponse(t *testing.T) {
-	m := newMockServer()
-	m.response = `[{"id":"inst_123","port":"9868","status":"running","headless":true}]`
-	defer m.close()
-	client := m.server.Client()
-
-	instances := getInstances(client, m.base(), "")
-	if len(instances) != 1 {
-		t.Fatalf("len(instances) = %d, want 1", len(instances))
-	}
-	if got, _ := instances[0]["id"].(string); got != "inst_123" {
-		t.Fatalf("id = %q, want %q", got, "inst_123")
-	}
-}
-
-func TestGetInstances_EnvelopeResponseRejected(t *testing.T) {
-	m := newMockServer()
-	m.response = `{"instances":[{"id":"inst_456","port":"9869","status":"running","headless":false}]}`
-	defer m.close()
-	client := m.server.Client()
-
-	instances := getInstances(client, m.base(), "")
-	if instances != nil {
-		t.Fatalf("instances = %#v, want nil for legacy envelope response", instances)
-	}
-}
-
 func TestFormatProfileListSeparatesQuarantinedAndTotalsTheirSize(t *testing.T) {
 	out := formatProfileList([]map[string]any{
 		{"id": "p1", "name": "work", "diskUsage": float64(500 << 20)},

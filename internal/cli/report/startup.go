@@ -2,7 +2,6 @@ package report
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"strings"
 	"sync"
@@ -58,18 +57,6 @@ func PrintStartupBanner(cfg *config.RuntimeConfig, opts StartupBannerOptions) {
 	writeBannerLine("")
 }
 
-func PrintSecuritySummary(w io.Writer, cfg *config.RuntimeConfig, prefix string, detailed bool) {
-	posture := AssessSecurityPosture(cfg)
-	if detailed {
-		writeSummaryf(w, "%s%s  %s\n", prefix, styleHeading("Security"), styleSecurityLevel(posture.Level))
-		for _, check := range posture.Checks {
-			writeSummaryf(w, "%s  %s %s %s\n", prefix, styleMarker(check.Passed), styleCheckLabel(check.Label), styleCheckDetail(check.Passed, check.Detail))
-		}
-	} else {
-		writeSummaryf(w, "%s%s  %s\n", prefix, styleLabel("security"), styleSecurityLevel(posture.Level))
-	}
-}
-
 func blankIfEmpty(value, fallback string) string {
 	if strings.TrimSpace(value) == "" {
 		return fallback
@@ -91,10 +78,6 @@ func writeBannerLine(line string) {
 
 func writeBannerf(format string, args ...any) {
 	_, _ = fmt.Fprintf(os.Stdout, format, args...)
-}
-
-func writeSummaryf(w io.Writer, format string, args ...any) {
-	_, _ = fmt.Fprintf(w, format, args...)
 }
 
 func styleHeading(text string) string {
@@ -124,24 +107,6 @@ func styleListenStatus(status string) string {
 	default:
 		return applyStyle(status, valueStyle)
 	}
-}
-
-func styleCheckLabel(text string) string {
-	return applyStyle(fmt.Sprintf("%-20s", text), mutedStyle)
-}
-
-func styleCheckDetail(passed bool, text string) string {
-	if passed {
-		return applyStyle(text, successStyle)
-	}
-	return applyStyle(text, warningStyle)
-}
-
-func styleMarker(passed bool) string {
-	if passed {
-		return applyStyle("ok", successStyle)
-	}
-	return applyStyle("!!", errorStyle)
 }
 
 func styleSecurityLevel(level string) string {
