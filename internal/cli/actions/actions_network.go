@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/sanitize"
 	"github.com/spf13/cobra"
@@ -146,9 +147,7 @@ func NetworkStream(client *http.Client, base, token string, cmd *cobra.Command) 
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
+	authn.SetAuthorization(req.Header, token)
 	req.Header.Set("Accept", "text/event-stream")
 
 	// Use a client without timeout for streaming

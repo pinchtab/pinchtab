@@ -7,9 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/api/types"
+	"github.com/pinchtab/pinchtab/internal/authn"
 )
 
 // request describes a single API call. body is a JSON payload (nil = no body;
@@ -118,12 +118,5 @@ func doRequest(client *http.Client, token string, r request) (int, []byte, error
 
 func setClientHeaders(req *http.Request, token string) {
 	req.Header.Set(types.HeaderSource, "client")
-	if token == "" {
-		return
-	}
-	if strings.HasPrefix(token, "ses_") {
-		req.Header.Set("Authorization", "Session "+token)
-	} else {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
+	authn.SetAuthorization(req.Header, token)
 }

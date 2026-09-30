@@ -14,6 +14,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/audit"
 	auditreport "github.com/pinchtab/pinchtab/internal/audit/report"
+	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
@@ -428,9 +429,7 @@ func fetchRawPDF(client *http.Client, base, token, tabID string) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
+	authn.SetAuthorization(req.Header, token)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("print pdf: %w", err)

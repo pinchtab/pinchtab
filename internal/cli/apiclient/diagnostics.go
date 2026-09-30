@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/pinchtab/pinchtab/internal/authn"
 )
 
 // CheckServerAndGuide checks if pinchtab server is running and provides guidance
@@ -15,9 +17,7 @@ func CheckServerAndGuide(client *http.Client, base, token string) bool {
 		fmt.Fprintf(os.Stderr, "Invalid server URL %q: %v\n", base, err)
 		return false
 	}
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
+	authn.SetAuthorization(req.Header, token)
 
 	resp, err := client.Do(req)
 	if err != nil {

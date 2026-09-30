@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/api/types"
+	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/cli/clistate"
 	"github.com/spf13/cobra"
@@ -168,13 +169,7 @@ func (tabStateStore) probe(tabID string) tabProbeResult {
 		return tabProbeInconclusive
 	}
 	req.Header.Set(types.HeaderSource, "client")
-	if token != "" {
-		if strings.HasPrefix(token, "ses_") {
-			req.Header.Set("Authorization", "Session "+token)
-		} else {
-			req.Header.Set("Authorization", "Bearer "+token)
-		}
-	}
+	authn.SetAuthorization(req.Header, token)
 	resp, err := client.Do(req)
 	if err != nil {
 		return tabProbeInconclusive

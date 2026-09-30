@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/pinchtab/pinchtab/internal/readiness"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/authn"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/orchestrator"
@@ -65,22 +67,11 @@ func (p HealthProbe) Reason() string {
 // Authorization header and the three states kept in one value.
 func ProbeHealthWithToken(url string, timeout time.Duration, token string) HealthProbe {
 	headers := map[string]string{}
-	if auth := AuthorizationHeaderValue(token); auth != "" {
+	if auth := authn.AuthorizationHeaderValue(token); auth != "" {
 		headers["Authorization"] = auth
 	}
 	status, body, reachable := ProbeHealth(url, timeout, headers)
 	return HealthProbe{Reachable: reachable, StatusCode: status, Body: body}
-}
-
-func AuthorizationHeaderValue(token string) string {
-	token = strings.TrimSpace(token)
-	if token == "" {
-		return ""
-	}
-	if strings.HasPrefix(token, "ses_") {
-		return "Session " + token
-	}
-	return "Bearer " + token
 }
 
 func CheckPinchTabRunning(port, token string) bool {
@@ -135,9 +126,7 @@ func ShutdownServer(port, token string) error {
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
-	if auth := AuthorizationHeaderValue(token); auth != "" {
-		req.Header.Set("Authorization", auth)
-	}
+	authn.SetAuthorization(req.Header, token)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("shutdown request: %w", err)

@@ -56,6 +56,22 @@ func TestClientGet(t *testing.T) {
 	}
 }
 
+func TestClientSendsSessionSchemeForSessionToken(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("Authorization")
+		_, _ = io.WriteString(w, `{}`)
+	}))
+	defer srv.Close()
+
+	if _, _, err := NewClient(srv.URL, "ses_x").Get(context.Background(), "/health", nil); err != nil {
+		t.Fatal(err)
+	}
+	if got != "Session ses_x" {
+		t.Fatalf("Authorization = %q, want %q", got, "Session ses_x")
+	}
+}
+
 func TestClientGetNoQuery(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.RawQuery != "" {

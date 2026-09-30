@@ -19,3 +19,14 @@ func TestNetworkClearPreservesExplicitTab(t *testing.T) {
 		t.Fatalf("network clear request = %s?%s, want /network/clear?tabId=tab-target", m.lastPath, m.lastQuery)
 	}
 }
+
+func TestNetworkStreamSendsSessionScheme(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+
+	NetworkStream(m.server.Client(), m.base(), "ses_x", &cobra.Command{})
+
+	if got := m.lastHeaders.Get("Authorization"); got != "Session ses_x" {
+		t.Fatalf("Authorization = %q, want %q", got, "Session ses_x")
+	}
+}

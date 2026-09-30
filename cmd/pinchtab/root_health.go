@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/api/types"
+	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/server"
 )
 
@@ -67,7 +68,7 @@ func fetchHealthSnapshot(port string) (*healthSnapshot, healthSnapshotState) {
 // back running with an empty Mode rather than being classed invalid.
 func probeHealthSnapshot(port, token string) (*healthSnapshot, healthSnapshotState) {
 	var headers map[string]string
-	if auth := server.AuthorizationHeaderValue(token); auth != "" {
+	if auth := authn.AuthorizationHeaderValue(token); auth != "" {
 		headers = map[string]string{"Authorization": auth}
 	}
 	status, body, reachable := server.ProbeHealth(fmt.Sprintf("http://localhost:%s/health", port), 500*time.Millisecond, headers)

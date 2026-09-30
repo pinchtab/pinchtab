@@ -15,6 +15,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/api/types"
+	"github.com/pinchtab/pinchtab/internal/authn"
 )
 
 const vocabHeader = types.HeaderVocab
@@ -94,9 +95,7 @@ func (c *Client) do(req *http.Request) ([]byte, int, error) {
 }
 
 func (c *Client) doWithHeaders(req *http.Request) ([]byte, int, http.Header, error) {
-	if c.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.Token)
-	}
+	authn.SetAuthorization(req.Header, c.Token)
 	req.Header.Set(activity.HeaderAgentID, "mcp")
 	// No X-PinchTab-Source: MCP calls the public front door with a bearer token, so
 	// the ingress strip layer drops inbound X-PinchTab-* headers. Setting a source

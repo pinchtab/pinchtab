@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/cli/output"
@@ -225,9 +226,7 @@ func getInstances(client *http.Client, base, token string) []map[string]any {
 	if err != nil {
 		return nil
 	}
-	if token != "" {
-		resp.Header.Set("Authorization", "Bearer "+token)
-	}
+	authn.SetAuthorization(resp.Header, token)
 
 	result, err := client.Do(resp)
 	if err != nil || result.StatusCode >= 400 {
