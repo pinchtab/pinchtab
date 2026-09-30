@@ -808,3 +808,11 @@ func TestOperatorFacingErrorsCarryAValidUTF8BodyFragment(t *testing.T) {
 		})
 	}
 }
+
+func TestValidatedHealthProbeBaseURL_RefusesLocalhostSubdomain(t *testing.T) {
+	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+
+	if _, err := o.validatedHealthProbeBaseURL("http://foo.localhost:9872", "", healthProbePolicyLoopback); err == nil {
+		t.Fatal("foo.localhost passed the loopback probe gate without being resolved")
+	}
+}

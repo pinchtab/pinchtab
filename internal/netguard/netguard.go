@@ -155,7 +155,15 @@ func IsLocalHost(host string) bool {
 	if host == "" {
 		return false
 	}
-	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+	if strings.HasSuffix(host, ".localhost") {
+		return true
+	}
+	return IsLoopbackHost(host)
+}
+
+func IsLoopbackHost(host string) bool {
+	host = NormalizeHost(host)
+	if host == "localhost" {
 		return true
 	}
 	ip := net.ParseIP(host)
@@ -203,8 +211,6 @@ func ResolveAndValidatePublicIPs(ctx context.Context, host string) ([]netip.Addr
 	return ResolveAndValidateIPsWithTrustedCIDRs(ctx, host, nil)
 }
 
-// ValidateAddrs refuses the first address that is not public unless a trusted CIDR
-// covers it; an empty set is a resolution failure, never a pass.
 func ValidateAddrs(addrs []netip.Addr, trusted []*net.IPNet) error {
 	if len(addrs) == 0 {
 		return ErrResolveHost
@@ -258,8 +264,6 @@ func ResolveHostAddrs(ctx context.Context, host string) ([]netip.Addr, error) {
 	return ResolveHostAddrsWith(ctx, host, ResolveHostIPs)
 }
 
-// ResolveHostAddrsWith resolves host through resolve, or takes it as a literal IP, and
-// returns its addresses unmapped and deduplicated in resolver order.
 func ResolveHostAddrsWith(ctx context.Context, host string, resolve func(ctx context.Context, network, host string) ([]net.IP, error)) ([]netip.Addr, error) {
 	host = NormalizeHost(host)
 	if host == "" {

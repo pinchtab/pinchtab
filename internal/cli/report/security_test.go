@@ -38,7 +38,7 @@ func TestAssessSecurityWarnings(t *testing.T) {
 			Bind:               "127.0.0.2",
 			Token:              "secret",
 			AttachEnabled:      true,
-			AttachAllowHosts:   []string{"127.0.0.2", "foo.localhost", "LOCALHOST", "::1"},
+			AttachAllowHosts:   []string{"127.0.0.2", "LOCALHOST", "::1"},
 			AttachAllowSchemes: []string{"ws", "wss"},
 			AllowedDomains:     []string{"127.0.0.1"},
 			IDPI: config.IDPIConfig{
@@ -54,6 +54,21 @@ func TestAssessSecurityWarnings(t *testing.T) {
 				t.Errorf("loopback-only config warned %s: %s", warning.ID, warning.Message)
 			}
 		}
+	})
+
+	t.Run("a localhost subdomain attach host is treated as external", func(t *testing.T) {
+		cfg := &config.RuntimeConfig{
+			Bind:             "127.0.0.1",
+			AttachEnabled:    true,
+			AttachAllowHosts: []string{"foo.localhost"},
+		}
+
+		for _, warning := range assessSecurityWarnings(cfg) {
+			if warning.ID == "attach_external_hosts" {
+				return
+			}
+		}
+		t.Error("foo.localhost can resolve off-host on pure-Go builds, yet no attach_external_hosts warning")
 	})
 
 	t.Run("website whitelist missing and other security gaps are flagged", func(t *testing.T) {

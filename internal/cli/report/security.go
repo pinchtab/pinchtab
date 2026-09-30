@@ -1,11 +1,11 @@
 package report
 
 import (
-	"github.com/pinchtab/pinchtab/internal/netguard"
 	"log/slog"
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/netguard"
 )
 
 type SecurityWarning struct {
@@ -207,7 +207,7 @@ func LogSecurityWarnings(cfg *config.RuntimeConfig) {
 }
 
 func isLoopbackBind(bind string) bool {
-	return strings.TrimSpace(bind) == "" || netguard.IsLocalHost(bind)
+	return strings.TrimSpace(bind) == "" || netguard.IsLoopbackHost(bind)
 }
 
 func allowsAllDomains(domains []string) bool {
@@ -233,7 +233,7 @@ func attachAllowsNonLocalHosts(hosts []string) bool {
 		return false
 	}
 	for _, host := range hosts {
-		if strings.TrimSpace(host) != "" && !netguard.IsLocalHost(host) {
+		if strings.TrimSpace(host) != "" && !netguard.IsLoopbackHost(host) {
 			return true
 		}
 	}

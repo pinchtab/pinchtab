@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/pinchtab/pinchtab/internal/netguard"
 	"net/http"
 	"net/url"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/cli/output"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/netguard"
 	"github.com/spf13/cobra"
 )
 
@@ -237,7 +237,7 @@ func loopbackBase(base string) bool {
 	if err != nil {
 		return false
 	}
-	return netguard.IsLocalHost(u.Hostname())
+	return netguard.IsLoopbackHost(u.Hostname())
 }
 
 func resolveCLIAgentID() string {

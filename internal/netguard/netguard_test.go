@@ -241,3 +241,19 @@ func TestAttachSchemeAllowed(t *testing.T) {
 		t.Error("https must not match http")
 	}
 }
+
+func TestIsLoopbackHostRefusesLocalhostSubdomains(t *testing.T) {
+	for host, want := range map[string]bool{
+		"localhost":     true,
+		"LOCALHOST.":    true,
+		"127.0.0.2":     true,
+		"::1":           true,
+		"foo.localhost": false,
+		"example.com":   false,
+		"":              false,
+	} {
+		if got := IsLoopbackHost(host); got != want {
+			t.Errorf("IsLoopbackHost(%q) = %v, want %v", host, got, want)
+		}
+	}
+}

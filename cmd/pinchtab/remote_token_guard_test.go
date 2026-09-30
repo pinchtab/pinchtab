@@ -191,3 +191,12 @@ func TestSubcommandHelpListsTheGlobalFlags(t *testing.T) {
 		}
 	}
 }
+
+func TestTheConfigTokenIsRefusedForALocalhostSubdomain(t *testing.T) {
+	clearCredentialEnv(t)
+	cfg := &config.RuntimeConfig{Port: "9867", Token: "local-secret"}
+
+	if token, err := resolveCLIToken(cfg, "http://foo.localhost:9867"); err == nil || token != "" {
+		t.Fatalf("token = %q, err = %v; a *.localhost name can resolve off-host on pure-Go builds", token, err)
+	}
+}
