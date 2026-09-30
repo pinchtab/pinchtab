@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 )
 
@@ -63,31 +64,20 @@ func hasNodeDOMMetadata(node A11yNode) bool {
 }
 
 func resolveNodeDOMMetadata(ctx context.Context, backendNodeID int64) (nodeDOMMetadata, bool) {
-	var resolveResult json.RawMessage
-	if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
-		"backendNodeId": backendNodeID,
-	}, &resolveResult); err != nil {
-		return nodeDOMMetadata{}, false
-	}
-
-	var resolved struct {
-		Object struct {
-			ObjectID string `json:"objectId"`
-		} `json:"object"`
-	}
-	if err := json.Unmarshal(resolveResult, &resolved); err != nil || resolved.Object.ObjectID == "" {
+	objectID, err := cdpops.ResolveNodeObjectID(ctx, backendNodeID)
+	if err != nil {
 		return nodeDOMMetadata{}, false
 	}
 	defer func() {
 		_ = chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.releaseObject", map[string]any{
-			"objectId": resolved.Object.ObjectID,
+			"objectId": objectID,
 		}, nil)
 	}()
 
 	var callResult json.RawMessage
 	if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
 		"functionDeclaration": domMetadataFn,
-		"objectId":            resolved.Object.ObjectID,
+		"objectId":            objectID,
 		"returnByValue":       true,
 	}, &callResult); err != nil {
 		return nodeDOMMetadata{}, false

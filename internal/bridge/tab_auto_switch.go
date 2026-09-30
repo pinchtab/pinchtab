@@ -2,13 +2,14 @@ package bridge
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 )
 
 // autoSwitchGraceTimeout is a short grace period after a click returns for the
@@ -187,24 +188,6 @@ func (s *autoSwitchSession) prepareNode(ctx context.Context, backendNodeID int64
 }
 
 func popupAnchorURL(ctx context.Context, backendNodeID int64) (string, error) {
-	var resolved json.RawMessage
-	if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
-		"backendNodeId": backendNodeID,
-	}, &resolved); err != nil {
-		return "", err
-	}
-	var obj struct {
-		Object struct {
-			ObjectID string `json:"objectId"`
-		} `json:"object"`
-	}
-	if err := json.Unmarshal(resolved, &obj); err != nil {
-		return "", err
-	}
-	if obj.Object.ObjectID == "" {
-		return "", nil
-	}
-
 	const script = `function() {
 		var el = this;
 		while (el && el.nodeType === 1) {
@@ -217,23 +200,11 @@ func popupAnchorURL(ctx context.Context, backendNodeID int64) (string, error) {
 		}
 		return "";
 	}`
-	var raw json.RawMessage
-	if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-		"functionDeclaration": script,
-		"objectId":            obj.Object.ObjectID,
-		"returnByValue":       true,
-	}, &raw); err != nil {
-		return "", err
+	var href string
+	if err := cdpops.CallFunctionOnNode(ctx, backendNodeID, script, nil, &href); err != nil {
+		return "", fmt.Errorf("popup anchor: %w", err)
 	}
-	var out struct {
-		Result struct {
-			Value string `json:"value"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(out.Result.Value), nil
+	return strings.TrimSpace(href), nil
 }
 
 func (s *autoSwitchSession) restoreWindowOpenAndFallbackURL(ctx context.Context) string {
