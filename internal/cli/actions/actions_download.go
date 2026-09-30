@@ -26,7 +26,7 @@ func Download(conn apiclient.Conn, args []string, output, tabID string) {
 
 	path := apiclient.TabPath(tabID, "download")
 
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, path, params)
+	body := conn.GetRaw(path, params)
 	if body == nil {
 		return
 	}

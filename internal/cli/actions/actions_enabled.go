@@ -29,7 +29,7 @@ func Enabled(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 		return
 	}
 
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/enabled", params)
+	body := conn.GetRaw("/enabled", params)
 	var result struct {
 		Enabled bool `json:"enabled"`
 	}

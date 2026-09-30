@@ -31,7 +31,7 @@ func Attr(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 		return
 	}
 
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/attr", params)
+	body := conn.GetRaw("/attr", params)
 	var result struct {
 		Value *string `json:"value"`
 	}

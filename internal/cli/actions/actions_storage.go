@@ -20,7 +20,7 @@ func StorageGet(conn apiclient.Conn, cmd *cobra.Command, key string) {
 		params.Set("tabId", tab)
 	}
 
-	result := requireBytes(apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/storage", params), "Failed to get storage")
+	result := requireBytes(conn.GetRaw("/storage", params), "Failed to get storage")
 	buf := decodeMap(result, "Failed to parse response")
 	printIndented(buf)
 }
@@ -80,5 +80,5 @@ func deleteStorage(conn apiclient.Conn, cmd *cobra.Command, key string) {
 		body["tabId"] = tabID
 	}
 
-	requireMap(apiclient.DoDelete(conn.Client, conn.Base, conn.Token, "/storage", nil, apiclient.WithBody(body)), "Failed to delete storage")
+	requireMap(conn.Delete("/storage", nil, apiclient.WithBody(body)), "Failed to delete storage")
 }

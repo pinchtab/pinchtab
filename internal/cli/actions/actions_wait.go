@@ -60,7 +60,7 @@ func Wait(conn apiclient.Conn, args []string, cmd *cobra.Command) {
 
 	path := apiclient.TabPath(tabID, "wait")
 
-	result := apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, path, body)
+	result := conn.PostQuiet(path, body)
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {

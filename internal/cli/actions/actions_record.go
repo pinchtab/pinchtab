@@ -69,7 +69,7 @@ func RecordStop(conn apiclient.Conn) {
 
 	// Server encodes to its own recordings directory; we move the file
 	// to the user's desired location after encoding completes.
-	raw := apiclient.DoPostRaw(conn.Client, conn.Base, conn.Token, "/record/stop", map[string]any{})
+	raw := conn.PostRaw("/record/stop", map[string]any{})
 	clearRecordingState()
 
 	if raw == nil {
@@ -97,7 +97,7 @@ func RecordStop(conn apiclient.Conn) {
 
 	serverPath := result.Path
 	err = readiness.WaitForRecordEncode(context.Background(), func() ([]byte, error) {
-		raw := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/record/status", nil)
+		raw := conn.GetRaw("/record/status", nil)
 		if raw == nil {
 			return nil, errors.New("no status response")
 		}
@@ -111,7 +111,7 @@ func RecordStop(conn apiclient.Conn) {
 	}
 
 	var warning string
-	if raw := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/record/status", nil); raw != nil {
+	if raw := conn.GetRaw("/record/status", nil); raw != nil {
 		var st struct {
 			Warning string `json:"warning"`
 		}
@@ -146,7 +146,7 @@ func RecordStop(conn apiclient.Conn) {
 }
 
 func RecordStatus(conn apiclient.Conn) {
-	raw := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/record/status", nil)
+	raw := conn.GetRaw("/record/status", nil)
 	if raw == nil {
 		return
 	}

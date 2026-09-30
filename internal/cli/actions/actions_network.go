@@ -61,7 +61,7 @@ func Network(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 		return
 	}
 
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/network", params)
+	body := conn.GetRaw("/network", params)
 	var resp struct {
 		Count   int `json:"count"`
 		Entries []struct {
@@ -135,7 +135,7 @@ func NetworkStream(conn apiclient.Conn, cmd *cobra.Command) {
 		params.Set("bufferSize", v)
 	}
 
-	resp, err := apiclient.OpenStream(conn.Client, conn.Base, conn.Token, "/network/stream", params)
+	resp, err := conn.OpenStream("/network/stream", params)
 	if err != nil {
 		runtimeErr("Error connecting to stream: %v", err)
 	}

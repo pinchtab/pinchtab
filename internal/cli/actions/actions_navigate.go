@@ -46,7 +46,7 @@ func historyNav(conn apiclient.Conn, action string, cmd *cobra.Command) {
 		return
 	}
 
-	result := apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, path, nil)
+	result := conn.PostQuiet(path, nil)
 	if landed := landedURL(result); landed != "" {
 		output.Value(landed)
 	} else {
@@ -224,11 +224,11 @@ func navigationHTTPClient(client *http.Client, timeoutSeconds float64) *http.Cli
 // postNavigate returns the decoded response and whether the tab-scoped request
 // 404'd and was retried unscoped, which is the case the caller has to report.
 func postNavigate(conn apiclient.Conn, req navigateRequest, printResponse bool) (map[string]any, bool) {
-	statusCode, respBody, result := apiclient.DoPostQuietWithStatus(conn.Client, conn.Base, conn.Token, req.path, req.body)
+	statusCode, respBody, result := conn.PostQuietWithStatus(req.path, req.body)
 	usedFallback := false
 	if statusCode == http.StatusNotFound && req.fallbackOnNotFound {
 		usedFallback = true
-		statusCode, respBody, result = apiclient.DoPostQuietWithStatus(conn.Client, conn.Base, conn.Token, "/navigate", req.body)
+		statusCode, respBody, result = conn.PostQuietWithStatus("/navigate", req.body)
 	}
 	if statusCode >= 400 {
 		apiclient.ExitWithAPIError(statusCode, respBody)

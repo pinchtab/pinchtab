@@ -29,7 +29,7 @@ func Value(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 		return
 	}
 
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/value", params)
+	body := conn.GetRaw("/value", params)
 	var result struct {
 		Value *string `json:"value"`
 	}

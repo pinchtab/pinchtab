@@ -19,7 +19,7 @@ func Health(conn apiclient.Conn, cmd *cobra.Command) {
 		return
 	}
 
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/health", nil)
+	body := conn.GetRaw("/health", nil)
 	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		output.Value("ok")
@@ -61,7 +61,7 @@ func Instances(conn apiclient.Conn, cmd *cobra.Command) {
 		return
 	}
 
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/instances", nil)
+	body := conn.GetRaw("/instances", nil)
 
 	instances, err := decodeInstancesResponse(body)
 	if err != nil {
@@ -96,7 +96,7 @@ func Profiles(conn apiclient.Conn, cmd *cobra.Command) {
 		return
 	}
 
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/profiles", nil)
+	body := conn.GetRaw("/profiles", nil)
 
 	profiles, err := decodeProfilesResponse(body)
 	if err != nil {
@@ -107,7 +107,7 @@ func Profiles(conn apiclient.Conn, cmd *cobra.Command) {
 }
 
 func ProfilesCreate(conn apiclient.Conn, name string) {
-	raw := apiclient.DoPostRaw(conn.Client, conn.Base, conn.Token, "/profiles", map[string]any{"name": name})
+	raw := conn.PostRaw("/profiles", map[string]any{"name": name})
 	var created struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
@@ -134,7 +134,7 @@ func ProfilesPrune(conn apiclient.Conn, cmd *cobra.Command) {
 		return
 	}
 
-	raw := apiclient.DoPostRaw(conn.Client, conn.Base, conn.Token, "/profiles/prune", body)
+	raw := conn.PostRaw("/profiles/prune", body)
 	var resp struct {
 		Removed    bool  `json:"removed"`
 		Count      int   `json:"count"`

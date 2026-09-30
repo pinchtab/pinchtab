@@ -71,7 +71,7 @@ func Screenshot(conn apiclient.Conn, cmd *cobra.Command) {
 
 	if annotate {
 		params.Set("annotate", "true")
-		raw := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/screenshot", params, apiclient.CaptureVocab(params.Get("tabId") == ""))
+		raw := conn.GetRaw("/screenshot", params, apiclient.CaptureVocab(params.Get("tabId") == ""))
 		if raw == nil {
 			return
 		}
@@ -125,7 +125,7 @@ func Screenshot(conn apiclient.Conn, cmd *cobra.Command) {
 	if autoNamed {
 		outFile = fmt.Sprintf("screenshot-%s%s", time.Now().Format("20060102-150405"), ext)
 	}
-	data := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/screenshot", params)
+	data := conn.GetRaw("/screenshot", params)
 	if data == nil {
 		return
 	}

@@ -24,14 +24,14 @@ func Annotate(conn apiclient.Conn, cmd *cobra.Command) {
 
 	if clear, _ := cmd.Flags().GetBool("clear"); clear {
 		params.Set("clear", "true")
-		if apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/annotate", params) == nil {
+		if conn.GetRaw("/annotate", params) == nil {
 			return
 		}
 		fmt.Println(cli.StyleStdout(cli.SuccessStyle, "Overlay cleared"))
 		return
 	}
 
-	raw := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/annotate", params, apiclient.CaptureVocab(params.Get("tabId") == ""))
+	raw := conn.GetRaw("/annotate", params, apiclient.CaptureVocab(params.Get("tabId") == ""))
 	if raw == nil {
 		return
 	}

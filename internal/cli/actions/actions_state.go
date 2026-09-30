@@ -16,13 +16,13 @@ func StateCurrent(conn apiclient.Conn, cmd *cobra.Command) {
 		params.Set("tabId", tabID)
 	}
 
-	result := requireBytes(apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/state", params), "Failed to read current browser state")
+	result := requireBytes(conn.GetRaw("/state", params), "Failed to read current browser state")
 	buf := decodeMap(result, "Failed to parse response")
 	printIndented(buf)
 }
 
 func StateList(conn apiclient.Conn) {
-	result := requireBytes(apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/state/list", nil), "Failed to list state files")
+	result := requireBytes(conn.GetRaw("/state/list", nil), "Failed to list state files")
 	buf := decodeMap(result, "Failed to parse response")
 	printIndented(buf)
 }
@@ -68,7 +68,7 @@ func StateShow(conn apiclient.Conn, name string) {
 	params := url.Values{}
 	params.Set("name", name)
 
-	result := requireBytes(apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/state/show", params), "Failed to show state")
+	result := requireBytes(conn.GetRaw("/state/show", params), "Failed to show state")
 	buf := decodeMap(result, "Failed to parse response")
 	printIndented(buf)
 }
@@ -81,7 +81,7 @@ func StateDelete(conn apiclient.Conn, name string) {
 	params := url.Values{}
 	params.Set("name", name)
 
-	requireMap(apiclient.DoDelete(conn.Client, conn.Base, conn.Token, "/state", params), "Failed to delete state")
+	requireMap(conn.Delete("/state", params), "Failed to delete state")
 }
 
 func StateClean(conn apiclient.Conn, cmd *cobra.Command) {

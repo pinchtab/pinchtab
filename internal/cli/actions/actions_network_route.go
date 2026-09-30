@@ -60,7 +60,7 @@ func NetworkRoute(conn apiclient.Conn, cmd *cobra.Command, pattern string) {
 	}
 
 	path := networkRoutePath(cmd)
-	result := requireMap(apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, path, req), "Failed to install route")
+	result := requireMap(conn.PostQuiet(path, req), "Failed to install route")
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
@@ -78,7 +78,7 @@ func NetworkUnroute(conn apiclient.Conn, cmd *cobra.Command, pattern string) {
 		params.Set("pattern", pattern)
 	}
 	path := networkRoutePath(cmd)
-	result := requireMap(apiclient.DoDelete(conn.Client, conn.Base, conn.Token, path, params), "Failed to remove route(s)")
+	result := requireMap(conn.Delete(path, params), "Failed to remove route(s)")
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {

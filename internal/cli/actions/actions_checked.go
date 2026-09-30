@@ -29,7 +29,7 @@ func Checked(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 		return
 	}
 
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/checked", params)
+	body := conn.GetRaw("/checked", params)
 	var result struct {
 		Checked bool `json:"checked"`
 	}

@@ -44,7 +44,7 @@ func readLog(conn apiclient.Conn, cmd *cobra.Command, path, failMsg string, prin
 		conn.Get(path, params)
 		return
 	}
-	result := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, path, params)
+	result := conn.GetRaw(path, params)
 	if result == nil {
 		runtimeErr("%s", failMsg)
 	}

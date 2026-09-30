@@ -21,6 +21,6 @@ func Dialog(conn apiclient.Conn, action string, text string, cmd *cobra.Command)
 		return
 	}
 
-	apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, path, body)
+	conn.PostQuiet(path, body)
 	output.Success()
 }

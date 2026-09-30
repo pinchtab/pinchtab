@@ -46,7 +46,7 @@ func Extract(conn apiclient.Conn, cmd *cobra.Command) {
 		conn.Post(path, body, capture)
 		return
 	}
-	result := apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, path, body, capture)
+	result := conn.PostQuiet(path, body, capture)
 	output.JSON(result["data"])
 	if withFields || explain {
 		fields, _ := result["fields"].(map[string]any)

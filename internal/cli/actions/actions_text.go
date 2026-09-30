@@ -61,7 +61,7 @@ func Text(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 
 	outFile, _ := cmd.Flags().GetString("output")
 
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/text", params)
+	body := conn.GetRaw("/text", params)
 	var result struct {
 		Text       string `json:"text"`
 		Extraction string `json:"extraction"`

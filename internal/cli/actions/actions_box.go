@@ -30,7 +30,7 @@ func Box(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 		return
 	}
 
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/box", params)
+	body := conn.GetRaw("/box", params)
 	var result struct {
 		Box struct {
 			X      float64 `json:"x"`

@@ -73,7 +73,7 @@ func Capture(conn apiclient.Conn, cmd *cobra.Command) {
 		params.Set("tabId", v)
 	}
 
-	raw := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/capture", params, apiclient.CaptureVocab(params.Get("tabId") == ""))
+	raw := conn.GetRaw("/capture", params, apiclient.CaptureVocab(params.Get("tabId") == ""))
 	if raw == nil {
 		return
 	}

@@ -75,7 +75,7 @@ func Scrape(conn apiclient.Conn, cmd *cobra.Command, target string) (err error) 
 	}
 
 	longClient := &http.Client{Transport: conn.Client.Transport, Timeout: scrapeTimeout}
-	raw, err := apiclient.DoRawE(longClient, conn.Base, conn.Token, http.MethodPost, "/scrape", apiclient.WithBody(body))
+	raw, err := conn.WithClient(longClient).Raw(http.MethodPost, "/scrape", apiclient.WithBody(body))
 	if err != nil {
 		return err
 	}

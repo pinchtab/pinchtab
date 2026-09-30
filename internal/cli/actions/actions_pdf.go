@@ -75,7 +75,7 @@ func PDF(conn apiclient.Conn, cmd *cobra.Command) {
 		outFile = fmt.Sprintf("page-%s.pdf", time.Now().Format("20060102-150405"))
 	}
 
-	data := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, apiclient.TabPath(tabID, "pdf"), params)
+	data := conn.GetRaw(apiclient.TabPath(tabID, "pdf"), params)
 	if data == nil {
 		return
 	}

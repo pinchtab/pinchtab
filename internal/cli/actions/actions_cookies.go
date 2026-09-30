@@ -22,7 +22,7 @@ func CookiesGet(conn apiclient.Conn, cmd *cobra.Command) {
 		params.Set("url", target)
 	}
 
-	result := requireBytes(apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/cookies", params), "Failed to get cookies")
+	result := requireBytes(conn.GetRaw("/cookies", params), "Failed to get cookies")
 	printIndented(decodeMap(result, "Failed to parse response"))
 }
 
@@ -55,7 +55,7 @@ func CookiesSet(conn apiclient.Conn, cmd *cobra.Command, name, value string) {
 		body["url"] = target
 	}
 
-	result := requireMap(apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, "/cookies", body), "Failed to set cookie")
+	result := requireMap(conn.PostQuiet("/cookies", body), "Failed to set cookie")
 	if !cookieWriteConfirmed(result) {
 		runtimeErr("ERROR: cookies: %q was not set (%v)", name, jsonLine(result))
 	}
@@ -64,7 +64,7 @@ func CookiesSet(conn apiclient.Conn, cmd *cobra.Command, name, value string) {
 
 // CookiesClear clears all browser cookies.
 func CookiesClear(conn apiclient.Conn, cmd *cobra.Command) {
-	result := apiclient.DoDelete(conn.Client, conn.Base, conn.Token, "/cookies", nil, apiclient.Quiet())
+	result := conn.Delete("/cookies", nil, apiclient.Quiet())
 	if result == nil {
 		runtimeErr("ERROR: cookies: clear failed")
 	}

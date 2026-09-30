@@ -110,7 +110,7 @@ func postActionWithHeaders(conn apiclient.Conn, cmd *cobra.Command, req bridge.A
 		return
 	}
 
-	result := apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, path, nil, opts...)
+	result := conn.PostQuiet(path, nil, opts...)
 	printActionResult(req.Kind, result)
 
 	snap, _ := cmd.Flags().GetBool("snap")
@@ -156,7 +156,7 @@ func fetchAndPrintSnapshot(conn apiclient.Conn, cmd *cobra.Command, tabID string
 
 func fetchAndPrintText(conn apiclient.Conn, tabID string) {
 	path := apiclient.TabPath(tabID, "text")
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, path, nil)
+	body := conn.GetRaw(path, nil)
 	var result struct {
 		Text string `json:"text"`
 	}

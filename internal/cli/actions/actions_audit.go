@@ -315,7 +315,7 @@ func Audit(conn apiclient.Conn, cmd *cobra.Command, target string) (err error) {
 	}
 
 	longClient := &http.Client{Transport: conn.Client.Transport, Timeout: auditTimeout}
-	raw, err := apiclient.DoRawE(longClient, conn.Base, conn.Token, http.MethodPost, "/audit", apiclient.WithBody(body))
+	raw, err := conn.WithClient(longClient).Raw(http.MethodPost, "/audit", apiclient.WithBody(body))
 	if err != nil {
 		return err
 	}
@@ -404,17 +404,17 @@ func exportAuditPDF(conn apiclient.Conn, dir string, report audit.AuditReport) e
 // GET /pdf.
 func serverPDFPrinter(conn apiclient.Conn) auditreport.PDFPrinter {
 	return func(html []byte) ([]byte, error) {
-		status, _, tab := apiclient.DoPostQuietWithStatus(conn.Client, conn.Base, conn.Token, "/tab", map[string]any{"action": "new"})
+		status, _, tab := conn.PostQuietWithStatus("/tab", map[string]any{"action": "new"})
 		tabID, _ := tab["tabId"].(string)
 		if status >= 400 || tabID == "" {
 			return nil, fmt.Errorf("create print tab: HTTP %d", status)
 		}
 		defer func() {
-			_, _, _ = apiclient.DoPostQuietWithStatus(conn.Client, conn.Base, conn.Token, "/close", map[string]any{"tabId": tabID})
+			_, _, _ = conn.PostQuietWithStatus("/close", map[string]any{"tabId": tabID})
 		}()
 
 		doc, _ := json.Marshal(string(html))
-		status, body, _ := apiclient.DoPostQuietWithStatus(conn.Client, conn.Base, conn.Token, "/evaluate", map[string]any{
+		status, body, _ := conn.PostQuietWithStatus("/evaluate", map[string]any{
 			"tabId":      tabID,
 			"expression": fmt.Sprintf("document.open(); document.write(%s); document.close(); true", doc),
 		})

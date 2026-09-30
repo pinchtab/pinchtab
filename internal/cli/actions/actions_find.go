@@ -41,7 +41,7 @@ func Find(conn apiclient.Conn, query string, cmd *cobra.Command) {
 	capture := apiclient.CaptureVocab(tabID == "")
 
 	if refOnly {
-		result := apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, path, body, capture)
+		result := conn.PostQuiet(path, body, capture)
 		if ref, ok := result["best_ref"].(string); ok && ref != "" {
 			fmt.Println(ref)
 			return
@@ -55,7 +55,7 @@ func Find(conn apiclient.Conn, query string, cmd *cobra.Command) {
 	}
 
 	// Terse: one line per match: <ref>\t<role>\t"<name>"
-	result := apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, path, body, capture)
+	result := conn.PostQuiet(path, body, capture)
 	matches, ok := result["matches"].([]any)
 	if !ok || len(matches) == 0 {
 		// Single result format

@@ -52,7 +52,7 @@ func Memory(conn apiclient.Conn, cmd *cobra.Command) {
 		conn.Get("/memory", params)
 		return
 	}
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/memory", params)
+	body := conn.GetRaw("/memory", params)
 	var usage memoryUsage
 	if err := json.Unmarshal(body, &usage); err != nil {
 		fmt.Println(string(body))
@@ -76,7 +76,7 @@ func MemorySnapshot(conn apiclient.Conn, cmd *cobra.Command) {
 	if v, _ := cmd.Flags().GetString("tab"); v != "" {
 		body["tabId"] = v
 	}
-	raw := apiclient.DoPostRaw(conn.Client, conn.Base, conn.Token, "/memory/snapshot", body)
+	raw := conn.PostRaw("/memory/snapshot", body)
 	var snap memorySnapshot
 	if err := json.Unmarshal(raw, &snap); err != nil {
 		cli.Fatal("Decode heap snapshot response: %v", err)
@@ -124,7 +124,7 @@ func MemorySummary(conn apiclient.Conn, cmd *cobra.Command, id string) {
 		conn.Get(path, params)
 		return
 	}
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, path, params)
+	body := conn.GetRaw(path, params)
 	var summary memorySummary
 	if err := json.Unmarshal(body, &summary); err != nil {
 		fmt.Println(string(body))
@@ -176,7 +176,7 @@ func MemoryCompare(conn apiclient.Conn, cmd *cobra.Command, baseID, headID strin
 		conn.Get("/memory/compare", params)
 		return
 	}
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/memory/compare", params)
+	body := conn.GetRaw("/memory/compare", params)
 	var cmp memoryComparison
 	if err := json.Unmarshal(body, &cmp); err != nil {
 		fmt.Println(string(body))

@@ -28,7 +28,7 @@ func resolveTabReference(conn apiclient.Conn, ref string) (string, error) {
 }
 
 func listTabIDs(conn apiclient.Conn) ([]string, error) {
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/tabs", nil)
+	body := conn.GetRaw("/tabs", nil)
 	var resp struct {
 		Tabs []struct {
 			ID string `json:"id"`

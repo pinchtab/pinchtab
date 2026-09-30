@@ -25,7 +25,7 @@ func Evaluate(conn apiclient.Conn, args []string, cmd *cobra.Command) {
 	}
 
 	// Terse: scalar verbatim, object/array as compact JSON
-	result := apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, path, body)
+	result := conn.PostQuiet(path, body)
 	if val, ok := result["result"]; ok {
 		switch v := val.(type) {
 		case string:

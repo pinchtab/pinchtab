@@ -19,7 +19,7 @@ func TabList(conn apiclient.Conn, cmd *cobra.Command) {
 	}
 
 	// Terse: one line per tab: [*]<id>\t<url>\t<title>
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/tabs", nil)
+	body := conn.GetRaw("/tabs", nil)
 	var tabs []map[string]any
 	if err := json.Unmarshal(body, &tabs); err != nil {
 		fmt.Println(string(body))
@@ -46,7 +46,7 @@ func TabClose(conn apiclient.Conn, tabID string, cmd *cobra.Command) {
 		return
 	}
 
-	apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, "/close", map[string]any{"tabId": tabID})
+	conn.PostQuiet("/close", map[string]any{"tabId": tabID})
 	output.Success()
 }
 
@@ -70,7 +70,7 @@ func TabFocus(conn apiclient.Conn, tabID string, cmd *cobra.Command) string {
 		return resolvedTabID
 	}
 
-	result := apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, "/tab", map[string]any{
+	result := conn.PostQuiet("/tab", map[string]any{
 		"action": "focus",
 		"tabId":  resolvedTabID,
 	})
@@ -96,7 +96,7 @@ func TabHandoff(conn apiclient.Conn, tabID, reason string, timeoutMS int, cmd *c
 		conn.Post(apiclient.TabPath(tabID, "handoff"), body)
 		return
 	}
-	apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, apiclient.TabPath(tabID, "handoff"), body)
+	conn.PostQuiet(apiclient.TabPath(tabID, "handoff"), body)
 	output.Value("paused")
 	if reason != "" {
 		output.Hint(fmt.Sprintf("reason: %s", reason))
@@ -114,7 +114,7 @@ func TabResume(conn apiclient.Conn, tabID, status string, cmd *cobra.Command) {
 		conn.Post(apiclient.TabPath(tabID, "resume"), body)
 		return
 	}
-	apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, apiclient.TabPath(tabID, "resume"), body)
+	conn.PostQuiet(apiclient.TabPath(tabID, "resume"), body)
 	output.Value("resumed")
 }
 
@@ -125,7 +125,7 @@ func TabHandoffStatus(conn apiclient.Conn, tabID string, cmd *cobra.Command) {
 		conn.Get(apiclient.TabPath(tabID, "handoff"), nil)
 		return
 	}
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, apiclient.TabPath(tabID, "handoff"), nil)
+	body := conn.GetRaw(apiclient.TabPath(tabID, "handoff"), nil)
 	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		fmt.Println(string(body))

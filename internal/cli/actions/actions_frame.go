@@ -23,7 +23,7 @@ func Frame(conn apiclient.Conn, args []string, cmd *cobra.Command) {
 			return
 		}
 
-		body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/frame", params)
+		body := conn.GetRaw("/frame", params)
 		var resp struct {
 			Current any  `json:"current"`
 			Scoped  bool `json:"scoped"`
@@ -59,7 +59,7 @@ func Frame(conn apiclient.Conn, args []string, cmd *cobra.Command) {
 		return
 	}
 
-	result := apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, "/frame", body)
+	result := conn.PostQuiet("/frame", body)
 	if scoped, ok := result["scoped"].(bool); ok && !scoped {
 		fmt.Println("main")
 		return

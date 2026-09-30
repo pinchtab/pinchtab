@@ -111,6 +111,6 @@ func inspectGet(conn apiclient.Conn, path string, cmd *cobra.Command, args []str
 		conn.Get(path, params)
 		return
 	}
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, path, params)
+	body := conn.GetRaw(path, params)
 	terse(body)
 }

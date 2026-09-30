@@ -30,7 +30,7 @@ func Count(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 		return
 	}
 
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/count", params)
+	body := conn.GetRaw("/count", params)
 	var result struct {
 		Count int `json:"count"`
 	}

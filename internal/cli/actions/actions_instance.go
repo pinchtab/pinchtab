@@ -51,7 +51,7 @@ func InstanceNavigate(conn apiclient.Conn, args []string) {
 
 func InstanceLogs(conn apiclient.Conn, args []string) {
 	instID := args[0]
-	logs := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, fmt.Sprintf("/instances/%s/logs", instID), nil)
+	logs := conn.GetRaw(fmt.Sprintf("/instances/%s/logs", instID), nil)
 	fmt.Println(string(logs))
 }
 

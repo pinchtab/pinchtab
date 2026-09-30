@@ -47,7 +47,7 @@ func A11yAudit(conn apiclient.Conn, cmd *cobra.Command) {
 		conn.Get("/a11y/audit", params, capture)
 		return
 	}
-	printA11ySummary(apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/a11y/audit", params, capture))
+	printA11ySummary(conn.GetRaw("/a11y/audit", params, capture))
 }
 
 // printA11ySummary renders a compact human summary for either engine, falling

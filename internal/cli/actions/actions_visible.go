@@ -29,7 +29,7 @@ func Visible(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 		return
 	}
 
-	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/visible", params)
+	body := conn.GetRaw("/visible", params)
 	var result struct {
 		Visible bool `json:"visible"`
 	}
