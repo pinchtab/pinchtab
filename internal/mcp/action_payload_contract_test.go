@@ -2,9 +2,7 @@ package mcp
 
 import (
 	"go/ast"
-	"go/parser"
 	"go/token"
-	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -14,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 // consumedElsewhere records the payload keys the bridge ACTION never reads because another
@@ -120,10 +119,11 @@ var declaringSets = map[string]map[string]bool{
 func mcpPayloadKeysByKind(t *testing.T) map[string]payloadCase {
 	t.Helper()
 
-	fn := findFuncDecl(t, parseGoFile(t, "handlers_interaction.go"), "handleAction")
+	pkg := srccensus.Load(t, ".", 18)
+	fn := findFuncDecl(t, pkg, "handleAction")
 	keys := map[string]map[string]bool{}
 	rewrites := map[string]map[string]bool{}
-	collectPayloadKeys(t, fn.Body, mcpActionKinds(t), keys, rewrites)
+	collectPayloadKeys(t, fn.Body, mcpActionKinds(t, pkg), keys, rewrites)
 
 	for key, setName := range gatedByDeclaringSet {
 		set, known := declaringSets[setName]
@@ -157,20 +157,23 @@ func mcpPayloadKeysByKind(t *testing.T) map[string]payloadCase {
 
 // mcpActionKinds is the set of kinds handleAction is instantiated with, taken from the tool
 // registration so a new action tool joins this census by existing.
-func mcpActionKinds(t *testing.T) []string {
+func mcpActionKinds(t *testing.T, pkg *srccensus.Package) []string {
 	t.Helper()
 
 	var kinds []string
-	ast.Inspect(parseGoFile(t, "handlers.go"), func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok || !isIdent(call.Fun, "handleAction") || len(call.Args) != 2 {
+	_, files := pkg.Syntax()
+	for _, file := range files {
+		ast.Inspect(file, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || !isIdent(call.Fun, "handleAction") || len(call.Args) != 2 {
+				return true
+			}
+			if kind, ok := stringLit(call.Args[1]); ok {
+				kinds = append(kinds, kind)
+			}
 			return true
-		}
-		if kind, ok := stringLit(call.Args[1]); ok {
-			kinds = append(kinds, kind)
-		}
-		return true
-	})
+		})
+	}
 	if len(kinds) < 5 {
 		t.Fatalf("found only %d action tools, so this census is not reading the tool registration", len(kinds))
 	}
@@ -357,14 +360,17 @@ func union(a, b []string) []string {
 	return out
 }
 
-func findFuncDecl(t *testing.T, file *ast.File, name string) *ast.FuncDecl {
+func findFuncDecl(t *testing.T, pkg *srccensus.Package, name string) *ast.FuncDecl {
 	t.Helper()
-	for _, decl := range file.Decls {
-		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == name && fn.Body != nil {
-			return fn
+	_, files := pkg.Syntax()
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == name && fn.Body != nil {
+				return fn
+			}
 		}
 	}
-	t.Fatalf("no %s function found, so this census has nothing to read", name)
+	t.Fatalf("no %s function found in %s, so this census has nothing to read", name, pkg.Dir())
 	return nil
 }
 
@@ -434,19 +440,14 @@ func bridgeRequestReads(t *testing.T) (reads map[string]map[string]bool, calls m
 	reads = map[string]map[string]bool{}
 	calls = map[string]map[string]bool{}
 
-	dir := filepath.Join("..", "bridge")
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("ReadDir(%s): %v", dir, err)
+	_, files := srccensus.Load(t, filepath.Join("..", "bridge"), 70).Syntax()
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
 	}
-	parsed := 0
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		parsed++
-		file := parseGoFile(t, filepath.Join(dir, name))
+	sort.Strings(names)
+	for _, name := range names {
+		file := files[name]
 		for _, decl := range file.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
 			if !ok || fn.Body == nil {
@@ -474,9 +475,6 @@ func bridgeRequestReads(t *testing.T) (reads map[string]map[string]bool, calls m
 				return true
 			})
 		}
-	}
-	if parsed == 0 {
-		t.Fatalf("no non-test Go files parsed from %s", dir)
 	}
 	return reads, calls
 }
@@ -553,15 +551,6 @@ func anyKindPosts(keysByKind map[string]payloadCase, key string) bool {
 		}
 	}
 	return false
-}
-
-func parseGoFile(t *testing.T, path string) *ast.File {
-	t.Helper()
-	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
-	if err != nil {
-		t.Fatalf("ParseFile(%s): %v", path, err)
-	}
-	return file
 }
 
 func isIdent(expr ast.Expr, name string) bool {

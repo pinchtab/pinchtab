@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/ast"
-	"go/parser"
-	"go/token"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,6 +13,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 func postAction(t *testing.T, h *Handlers, body string) *httptest.ResponseRecorder {
@@ -132,16 +131,10 @@ func TestBatchStopOnErrorStopsAfterAPreDispatchFailure(t *testing.T) {
 }
 
 func TestEachStepTimeoutContextIsCancelledExactlyOnce(t *testing.T) {
-	f, err := parser.ParseFile(token.NewFileSet(), "actions.go", nil, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	pkg := srccensus.Load(t, ".", handlersSourceFileFloor)
 	checked := 0
-	for _, decl := range f.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || (fn.Name.Name != "handleActionsBatch" && fn.Name.Name != "HandleMacro" && fn.Name.Name != "runMultiStep" && fn.Name.Name != "runMultiStepAction") {
-			continue
-		}
+	for _, name := range []string{"handleActionsBatch", "HandleMacro", "runMultiStep", "runMultiStepAction"} {
+		fn, _ := handlerFuncDecl(t, pkg, name)
 		checked++
 		cancels := map[string]int{}
 		ast.Inspect(fn.Body, func(n ast.Node) bool {
@@ -187,22 +180,21 @@ func TestEachStepTimeoutContextIsCancelledExactlyOnce(t *testing.T) {
 }
 
 func TestNoHandlerRecoversAnUnknownActionByStringPrefix(t *testing.T) {
-	f, err := parser.ParseFile(token.NewFileSet(), "actions.go", nil, 0)
-	if err != nil {
-		t.Fatal(err)
+	fset, files := srccensus.Load(t, ".", handlersSourceFileFloor).Syntax()
+	for _, file := range files {
+		ast.Inspect(file, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "HasPrefix" || len(call.Args) != 2 {
+				return true
+			}
+			if lit, ok := call.Args[1].(*ast.BasicLit); ok && strings.Contains(lit.Value, "unknown action") {
+				t.Errorf("%s still recovers the unknown-action error by string prefix; match bridge.ErrUnknownAction with errors.Is", fset.Position(call.Pos()))
+			}
+			return true
+		})
 	}
-	ast.Inspect(f, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || sel.Sel.Name != "HasPrefix" || len(call.Args) != 2 {
-			return true
-		}
-		if lit, ok := call.Args[1].(*ast.BasicLit); ok && strings.Contains(lit.Value, "unknown action") {
-			t.Errorf("actions.go still recovers the unknown-action error by string prefix; match bridge.ErrUnknownAction with errors.Is")
-		}
-		return true
-	})
 }

@@ -3,8 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"go/ast"
-	"go/parser"
-	"go/token"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +12,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/routes"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 // decodeRefusal reads one recorded 403 into its message, code and details. Both
@@ -248,23 +247,9 @@ func TestWaitFnRefusesExactlyAsEvaluateDoesForTheSameCapability(t *testing.T) {
 // This keys off the OPERATION instead: any site emitting a _disabled code must hand
 // it the shared details builder, whatever route or capability it belongs to.
 func TestEveryHandRolledDisabledRefusalUsesTheSharedDetailsBuilder(t *testing.T) {
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	fset := token.NewFileSet()
-	scanned, found := 0, 0
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		scanned++
-		file, err := parser.ParseFile(fset, name, nil, 0)
-		if err != nil {
-			t.Fatalf("ParseFile(%s): %v", name, err)
-		}
+	fset, files := srccensus.Load(t, ".", handlersSourceFileFloor).Syntax()
+	found := 0
+	for name, file := range files {
 		ast.Inspect(file, func(node ast.Node) bool {
 			call, ok := node.(*ast.CallExpr)
 			if !ok {
@@ -287,9 +272,6 @@ func TestEveryHandRolledDisabledRefusalUsesTheSharedDetailsBuilder(t *testing.T)
 		})
 	}
 
-	if scanned == 0 {
-		t.Fatal("scanned no source files, so this census proves nothing")
-	}
 	if found == 0 {
 		t.Fatal("found no disabled-code ErrorCode call in either spelling; the shape moved and this census now passes over nothing")
 	}
@@ -318,23 +300,8 @@ func disabledCodeSpelling(arg ast.Expr) (string, bool) {
 // build, and hand-writing it is how a refusal loses the hint and the restart. Its steady
 // state is zero matches, so its non-vacuity is the file count, not a found floor.
 func TestNoHandlerHandBuildsADetailsMapCarryingTheCapabilitySetting(t *testing.T) {
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	fset := token.NewFileSet()
-	scanned := 0
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		scanned++
-		file, err := parser.ParseFile(fset, name, nil, 0)
-		if err != nil {
-			t.Fatalf("ParseFile(%s): %v", name, err)
-		}
+	fset, files := srccensus.Load(t, ".", handlersSourceFileFloor).Syntax()
+	for name, file := range files {
 		ast.Inspect(file, func(node ast.Node) bool {
 			lit, ok := node.(*ast.CompositeLit)
 			if !ok || !hasStringKey(lit, "setting") {
@@ -344,10 +311,6 @@ func TestNoHandlerHandBuildsADetailsMapCarryingTheCapabilitySetting(t *testing.T
 				fset.Position(lit.Pos()), name)
 			return true
 		})
-	}
-
-	if scanned == 0 {
-		t.Fatal("scanned no source files, so this census proves nothing")
 	}
 }
 

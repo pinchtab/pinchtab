@@ -5,14 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
-	"go/parser"
-	"go/token"
-	"os"
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/chromedp/cdproto"
 	"github.com/chromedp/cdproto/input"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 func TestDispatchMouseMoveFallsBackToSyntheticOnDeadline(t *testing.T) {
@@ -189,32 +188,32 @@ func TestTheButtonVocabularyHasOneOwner(t *testing.T) {
 // a button must route it through the normalizer, so none reaches CDP with a raw caller
 // string. Adding an entry point that forgets is what this catches.
 func TestEveryButtonTakingEntryPointNormalizesIt(t *testing.T) {
-	source, err := os.ReadFile("pointer.go")
-	if err != nil {
-		t.Fatal(err)
+	pkg := srccensus.Load(t, ".", 7)
+	_, files := pkg.Syntax()
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
 	}
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "pointer.go", source, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	sort.Strings(names)
 
 	checked := 0
-	for _, decl := range file.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Body == nil || !takesAButton(fn) {
-			continue
-		}
-		if fn.Name.Name == "normalizeMouseButton" || fn.Name.Name == "ValidateMouseButton" {
-			continue
-		}
-		checked++
-		if !callsNormalizer(fn) && !passesButtonOn(fn) {
-			t.Errorf("%s takes a button and neither normalizes it nor passes it to something that does, so a caller string reaches CDP raw", fn.Name.Name)
+	for _, name := range names {
+		for _, decl := range files[name].Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil || !takesAButton(fn) {
+				continue
+			}
+			if fn.Name.Name == "normalizeMouseButton" || fn.Name.Name == "ValidateMouseButton" {
+				continue
+			}
+			checked++
+			if !callsNormalizer(fn) && !passesButtonOn(fn) {
+				t.Errorf("%s takes a button and neither normalizes it nor passes it to something that does, so a caller string reaches CDP raw", fn.Name.Name)
+			}
 		}
 	}
 	if checked < 4 {
-		t.Fatalf("found only %d button-taking functions in pointer.go; this census is not reading the callers", checked)
+		t.Fatalf("found only %d button-taking functions in %s; this census is not reading the callers", checked, pkg.Dir())
 	}
 }
 

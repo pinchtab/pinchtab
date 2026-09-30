@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +19,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 type failMockBridge struct {
@@ -1321,21 +1321,22 @@ func jsonLiteral(t reflect.Type, value string) string {
 // only from bridge.ActionRequest refused a parameter the same function implements, leaving the
 // code that reads it unreachable behind a 400 saying it is not a parameter of /action.
 //
-// This walks every r.URL.Query().Get("…") in actions.go and requires the key to be allowed, so
-// the NEXT such parameter fails here the day it lands rather than being refused in production.
-// Scope is the file, not the package: a query read in another handler belongs to that handler.
+// This walks every r.URL.Query().Get("…") in the file declaring HandleAction and requires the
+// key to be allowed, so the NEXT such parameter fails here the day it lands rather than being
+// refused in production. Scope is that file, not the package: a query read in another handler
+// belongs to that handler.
 func TestEveryQueryParameterActionReadsIsAllowed(t *testing.T) {
-	keys := queryGetLiteralsIn(t, "actions.go")
+	file, keys := actionHandlerQueryGetLiterals(t)
 	if len(keys) == 0 {
-		t.Fatal("no r.URL.Query().Get literal found in actions.go; the walk stopped matching and this guard would pass over nothing — re-point it at wherever the query reads moved rather than deleting it")
+		t.Fatalf("no r.URL.Query().Get literal found in %s; the walk stopped matching and this guard would pass over nothing — re-point it at wherever the query reads moved rather than deleting it", file)
 	}
 
 	for _, key := range keys {
 		if _, ok := actionQueryKeys[key.name]; ok {
 			continue
 		}
-		t.Errorf("actions.go:%d reads the query parameter %q, but the allow-list refuses it — a caller who sends it gets a 400 saying it is not a parameter of /action while this line reads it. Declare it in getOnlyActionQueryKeys with the reason it is GET-only, or stop reading it",
-			key.line, key.name)
+		t.Errorf("%s:%d reads the query parameter %q, but the allow-list refuses it — a caller who sends it gets a 400 saying it is not a parameter of /action while this line reads it. Declare it in getOnlyActionQueryKeys with the reason it is GET-only, or stop reading it",
+			file, key.line, key.name)
 	}
 }
 
@@ -1344,7 +1345,8 @@ func TestEveryQueryParameterActionReadsIsAllowed(t *testing.T) {
 // that spelling.
 func TestNoGetOnlyKeyOutlivesItsRead(t *testing.T) {
 	read := map[string]bool{}
-	for _, key := range queryGetLiteralsIn(t, "actions.go") {
+	file, keys := actionHandlerQueryGetLiterals(t)
+	for _, key := range keys {
 		read[key.name] = true
 	}
 	for key, reason := range getOnlyActionQueryKeys {
@@ -1352,7 +1354,7 @@ func TestNoGetOnlyKeyOutlivesItsRead(t *testing.T) {
 			t.Errorf("%q is recorded as GET-only with no reason; every entry widens the allow-list and has to say why", key)
 		}
 		if !read[key] {
-			t.Errorf("%q is recorded as GET-only but actions.go reads no such query parameter; the entry outlived its code and now just permits a typo — drop it", key)
+			t.Errorf("%q is recorded as GET-only but %s reads no such query parameter; the entry outlived its code and now just permits a typo — drop it", key, file)
 		}
 	}
 }
@@ -1362,17 +1364,20 @@ type queryGetLiteral struct {
 	line int
 }
 
-// queryGetLiteralsIn finds the string literal of every `….Query().Get("x")` in one file of this
-// package. It matches the CHAIN rather than the method name, so an unrelated Get on some other
-// receiver is not mistaken for a query read.
-func queryGetLiteralsIn(t *testing.T, file string) []queryGetLiteral {
+// actionHandlerQueryGetLiterals finds the string literal of every `….Query().Get("x")` in the
+// file declaring HandleAction. It matches the CHAIN rather than the method name, so an unrelated
+// Get on some other receiver is not mistaken for a query read.
+func actionHandlerQueryGetLiterals(t *testing.T) (string, []queryGetLiteral) {
 	t.Helper()
 
-	fset := token.NewFileSet()
-	parsed, err := parser.ParseFile(fset, file, nil, 0)
-	if err != nil {
-		t.Fatalf("cannot parse %s, so this guard would check nothing: %v", file, err)
+	pkg := srccensus.Load(t, ".", handlersSourceFileFloor)
+	handler, ok := pkg.Func("HandleAction")
+	if !ok {
+		t.Fatalf("HandleAction is no longer declared anywhere in %s; re-point this guard at the /action handler rather than deleting it", pkg.Dir())
 	}
+	file := handler.File
+	fset, files := pkg.Syntax()
+	parsed := files[file]
 
 	var found []queryGetLiteral
 	ast.Inspect(parsed, func(node ast.Node) bool {
@@ -1404,5 +1409,5 @@ func queryGetLiteralsIn(t *testing.T, file string) []queryGetLiteral {
 		found = append(found, queryGetLiteral{name: name, line: fset.Position(call.Pos()).Line})
 		return true
 	})
-	return found
+	return file, found
 }

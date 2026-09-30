@@ -6,15 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
-	"go/parser"
+	"go/printer"
 	"go/token"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/selector"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
@@ -262,11 +262,8 @@ func TestDialogScopedWrapperFormsStayInsideTheScope(t *testing.T) {
 // recursion: the stub table is blind to it by construction. This is the backstop
 // for that environment — it needs no browser and it names the one-token swap.
 func TestWrapperArmsAreWiredToTheirOwnScope(t *testing.T) {
-	raw, err := os.ReadFile("action_resolve.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	src := string(raw)
+	pkg := srccensus.Load(t, ".", 70)
+	fset, _ := pkg.Syntax()
 
 	// The property, not the argument spelling: each entry point must hand its
 	// wrapper arm ITS OWN scope and never mention the other. Pinning the full call
@@ -302,18 +299,11 @@ func TestWrapperArmsAreWiredToTheirOwnScope(t *testing.T) {
 		"resolveNested":                    true,
 	}
 	callers := map[string]bool{}
-	for _, chunk := range strings.Split(src, "\nfunc ") {
-		if !strings.Contains(chunk, dispatch) {
-			continue
-		}
-		name := chunk[:strings.IndexAny(chunk, "(")]
-		if idx := strings.LastIndex(name, ") "); idx >= 0 {
-			name = name[idx+2:]
-		}
-		callers[strings.TrimSpace(name)] = true
+	for _, site := range pkg.CallsAllowingNone("resolveParsed") {
+		callers[site.Func] = true
 	}
 	if len(callers) == 0 {
-		t.Fatalf("nothing in action_resolve.go calls %s — this guard would pass vacuously; if the dispatcher was renamed, pin the same property against its replacement rather than deleting this test", dispatch)
+		t.Fatalf("nothing in %s calls %s — this guard would pass vacuously; if the dispatcher was renamed, pin the same property against its replacement rather than deleting this test", pkg.Dir(), dispatch)
 	}
 	for name := range callers {
 		if !allowed[name] {
@@ -327,14 +317,18 @@ func TestWrapperArmsAreWiredToTheirOwnScope(t *testing.T) {
 	}
 
 	for _, tc := range entries {
-		body := src[strings.Index(src, tc.entry):]
-		if end := strings.Index(body, "\nfunc "); end >= 0 {
-			body = body[:end]
+		name := strings.TrimSuffix(strings.TrimPrefix(tc.entry, "func "), "(")
+		decl := wrapperEntryDecl(t, pkg, name)
+		var dispatches []string
+		for _, call := range resolveParsedCalls(decl) {
+			if len(call.Args) >= 2 {
+				dispatches = append(dispatches, "resolveParsed("+renderExpr(t, fset, call.Args[0])+", "+renderExpr(t, fset, call.Args[1]))
+			}
 		}
-		if !strings.Contains(body, dispatch+tc.want) {
+		if !anyHasPrefix(dispatches, dispatch+tc.want) {
 			t.Errorf("%s no longer hands its wrapper arm %s%s — a dialog-scoped first:/last:/nth: would search the wrong root", tc.entry, dispatch, tc.want)
 		}
-		if strings.Contains(body, dispatch+tc.other) {
+		if anyHasPrefix(dispatches, dispatch+tc.other) {
 			t.Errorf("%s hands its wrapper arm a %s: the scopes are swapped", tc.entry, tc.other)
 		}
 		// The starting index/fromEnd is the other half of the wrapper wiring, and it
@@ -348,7 +342,7 @@ func TestWrapperArmsAreWiredToTheirOwnScope(t *testing.T) {
 		// merely RENAMED, and this is the only browserless guard on this wiring — one
 		// red for no defect is how it gets deleted. The last two arguments are what the
 		// property is about, whatever the ones before them are called.
-		assertWrapperArmStartsFresh(t, src, tc.entry)
+		assertWrapperArmStartsFresh(t, decl, name)
 	}
 }
 
@@ -430,41 +424,14 @@ func newScopedWrapperFixture(t *testing.T) context.Context {
 // third value is the same shape of defect one step further: an entry point that starts
 // positional=true makes a BARE text: index the document, silently dropping the control
 // ranking that only the bare form carries.
-func assertWrapperArmStartsFresh(t *testing.T, src, entrySignature string) {
+func assertWrapperArmStartsFresh(t *testing.T, decl *ast.FuncDecl, name string) {
 	t.Helper()
 
-	name := strings.TrimSuffix(strings.TrimPrefix(entrySignature, "func "), "(")
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "action_resolve.go", src, 0)
-	if err != nil {
-		t.Fatalf("cannot parse action_resolve.go, so this guard checks nothing: %v", err)
-	}
-
-	var decl *ast.FuncDecl
-	for _, d := range file.Decls {
-		if fn, ok := d.(*ast.FuncDecl); ok && fn.Name.Name == name {
-			decl = fn
-			break
-		}
-	}
-	if decl == nil {
-		t.Fatalf("%s is not declared in action_resolve.go; if the entry point was renamed, pin the same property against its replacement rather than dropping it from this table", name)
-	}
-
-	var calls int
-	ast.Inspect(decl, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		fn, ok := call.Fun.(*ast.Ident)
-		if !ok || fn.Name != "resolveParsed" {
-			return true
-		}
-		calls++
+	calls := resolveParsedCalls(decl)
+	for _, call := range calls {
 		if len(call.Args) < 3 {
 			t.Errorf("%s calls resolveParsed with %d arguments; the starting index, fromEnd and positional are the last three", name, len(call.Args))
-			return true
+			continue
 		}
 		index := exprText(call.Args[len(call.Args)-3])
 		fromEnd := exprText(call.Args[len(call.Args)-2])
@@ -472,11 +439,66 @@ func assertWrapperArmStartsFresh(t *testing.T, src, entrySignature string) {
 		if index != "0" || fromEnd != "false" || positional != "false" {
 			t.Errorf("%s starts its wrapper arm at index %s, fromEnd %s, positional %s, want 0, false and false — a wrapper derives its own index from the grammar, and only a wrapper may claim to be positional", name, index, fromEnd, positional)
 		}
-		return true
-	})
-	if calls == 0 {
+	}
+	if len(calls) == 0 {
 		t.Errorf("%s no longer calls resolveParsed, so its wrapper wiring is unpinned", name)
 	}
+}
+
+func wrapperEntryDecl(t *testing.T, pkg *srccensus.Package, name string) *ast.FuncDecl {
+	t.Helper()
+	decl, ok := funcDeclNamed(pkg, name)
+	if !ok {
+		t.Fatalf("%s is not declared in %s; if the entry point was renamed, pin the same property against its replacement rather than dropping it from this table", name, pkg.Dir())
+	}
+	return decl
+}
+
+func funcDeclNamed(pkg *srccensus.Package, name string) (*ast.FuncDecl, bool) {
+	found, ok := pkg.Func(name)
+	if !ok {
+		return nil, false
+	}
+	_, files := pkg.Syntax()
+	for _, decl := range files[found.File].Decls {
+		if fn, isFunc := decl.(*ast.FuncDecl); isFunc && fn.Name.Name == name {
+			return fn, true
+		}
+	}
+	return nil, false
+}
+
+func resolveParsedCalls(decl *ast.FuncDecl) []*ast.CallExpr {
+	var calls []*ast.CallExpr
+	ast.Inspect(decl, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if fn, ok := call.Fun.(*ast.Ident); ok && fn.Name == "resolveParsed" {
+			calls = append(calls, call)
+		}
+		return true
+	})
+	return calls
+}
+
+func renderExpr(t *testing.T, fset *token.FileSet, expr ast.Expr) string {
+	t.Helper()
+	var out strings.Builder
+	if err := printer.Fprint(&out, fset, expr); err != nil {
+		t.Fatalf("cannot render %T, so this guard cannot read the dispatch: %v", expr, err)
+	}
+	return out.String()
+}
+
+func anyHasPrefix(values []string, prefix string) bool {
+	for _, value := range values {
+		if strings.HasPrefix(value, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // exprText renders an argument for comparison and for the failure message. Anything that

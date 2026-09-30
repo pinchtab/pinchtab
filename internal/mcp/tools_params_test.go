@@ -2,13 +2,13 @@ package mcp
 
 import (
 	"go/ast"
-	"go/parser"
 	"go/token"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 var routingHelpers = map[string]bool{
@@ -23,22 +23,10 @@ var routingHelpers = map[string]bool{
 // helper itself.
 func packageCallGraph(t *testing.T) map[string]map[string]bool {
 	t.Helper()
-	fset := token.NewFileSet()
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("cannot list the mcp package, so this guard checks nothing: %v", err)
-	}
+	_, files := srccensus.Load(t, ".", 18).Syntax()
 
 	calls := map[string]map[string]bool{}
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		file, parseErr := parser.ParseFile(fset, name, nil, 0)
-		if parseErr != nil {
-			t.Fatalf("cannot parse %s: %v", name, parseErr)
-		}
+	for _, file := range files {
 		for _, decl := range file.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
 			if !ok || fn.Body == nil {
@@ -86,41 +74,42 @@ func reachesRouting(calls map[string]map[string]bool, start string) bool {
 // guard cannot drift from the dispatch table it is asking about.
 func toolHandlers(t *testing.T) map[string]string {
 	t.Helper()
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "handlers.go", nil, 0)
-	if err != nil {
-		t.Fatalf("cannot parse handlers.go: %v", err)
+	pkg := srccensus.Load(t, ".", 18)
+	var registry *ast.FuncDecl
+	_, files := pkg.Syntax()
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == "rawHandlerMap" && fn.Body != nil {
+				registry = fn
+			}
+		}
+	}
+	if registry == nil {
+		t.Fatalf("no rawHandlerMap function found in %s, so this guard has no dispatch table to read", pkg.Dir())
 	}
 
 	pairs := map[string]string{}
-	ast.Inspect(file, func(n ast.Node) bool {
-		fn, ok := n.(*ast.FuncDecl)
-		if !ok || fn.Name.Name != "rawHandlerMap" {
+	ast.Inspect(registry.Body, func(n ast.Node) bool {
+		kv, ok := n.(*ast.KeyValueExpr)
+		if !ok {
 			return true
 		}
-		ast.Inspect(fn.Body, func(n ast.Node) bool {
-			kv, ok := n.(*ast.KeyValueExpr)
-			if !ok {
-				return true
-			}
-			key, ok := kv.Key.(*ast.BasicLit)
-			if !ok || key.Kind != token.STRING {
-				return true
-			}
-			name, err := strconv.Unquote(key.Value)
-			if err != nil {
-				return true
-			}
-			call, ok := kv.Value.(*ast.CallExpr)
-			if !ok {
-				return true
-			}
-			if ident, ok := call.Fun.(*ast.Ident); ok {
-				pairs[name] = ident.Name
-			}
+		key, ok := kv.Key.(*ast.BasicLit)
+		if !ok || key.Kind != token.STRING {
 			return true
-		})
-		return false
+		}
+		name, err := strconv.Unquote(key.Value)
+		if err != nil {
+			return true
+		}
+		call, ok := kv.Value.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if ident, ok := call.Fun.(*ast.Ident); ok {
+			pairs[name] = ident.Name
+		}
+		return true
 	})
 
 	if len(pairs) == 0 {
@@ -168,36 +157,34 @@ func TestEveryToolWhoseHandlerRoutesDeclaresBrowser(t *testing.T) {
 }
 
 func TestNoParameterDescriptionIsWrittenTwice(t *testing.T) {
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "tools.go", nil, 0)
-	if err != nil {
-		t.Fatalf("cannot parse tools.go: %v", err)
-	}
+	_, files := srccensus.Load(t, ".", 18).Syntax()
 
 	seen := map[string]int{}
-	ast.Inspect(file, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
+	for _, file := range files {
+		ast.Inspect(file, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "Description" || len(call.Args) != 1 {
+				return true
+			}
+			lit, ok := call.Args[0].(*ast.BasicLit)
+			if !ok || lit.Kind != token.STRING {
+				return true
+			}
+			text, err := strconv.Unquote(lit.Value)
+			if err != nil {
+				return true
+			}
+			seen[text]++
 			return true
-		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || sel.Sel.Name != "Description" || len(call.Args) != 1 {
-			return true
-		}
-		lit, ok := call.Args[0].(*ast.BasicLit)
-		if !ok || lit.Kind != token.STRING {
-			return true
-		}
-		text, err := strconv.Unquote(lit.Value)
-		if err != nil {
-			return true
-		}
-		seen[text]++
-		return true
-	})
+		})
+	}
 
 	if len(seen) == 0 {
-		t.Fatal("found no description literals in tools.go; the scan matched nothing and this guard is vacuous")
+		t.Fatal("found no description literals in the mcp package; the scan matched nothing and this guard is vacuous")
 	}
 
 	var repeated []string
@@ -208,7 +195,7 @@ func TestNoParameterDescriptionIsWrittenTwice(t *testing.T) {
 	}
 	sort.Strings(repeated)
 	if len(repeated) > 0 {
-		t.Errorf("%d description string(s) are written more than once in tools.go; give each a shared constructor in tools_params.go so a reword is one edit with a uniform effect:\n  %s",
+		t.Errorf("%d description string(s) are written more than once across the mcp package; give each a shared constructor in tools_params.go so a reword is one edit with a uniform effect:\n  %s",
 			len(repeated), strings.Join(repeated, "\n  "))
 	}
 }

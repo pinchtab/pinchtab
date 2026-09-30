@@ -4,12 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"reflect"
 	"regexp"
 	"sort"
@@ -18,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 // upstreamRecorder records every request that reaches PinchTab, so a test can
@@ -795,20 +794,8 @@ func newArgumentReadCensus(t *testing.T) *argumentReadCensus {
 		dynamicSites: map[string]int{},
 		memo:         map[string][]argumentRead{},
 	}
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fset := token.NewFileSet()
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		file, err := parser.ParseFile(fset, name, nil, 0)
-		if err != nil {
-			t.Fatalf("cannot parse %s: %v", name, err)
-		}
+	_, files := srccensus.Load(t, ".", 18).Syntax()
+	for _, file := range files {
 		for _, decl := range file.Decls {
 			switch d := decl.(type) {
 			case *ast.FuncDecl:
@@ -1187,29 +1174,32 @@ func readsArgumentMap(expr ast.Expr, requestMaps map[string]bool) bool {
 
 func toolRegistrations(t *testing.T) map[string]*ast.CallExpr {
 	t.Helper()
-	file, err := parser.ParseFile(token.NewFileSet(), "handlers.go", nil, 0)
-	if err != nil {
-		t.Fatalf("cannot parse handlers.go: %v", err)
+	pkg := srccensus.Load(t, ".", 18)
+	var registry *ast.FuncDecl
+	_, files := pkg.Syntax()
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == "rawHandlerMap" && fn.Body != nil {
+				registry = fn
+			}
+		}
+	}
+	if registry == nil {
+		t.Fatalf("no rawHandlerMap function found in %s, so this census has no tool registrations to read", pkg.Dir())
 	}
 	registrations := map[string]*ast.CallExpr{}
-	for _, decl := range file.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Name.Name != "rawHandlerMap" {
-			continue
-		}
-		ast.Inspect(fn.Body, func(n ast.Node) bool {
-			kv, ok := n.(*ast.KeyValueExpr)
-			if !ok {
-				return true
-			}
-			name, nameOK := stringLiteral(kv.Key)
-			call, callOK := kv.Value.(*ast.CallExpr)
-			if nameOK && callOK {
-				registrations[name] = call
-			}
+	ast.Inspect(registry.Body, func(n ast.Node) bool {
+		kv, ok := n.(*ast.KeyValueExpr)
+		if !ok {
 			return true
-		})
-	}
+		}
+		name, nameOK := stringLiteral(kv.Key)
+		call, callOK := kv.Value.(*ast.CallExpr)
+		if nameOK && callOK {
+			registrations[name] = call
+		}
+		return true
+	})
 	if len(registrations) == 0 {
 		t.Fatal("found no tool registrations in rawHandlerMap, so this census checks nothing")
 	}

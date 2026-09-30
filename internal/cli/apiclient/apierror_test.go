@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"io"
 	"net/http"
@@ -17,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 func TestIsRouteNotFound(t *testing.T) {
@@ -225,21 +225,8 @@ func TestReturningRequestPathsLeaveTheCacheIntact(t *testing.T) {
 // were side-effect free only because the variable happened to be nil here. Data
 // cannot carry behaviour; a func variable can, so none may come back.
 func TestNoMutablePackageLevelFunctionVariables(t *testing.T) {
-	paths, err := filepath.Glob("*.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fileSet := token.NewFileSet()
-	scanned := 0
-	for _, path := range paths {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
-		}
-		file, err := parser.ParseFile(fileSet, path, nil, 0)
-		if err != nil {
-			t.Fatalf("parse %s: %v", path, err)
-		}
-		scanned++
+	fileSet, files := srccensus.Load(t, ".", 5).Syntax()
+	for path, file := range files {
 		for _, decl := range file.Decls {
 			gen, ok := decl.(*ast.GenDecl)
 			if !ok || gen.Tok != token.VAR {
@@ -258,9 +245,6 @@ func TestNoMutablePackageLevelFunctionVariables(t *testing.T) {
 				}
 			}
 		}
-	}
-	if scanned < 2 {
-		t.Fatalf("scanned %d source files; this census matched almost nothing and would pass vacuously", scanned)
 	}
 }
 

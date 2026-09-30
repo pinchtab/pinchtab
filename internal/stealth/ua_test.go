@@ -3,7 +3,6 @@ package stealth
 import (
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +12,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 func hostVersionOracle(t *testing.T) (uaDataPlatform, version string) {
@@ -194,30 +195,14 @@ const hostFactImport = "host"
 // added in a sibling file is inside the census rather than outside it.
 func parsePackageSources(t *testing.T) (map[string]*ast.File, *token.FileSet) {
 	t.Helper()
-	paths, err := filepath.Glob("*.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fileSet := token.NewFileSet()
-	sources := map[string]*ast.File{}
+	fileSet, sources := srccensus.Load(t, ".", 5).Syntax()
 	importsHostFacts := false
-	for _, path := range paths {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
-		}
-		file, err := parser.ParseFile(fileSet, path, nil, 0)
-		if err != nil {
-			t.Fatalf("parse %s: %v", path, err)
-		}
-		sources[path] = file
+	for _, file := range sources {
 		for _, spec := range file.Imports {
 			if strings.HasSuffix(strings.Trim(spec.Path.Value, `"`), "/"+hostFactImport) {
 				importsHostFacts = true
 			}
 		}
-	}
-	if len(sources) < 2 {
-		t.Fatalf("parsed %d package files; the census matched almost nothing and would pass vacuously", len(sources))
 	}
 	if !importsHostFacts {
 		t.Fatalf("no file in this package imports a %q package; the host-reader census has nothing to key on and would pass vacuously", hostFactImport)

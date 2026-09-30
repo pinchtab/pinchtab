@@ -2,9 +2,10 @@ package config
 
 import (
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 func TestFileConfigFromRuntimeSharesNothingWithTheRuntime(t *testing.T) {
@@ -34,47 +35,24 @@ func TestFileConfigFromRuntimeSharesNothingWithTheRuntime(t *testing.T) {
 }
 
 func TestFileConfigFromRuntimeDelegatesToPerSectionBuilders(t *testing.T) {
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, "config_file_marshal.go", nil, 0)
-	if err != nil {
-		t.Fatal(err)
+	fset, funcs := packageFuncs(t)
+	fn := declaredFunc(t, funcs, "FileConfigFromRuntime")
+	lines := fset.Position(fn.End()).Line - fset.Position(fn.Pos()).Line
+	if lines > 60 {
+		t.Fatalf("FileConfigFromRuntime spans %d lines, want under 60 with the sections built by their own functions", lines)
 	}
-	for _, decl := range f.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Name.Name != "FileConfigFromRuntime" {
-			continue
+	for _, b := range []string{"serverConfigFromRuntime", "securityConfigFromRuntime", "instanceDefaultsFromRuntime"} {
+		if !callsFunction(fn.Body, b) {
+			t.Errorf("FileConfigFromRuntime does not delegate to %s", b)
 		}
-		lines := fset.Position(fn.End()).Line - fset.Position(fn.Pos()).Line
-		if lines > 60 {
-			t.Fatalf("FileConfigFromRuntime spans %d lines, want under 60 with the sections built by their own functions", lines)
-		}
-		var addressOfRuntime []string
-		ast.Inspect(fn.Body, func(n ast.Node) bool {
-			if u, ok := n.(*ast.UnaryExpr); ok && u.Op == token.AND {
-				addressOfRuntime = append(addressOfRuntime, fset.Position(u.Pos()).String())
-			}
-			return true
-		})
-		for _, b := range []string{"serverConfigFromRuntime", "securityConfigFromRuntime", "instanceDefaultsFromRuntime"} {
-			if !callsFunction(fn.Body, b) {
-				t.Errorf("FileConfigFromRuntime does not delegate to %s", b)
-			}
-		}
-		return
 	}
-	t.Fatal("FileConfigFromRuntime not found")
 }
 
 func TestSectionBuildersNeverTakeTheAddressOfARuntimeField(t *testing.T) {
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, "config_file_marshal.go", nil, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	fset, funcs := packageFuncs(t)
 	checked := 0
-	for _, decl := range f.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Recv != nil || fn.Type.Params.NumFields() != 1 {
+	for _, fn := range reachableFrom(t, funcs, "FileConfigFromRuntime") {
+		if fn.Type.Params.NumFields() != 1 || len(fn.Type.Params.List[0].Names) != 1 {
 			continue
 		}
 		param := fn.Type.Params.List[0]
@@ -103,6 +81,60 @@ func TestSectionBuildersNeverTakeTheAddressOfARuntimeField(t *testing.T) {
 	if checked < 10 {
 		t.Fatalf("checked %d runtime-taking builders, want the section builders plus FileConfigFromRuntime", checked)
 	}
+}
+
+type funcIndex struct {
+	dir   string
+	decls map[string]*ast.FuncDecl
+}
+
+func packageFuncs(t *testing.T) (*token.FileSet, funcIndex) {
+	t.Helper()
+	pkg := srccensus.Load(t, ".", 25)
+	fset, files := pkg.Syntax()
+	funcs := map[string]*ast.FuncDecl{}
+	for _, f := range files {
+		for _, decl := range f.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv == nil && fn.Body != nil {
+				funcs[fn.Name.Name] = fn
+			}
+		}
+	}
+	return fset, funcIndex{dir: pkg.Dir(), decls: funcs}
+}
+
+func declaredFunc(t *testing.T, funcs funcIndex, name string) *ast.FuncDecl {
+	t.Helper()
+	fn := funcs.decls[name]
+	if fn == nil {
+		t.Fatalf("%s not found in %s", name, funcs.dir)
+	}
+	return fn
+}
+
+func reachableFrom(t *testing.T, funcs funcIndex, root string) []*ast.FuncDecl {
+	t.Helper()
+	declaredFunc(t, funcs, root)
+	seen := map[string]bool{root: true}
+	queue := []string{root}
+	var reached []*ast.FuncDecl
+	for len(queue) > 0 {
+		fn := funcs.decls[queue[0]]
+		queue = queue[1:]
+		reached = append(reached, fn)
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			if id, ok := call.Fun.(*ast.Ident); ok && funcs.decls[id.Name] != nil && !seen[id.Name] {
+				seen[id.Name] = true
+				queue = append(queue, id.Name)
+			}
+			return true
+		})
+	}
+	return reached
 }
 
 func callsFunction(body *ast.BlockStmt, name string) bool {

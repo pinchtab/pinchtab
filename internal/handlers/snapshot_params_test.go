@@ -4,20 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
-	"path/filepath"
-	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 	"gopkg.in/yaml.v3"
 )
 
@@ -269,13 +267,53 @@ func TestParamsTheRequestPathReadsAreNotReportedAsIgnored(t *testing.T) {
 	}
 }
 
-var queryGetPattern = regexp.MustCompile(`\.Get\("([^"]+)"\)`)
+// snapshotPathOwners are the declarations whose files' query reads can run for a /snapshot
+// request; each is located wherever it now lives, so the scan follows a move. Listed rather
+// than derived because the call graph decides membership. ParseSnapshotCostControls is on it
+// because that is where the cost controls moved: a scan of the handler alone would no longer
+// see `filter`, `format`, `depth`, `maxTokens` or the `interactive` alias at all.
+var snapshotPathOwners = []string{"HandleSnapshot", "resolveReadRouting", "ParseSnapshotCostControls"}
 
-// snapshotPathSources are the files whose query reads can run for a /snapshot request.
-// Listed rather than derived because the call graph decides membership. snapshot_params.go
-// is on it because that is where the cost controls moved: a scan of the handler alone would
-// no longer see `filter`, `format`, `depth`, `maxTokens` or the `interactive` alias at all.
-var snapshotPathSources = []string{"snapshot.go", "read_prelude.go", "snapshot_params.go"}
+func snapshotPathSources(t *testing.T) ([]string, map[string]*ast.File) {
+	t.Helper()
+	pkg := srccensus.Load(t, ".", handlersSourceFileFloor)
+	_, files := pkg.Syntax()
+	var names []string
+	seen := map[string]bool{}
+	for _, owner := range snapshotPathOwners {
+		fn, ok := pkg.Func(owner)
+		if !ok {
+			t.Fatalf("%s is no longer declared anywhere in %s; re-point snapshotPathOwners at whatever now reads its parameters rather than deleting it", owner, pkg.Dir())
+		}
+		if !seen[fn.File] {
+			seen[fn.File] = true
+			names = append(names, fn.File)
+		}
+	}
+	return names, files
+}
+
+func queryGetLiterals(file *ast.File) []string {
+	var params []string
+	ast.Inspect(file, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok || len(call.Args) != 1 {
+			return true
+		}
+		if sel, ok := call.Fun.(*ast.SelectorExpr); !ok || sel.Sel.Name != "Get" {
+			return true
+		}
+		lit, ok := call.Args[0].(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return true
+		}
+		if param, err := strconv.Unquote(lit.Value); err == nil && param != "" {
+			params = append(params, param)
+		}
+		return true
+	})
+	return params
+}
 
 // notOnTheSnapshotPath are parameters those files read from a function /snapshot never
 // calls. They belong OUT of snapshotKnownParams: /snapshot genuinely ignores them, so
@@ -294,14 +332,10 @@ func TestKnownParamsCoversEveryParamTheHandlerReads(t *testing.T) {
 	seen := 0
 	reported := map[string]bool{}
 	exemptionsUsed := map[string]bool{}
-	for _, name := range snapshotPathSources {
-		body, err := os.ReadFile(filepath.Join(".", name))
-		if err != nil {
-			t.Fatalf("cannot read %s, so this guard would check nothing: %v", name, err)
-		}
-		for _, match := range queryGetPattern.FindAllStringSubmatch(string(body), -1) {
+	sources, files := snapshotPathSources(t)
+	for _, name := range sources {
+		for _, param := range queryGetLiterals(files[name]) {
 			seen++
-			param := match[1]
 			if _, exempt := notOnTheSnapshotPath[param]; exempt {
 				exemptionsUsed[param] = true
 				continue
@@ -312,8 +346,8 @@ func TestKnownParamsCoversEveryParamTheHandlerReads(t *testing.T) {
 			}
 		}
 	}
-	if seen < len(snapshotPathSources) {
-		t.Fatalf("found %d query reads across %v; the scan matched almost nothing and would pass vacuously", seen, snapshotPathSources)
+	if seen < len(sources) {
+		t.Fatalf("found %d query reads across %v; the scan matched almost nothing and would pass vacuously", seen, sources)
 	}
 	if len(missing) > 0 {
 		t.Errorf("these parameters are read on the snapshot request path but are absent from snapshotKnownParams, so a caller sending them is wrongly told they were ignored:\n  %s",
@@ -321,7 +355,7 @@ func TestKnownParamsCoversEveryParamTheHandlerReads(t *testing.T) {
 	}
 	for param, why := range notOnTheSnapshotPath {
 		if !exemptionsUsed[param] {
-			t.Errorf("%q is exempted (%s) but no longer read by %v; drop the exemption, or re-point it, rather than leaving it to excuse nothing", param, why, snapshotPathSources)
+			t.Errorf("%q is exempted (%s) but no longer read by %v; drop the exemption, or re-point it, rather than leaving it to excuse nothing", param, why, sources)
 		}
 		if snapshotKnownParams[param] {
 			t.Errorf("%q is both exempted and listed as known; one of the two is wrong", param)
@@ -504,8 +538,6 @@ func TestAResponseWithoutIgnoredParamsCarriesNoDisclosure(t *testing.T) {
 	}
 }
 
-const snapshotHandlerFile = "snapshot.go"
-
 // snapshotFraming belongs here for the same reason attachIgnoredParams does: it
 // discloses.
 // It emits ignoredParamsComment unconditionally as part of the framing it returns,
@@ -611,23 +643,14 @@ func opensANestedBranch(n ast.Node) bool {
 	return false
 }
 
-const snapshotRenderFile = "snapshot_render.go"
-
 func TestEveryResponseBranchDisclosesIgnoredParams(t *testing.T) {
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, snapshotRenderFile, nil, 0)
-	if err != nil {
-		t.Fatalf("cannot parse %s, so this guard checks nothing: %v", snapshotRenderFile, err)
-	}
+	pkg := srccensus.Load(t, ".", handlersSourceFileFloor)
+	fset, _ := pkg.Syntax()
+	handler, _ := handlerFuncDecl(t, pkg, "HandleSnapshot")
 
-	var blocks []ast.Node
-	for _, decl := range file.Decls {
-		if fn, ok := decl.(*ast.FuncDecl); ok {
-			blocks = append(blocks, successResponseBlocks(fn)...)
-		}
-	}
-	if len(blocks) < 5 {
-		t.Fatalf("found %d response branches in %s; there are five (file, diff, plain text, yaml, json), so the scan is matching the wrong thing — lower this floor only for a branch deliberately removed", len(blocks), snapshotRenderFile)
+	blocks := successResponseBlocks(handler)
+	if len(blocks) < 7 {
+		t.Fatalf("found %d response branches in HandleSnapshot; there are seven, so the scan is matching the wrong thing — lower this floor only for a branch deliberately removed", len(blocks))
 	}
 	for _, block := range blocks {
 		if !disclosesIgnoredParams(block) {

@@ -3,9 +3,7 @@ package audit
 import (
 	"encoding/json"
 	"go/ast"
-	"go/parser"
 	"go/token"
-	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -13,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 	"github.com/pinchtab/pinchtab/pkg/pinchtabaudit"
 )
 
@@ -408,8 +407,8 @@ func TestMirrorRenamesAreDerivedAndNotAnIdentityMap(t *testing.T) {
 // neither. Every type name exported by BOTH packages must be claimed by a pair on
 // both sides or carry a reason in unmirroredSharedNames; a name in neither fails.
 func TestEverySharedAuditTypeNameIsClaimedOrExcused(t *testing.T) {
-	internalNames := exportedStructNames(t, ".")
-	sdkNames := exportedStructNames(t, filepath.Join("..", "..", "pkg", "pinchtabaudit"))
+	internalNames := exportedStructNames(t, ".", 10)
+	sdkNames := exportedStructNames(t, filepath.Join("..", "..", "pkg", "pinchtabaudit"), 2)
 
 	claimedInternal := map[string]bool{}
 	claimedSDK := map[string]bool{}
@@ -463,7 +462,7 @@ func TestEverySharedAuditTypeNameIsClaimedOrExcused(t *testing.T) {
 // what makes this the realistic shape rather than a contrived one. Enumerating the SDK
 // side closes it — a new SDK struct must be paired or excused however it is named.
 func TestEverySDKStructIsMirroredOrExcused(t *testing.T) {
-	sdkNames := exportedStructNames(t, filepath.Join("..", "..", "pkg", "pinchtabaudit"))
+	sdkNames := exportedStructNames(t, filepath.Join("..", "..", "pkg", "pinchtabaudit"), 2)
 
 	claimed := map[string]bool{}
 	for _, pair := range mirrorPairs {
@@ -496,26 +495,12 @@ func TestEverySDKStructIsMirroredOrExcused(t *testing.T) {
 
 // exportedStructNames scans a package directory for `type X struct` declarations.
 // Reflection cannot enumerate a package, and the mirror lives in two of them.
-func exportedStructNames(t *testing.T, dir string) map[string]bool {
+func exportedStructNames(t *testing.T, dir string, minFiles int) map[string]bool {
 	t.Helper()
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("read %s: %v", dir, err)
-	}
+	_, files := srccensus.Load(t, dir, minFiles).Syntax()
 
 	names := map[string]bool{}
-	fset := token.NewFileSet()
-	var scanned int
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		file, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.SkipObjectResolution)
-		if err != nil {
-			t.Fatalf("parse %s: %v", name, err)
-		}
-		scanned++
+	for _, file := range files {
 		for _, decl := range file.Decls {
 			gen, ok := decl.(*ast.GenDecl)
 			if !ok || gen.Tok != token.TYPE {
@@ -531,9 +516,6 @@ func exportedStructNames(t *testing.T, dir string) map[string]bool {
 				}
 			}
 		}
-	}
-	if scanned == 0 {
-		t.Fatalf("no production files scanned in %s; the census would pass vacuously", dir)
 	}
 	return names
 }

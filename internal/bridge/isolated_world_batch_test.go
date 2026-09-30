@@ -4,15 +4,13 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
@@ -195,40 +193,26 @@ func TestBackendNodeWithinScopeStillAnswersBothWays(t *testing.T) {
 // second resolve inside this function is exactly the regrowth the card is about,
 // and it is visible in the AST without a browser.
 func TestBackendNodeWithinScopeResolvesItsNodesOnce(t *testing.T) {
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "action_resolve.go", nil, 0)
-	if err != nil {
-		t.Fatalf("parse action_resolve.go: %v", err)
+	pkg := srccensus.Load(t, ".", 70)
+	body, ok := pkg.Func("BackendNodeWithinScope")
+	if !ok {
+		t.Fatalf("BackendNodeWithinScope is gone from %s; this guard names it", pkg.Dir())
 	}
 
-	var body *ast.FuncDecl
-	for _, decl := range file.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if ok && fn.Name.Name == "BackendNodeWithinScope" {
-			body = fn
-			break
+	callsWithin := func(callee string) int {
+		count := 0
+		for _, site := range pkg.CallsAllowingNone(callee) {
+			if pkg.Contains(body, site) {
+				count++
+			}
 		}
-	}
-	if body == nil {
-		t.Fatal("BackendNodeWithinScope is gone from action_resolve.go; this guard names it")
+		return count
 	}
 
-	calls := map[string]int{}
-	ast.Inspect(body, func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if ident, ok := call.Fun.(*ast.Ident); ok {
-			calls[ident.Name]++
-		}
-		return true
-	})
-
-	if calls["IsolatedNodeObjectIDs"] != 1 {
-		t.Errorf("BackendNodeWithinScope calls IsolatedNodeObjectIDs %d times, want exactly 1: one isolated context serves the whole check", calls["IsolatedNodeObjectIDs"])
+	if n := callsWithin("IsolatedNodeObjectIDs"); n != 1 {
+		t.Errorf("BackendNodeWithinScope calls IsolatedNodeObjectIDs %d times, want exactly 1: one isolated context serves the whole check", n)
 	}
-	if calls["IsolatedNodeObjectID"] != 0 {
-		t.Errorf("BackendNodeWithinScope calls the single-node IsolatedNodeObjectID %d times; each call recomputes the top-frame context", calls["IsolatedNodeObjectID"])
+	if n := callsWithin("IsolatedNodeObjectID"); n != 0 {
+		t.Errorf("BackendNodeWithinScope calls the single-node IsolatedNodeObjectID %d times; each call recomputes the top-frame context", n)
 	}
 }

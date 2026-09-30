@@ -5,12 +5,13 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 func inlineTail(body []byte, code int, err error) (*mcp.CallToolResult, error) {
@@ -148,24 +149,15 @@ func exprString(e ast.Expr) string {
 
 func parsePackageSources(t *testing.T) (*token.FileSet, []*ast.File) {
 	t.Helper()
-	paths, err := filepath.Glob("*.go")
-	if err != nil {
-		t.Fatal(err)
+	fset, byName := srccensus.Load(t, ".", 18).Syntax()
+	names := make([]string, 0, len(byName))
+	for name := range byName {
+		names = append(names, name)
 	}
-	fset := token.NewFileSet()
-	var files []*ast.File
-	for _, path := range paths {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
-		}
-		file, err := parser.ParseFile(fset, path, nil, 0)
-		if err != nil {
-			t.Fatalf("parse %s: %v", path, err)
-		}
-		files = append(files, file)
-	}
-	if len(files) < 15 {
-		t.Fatalf("parsed %d mcp sources; the census would pass vacuously", len(files))
+	sort.Strings(names)
+	files := make([]*ast.File, 0, len(names))
+	for _, name := range names {
+		files = append(files, byName[name])
 	}
 	return fset, files
 }

@@ -2,13 +2,12 @@ package types
 
 import (
 	"go/ast"
-	"go/parser"
-	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 func TestEveryExportedDeclarationIsInTheGeneratedTypeScript(t *testing.T) {
@@ -18,19 +17,9 @@ func TestEveryExportedDeclarationIsInTheGeneratedTypeScript(t *testing.T) {
 	}
 	ts := string(generated)
 
-	files, err := filepath.Glob("*.go")
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, files := srccensus.Load(t, ".", 3).Syntax()
 	checked := 0
-	for _, path := range files {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
-		}
-		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
+	for _, file := range files {
 		for _, decl := range file.Decls {
 			gen, ok := decl.(*ast.GenDecl)
 			if !ok {

@@ -4,12 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"net/http"
 	"net/http/httptest"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -18,6 +16,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 	"github.com/pinchtab/semantic"
 )
 
@@ -217,28 +216,32 @@ func TestEachMintedTokenIsDistinctAndNonEmpty(t *testing.T) {
 // at any site reddens here while leaving the behavioural gate tests green, so this census is
 // load-bearing.
 func TestEveryRefPublishSiteRoutesThroughTheEpochRefBook(t *testing.T) {
+	pkg := srccensus.Load(t, ".", handlersSourceFileFloor)
 	for _, tc := range []struct {
-		file string
-		why  string
+		fn  string
+		why string
 	}{
-		{"snapshot.go", "the /snapshot response is the primary vocabulary a client reads and echoes"},
-		{"capture.go", "the /capture response publishes the same tab vocabulary as /snapshot"},
-		{"screenshot_annotate.go", "the annotate path republishes with a hardcoded interactive filter and must not supersede an existing ref"},
-		{"action_execution.go", "the stale-ref retry refreshes the cache and must not supersede a ref minted before it"},
+		{"HandleSnapshot", "the /snapshot response is the primary vocabulary a client reads and echoes"},
+		{"HandleCapture", "the /capture response publishes the same tab vocabulary as /snapshot"},
+		{"collectScreenshotAnnotations", "the annotate path republishes with a hardcoded interactive filter and must not supersede an existing ref"},
+		{"refreshRefCache", "the stale-ref retry refreshes the cache and must not supersede a ref minted before it"},
 	} {
-		if !fileCallsSelector(t, tc.file, "EpochRefs") {
-			t.Errorf("%s does not call bridge.EpochRefs, so this publish site does not route through the epoch ref book — %s", tc.file, tc.why)
+		fn, file := handlerFuncDecl(t, pkg, tc.fn)
+		if !callsSelector(fn, "EpochRefs") {
+			t.Errorf("%s (%s) does not call bridge.EpochRefs, so this publish site does not route through the epoch ref book — %s", tc.fn, file, tc.why)
 		}
 	}
 
-	if !fileCallsAnyIdent(t, "snapshot.go", "publishVocab") {
-		t.Error("snapshot.go does not emit the token in a response header, so a client reading a compact/text snapshot cannot obtain it")
+	snapshot, _ := handlerFuncDecl(t, pkg, "HandleSnapshot")
+	if !callsAnyIdent(snapshot, "publishVocab") {
+		t.Error("HandleSnapshot does not emit the token in a response header, so a client reading a compact/text snapshot cannot obtain it")
 	}
-	if !fileMentionsString(t, "snapshot_render.go", "vocabularyToken") {
-		t.Error("snapshot.go does not carry the token in its JSON body, so a JSON snapshot consumer cannot echo it")
+	if !mentionsString(snapshot, "vocabularyToken") {
+		t.Error("HandleSnapshot does not carry the token in its JSON body, so a JSON snapshot consumer cannot echo it")
 	}
-	if !fileCallsAnyIdent(t, "capture.go", "publishVocab") {
-		t.Error("capture.go does not emit the token in a response header, so a /capture client cannot obtain it uniformly with /snapshot")
+	capture, _ := handlerFuncDecl(t, pkg, "HandleCapture")
+	if !callsAnyIdent(capture, "publishVocab") {
+		t.Error("HandleCapture does not emit the token in a response header, so a /capture client cannot obtain it uniformly with /snapshot")
 	}
 }
 
@@ -256,15 +259,10 @@ func TestEveryReEpochSitePublishesTheVocabularyOnItsResponse(t *testing.T) {
 	}
 	publishHelpers := []string{"publishVocab", "publishTabVocab", "publishVocabIfReepoched"}
 
-	files, err := filepath.Glob("*.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, file := range files {
-		if strings.HasSuffix(file, "_test.go") {
-			continue
-		}
-		if !fileCallsSelector(t, file, "EpochRefs") && !fileCallsSelector(t, file, "refreshRefCache") {
+	pkg := srccensus.Load(t, ".", handlersSourceFileFloor)
+	_, files := pkg.Syntax()
+	for file, parsed := range files {
+		if !callsSelector(parsed, "EpochRefs") && !callsSelector(parsed, "refreshRefCache") {
 			continue
 		}
 		answering, ok := publishers[file]
@@ -273,22 +271,31 @@ func TestEveryReEpochSitePublishesTheVocabularyOnItsResponse(t *testing.T) {
 			continue
 		}
 		for _, pub := range answering {
-			if !fileCallsAnyIdent(t, pub, publishHelpers...) {
+			pubFile, ok := files[pub]
+			if !ok {
+				t.Errorf("%s is recorded as answering for the re-epoch in %s but is not a source file in %s; re-point the row at wherever that response moved", pub, file, pkg.Dir())
+				continue
+			}
+			if !callsAnyIdent(pubFile, publishHelpers...) {
 				t.Errorf("%s answers for the re-epoch in %s but never calls a vocab publish helper, so its response leaves the client echoing a superseded token", pub, file)
 			}
 		}
 	}
 
-	for _, file := range files {
-		if strings.HasSuffix(file, "_test.go") || file == "action_execution.go" {
+	writer, writerFile := handlerFuncDecl(t, pkg, "publishVocab")
+	for file, parsed := range files {
+		if file == writerFile {
 			continue
 		}
-		if fileSetsHeader(t, file, "vocabHeader") {
+		if setsHeader(parsed, "vocabHeader") {
 			t.Errorf("%s sets the vocab header directly; publication goes through publishVocab so every publisher also names the tab the token belongs to", file)
 		}
 	}
+	if !setsHeader(writer, "vocabHeader") {
+		t.Errorf("publishVocab (%s) no longer sets vocabHeader, so exempting its file from the direct-set ban excuses nothing; re-point this guard at whatever writes the header now", writerFile)
+	}
 
-	graph := handlerCallGraph(t, files)
+	graph := handlerCallGraph(files)
 	reEpochs := []string{"bridge.EpochRefs", "refreshRefCache"}
 	reachingHandlers := 0
 	for name := range graph.handlers {
@@ -310,14 +317,9 @@ type packageCallGraph struct {
 	handlers map[string]bool
 }
 
-func handlerCallGraph(t *testing.T, files []string) packageCallGraph {
-	t.Helper()
+func handlerCallGraph(files map[string]*ast.File) packageCallGraph {
 	g := packageCallGraph{refs: map[string]map[string]bool{}, handlers: map[string]bool{}}
-	for _, file := range files {
-		if strings.HasSuffix(file, "_test.go") {
-			continue
-		}
-		f := parseHandlerFile(t, file)
+	for _, f := range files {
 		imported := map[string]bool{}
 		for _, spec := range f.Imports {
 			p, _ := strconv.Unquote(spec.Path.Value)
@@ -390,9 +392,25 @@ func (g packageCallGraph) pathTo(from string, targets ...string) []string {
 	return walk(from)
 }
 
-func fileCallsAnyIdent(t *testing.T, name string, idents ...string) bool {
+func handlerFuncDecl(t *testing.T, pkg *srccensus.Package, name string) (*ast.FuncDecl, string) {
+	t.Helper()
+	fn, ok := pkg.Func(name)
+	if !ok {
+		t.Fatalf("%s is no longer declared anywhere in %s; re-point this guard at whatever replaced it rather than deleting it", name, pkg.Dir())
+	}
+	_, files := pkg.Syntax()
+	for _, decl := range files[fn.File].Decls {
+		if fd, ok := decl.(*ast.FuncDecl); ok && fd.Name.Name == name {
+			return fd, fn.File
+		}
+	}
+	t.Fatalf("srccensus located %s in %s but its declaration is not among that file's decls", name, fn.File)
+	return nil, ""
+}
+
+func callsAnyIdent(scope ast.Node, idents ...string) bool {
 	found := false
-	ast.Inspect(parseHandlerFile(t, name), func(n ast.Node) bool {
+	ast.Inspect(scope, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
 		if !ok {
 			return true
@@ -414,9 +432,9 @@ func fileCallsAnyIdent(t *testing.T, name string, idents ...string) bool {
 	return found
 }
 
-func fileSetsHeader(t *testing.T, name, headerIdent string) bool {
+func setsHeader(scope ast.Node, headerIdent string) bool {
 	found := false
-	ast.Inspect(parseHandlerFile(t, name), func(n ast.Node) bool {
+	ast.Inspect(scope, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
 		if !ok || len(call.Args) == 0 {
 			return true
@@ -432,18 +450,9 @@ func fileSetsHeader(t *testing.T, name, headerIdent string) bool {
 	return found
 }
 
-func parseHandlerFile(t *testing.T, name string) *ast.File {
-	t.Helper()
-	f, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
-	if err != nil {
-		t.Fatalf("parse %s: %v", name, err)
-	}
-	return f
-}
-
-func fileCallsSelector(t *testing.T, name, sel string) bool {
+func callsSelector(scope ast.Node, sel string) bool {
 	found := false
-	ast.Inspect(parseHandlerFile(t, name), func(n ast.Node) bool {
+	ast.Inspect(scope, func(n ast.Node) bool {
 		if call, ok := n.(*ast.CallExpr); ok {
 			if se, ok := call.Fun.(*ast.SelectorExpr); ok && se.Sel.Name == sel {
 				found = true
@@ -454,9 +463,9 @@ func fileCallsSelector(t *testing.T, name, sel string) bool {
 	return found
 }
 
-func fileMentionsString(t *testing.T, name, lit string) bool {
+func mentionsString(scope ast.Node, lit string) bool {
 	found := false
-	ast.Inspect(parseHandlerFile(t, name), func(n ast.Node) bool {
+	ast.Inspect(scope, func(n ast.Node) bool {
 		if bl, ok := n.(*ast.BasicLit); ok && bl.Kind == token.STRING && strings.Trim(bl.Value, "`\"") == lit {
 			found = true
 		}

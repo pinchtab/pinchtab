@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"go/ast"
-	"go/parser"
 	"go/token"
-	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 // The two spellings of "empty" that the world unification could have collapsed.
@@ -39,20 +40,10 @@ func TestAnUnnamedFrameIsANoOpRatherThanTheTopFrame(t *testing.T) {
 // Pinned through the AST by argument POSITION rather than by matching call text, so
 // renaming the parameter keeps this green while dropping it reds.
 func TestTheNamedFrameIsHandedToTheWorldOwner(t *testing.T) {
-	fset := token.NewFileSet()
-	parsed, err := parser.ParseFile(fset, "frame_dom.go", nil, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var fn *ast.FuncDecl
-	for _, decl := range parsed.Decls {
-		if candidate, ok := decl.(*ast.FuncDecl); ok && candidate.Name.Name == "FrameExecutionContextID" {
-			fn = candidate
-		}
-	}
-	if fn == nil {
-		t.Fatal("FrameExecutionContextID is gone from frame_dom.go; re-point this guard at whatever scopes an evaluation to a frame rather than deleting it")
+	pkg := srccensus.Load(t, ".", 7)
+	fn, ok := funcDeclNamed(pkg, "FrameExecutionContextID")
+	if !ok {
+		t.Fatalf("FrameExecutionContextID is gone from %s; re-point this guard at whatever scopes an evaluation to a frame rather than deleting it", pkg.Dir())
 	}
 	params := fn.Type.Params.List
 	frameParam := params[len(params)-1].Names[0].Name
@@ -89,23 +80,15 @@ func TestTheNamedFrameIsHandedToTheWorldOwner(t *testing.T) {
 // resolve-the-frame-then-create-a-world sequence, which is how a second world name
 // came to exist for one rule.
 func TestThisPackageMintsNoIsolatedWorldOfItsOwn(t *testing.T) {
-	paths, err := filepath.Glob("*.go")
-	if err != nil {
-		t.Fatal(err)
+	fset, files := srccensus.Load(t, ".", 7).Syntax()
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
 	}
+	sort.Strings(names)
 
-	files := 0
-	for _, path := range paths {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
-		}
-		files++
-		fset := token.NewFileSet()
-		parsed, err := parser.ParseFile(fset, path, nil, 0)
-		if err != nil {
-			t.Fatalf("cannot parse %s, so this guard would skip it silently: %v", path, err)
-		}
-		ast.Inspect(parsed, func(node ast.Node) bool {
+	for _, path := range names {
+		ast.Inspect(files[path], func(node ast.Node) bool {
 			lit, ok := node.(*ast.BasicLit)
 			if !ok || lit.Kind != token.STRING {
 				return true
@@ -116,9 +99,20 @@ func TestThisPackageMintsNoIsolatedWorldOfItsOwn(t *testing.T) {
 			return true
 		})
 	}
-	if files < 2 {
-		t.Fatalf("scanned %d non-test file(s) in this package, fewer than this guard was written over; it would pass vacuously", files)
+}
+
+func funcDeclNamed(pkg *srccensus.Package, name string) (*ast.FuncDecl, bool) {
+	found, ok := pkg.Func(name)
+	if !ok {
+		return nil, false
 	}
+	_, files := pkg.Syntax()
+	for _, decl := range files[found.File].Decls {
+		if fn, isFunc := decl.(*ast.FuncDecl); isFunc && fn.Name.Name == name {
+			return fn, true
+		}
+	}
+	return nil, false
 }
 
 func describeExpr(expr ast.Expr) string {
