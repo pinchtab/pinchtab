@@ -234,6 +234,8 @@ func (b *Bridge) wireTabManager(browserCtx context.Context) {
 	// bridge are re-applied so they survive the TabManager swap.
 	b.TabManager.AddTabRemovedHook(b.dropFetchPauseSuppression)
 	b.TabManager.AddTabRemovedHook(b.releaseTabLock)
+	b.TabManager.AddTabRemovedHook(b.dropPointerState)
+	b.TabManager.AddTabRemovedHook(b.dropFingerprintOverlay)
 	b.SetFreezeVeto(b.tabHandoffPaused)
 	b.tabRemovedHooksMu.Lock()
 	hooks := make([]func(string), len(b.externalTabRemovedHooks))
@@ -400,6 +402,12 @@ func (b *Bridge) SetFingerprintRotateActive(tabID string, active bool) {
 	b.fingerprintMu.Lock()
 	defer b.fingerprintMu.Unlock()
 	b.fingerprintOverlays[tabID] = active
+}
+
+func (b *Bridge) dropFingerprintOverlay(tabID string) {
+	b.fingerprintMu.Lock()
+	defer b.fingerprintMu.Unlock()
+	delete(b.fingerprintOverlays, tabID)
 }
 
 func (b *Bridge) FingerprintRotateActive(tabID string) bool {

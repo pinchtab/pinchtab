@@ -468,6 +468,12 @@ func (b *Bridge) rememberPointerPosition(tabID string, x, y float64) {
 	b.pointerMu.Unlock()
 }
 
+func (b *Bridge) dropPointerState(tabID string) {
+	b.pointerMu.Lock()
+	defer b.pointerMu.Unlock()
+	delete(b.pointerByTab, tabID)
+}
+
 func (b *Bridge) currentPointerPosition(tabID string) (float64, float64, bool) {
 	if b == nil || tabID == "" {
 		return 0, 0, false

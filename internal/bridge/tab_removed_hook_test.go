@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 // TestExternalTabRemovedHookSurvivesRewire verifies that a hook registered via
@@ -20,7 +22,6 @@ func TestExternalTabRemovedHookSurvivesRewire(t *testing.T) {
 	ctx := context.Background()
 	b.wireTabManager(ctx)
 
-	// External hook + the built-ins: dropFetchPauseSuppression and releaseTabLock.
 	if got := len(b.onTabRemovedHooks); got != builtInTabRemovedHooks+1 {
 		t.Fatalf("hooks after first wire = %d, want %d", got, builtInTabRemovedHooks+1)
 	}
@@ -42,7 +43,7 @@ func TestExternalTabRemovedHookSurvivesRewire(t *testing.T) {
 // builtInTabRemovedHooks is how many cleanups wireTabManager adds by itself.
 // Naming it keeps the count above about duplication across a rewire, which is
 // what that test is for, rather than about how many built-ins happen to exist.
-const builtInTabRemovedHooks = 2
+const builtInTabRemovedHooks = 4
 
 // The lease of a closed tab is dropped because releaseTabLock is WIRED, not
 // merely because LockManager.Release exists. This drives the hook list the tab
@@ -79,5 +80,40 @@ func TestReleaseTabLockBeforeLocksExist(t *testing.T) {
 	b.wireTabManager(context.Background())
 	for _, h := range b.onTabRemovedHooks {
 		h("tab1")
+	}
+}
+
+func TestClosingATabDropsItsPointerAndFingerprintState(t *testing.T) {
+	b := New(context.Background(), nil, &config.RuntimeConfig{})
+	b.wireTabManager(context.Background())
+	b.rememberPointerPosition("tab1", 10, 20)
+	b.rememberPointerPosition("tab2", 30, 40)
+	b.SetFingerprintRotateActive("tab1", true)
+	b.SetFingerprintRotateActive("tab2", true)
+
+	for _, h := range b.onTabRemovedHooks {
+		h("tab1")
+	}
+
+	if _, _, known := b.currentPointerPosition("tab1"); known {
+		t.Error("closed tab kept its pointer position")
+	}
+	if b.FingerprintRotateActive("tab1") {
+		t.Error("closed tab kept its fingerprint overlay")
+	}
+	if _, _, known := b.currentPointerPosition("tab2"); !known {
+		t.Error("closing one tab dropped another tab's pointer position")
+	}
+	if !b.FingerprintRotateActive("tab2") {
+		t.Error("closing one tab dropped another tab's fingerprint overlay")
+	}
+
+	b.wireTabManager(context.Background())
+	b.rememberPointerPosition("tab3", 1, 1)
+	for _, h := range b.onTabRemovedHooks {
+		h("tab3")
+	}
+	if _, _, known := b.currentPointerPosition("tab3"); known {
+		t.Error("pointer cleanup did not survive a TabManager rewire")
 	}
 }
