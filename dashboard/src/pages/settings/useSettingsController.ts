@@ -5,7 +5,7 @@ import { useAppStore } from "../../stores/useAppStore";
 import type {
   BackendConfig,
   BackendConfigState,
-  DashboardServerInfo,
+  DashboardHealth,
   LocalDashboardSettings,
 } from "../../types";
 import { deepEqual } from "./deepEqual";
@@ -14,7 +14,7 @@ import { backendSaveNotice, type UpdateBackendSection } from "./settingsShared";
 export type PendingElevatedAction = "save" | null;
 
 export interface UseSettingsControllerResult {
-  serverInfo: DashboardServerInfo | null;
+  serverInfo: DashboardHealth | null;
   localSettings: LocalDashboardSettings;
   setLocalSettings: Dispatch<SetStateAction<LocalDashboardSettings>>;
   backendState: BackendConfigState | null;

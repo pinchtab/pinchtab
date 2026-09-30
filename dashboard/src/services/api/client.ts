@@ -1,6 +1,6 @@
 import type { Instance } from "../../generated/types";
-import type { DashboardServerInfo } from "../../types";
-import { normalizeDashboardServerInfo } from "../../types";
+import type { DashboardHealth } from "../../types";
+import { normalizeDashboardHealth } from "../../types";
 import { dispatchAuthRequired, dispatchServerUnreachable } from "../auth";
 
 const BASE = ""; // Uses proxy in dev
@@ -120,15 +120,15 @@ export function normalizeInstance(instance: Instance): Instance {
 
 export async function probeBackendAuth(): Promise<{
   mode: "open" | "authenticated" | "required";
-  health?: DashboardServerInfo;
+  health?: DashboardHealth;
 }> {
   const res = await fetch(BASE + "/health", {
     ...withDashboardSource(),
     credentials: "same-origin",
   });
   if (res.ok) {
-    const health = normalizeDashboardServerInfo(
-      (await res.json()) as DashboardServerInfo,
+    const health = normalizeDashboardHealth(
+      (await res.json()) as DashboardHealth,
     );
     return {
       mode: health.authRequired ? "authenticated" : "open",

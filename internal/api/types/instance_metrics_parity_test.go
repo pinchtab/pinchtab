@@ -11,6 +11,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/browserops"
+	"github.com/pinchtab/pinchtab/internal/session"
 )
 
 var timeType = reflect.TypeFor[time.Time]()
@@ -77,6 +78,9 @@ var wireTwins = []wireTwin{
 	{name: "CrashSummary", wire: types.CrashSummary{}, source: bridge.CrashSummary{}},
 	{name: "RouteAttempt", wire: types.RouteAttempt{}, source: browserops.RouteAttempt{}},
 	{name: "RouteMetadata", wire: types.RouteMetadata{}, source: browserops.RouteMetadata{}},
+	{name: "Session", wire: types.Session{}, source: session.Session{}},
+	{name: "ConsoleLogEntry", wire: types.ConsoleLogEntry{}, source: bridge.LogEntry{}},
+	{name: "ErrorLogEntry", wire: types.ErrorLogEntry{}, source: bridge.ErrorEntry{}},
 	// The served profile is profiles.profileResponse, which is unexported and sends
 	// every key unconditionally; Profile mirrors ProfileInfo's optionality instead,
 	// which the dashboard reads the same way since an optional key may be present.

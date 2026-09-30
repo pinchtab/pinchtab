@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/profiles"
@@ -62,7 +63,7 @@ func TestHealthCountsEachProfileInExactlyOneBucketThatReconcilesWithTheListing(t
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
 	}
-	var health healthEnvelope
+	var health types.DashboardHealth
 	if err := json.NewDecoder(w.Body).Decode(&health); err != nil {
 		t.Fatalf("decode: %v", err)
 	}

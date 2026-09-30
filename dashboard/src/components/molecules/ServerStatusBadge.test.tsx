@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { DashboardServerInfo } from "../../types";
+import type { DashboardHealth } from "../../types";
 import type { Instance } from "../../generated/types";
 import ServerStatusBadge from "./ServerStatusBadge";
 
@@ -16,7 +16,7 @@ const runningInstance: Instance = {
   attached: false,
 };
 
-const serverInfo: DashboardServerInfo = {
+const serverInfo: DashboardHealth = {
   status: "ok",
   mode: "dashboard",
   version: "1.0.0",

@@ -12,40 +12,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
-type healthInstanceInfo struct {
-	ID             string `json:"id"`
-	Status         string `json:"status"`
-	Responsiveness string `json:"responsiveness"`
-}
-
-type healthSecurityInfo struct {
-	Level                     string   `json:"level"`
-	Bind                      string   `json:"bind"`
-	AllowedDomains            []string `json:"allowedDomains"`
-	IDPIEnabled               bool     `json:"idpiEnabled"`
-	EnabledSensitiveEndpoints []string `json:"enabledSensitiveEndpoints"`
-	GuardsDown                bool     `json:"guardsDown"`
-}
-
-type healthEnvelope struct {
-	Status                string               `json:"status"`
-	Mode                  string               `json:"mode"`
-	Version               string               `json:"version"`
-	Uptime                int64                `json:"uptime"`
-	AuthRequired          bool                 `json:"authRequired"`
-	Profiles              int                  `json:"profiles"`
-	TemporaryProfiles     int                  `json:"temporaryProfiles"`
-	QuarantinedProfiles   int                  `json:"quarantinedProfiles"`
-	Instances             int                  `json:"instances"`
-	DefaultInstance       *healthInstanceInfo  `json:"defaultInstance,omitempty"`
-	Agents                int                  `json:"agents"`
-	RestartRequired       bool                 `json:"restartRequired"`
-	RestartReasons        []string             `json:"restartReasons,omitempty"`
-	Security              *healthSecurityInfo  `json:"security,omitempty"`
-	Crashes               *bridge.CrashSummary `json:"crashes,omitempty"`
-	UnresponsiveInstances []string             `json:"unresponsiveInstances,omitempty"`
-}
-
 func unresponsiveInstanceIDs(instances []bridge.Instance) []string {
 	var ids []string
 	for _, inst := range instances {
@@ -64,7 +30,7 @@ type defaultInstancer interface {
 	DefaultInstance() (bridge.Instance, bool)
 }
 
-func defaultInstanceInfo(lister InstanceLister, instances []bridge.Instance) *healthInstanceInfo {
+func defaultInstanceInfo(lister InstanceLister, instances []bridge.Instance) *types.HealthInstanceInfo {
 	def, ok := bridge.Instance{}, false
 	if d, isDefaulter := lister.(defaultInstancer); isDefaulter {
 		def, ok = d.DefaultInstance()
@@ -75,17 +41,17 @@ func defaultInstanceInfo(lister InstanceLister, instances []bridge.Instance) *he
 		}
 		def = instances[0]
 	}
-	return &healthInstanceInfo{
+	return &types.HealthInstanceInfo{
 		ID:             def.ID,
 		Status:         def.Status,
 		Responsiveness: def.Responsiveness,
 	}
 }
 
-func (c *ConfigAPI) healthInfo(includeSecurity bool) (healthEnvelope, error) {
+func (c *ConfigAPI) healthInfo(includeSecurity bool) (types.DashboardHealth, error) {
 	_, _, restartReasons, err := c.currentConfig()
 	if err != nil {
-		return healthEnvelope{}, err
+		return types.DashboardHealth{}, err
 	}
 
 	profileCount, temporaryCount, quarantinedCount := 0, 0, 0
@@ -110,14 +76,14 @@ func (c *ConfigAPI) healthInfo(includeSecurity bool) (healthEnvelope, error) {
 		}
 	}
 
-	var crashes *bridge.CrashSummary
+	var crashes *types.CrashSummary
 	if reporter, ok := c.instances.(crashReporter); ok {
 		if summary := reporter.CrashSummary(); summary.Total > 0 {
-			crashes = &summary
+			crashes = wireCrashSummary(summary)
 		}
 	}
 	instanceCount := 0
-	var defaultInst *healthInstanceInfo
+	var defaultInst *types.HealthInstanceInfo
 	var unresponsive []string
 	if c.instances != nil {
 		instances := c.instances.List()
@@ -134,7 +100,7 @@ func (c *ConfigAPI) healthInfo(includeSecurity bool) (healthEnvelope, error) {
 		agentCount = c.agents.AgentCount()
 	}
 	cfg := c.cfg()
-	out := healthEnvelope{
+	out := types.DashboardHealth{
 		Status:                status,
 		Mode:                  types.ModeDashboard,
 		Version:               c.version,
@@ -158,6 +124,22 @@ func (c *ConfigAPI) healthInfo(includeSecurity bool) (healthEnvelope, error) {
 	return out, nil
 }
 
+func wireCrashSummary(summary bridge.CrashSummary) *types.CrashSummary {
+	recent := make([]types.CrashEvent, len(summary.Recent))
+	for i, ev := range summary.Recent {
+		recent[i] = types.CrashEvent{
+			Time:       ev.Time,
+			TargetID:   ev.TargetID,
+			TabID:      ev.TabID,
+			URL:        ev.URL,
+			Reason:     ev.Reason,
+			LastError:  ev.LastError,
+			InstanceID: ev.InstanceID,
+		}
+	}
+	return &types.CrashSummary{Total: summary.Total, Recent: recent}
+}
+
 func healthSecurityVisibleTo(r *http.Request) bool {
 	switch authn.CredentialsFromRequest(r).Method {
 	case authn.MethodHeader, authn.MethodCookie:
@@ -167,14 +149,14 @@ func healthSecurityVisibleTo(r *http.Request) bool {
 	}
 }
 
-func runtimeSecurityInfo(cfg *config.RuntimeConfig) healthSecurityInfo {
+func runtimeSecurityInfo(cfg *config.RuntimeConfig) types.HealthSecurityInfo {
 	if cfg == nil {
-		return healthSecurityInfo{Level: "UNKNOWN"}
+		return types.HealthSecurityInfo{Level: "UNKNOWN"}
 	}
 	posture := report.AssessSecurityPosture(cfg)
 	enabled := append([]string(nil), cfg.EnabledSensitiveEndpoints()...)
 	domains := append([]string(nil), cfg.AllowedDomains...)
-	return healthSecurityInfo{
+	return types.HealthSecurityInfo{
 		Level:                     posture.Level,
 		Bind:                      cfg.Bind,
 		AllowedDomains:            domains,

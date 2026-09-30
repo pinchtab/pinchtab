@@ -1,4 +1,8 @@
-import type { InstanceTab } from "../../generated/types";
+import type {
+  ConsoleLogEntry,
+  ErrorLogEntry,
+  InstanceTab,
+} from "../../generated/types";
 import { request, requestBlob } from "./client";
 
 export async function fetchTabScreenshot(
@@ -29,22 +33,7 @@ export async function resumeTab(
   });
 }
 
-export interface ConsoleLogEntry {
-  timestamp: string;
-  level: string;
-  message: string;
-  source?: string;
-}
-
-export interface ErrorLogEntry {
-  timestamp: string;
-  message: string;
-  type?: string;
-  url?: string;
-  line?: number;
-  column?: number;
-  stack?: string;
-}
+export type { ConsoleLogEntry, ErrorLogEntry };
 
 export async function fetchConsoleLogs(
   tabId: string,

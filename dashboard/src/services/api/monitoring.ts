@@ -1,6 +1,6 @@
 import type { InstanceMetrics } from "../../generated/types";
-import type { DashboardServerInfo, MonitoringServerMetrics } from "../../types";
-import { normalizeDashboardServerInfo } from "../../types";
+import type { DashboardHealth, MonitoringServerMetrics } from "../../types";
+import { normalizeDashboardHealth } from "../../types";
 import { request } from "./client";
 
 export async function fetchAllMetrics(): Promise<InstanceMetrics[]> {
@@ -15,8 +15,6 @@ export async function fetchServerMetrics(): Promise<MonitoringServerMetrics> {
 }
 
 // Health
-export async function fetchHealth(): Promise<DashboardServerInfo> {
-  return normalizeDashboardServerInfo(
-    await request<DashboardServerInfo>("/health"),
-  );
+export async function fetchHealth(): Promise<DashboardHealth> {
+  return normalizeDashboardHealth(await request<DashboardHealth>("/health"));
 }

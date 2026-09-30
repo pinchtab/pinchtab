@@ -16,6 +16,7 @@ import (
 
 	_ "github.com/pinchtab/pinchtab/internal/browsers/all"
 
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/browsersession"
@@ -618,7 +619,7 @@ func TestHandleHealthIncludesAgentCount(t *testing.T) {
 		t.Fatalf("HandleHealth() status = %d, want %d", w.Code, http.StatusOK)
 	}
 
-	var health healthEnvelope
+	var health types.DashboardHealth
 	if err := json.NewDecoder(w.Body).Decode(&health); err != nil {
 		t.Fatalf("Decode() error = %v", err)
 	}
@@ -668,7 +669,7 @@ func TestHandleHealthSecurityVisibilityByAuthMethod(t *testing.T) {
 			if w.Code != http.StatusOK {
 				t.Fatalf("HandleHealth() status = %d, want %d", w.Code, http.StatusOK)
 			}
-			var health healthEnvelope
+			var health types.DashboardHealth
 			if err := json.NewDecoder(w.Body).Decode(&health); err != nil {
 				t.Fatalf("Decode() error = %v", err)
 			}
@@ -852,7 +853,7 @@ func TestHandleHealthCountsQuarantinedProfilesSeparately(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("HandleHealth() status = %d, want %d", w.Code, http.StatusOK)
 	}
-	var health healthEnvelope
+	var health types.DashboardHealth
 	if err := json.NewDecoder(w.Body).Decode(&health); err != nil {
 		t.Fatalf("Decode() error = %v", err)
 	}

@@ -176,12 +176,67 @@ type MonitoringSettings struct {
 	PollInterval  int  `json:"pollInterval"`  // Poll interval in seconds (default 30)
 }
 
-type ServerInfo struct {
-	Version   string `json:"version"`
-	Uptime    int64  `json:"uptime"`
-	Profiles  int    `json:"profiles"`
-	Instances int    `json:"instances"`
-	Agents    int    `json:"agents"`
+type HealthInstanceInfo struct {
+	ID             string `json:"id"`
+	Status         string `json:"status"`
+	Responsiveness string `json:"responsiveness"`
+}
+
+type HealthSecurityInfo struct {
+	Level                     string   `json:"level"`
+	Bind                      string   `json:"bind"`
+	AllowedDomains            []string `json:"allowedDomains"`
+	IDPIEnabled               bool     `json:"idpiEnabled"`
+	EnabledSensitiveEndpoints []string `json:"enabledSensitiveEndpoints"`
+	GuardsDown                bool     `json:"guardsDown"`
+}
+
+type DashboardHealth struct {
+	Status                string              `json:"status"`
+	Mode                  string              `json:"mode"`
+	Version               string              `json:"version"`
+	Uptime                int64               `json:"uptime"`
+	AuthRequired          bool                `json:"authRequired"`
+	Profiles              int                 `json:"profiles"`
+	TemporaryProfiles     int                 `json:"temporaryProfiles"`
+	QuarantinedProfiles   int                 `json:"quarantinedProfiles"`
+	Instances             int                 `json:"instances"`
+	DefaultInstance       *HealthInstanceInfo `json:"defaultInstance,omitempty"`
+	Agents                int                 `json:"agents"`
+	RestartRequired       bool                `json:"restartRequired"`
+	RestartReasons        []string            `json:"restartReasons,omitempty"`
+	Security              *HealthSecurityInfo `json:"security,omitempty"`
+	Crashes               *CrashSummary       `json:"crashes,omitempty"`
+	UnresponsiveInstances []string            `json:"unresponsiveInstances,omitempty"`
+}
+
+type Session struct {
+	ID         string    `json:"id"`
+	AgentID    string    `json:"agentId"`
+	Label      string    `json:"label,omitempty"`
+	Browser    string    `json:"browser,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
+	LastSeenAt time.Time `json:"lastSeenAt"`
+	ExpiresAt  time.Time `json:"expiresAt"`
+	Status     string    `json:"status"`
+	Grants     []string  `json:"grants,omitempty"`
+}
+
+type ConsoleLogEntry struct {
+	Timestamp time.Time `json:"timestamp"`
+	Level     string    `json:"level"`
+	Message   string    `json:"message"`
+	Source    string    `json:"source,omitempty"`
+}
+
+type ErrorLogEntry struct {
+	Timestamp time.Time `json:"timestamp"`
+	Message   string    `json:"message"`
+	Type      string    `json:"type,omitempty"`
+	URL       string    `json:"url,omitempty"`
+	Line      int64     `json:"line,omitempty"`
+	Column    int64     `json:"column,omitempty"`
+	Stack     string    `json:"stack,omitempty"`
 }
 
 type CreateProfileRequest struct {

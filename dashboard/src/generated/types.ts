@@ -216,12 +216,62 @@ export interface MonitoringSettings {
   memoryMetrics: boolean; // Enable per-tab memory aggregation (can be heavy)
   pollInterval: number /* int */; // Poll interval in seconds (default 30)
 }
-export interface ServerInfo {
+export interface HealthInstanceInfo {
+  id: string;
+  status: string;
+  responsiveness: string;
+}
+export interface HealthSecurityInfo {
+  level: string;
+  bind: string;
+  allowedDomains: string[];
+  idpiEnabled: boolean;
+  enabledSensitiveEndpoints: string[];
+  guardsDown: boolean;
+}
+export interface DashboardHealth {
+  status: string;
+  mode: string;
   version: string;
   uptime: number /* int64 */;
+  authRequired: boolean;
   profiles: number /* int */;
+  temporaryProfiles: number /* int */;
+  quarantinedProfiles: number /* int */;
   instances: number /* int */;
+  defaultInstance?: HealthInstanceInfo;
   agents: number /* int */;
+  restartRequired: boolean;
+  restartReasons?: string[];
+  security?: HealthSecurityInfo;
+  crashes?: CrashSummary;
+  unresponsiveInstances?: string[];
+}
+export interface Session {
+  id: string;
+  agentId: string;
+  label?: string;
+  browser?: string;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+  status: string;
+  grants?: string[];
+}
+export interface ConsoleLogEntry {
+  timestamp: string;
+  level: string;
+  message: string;
+  source?: string;
+}
+export interface ErrorLogEntry {
+  timestamp: string;
+  message: string;
+  type?: string;
+  url?: string;
+  line?: number /* int64 */;
+  column?: number /* int64 */;
+  stack?: string;
 }
 export interface CreateProfileRequest {
   name: string;

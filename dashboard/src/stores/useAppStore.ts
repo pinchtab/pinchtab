@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { Profile, Instance, ActivityEvent } from "../generated/types";
-import type { DashboardServerInfo } from "../types";
+import type { DashboardHealth } from "../types";
 import {
   createMonitoringSlice,
   type MonitoringSlice,
@@ -50,8 +50,8 @@ interface ActivitySlice {
 }
 
 interface ServerInfoSlice {
-  serverInfo: DashboardServerInfo | null;
-  setServerInfo: (info: DashboardServerInfo | null) => void;
+  serverInfo: DashboardHealth | null;
+  setServerInfo: (info: DashboardHealth | null) => void;
 }
 
 interface HandoffSlice {

@@ -3,6 +3,7 @@ import type {
   ActivityEvent,
   BrowserSettings,
   CreateProfileRequest,
+  DashboardHealth,
   Instance,
   InstanceMetrics,
   InstanceTab,
@@ -23,21 +24,9 @@ export type {
   ScreencastSettings,
   BrowserSettings,
   CreateProfileRequest,
+  DashboardHealth,
   LaunchInstanceRequest,
 };
-
-export interface DashboardServerInfo {
-  status: string;
-  mode: string;
-  version: string;
-  uptime: number;
-  authRequired?: boolean;
-  profiles: number;
-  instances: number;
-  agents: number;
-  restartRequired?: boolean;
-  restartReasons?: string[];
-}
 
 export interface MonitoringServerMetrics {
   goHeapAllocMB: number;
@@ -494,9 +483,9 @@ export function normalizeBackendConfigState(
   };
 }
 
-export function normalizeDashboardServerInfo(
-  input: DashboardServerInfo,
-): DashboardServerInfo {
+export function normalizeDashboardHealth(
+  input: DashboardHealth,
+): DashboardHealth {
   return {
     ...input,
     authRequired: input.authRequired ?? false,

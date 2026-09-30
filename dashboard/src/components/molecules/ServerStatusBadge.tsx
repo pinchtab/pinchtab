@@ -1,8 +1,8 @@
 import type { Instance } from "../../generated/types";
-import type { DashboardServerInfo } from "../../types";
+import type { DashboardHealth } from "../../types";
 
 interface Props {
-  serverInfo: DashboardServerInfo | null;
+  serverInfo: DashboardHealth | null;
   instance?: Instance | null;
   compact?: boolean;
   sidebarCollapsed?: boolean;

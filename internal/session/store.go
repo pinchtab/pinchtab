@@ -28,7 +28,7 @@ type Session struct {
 	TokenHash  [32]byte  `json:"-"`
 	CreatedAt  time.Time `json:"createdAt"`
 	LastSeenAt time.Time `json:"lastSeenAt"`
-	ExpiresAt  time.Time `json:"expiresAt,omitempty"`
+	ExpiresAt  time.Time `json:"expiresAt"`
 	Status     string    `json:"status"`
 	Grants     []string  `json:"grants,omitempty"`
 }
@@ -593,7 +593,7 @@ type persistedSession struct {
 	TokenHash  string    `json:"tokenHash"`
 	CreatedAt  time.Time `json:"createdAt"`
 	LastSeenAt time.Time `json:"lastSeenAt"`
-	ExpiresAt  time.Time `json:"expiresAt,omitempty"`
+	ExpiresAt  time.Time `json:"expiresAt"`
 	Status     string    `json:"status"`
 	Grants     []string  `json:"grants,omitempty"`
 }
