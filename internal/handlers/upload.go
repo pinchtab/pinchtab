@@ -189,12 +189,7 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		WriteTabContextError(w, err, 404)
 		return
 	}
-	owner := resolveOwner(r, "")
-	if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
-		httpx.ErrorCode(w, http.StatusLocked, "tab_locked", err.Error(), false, nil)
-		return
-	}
-	if _, ok := h.applyTabGuards(w, r, ctx, resolvedTabID, guardDialogBlocked|guardDomainPolicy|guardHandoffPause); !ok {
+	if _, ok := h.applyTabGuards(w, r, ctx, resolvedTabID, guardTabLease|guardDialogBlocked|guardDomainPolicy|guardHandoffPause); !ok {
 		return
 	}
 

@@ -147,12 +147,7 @@ func (h *Handlers) HandleTabHandoff(w http.ResponseWriter, r *http.Request) {
 		WriteTabContextError(w, err, 404)
 		return
 	}
-	owner := resolveOwner(r, "")
-	if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
-		httpx.ErrorCode(w, 423, "tab_locked", err.Error(), false, nil)
-		return
-	}
-	if _, ok := h.applyTabGuards(w, r, ctx, resolvedTabID, guardDomainPolicy); !ok {
+	if _, ok := h.applyTabGuards(w, r, ctx, resolvedTabID, guardTabLease|guardDomainPolicy); !ok {
 		return
 	}
 
@@ -208,12 +203,7 @@ func (h *Handlers) HandleTabResume(w http.ResponseWriter, r *http.Request) {
 		WriteTabContextError(w, err, 404)
 		return
 	}
-	owner := resolveOwner(r, "")
-	if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
-		httpx.ErrorCode(w, 423, "tab_locked", err.Error(), false, nil)
-		return
-	}
-	if _, ok := h.applyTabGuards(w, r, ctx, resolvedTabID, guardDomainPolicy); !ok {
+	if _, ok := h.applyTabGuards(w, r, ctx, resolvedTabID, guardTabLease|guardDomainPolicy); !ok {
 		return
 	}
 

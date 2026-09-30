@@ -28,33 +28,6 @@ import (
 	"github.com/pinchtab/semantic/recovery"
 )
 
-func resolveOwner(r *http.Request, fallback string) string {
-	if o := strings.TrimSpace(r.Header.Get("X-Owner")); o != "" {
-		return o
-	}
-	if o := strings.TrimSpace(r.URL.Query().Get("owner")); o != "" {
-		return o
-	}
-	return strings.TrimSpace(fallback)
-}
-
-func (h *Handlers) enforceTabLease(tabID, owner string) error {
-	if tabID == "" {
-		return nil
-	}
-	lock := h.Bridge.TabLockInfo(tabID)
-	if lock == nil {
-		return nil
-	}
-	if owner == "" {
-		return fmt.Errorf("tab %s is locked by %s; owner required", tabID, lock.Owner)
-	}
-	if owner != lock.Owner {
-		return fmt.Errorf("tab %s is locked by %s", tabID, lock.Owner)
-	}
-	return nil
-}
-
 // rejectMixedBrowsers returns the first action's browser as the request browser,
 // rejecting (with a 400) any later action that names a different browser, since a
 // batch/macro executes on a single browser. noun/field tune the error wording
@@ -565,12 +538,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		if req.TabID == "" {
 			req.TabID = resolvedTabID
 		}
-		owner := resolveOwner(r, req.Owner)
-		if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
-			httpx.ErrorCode(w, 423, "tab_locked", err.Error(), false, nil)
-			return
-		}
-		if _, ok := h.applyTabGuards(w, r, ctx, resolvedTabID, guardDialogBlocked|guardDomainPolicy|guardHandoffPause); !ok {
+		if _, ok := h.applyTabGuardsAs(w, r, ctx, resolvedTabID, req.Owner, guardTabLease|guardDialogBlocked|guardDomainPolicy|guardHandoffPause); !ok {
 			return
 		}
 		defer h.armIdleLifecycle(resolvedTabID)
@@ -846,22 +814,12 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 	}
 	effectiveCfg := routing.EffectiveCfg
 
-	var ctx context.Context
-	var resolvedTabID string
-	owner := resolveOwner(r, req.Owner)
-	{
-		var err error
-		ctx, resolvedTabID, err = h.tabContext(r, req.TabID)
-		if err != nil {
-			WriteTabContextError(w, err, 404)
-			return
-		}
-		if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
-			httpx.ErrorCode(w, 423, "tab_locked", err.Error(), false, nil)
-			return
-		}
+	ctx, resolvedTabID, err := h.tabContext(r, req.TabID)
+	if err != nil {
+		WriteTabContextError(w, err, 404)
+		return
 	}
-	if _, ok := h.applyTabGuards(w, r, ctx, resolvedTabID, guardDialogBlocked); !ok {
+	if _, ok := h.applyTabGuardsAs(w, r, ctx, resolvedTabID, req.Owner, guardTabLease|guardDialogBlocked); !ok {
 		return
 	}
 
@@ -871,16 +829,12 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 		if action.TabID == "" {
 			action.TabID = resolvedTabID
 		} else if action.TabID != resolvedTabID {
-			var err error
-			ctx, resolvedTabID, err = h.tabContext(r, action.TabID)
+			stepCtx, stepTabID, err := h.stepTabContext(r, action.TabID, req.Owner)
 			if err != nil {
-				run.record(actionResult{Index: i, Success: false, Error: fmt.Sprintf("tab not found: %v", err)})
-				continue
-			}
-			if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
 				run.record(actionResult{Index: i, Success: false, Error: err.Error()})
 				continue
 			}
+			ctx, resolvedTabID = stepCtx, stepTabID
 		}
 		run.enterTab(resolvedTabID, h.tabVocab(resolvedTabID))
 		if _, ok := h.applyTabGuards(w, r, ctx, resolvedTabID, guardDomainPolicy); !ok {
@@ -1074,8 +1028,6 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 	if !rejectMultiStepSubmitClicks(w, req.Steps, "macro", "steps") {
 		return
 	}
-	owner := resolveOwner(r, req.Owner)
-
 	// Browser resolution: use the first step's browser field as the request
 	// browser, then fall through session > instance > global default > chrome.
 	macroRequestBrowser, ok := rejectMixedBrowsers(w, req.Steps, "macro", "steps")
@@ -1131,21 +1083,12 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 		stepTimeout = time.Duration(req.StepTimeout * float64(time.Second))
 	}
 
-	var ctx context.Context
-	var resolvedTabID string
-	{
-		var err error
-		ctx, resolvedTabID, err = h.tabContext(r, req.TabID)
-		if err != nil {
-			WriteTabContextError(w, err, 404)
-			return
-		}
-		if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
-			httpx.ErrorCode(w, 423, "tab_locked", err.Error(), false, nil)
-			return
-		}
+	ctx, resolvedTabID, err := h.tabContext(r, req.TabID)
+	if err != nil {
+		WriteTabContextError(w, err, 404)
+		return
 	}
-	if _, ok := h.applyTabGuards(w, r, ctx, resolvedTabID, guardDialogBlocked); !ok {
+	if _, ok := h.applyTabGuardsAs(w, r, ctx, resolvedTabID, req.Owner, guardTabLease|guardDialogBlocked); !ok {
 		return
 	}
 

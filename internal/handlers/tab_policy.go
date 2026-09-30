@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
@@ -28,9 +29,58 @@ const (
 	guardDialogBlocked
 	guardDomainPolicy
 	guardHandoffPause
+	guardTabLease
 )
 
+func resolveOwner(r *http.Request, bodyOwner string) string {
+	if o := strings.TrimSpace(r.Header.Get("X-Owner")); o != "" {
+		return o
+	}
+	if o := strings.TrimSpace(r.URL.Query().Get("owner")); o != "" {
+		return o
+	}
+	return strings.TrimSpace(bodyOwner)
+}
+
+func (h *Handlers) enforceTabLease(tabID, owner string) error {
+	if tabID == "" {
+		return nil
+	}
+	lock := h.Bridge.TabLockInfo(tabID)
+	if lock == nil {
+		return nil
+	}
+	if owner == "" {
+		return fmt.Errorf("tab %s is locked by %s; owner required", tabID, lock.Owner)
+	}
+	if owner != lock.Owner {
+		return fmt.Errorf("tab %s is locked by %s", tabID, lock.Owner)
+	}
+	return nil
+}
+
+func (h *Handlers) stepTabContext(r *http.Request, tabID, bodyOwner string) (context.Context, string, error) {
+	ctx, resolvedTabID, err := h.tabContext(r, tabID)
+	if err != nil {
+		return nil, "", fmt.Errorf("tab not found: %w", err)
+	}
+	if err := h.enforceTabLease(resolvedTabID, resolveOwner(r, bodyOwner)); err != nil {
+		return nil, "", err
+	}
+	return ctx, resolvedTabID, nil
+}
+
 func (h *Handlers) applyTabGuards(w http.ResponseWriter, r *http.Request, ctx context.Context, tabID string, guards tabGuards) (string, bool) {
+	return h.applyTabGuardsAs(w, r, ctx, tabID, "", guards)
+}
+
+func (h *Handlers) applyTabGuardsAs(w http.ResponseWriter, r *http.Request, ctx context.Context, tabID, bodyOwner string, guards tabGuards) (string, bool) {
+	if guards&guardTabLease != 0 {
+		if err := h.enforceTabLease(tabID, resolveOwner(r, bodyOwner)); err != nil {
+			httpx.ErrorCode(w, http.StatusLocked, "tab_locked", err.Error(), false, nil)
+			return "", false
+		}
+	}
 	if guards&guardDialogBlocked != 0 && h.refuseIfDialogBlocked(w, tabID) {
 		return "", false
 	}

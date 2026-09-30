@@ -156,14 +156,8 @@ type exportContext struct {
 // path-required check) first so each endpoint keeps its own ordering. On any
 // failure it writes the response and returns ok=false.
 func (h *Handlers) resolveExportContext(w http.ResponseWriter, r *http.Request, label string) (exportContext, bool) {
-	tabCtx, resolvedTabID, ok := h.resolveNetworkTab(w, r)
+	tabCtx, resolvedTabID, ok := h.resolveNetworkTab(w, r, guardTabLease|guardDomainPolicy)
 	if !ok {
-		return exportContext{}, false
-	}
-
-	owner := resolveOwner(r, "")
-	if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
-		httpx.ErrorCode(w, http.StatusLocked, "tab_locked", err.Error(), false, nil)
 		return exportContext{}, false
 	}
 

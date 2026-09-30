@@ -53,8 +53,8 @@ func (h *Handlers) ensureBrowserReady(w http.ResponseWriter) bool {
 	return true
 }
 
-func (h *Handlers) resolveNetworkTab(w http.ResponseWriter, r *http.Request) (context.Context, string, bool) {
-	return h.guardedTabContext(w, r, r.URL.Query().Get("tabId"), guardDomainPolicy)
+func (h *Handlers) resolveNetworkTab(w http.ResponseWriter, r *http.Request, guards tabGuards) (context.Context, string, bool) {
+	return h.guardedTabContext(w, r, r.URL.Query().Get("tabId"), guards)
 }
 
 // ensureCaptureBuffer returns the tab's network buffer, lazily starting capture
@@ -207,7 +207,7 @@ func (h *Handlers) HandleNetwork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tabCtx, resolvedTabID, ok := h.resolveNetworkTab(w, r)
+	tabCtx, resolvedTabID, ok := h.resolveNetworkTab(w, r, guardDomainPolicy)
 	if !ok {
 		return
 	}
@@ -284,7 +284,7 @@ func (h *Handlers) HandleNetworkByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tabCtx, resolvedTabID, ok := h.resolveNetworkTab(w, r)
+	tabCtx, resolvedTabID, ok := h.resolveNetworkTab(w, r, guardDomainPolicy)
 	if !ok {
 		return
 	}
@@ -411,7 +411,7 @@ func (h *Handlers) HandleNetworkStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tabCtx, resolvedTabID, ok := h.resolveNetworkTab(w, r)
+	tabCtx, resolvedTabID, ok := h.resolveNetworkTab(w, r, guardDomainPolicy)
 	if !ok {
 		return
 	}

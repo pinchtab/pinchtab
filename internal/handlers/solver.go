@@ -69,13 +69,7 @@ func (h *Handlers) HandleSolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	owner := resolveOwner(r, "")
-	if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
-		httpx.ErrorCode(w, 423, "tab_locked", err.Error(), false, nil)
-		return
-	}
-
-	if _, ok := h.applyTabGuards(w, r, ctx, resolvedTabID, guardDialogBlocked|guardDomainPolicy|guardHandoffPause); !ok {
+	if _, ok := h.applyTabGuards(w, r, ctx, resolvedTabID, guardTabLease|guardDialogBlocked|guardDomainPolicy|guardHandoffPause); !ok {
 		return
 	}
 

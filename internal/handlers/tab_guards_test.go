@@ -45,6 +45,14 @@ type guardProbeBridge struct {
 	paused     bool
 	currentURL string
 	dialogs    *bridge.DialogManager
+	lockOwner  string
+}
+
+func (b *guardProbeBridge) TabLockInfo(string) *bridge.LockInfo {
+	if b.lockOwner == "" {
+		return nil
+	}
+	return &bridge.LockInfo{Owner: b.lockOwner}
 }
 
 // probePausedAt is fixed so two refusals from different endpoints differ only
@@ -707,5 +715,80 @@ func TestActionsBatchStopsOnADialogOpenedMidRun(t *testing.T) {
 	second := resp.Results[1]
 	if second.Success || second.Code != dialogBlockedCode || second.Details["remedy"] == nil || !strings.Contains(second.Error, "opened by step 1") {
 		t.Errorf("step 2 = %+v, want a failed step carrying %s with the remedy", second, dialogBlockedCode)
+	}
+}
+
+func TestDeclaredLeaseGuardMatchesTheRefusal(t *testing.T) {
+	checked, refusals := 0, 0
+	for _, row := range guardedBindings(t) {
+		t.Run(row.ep.Route(), func(t *testing.T) {
+			b := &guardProbeBridge{currentURL: "https://allowed.example/", lockOwner: "someone-else"}
+			code, status, answered := probeRoute(t, b, allCapabilities(t, t.TempDir()), row.ep)
+			refused := code == "tab_locked" && status == http.StatusLocked
+			declared := row.b.guards&guardTabLease != 0
+
+			switch {
+			case declared && !refused:
+				t.Errorf("declares guardTabLease but a tab leased to another owner answered %d %q; either the declaration is wrong or the route needs a guardProbes entry that reaches its guards", status, code)
+			case !declared && refused && answered:
+				t.Errorf("refuses a leased tab without declaring guardTabLease, so its catalog line understates what it enforces")
+			}
+			checked++
+			if refused {
+				refusals++
+			}
+		})
+	}
+	if checked == 0 || refusals == 0 {
+		t.Fatalf("checked %d routes and saw %d lease refusals; with none observed this test cannot tell a guard from its absence", checked, refusals)
+	}
+}
+
+type leaseBatchBridge struct {
+	mockBridge
+	ranOn []string
+}
+
+func (b *leaseBatchBridge) TabContext(tabID string) (*bridge.TabHandle, string, error) {
+	if tabID == "" {
+		tabID = "tab1"
+	}
+	return bridge.NewTabHandle(context.Background()), tabID, nil
+}
+
+func (b *leaseBatchBridge) TabLockInfo(tabID string) *bridge.LockInfo {
+	if tabID == "tab2" {
+		return &bridge.LockInfo{Owner: "someone-else"}
+	}
+	return nil
+}
+
+func (b *leaseBatchBridge) ExecuteAction(_ context.Context, _ string, req bridge.ActionRequest) (map[string]any, error) {
+	b.ranOn = append(b.ranOn, req.TabID)
+	return map[string]any{"ok": true}, nil
+}
+
+func TestActionsBatchLeaseRefusalDoesNotSwitchLaterStepsOntoTheLockedTab(t *testing.T) {
+	b := &leaseBatchBridge{}
+	h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+	body := `{"actions":[{"kind":"press","key":"Enter","tabId":"tab2"},{"kind":"press","key":"Enter"}]}`
+	req := httptest.NewRequest("POST", "/actions", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleActions(w, req)
+
+	var resp struct {
+		Results []actionResult `json:"results"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v\n%s", err, w.Body.String())
+	}
+	if len(resp.Results) != 2 || resp.Results[0].Success || !strings.Contains(resp.Results[0].Error, "locked by someone-else") {
+		t.Fatalf("want step 1 refused by the lease, got %+v", resp.Results)
+	}
+	for _, tab := range b.ranOn {
+		if tab == "tab2" {
+			t.Fatalf("a later step ran on the leased tab: ranOn=%v", b.ranOn)
+		}
 	}
 }
