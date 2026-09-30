@@ -1,37 +1,19 @@
 package actions
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 
-	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
 // SetViewport sets the browser viewport dimensions via the HTTP API.
 func SetViewport(client *http.Client, base, token string, cmd *cobra.Command, args []string) {
-	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "ERROR: set viewport requires <width> <height> arguments")
-		os.Exit(2)
-	}
+	requireArgs(args, 2, "set viewport requires <width> <height> arguments")
+	width := parsePositiveIntArg("width", args[0])
+	height := parsePositiveIntArg("height", args[1])
 
-	var width, height int
-	if _, err := fmt.Sscanf(args[0], "%d", &width); err != nil || width <= 0 {
-		fmt.Fprintf(os.Stderr, "ERROR: invalid width %q: must be a positive integer\n", args[0])
-		os.Exit(2)
-	}
-	if _, err := fmt.Sscanf(args[1], "%d", &height); err != nil || height <= 0 {
-		fmt.Fprintf(os.Stderr, "ERROR: invalid height %q: must be a positive integer\n", args[1])
-		os.Exit(2)
-	}
-
-	body := map[string]any{
-		"width":  width,
-		"height": height,
-	}
-
+	body := map[string]any{"width": width, "height": height}
 	if dpr, _ := cmd.Flags().GetFloat64("dpr"); dpr > 0 {
 		body["deviceScaleFactor"] = dpr
 	}
@@ -39,20 +21,15 @@ func SetViewport(client *http.Client, base, token string, cmd *cobra.Command, ar
 		body["mobile"] = true
 	}
 
-	tab, _ := cmd.Flags().GetString("tab")
-	path := apiclient.TabPath(tab, "emulation/viewport")
+	postEmulation(client, base, token, cmd, "viewport", body, func(map[string]any) string {
+		return fmt.Sprintf("%dx%d", width, height)
+	})
+}
 
-	result := apiclient.DoPostQuiet(client, base, token, path, body)
-	if result == nil {
-		fmt.Fprintln(os.Stderr, "ERROR: set viewport failed")
-		os.Exit(2)
+func parsePositiveIntArg(name, raw string) int {
+	var value int
+	if _, err := fmt.Sscanf(raw, "%d", &value); err != nil || value <= 0 {
+		exitErr(2, fmt.Sprintf("ERROR: invalid %s %q: must be a positive integer", name, raw))
 	}
-
-	jsonOut, _ := cmd.Flags().GetBool("json")
-	if jsonOut {
-		out, _ := json.MarshalIndent(result, "", "  ")
-		fmt.Println(string(out))
-	} else {
-		fmt.Printf("%dx%d\n", width, height)
-	}
+	return value
 }
