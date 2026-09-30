@@ -1,6 +1,7 @@
 package report
 
 import (
+	"github.com/pinchtab/pinchtab/internal/netguard"
 	"log/slog"
 	"strings"
 
@@ -206,12 +207,7 @@ func LogSecurityWarnings(cfg *config.RuntimeConfig) {
 }
 
 func isLoopbackBind(bind string) bool {
-	switch strings.TrimSpace(strings.ToLower(bind)) {
-	case "127.0.0.1", "localhost", "::1", "":
-		return true
-	default:
-		return false
-	}
+	return strings.TrimSpace(bind) == "" || netguard.IsLocalHost(bind)
 }
 
 func allowsAllDomains(domains []string) bool {
@@ -237,9 +233,7 @@ func attachAllowsNonLocalHosts(hosts []string) bool {
 		return false
 	}
 	for _, host := range hosts {
-		switch strings.TrimSpace(strings.ToLower(host)) {
-		case "", "127.0.0.1", "localhost", "::1":
-		default:
+		if strings.TrimSpace(host) != "" && !netguard.IsLocalHost(host) {
 			return true
 		}
 	}

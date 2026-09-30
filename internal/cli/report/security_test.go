@@ -33,6 +33,29 @@ func TestAssessSecurityWarnings(t *testing.T) {
 		}
 	})
 
+	t.Run("every loopback spelling stays quiet", func(t *testing.T) {
+		cfg := &config.RuntimeConfig{
+			Bind:               "127.0.0.2",
+			Token:              "secret",
+			AttachEnabled:      true,
+			AttachAllowHosts:   []string{"127.0.0.2", "foo.localhost", "LOCALHOST", "::1"},
+			AttachAllowSchemes: []string{"ws", "wss"},
+			AllowedDomains:     []string{"127.0.0.1"},
+			IDPI: config.IDPIConfig{
+				Enabled:     true,
+				StrictMode:  true,
+				ScanContent: true,
+				WrapContent: true,
+			},
+		}
+
+		for _, warning := range assessSecurityWarnings(cfg) {
+			if warning.ID == "non_loopback_bind" || warning.ID == "attach_external_hosts" {
+				t.Errorf("loopback-only config warned %s: %s", warning.ID, warning.Message)
+			}
+		}
+	})
+
 	t.Run("website whitelist missing and other security gaps are flagged", func(t *testing.T) {
 		cfg := &config.RuntimeConfig{
 			Bind:             "0.0.0.0",

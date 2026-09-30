@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"net/netip"
 	"strings"
 	"time"
 
@@ -61,16 +60,16 @@ func ValidateTarget(ctx context.Context, raw string, allowExplicitInternal bool,
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 
-	ips, err := ResolveHostAddrs(ctx, host)
+	ips, err := netguard.ResolveHostAddrs(ctx, host)
 	if err != nil {
 		return nil, fmt.Errorf("could not resolve navigation host")
 	}
-	if err := validateResolvedPublicIPs(ips); err != nil {
+	if err := netguard.ValidateAddrs(ips, nil); err != nil {
 		if errors.Is(err, netguard.ErrPrivateInternalIP) {
 			if allowExplicitInternal {
 				return &ValidatedTarget{TrustedResolvedIP: ips}, nil
 			}
-			if len(trustedResolveCIDRs) > 0 && validateResolvedIPsWithTrustedCIDRs(ips, trustedResolveCIDRs) == nil {
+			if len(trustedResolveCIDRs) > 0 && netguard.ValidateAddrs(ips, trustedResolveCIDRs) == nil {
 				cidrs := make([]string, len(trustedResolveCIDRs))
 				for i, c := range trustedResolveCIDRs {
 					cidrs[i] = c.String()
@@ -91,72 +90,4 @@ func ValidateTarget(ctx context.Context, raw string, allowExplicitInternal bool,
 		return nil, fmt.Errorf("could not resolve navigation host")
 	}
 	return &ValidatedTarget{}, nil
-}
-
-func validateResolvedPublicIPs(ips []netip.Addr) error {
-	_, err := netguard.ValidateResolvedPublicAddrs(ips)
-	return err
-}
-
-func validateResolvedIPsWithTrustedCIDRs(ips []netip.Addr, trusted []*net.IPNet) error {
-	if len(ips) == 0 {
-		return netguard.ErrResolveHost
-	}
-	for _, addr := range ips {
-		ip := net.ParseIP(addr.String())
-		if err := netguard.ValidatePublicIP(ip); err != nil {
-			if !IPInCIDRs(ip, trusted) {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// ResolveHostAddrs resolves a host to a deduplicated set of IP addresses.
-func ResolveHostAddrs(ctx context.Context, host string) ([]netip.Addr, error) {
-	host = netguard.NormalizeHost(host)
-	if host == "" {
-		return nil, netguard.ErrResolveHost
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		addr, ok := netip.AddrFromSlice(ip)
-		if !ok {
-			return nil, netguard.ErrResolveHost
-		}
-		return []netip.Addr{addr.Unmap()}, nil
-	}
-
-	ips, err := netguard.ResolveHostIPs(ctx, "ip", host)
-	if err != nil || len(ips) == 0 {
-		return nil, netguard.ErrResolveHost
-	}
-	seen := make(map[netip.Addr]struct{}, len(ips))
-	out := make([]netip.Addr, 0, len(ips))
-	for _, ip := range ips {
-		addr, ok := netip.AddrFromSlice(ip)
-		if !ok {
-			return nil, netguard.ErrResolveHost
-		}
-		addr = addr.Unmap()
-		if _, ok := seen[addr]; ok {
-			continue
-		}
-		seen[addr] = struct{}{}
-		out = append(out, addr)
-	}
-	if len(out) == 0 {
-		return nil, netguard.ErrResolveHost
-	}
-	return out, nil
-}
-
-// IPInCIDRs reports whether ip falls within any of the given CIDRs.
-func IPInCIDRs(ip net.IP, cidrs []*net.IPNet) bool {
-	for _, cidr := range cidrs {
-		if cidr.Contains(ip) {
-			return true
-		}
-	}
-	return false
 }

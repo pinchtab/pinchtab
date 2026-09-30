@@ -200,59 +200,22 @@ func ValidatePublicIP(ip net.IP) error {
 }
 
 func ResolveAndValidatePublicIPs(ctx context.Context, host string) ([]netip.Addr, error) {
-	host = NormalizeHost(host)
-	if host == "" {
-		return nil, ErrResolveHost
-	}
-
-	if ip := net.ParseIP(host); ip != nil {
-		addr, ok := netip.AddrFromSlice(ip)
-		if !ok {
-			return nil, ErrPrivateInternalIP
-		}
-		return ValidateResolvedPublicAddrs([]netip.Addr{addr})
-	}
-
-	ips, err := ResolveHostIPs(ctx, "ip", host)
-	if err != nil || len(ips) == 0 {
-		return nil, ErrResolveHost
-	}
-
-	addrs := make([]netip.Addr, 0, len(ips))
-	for _, ip := range ips {
-		addr, ok := netip.AddrFromSlice(ip)
-		if !ok {
-			return nil, ErrPrivateInternalIP
-		}
-		addrs = append(addrs, addr)
-	}
-	return ValidateResolvedPublicAddrs(addrs)
+	return ResolveAndValidateIPsWithTrustedCIDRs(ctx, host, nil)
 }
 
-func ValidateResolvedPublicAddrs(ips []netip.Addr) ([]netip.Addr, error) {
-	if len(ips) == 0 {
-		return nil, ErrResolveHost
+// ValidateAddrs refuses the first address that is not public unless a trusted CIDR
+// covers it; an empty set is a resolution failure, never a pass.
+func ValidateAddrs(addrs []netip.Addr, trusted []*net.IPNet) error {
+	if len(addrs) == 0 {
+		return ErrResolveHost
 	}
-	seen := make(map[netip.Addr]struct{}, len(ips))
-	out := make([]netip.Addr, 0, len(ips))
-	for _, addr := range ips {
-		if !addr.IsValid() {
-			return nil, ErrPrivateInternalIP
+	for _, addr := range addrs {
+		ip := net.IP(addr.Unmap().AsSlice())
+		if err := ValidatePublicIP(ip); err != nil && !IPInCIDRs(ip, trusted) {
+			return err
 		}
-		addr = addr.Unmap()
-		if err := ValidatePublicIP(net.IP(addr.AsSlice())); err != nil {
-			return nil, err
-		}
-		if _, ok := seen[addr]; ok {
-			continue
-		}
-		seen[addr] = struct{}{}
-		out = append(out, addr)
 	}
-	if len(out) == 0 {
-		return nil, ErrResolveHost
-	}
-	return out, nil
+	return nil
 }
 
 func NormalizeRemoteIP(raw string) string {
@@ -281,49 +244,53 @@ func ValidateRemoteIPAddress(raw string) error {
 }
 
 func ResolveAndValidateIPsWithTrustedCIDRs(ctx context.Context, host string, trusted []*net.IPNet) ([]netip.Addr, error) {
+	addrs, err := ResolveHostAddrs(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateAddrs(addrs, trusted); err != nil {
+		return nil, err
+	}
+	return addrs, nil
+}
+
+func ResolveHostAddrs(ctx context.Context, host string) ([]netip.Addr, error) {
+	return ResolveHostAddrsWith(ctx, host, ResolveHostIPs)
+}
+
+// ResolveHostAddrsWith resolves host through resolve, or takes it as a literal IP, and
+// returns its addresses unmapped and deduplicated in resolver order.
+func ResolveHostAddrsWith(ctx context.Context, host string, resolve func(ctx context.Context, network, host string) ([]net.IP, error)) ([]netip.Addr, error) {
 	host = NormalizeHost(host)
 	if host == "" {
 		return nil, ErrResolveHost
 	}
-
-	if ip := net.ParseIP(host); ip != nil {
-		if err := ValidatePublicIP(ip); err != nil {
-			if !ipInCIDRs(ip, trusted) {
-				return nil, err
-			}
+	ips := []net.IP{net.ParseIP(host)}
+	if ips[0] == nil {
+		resolved, err := resolve(ctx, "ip", host)
+		if err != nil || len(resolved) == 0 {
+			return nil, ErrResolveHost
 		}
-		addr, _ := netip.AddrFromSlice(ip)
-		return []netip.Addr{addr.Unmap()}, nil
+		ips = resolved
 	}
-
-	ips, err := ResolveHostIPs(ctx, "ip", host)
-	if err != nil || len(ips) == 0 {
-		return nil, ErrResolveHost
-	}
-
 	seen := make(map[netip.Addr]struct{}, len(ips))
 	out := make([]netip.Addr, 0, len(ips))
 	for _, ip := range ips {
-		if err := ValidatePublicIP(ip); err != nil {
-			if !ipInCIDRs(ip, trusted) {
-				return nil, err
-			}
+		addr, ok := netip.AddrFromSlice(ip)
+		if !ok {
+			return nil, ErrResolveHost
 		}
-		addr, _ := netip.AddrFromSlice(ip)
 		addr = addr.Unmap()
-		if _, ok := seen[addr]; ok {
+		if _, dup := seen[addr]; dup {
 			continue
 		}
 		seen[addr] = struct{}{}
 		out = append(out, addr)
 	}
-	if len(out) == 0 {
-		return nil, ErrResolveHost
-	}
 	return out, nil
 }
 
-func ipInCIDRs(ip net.IP, cidrs []*net.IPNet) bool {
+func IPInCIDRs(ip net.IP, cidrs []*net.IPNet) bool {
 	for _, cidr := range cidrs {
 		if cidr.Contains(ip) {
 			return true

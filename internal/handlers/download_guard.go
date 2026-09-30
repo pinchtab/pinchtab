@@ -112,13 +112,6 @@ func (g *downloadURLGuard) Validate(rawURL string) error {
 }
 
 func validateDownloadRemoteIPAddress(raw string) error {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		// Best-effort mitigation: some responses may not expose a remote IP
-		// (for example, cached responses). Skip the post-connect check then.
-		return nil
-	}
-
 	normalized := netguard.NormalizeRemoteIP(raw)
 	if err := netguard.ValidateRemoteIPAddress(raw); err != nil {
 		if errors.Is(err, netguard.ErrUnparseableRemoteIP) {

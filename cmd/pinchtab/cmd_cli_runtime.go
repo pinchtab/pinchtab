@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"net"
+	"github.com/pinchtab/pinchtab/internal/netguard"
 	"net/http"
 	"net/url"
 	"os"
@@ -237,15 +237,7 @@ func loopbackBase(base string) bool {
 	if err != nil {
 		return false
 	}
-	host := u.Hostname()
-	if host == "" {
-		return false
-	}
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+	return netguard.IsLocalHost(u.Hostname())
 }
 
 func resolveCLIAgentID() string {

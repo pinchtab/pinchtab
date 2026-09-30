@@ -249,13 +249,16 @@ func normalizeResolvedDevToolsURL(raw string, requested *url.URL, requestedPinne
 	return "", fmt.Errorf("webSocketDebuggerUrl host %q does not match requested CDP endpoint %q", wsURL.Hostname(), requestedHost)
 }
 
+// shouldUseRequestedDevToolsHost also accepts the unspecified address: Chrome bound to
+// 0.0.0.0 or :: advertises that as its debugger host, which is only reachable through
+// the host the caller asked for.
 func shouldUseRequestedDevToolsHost(host string) bool {
 	host = strings.TrimSpace(host)
-	if host == "" || strings.EqualFold(host, "localhost") {
+	if host == "" || netguard.IsLocalHost(host) {
 		return true
 	}
 	ip := net.ParseIP(host)
-	return ip != nil && (ip.IsLoopback() || ip.IsUnspecified())
+	return ip != nil && ip.IsUnspecified()
 }
 
 func validateAndResolveCDPHost(parsed *url.URL, allowedHosts []string) (netip.Addr, error) {
@@ -292,38 +295,11 @@ func validateAndResolveCDPHostWithContext(ctx context.Context, parsed *url.URL, 
 }
 
 func resolveCDPHostAddrs(ctx context.Context, host string) ([]netip.Addr, error) {
-	if ip := net.ParseIP(host); ip != nil {
-		addr, ok := netip.AddrFromSlice(ip)
-		if !ok {
-			return nil, fmt.Errorf("invalid cdpUrl host %q", host)
-		}
-		return []netip.Addr{addr.Unmap()}, nil
-	}
-	ips, err := cdpResolveHostIPs(ctx, "ip", host)
+	addrs, err := netguard.ResolveHostAddrsWith(ctx, host, cdpResolveHostIPs)
 	if err != nil {
 		return nil, fmt.Errorf("resolve remote CDP host %q: %w", host, err)
 	}
-	if len(ips) == 0 {
-		return nil, fmt.Errorf("resolve remote CDP host %q: no addresses", host)
-	}
-	out := make([]netip.Addr, 0, len(ips))
-	seen := make(map[netip.Addr]struct{}, len(ips))
-	for _, ip := range ips {
-		addr, ok := netip.AddrFromSlice(ip)
-		if !ok {
-			continue
-		}
-		addr = addr.Unmap()
-		if _, ok := seen[addr]; ok {
-			continue
-		}
-		seen[addr] = struct{}{}
-		out = append(out, addr)
-	}
-	if len(out) == 0 {
-		return nil, fmt.Errorf("resolve remote CDP host %q: no usable IPs", host)
-	}
-	return out, nil
+	return addrs, nil
 }
 
 func validateCDPScheme(scheme string, allowedSchemes []string) error {

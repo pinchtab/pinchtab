@@ -15,10 +15,8 @@ func ValidateRemoteIP(raw string, trustedCIDRs []*net.IPNet, trustedIPs []netip.
 	normalized := netguard.NormalizeRemoteIP(raw)
 	if err := netguard.ValidateRemoteIPAddress(raw); err != nil {
 		if ip := net.ParseIP(normalized); ip != nil {
-			for _, cidr := range trustedCIDRs {
-				if cidr.Contains(ip) {
-					return nil
-				}
+			if netguard.IPInCIDRs(ip, trustedCIDRs) {
+				return nil
 			}
 			if addr, ok := netip.AddrFromSlice(ip); ok {
 				addr = addr.Unmap()

@@ -70,11 +70,7 @@ func healthProbeURL(baseURL *url.URL) string {
 // isAllowedProbeHost restricts generic health probes to loopback addresses to
 // prevent SSRF when inst.URL is attacker-controlled.
 func isAllowedProbeHost(host string) bool {
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+	return netguard.IsLocalHost(host)
 }
 
 func isAllowedChildProbeHost(host, bind string) bool {
