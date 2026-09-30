@@ -185,3 +185,19 @@ func TestFingerprintFlagsAllowColdStart(t *testing.T) {
 		t.Fatalf("status = %v, want pass after cold start: %s", result.Status, result.Detail)
 	}
 }
+
+func TestCDPReachableSkipsWhenCloakIsAbsent(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("discovery fixture relies on unix paths")
+	}
+	if _, err := os.Stat("/opt/cloakbrowser/chrome"); err == nil {
+		t.Skip("host has a system CloakBrowser install")
+	}
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+
+	result := cdpReachableCheck(context.Background(), &browsers.DoctorEnv{})
+	if result.Status != browsers.DoctorSkip {
+		t.Fatalf("status = %v, want skip: %s", result.Status, result.Detail)
+	}
+}

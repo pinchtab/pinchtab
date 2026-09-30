@@ -34,27 +34,15 @@ func (b Browser) DoctorChecks(cfg browsers.TargetConfig) []browsers.DoctorCheck 
 		{
 			ID:          "handle_decisions",
 			Description: "Verify ghost-chrome handle/skip behavior and state-changing safety",
-			Fn: func(ctx context.Context, cfg interface{}) browsers.DoctorCheckResult {
-				staticShapes := []string{browsers.ShapeStaticRead, browsers.ShapeStaticSnapshot}
-				skipShapes := []string{
-					browsers.ShapeRenderedRead, browsers.ShapeVisual,
-					browsers.ShapeInteraction, browsers.ShapeSessionState,
-					browsers.ShapeNetworkControl, browsers.ShapeDownloadUpload,
-				}
-
+			Fn: func(context.Context, *browsers.DoctorEnv) browsers.DoctorCheckResult {
 				var issues []string
-
-				for _, shape := range staticShapes {
-					d := b.CanHandle(browsers.RequestIntent{Shape: shape})
-					if d.Decision != browsers.DecisionHandle {
-						issues = append(issues, fmt.Sprintf("%s: expected handle, got %s", shape, d.Decision))
+				for _, shape := range browsers.AllShapes {
+					want := browsers.DecisionSkip
+					if shape == browsers.ShapeStaticRead || shape == browsers.ShapeStaticSnapshot {
+						want = browsers.DecisionHandle
 					}
-				}
-
-				for _, shape := range skipShapes {
-					d := b.CanHandle(browsers.RequestIntent{Shape: shape})
-					if d.Decision != browsers.DecisionSkip {
-						issues = append(issues, fmt.Sprintf("%s: expected skip, got %s", shape, d.Decision))
+					if d := b.CanHandle(browsers.RequestIntent{Shape: shape}); d.Decision != want {
+						issues = append(issues, fmt.Sprintf("%s: expected %s, got %s", shape, want, d.Decision))
 					}
 				}
 

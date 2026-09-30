@@ -38,3 +38,13 @@ func TestCDPReachableUsesDiscoveryWithoutABinaryOverride(t *testing.T) {
 		t.Fatalf("launched %q, want discovered binary %q", launched, binary)
 	}
 }
+
+func TestCDPReachableFailsWhenChromeIsAbsent(t *testing.T) {
+	result := browsers.CDPReachable(browsers.DoctorBinary{Probed: []string{"/nowhere/chrome"}}, chromeAbsent, func(string) (int, error) {
+		t.Fatal("probe ran without a binary")
+		return 0, nil
+	})
+	if result.Status != browsers.DoctorFail {
+		t.Fatalf("status = %v, want fail: %s", result.Status, result.Detail)
+	}
+}

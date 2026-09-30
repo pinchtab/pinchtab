@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pinchtab/pinchtab/internal/browserprobe"
 	"github.com/pinchtab/pinchtab/internal/browsers"
 )
 
@@ -29,41 +28,12 @@ func (b Browser) DoctorChecks(_ browsers.TargetConfig) []browsers.DoctorCheck {
 			Fn:              cdpReachableCheck,
 			LaunchesBrowser: true,
 		},
-		{
-			ID:          "handle_decisions",
-			Description: "Verify Chrome handles all request shapes",
-			Fn: func(ctx context.Context, cfg interface{}) browsers.DoctorCheckResult {
-				b := &Browser{}
-				allShapes := []string{
-					browsers.ShapeStaticRead, browsers.ShapeStaticSnapshot,
-					browsers.ShapeRenderedRead, browsers.ShapeVisual,
-					browsers.ShapeInteraction, browsers.ShapeSessionState,
-					browsers.ShapeNetworkControl, browsers.ShapeDownloadUpload,
-				}
-				var unexpected []string
-				for _, shape := range allShapes {
-					d := b.CanHandle(browsers.RequestIntent{Shape: shape})
-					if d.Decision != browsers.DecisionHandle {
-						unexpected = append(unexpected, shape)
-					}
-				}
-				if len(unexpected) > 0 {
-					return browsers.DoctorCheckResult{
-						Status: browsers.DoctorWarn,
-						Detail: fmt.Sprintf("unexpected skip/fail for shapes: %s", strings.Join(unexpected, ", ")),
-					}
-				}
-				return browsers.DoctorCheckResult{
-					Status: browsers.DoctorPass,
-					Detail: "all 8 request shapes handled",
-				}
-			},
-		},
+		browsers.HandleDecisionsCheck(b, "Chrome"),
 	}
 }
 
-func resolveDoctorBinary(cfg interface{}) browsers.DoctorBinary {
-	return browsers.ResolveDoctorBinary(cfg, BinaryNames(), CommonPaths(runtime.GOOS))
+func resolveDoctorBinary(env *browsers.DoctorEnv) browsers.DoctorBinary {
+	return browsers.ResolveDoctorBinary(env, BinaryNames(), CommonPaths(runtime.GOOS))
 }
 
 func chromeAbsent(probed []string) browsers.DoctorCheckResult {
@@ -75,66 +45,27 @@ func chromeAbsent(probed []string) browsers.DoctorCheckResult {
 	}
 }
 
-func cdpReachableCheck(ctx context.Context, cfg interface{}) browsers.DoctorCheckResult {
-	binary := resolveDoctorBinary(cfg)
+func cdpReachableCheck(ctx context.Context, env *browsers.DoctorEnv) browsers.DoctorCheckResult {
+	return browsers.CDPReachable(resolveDoctorBinary(env), chromeAbsent, func(path string) (int, error) {
+		res, err := probeCDP(ctx, path, browsers.DoctorSandboxArgs(env), chromeDoctorLaunchTimeout)
+		return res.Port, err
+	})
+}
+
+func chromePresenceCheck(ctx context.Context, env *browsers.DoctorEnv) browsers.DoctorCheckResult {
+	binary := resolveDoctorBinary(env)
 	if binary.Path == "" {
 		return chromeAbsent(binary.Probed)
 	}
-	res, err := probeCDP(ctx, binary.Path, browsers.DoctorSandboxArgs(cfg), chromeDoctorLaunchTimeout)
-	if err != nil {
-		return browsers.DoctorCheckResult{
-			Status: browsers.DoctorFail,
-			Detail: fmt.Sprintf("%s: headless launch did not expose CDP: %v", binary.Path, err),
-			Err:    err,
-		}
+	token, result := browsers.VersionCheck(ctx, binary, chromeMinVersion, nil)
+	if result.Status != browsers.DoctorPass || binary.Overridden || runtime.GOOS != "darwin" || binary.Path != primaryChromeAppMacOS {
+		return result
 	}
 	return browsers.DoctorCheckResult{
 		Status: browsers.DoctorPass,
-		Detail: fmt.Sprintf("%s: /json/version OK on port %d", binary.Path, res.Port),
-	}
-}
-
-func chromePresenceCheck(ctx context.Context, cfg interface{}) browsers.DoctorCheckResult {
-	binary := resolveDoctorBinary(cfg)
-	overridden := binary.Overridden
-	found := binary.Path
-	if found == "" {
-		return chromeAbsent(binary.Probed)
-	}
-	line, err := browserprobe.RunVersion(ctx, found)
-	if err != nil {
-		return browsers.DoctorCheckResult{
-			Status: browsers.DoctorWarn,
-			Detail: fmt.Sprintf("%s: --version failed: %v", found, err),
-			Err:    err,
-		}
-	}
-	token := browserprobe.ExtractVersionToken(line)
-	if token == "" {
-		return browsers.DoctorCheckResult{
-			Status: browsers.DoctorWarn,
-			Detail: fmt.Sprintf("%s: could not parse version from %q", found, line),
-		}
-	}
-	if browserprobe.CompareSemver(token, chromeMinVersion) < 0 {
-		return browsers.DoctorCheckResult{
-			Status: browsers.DoctorWarn,
-			Detail: fmt.Sprintf("%s -> %s (< required %s)", found, token, chromeMinVersion),
-		}
-	}
-	if !overridden && runtime.GOOS == "darwin" && found == primaryChromeAppMacOS {
-		// Works, but flag the macOS collision (issue #583) without downgrading
-		// status — the browser launches fine, it's just sub-optimal here.
-		return browsers.DoctorCheckResult{
-			Status: browsers.DoctorPass,
-			Detail: fmt.Sprintf("%s -> %s (>= %s); note: this is your primary Google Chrome — "+
-				"automating it on macOS can stop your normal Chrome from opening (issue #583). "+
-				"Install Google Chrome for Testing or Chromium, or set browser.binary.",
-				found, token, chromeMinVersion),
-		}
-	}
-	return browsers.DoctorCheckResult{
-		Status: browsers.DoctorPass,
-		Detail: fmt.Sprintf("%s -> %s (>= %s)", found, token, chromeMinVersion),
+		Detail: fmt.Sprintf("%s -> %s (>= %s); note: this is your primary Google Chrome — "+
+			"automating it on macOS can stop your normal Chrome from opening (issue #583). "+
+			"Install Google Chrome for Testing or Chromium, or set browser.binary.",
+			binary.Path, token, chromeMinVersion),
 	}
 }

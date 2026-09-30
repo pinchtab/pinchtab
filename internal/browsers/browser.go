@@ -64,6 +64,13 @@ const (
 	ShapeDownloadUpload = "download-upload"
 )
 
+var AllShapes = []string{
+	ShapeStaticRead, ShapeStaticSnapshot,
+	ShapeRenderedRead, ShapeVisual,
+	ShapeInteraction, ShapeSessionState,
+	ShapeNetworkControl, ShapeDownloadUpload,
+}
+
 type Browser interface {
 	// ID returns a short stable identifier ("chrome", "cloak", …).
 	ID() string

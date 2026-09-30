@@ -109,7 +109,7 @@ type DoctorCheckResult struct {
 type DoctorCheck struct {
 	ID              string
 	Description     string
-	Fn              func(ctx context.Context, cfg interface{}) DoctorCheckResult
+	Fn              func(ctx context.Context, env *DoctorEnv) DoctorCheckResult
 	LaunchesBrowser bool
 }
 
