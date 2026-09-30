@@ -26,6 +26,7 @@ type Bridge struct {
 	*TabManager
 	StealthBundle *stealth.Bundle
 	Actions       map[string]ActionFunc
+	pointerOps    *pointerOps
 	Locks         *LockManager
 	Dialogs       *DialogManager
 	LogStore      *ConsoleLogStore
@@ -89,6 +90,7 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 		fingerprintOverlays: make(map[string]bool),
 		handoffs:            make(map[string]TabHandoffState),
 		pointerByTab:        make(map[string]pointerState),
+		pointerOps:          defaultPointerOps(),
 		LogStore:            logStore,
 		stealthLaunchMode:   stealth.LaunchModeUninitialized,
 	}

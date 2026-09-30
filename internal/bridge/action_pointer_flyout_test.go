@@ -73,46 +73,36 @@ func TestClickPreservesFloatingFlyoutWithoutScroll(t *testing.T) {
 }
 
 func TestDefaultClickUsesNoScrollPathForFloatingFlyout(t *testing.T) {
-	origFlyout := clickFloatingFlyoutItemAction
-	origPointer := clickByNodeIDAction
-	origDOM := jsClickByBackendNodeAction
-	t.Cleanup(func() {
-		clickFloatingFlyoutItemAction = origFlyout
-		clickByNodeIDAction = origPointer
-		jsClickByBackendNodeAction = origDOM
-	})
+	t.Parallel()
+	ops := defaultPointerOps()
 
-	clickFloatingFlyoutItemAction = func(context.Context, int64) (bool, error) { return true, nil }
-	clickByNodeIDAction = func(context.Context, int64) error {
+	ops.clickFloatingFlyoutItem = func(context.Context, int64) (bool, error) { return true, nil }
+	ops.clickByNodeID = func(context.Context, int64) error {
 		t.Fatal("floating flyout item reached scrolling pointer path")
 		return nil
 	}
-	jsClickByBackendNodeAction = func(context.Context, int64) error {
+	ops.jsClickByBackendNode = func(context.Context, int64) error {
 		t.Fatal("atomic flyout click should not be repeated")
 		return nil
 	}
 
-	if err := clickByNodeIDWithMode(context.Background(), 42, "default"); err != nil {
+	if err := ops.clickByNodeIDWithMode(context.Background(), 42, "default"); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestDefaultClickKeepsPointerPathForOrdinaryNode(t *testing.T) {
-	origFlyout := clickFloatingFlyoutItemAction
-	origPointer := clickByNodeIDAction
-	t.Cleanup(func() {
-		clickFloatingFlyoutItemAction = origFlyout
-		clickByNodeIDAction = origPointer
-	})
+	t.Parallel()
+	ops := defaultPointerOps()
 
-	clickFloatingFlyoutItemAction = func(context.Context, int64) (bool, error) { return false, nil }
+	ops.clickFloatingFlyoutItem = func(context.Context, int64) (bool, error) { return false, nil }
 	pointerCalled := false
-	clickByNodeIDAction = func(context.Context, int64) error {
+	ops.clickByNodeID = func(context.Context, int64) error {
 		pointerCalled = true
 		return nil
 	}
 
-	if err := clickByNodeIDWithMode(context.Background(), 42, "default"); err != nil {
+	if err := ops.clickByNodeIDWithMode(context.Background(), 42, "default"); err != nil {
 		t.Fatal(err)
 	}
 	if !pointerCalled {

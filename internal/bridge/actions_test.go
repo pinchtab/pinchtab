@@ -16,6 +16,7 @@ import (
 )
 
 func TestClickAction_UsesCoordinatePathIncludingZeroZero(t *testing.T) {
+	t.Parallel()
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -31,6 +32,7 @@ func TestClickAction_UsesCoordinatePathIncludingZeroZero(t *testing.T) {
 }
 
 func TestDoubleClickAction_UsesCoordinatePathIncludingZeroZero(t *testing.T) {
+	t.Parallel()
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -46,6 +48,7 @@ func TestDoubleClickAction_UsesCoordinatePathIncludingZeroZero(t *testing.T) {
 }
 
 func TestHoverAction_UsesCoordinatePath(t *testing.T) {
+	t.Parallel()
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -119,17 +122,12 @@ func TestMouseUpAction_UsesCoordinatePath(t *testing.T) {
 }
 
 func TestMouseWheelAction_UsesExplicitWheelDeltas(t *testing.T) {
+	ops := defaultPointerOps()
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
-
-	origScrollByCoordinate := scrollByCoordinateAction
-	origScrollViewportCenter := scrollViewportCenter
-	t.Cleanup(func() {
-		scrollByCoordinateAction = origScrollByCoordinate
-		scrollViewportCenter = origScrollViewportCenter
-	})
+	b.pointerOps = ops
 
 	called := false
-	scrollByCoordinateAction = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
+	ops.scrollByCoordinate = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
 		called = true
 		if x != 50 || y != 75 {
 			t.Fatalf("wheel coordinates = (%v, %v), want (50, 75)", x, y)
@@ -139,7 +137,7 @@ func TestMouseWheelAction_UsesExplicitWheelDeltas(t *testing.T) {
 		}
 		return nil
 	}
-	scrollViewportCenter = func(context.Context) (float64, float64, error) {
+	ops.scrollViewportCenter = func(context.Context) (float64, float64, error) {
 		t.Fatal("viewport center should not be used when explicit coordinates are provided")
 		return 0, 0, nil
 	}
@@ -163,14 +161,14 @@ func TestMouseWheelAction_UsesExplicitWheelDeltas(t *testing.T) {
 }
 
 func TestClickAction_ForwardsModifiers(t *testing.T) {
+	t.Parallel()
+	ops := defaultPointerOps()
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
-
-	origClick := clickByCoordinateAction
-	t.Cleanup(func() { clickByCoordinateAction = origClick })
+	b.pointerOps = ops
 
 	var gotModifiers int
 	called := false
-	clickByCoordinateAction = func(ctx context.Context, x, y float64, modifiers int) error {
+	ops.clickByCoordinate = func(ctx context.Context, x, y float64, modifiers int) error {
 		called = true
 		gotModifiers = modifiers
 		return nil
@@ -195,13 +193,12 @@ func TestClickAction_ForwardsModifiers(t *testing.T) {
 }
 
 func TestMouseWheelAction_ForwardsModifiers(t *testing.T) {
+	ops := defaultPointerOps()
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
-
-	origScroll := scrollByCoordinateAction
-	t.Cleanup(func() { scrollByCoordinateAction = origScroll })
+	b.pointerOps = ops
 
 	var gotModifiers int
-	scrollByCoordinateAction = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
+	ops.scrollByCoordinate = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
 		gotModifiers = modifiers
 		return nil
 	}
@@ -223,25 +220,20 @@ func TestMouseWheelAction_ForwardsModifiers(t *testing.T) {
 }
 
 func TestMouseActions_TrackCurrentPointerPosition(t *testing.T) {
+	ops := defaultPointerOps()
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
-
-	origMove := mouseMoveByCoordinateAction
-	origUp := mouseUpByCoordinateAction
-	t.Cleanup(func() {
-		mouseMoveByCoordinateAction = origMove
-		mouseUpByCoordinateAction = origUp
-	})
+	b.pointerOps = ops
 
 	moveCalled := false
 	upCalled := false
-	mouseMoveByCoordinateAction = func(ctx context.Context, x, y float64) error {
+	ops.mouseMoveByCoordinate = func(ctx context.Context, x, y float64) error {
 		moveCalled = true
 		if x != 15 || y != 25 {
 			t.Fatalf("move coordinates = (%v, %v), want (15, 25)", x, y)
 		}
 		return nil
 	}
-	mouseUpByCoordinateAction = func(ctx context.Context, x, y float64, button string, modifiers int) error {
+	ops.mouseUpByCoordinate = func(ctx context.Context, x, y float64, button string, modifiers int) error {
 		upCalled = true
 		if x != 15 || y != 25 {
 			t.Fatalf("up coordinates = (%v, %v), want (15, 25)", x, y)
@@ -269,15 +261,12 @@ func TestMouseActions_TrackCurrentPointerPosition(t *testing.T) {
 }
 
 func TestMouseDownAction_UsesTrackedPointerWhenTargetMissing(t *testing.T) {
+	ops := defaultPointerOps()
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	b.pointerOps = ops
 	b.rememberPointerPosition("tab-current", 33, 44)
 
-	origDown := mouseDownByCoordinateAction
-	t.Cleanup(func() {
-		mouseDownByCoordinateAction = origDown
-	})
-
-	mouseDownByCoordinateAction = func(ctx context.Context, x, y float64, button string, modifiers int) error {
+	ops.mouseDownByCoordinate = func(ctx context.Context, x, y float64, button string, modifiers int) error {
 		if x != 33 || y != 44 {
 			t.Fatalf("down coordinates = (%v, %v), want (33, 44)", x, y)
 		}
@@ -296,20 +285,15 @@ func TestMouseDownAction_UsesTrackedPointerWhenTargetMissing(t *testing.T) {
 }
 
 func TestMouseWheelAction_UsesViewportCenterWhenPointerMissing(t *testing.T) {
+	ops := defaultPointerOps()
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	b.pointerOps = ops
 
-	origScrollByCoordinate := scrollByCoordinateAction
-	origScrollViewportCenter := scrollViewportCenter
-	t.Cleanup(func() {
-		scrollByCoordinateAction = origScrollByCoordinate
-		scrollViewportCenter = origScrollViewportCenter
-	})
-
-	scrollViewportCenter = func(context.Context) (float64, float64, error) {
+	ops.scrollViewportCenter = func(context.Context) (float64, float64, error) {
 		return 300, 200, nil
 	}
 	called := false
-	scrollByCoordinateAction = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
+	ops.scrollByCoordinate = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
 		called = true
 		if x != 300 || y != 200 {
 			t.Fatalf("wheel coordinates = (%v, %v), want (300, 200)", x, y)
@@ -416,6 +400,7 @@ func TestRemovedHumanActionKindsAreUnknown(t *testing.T) {
 }
 
 func TestExecuteAction_ClickRejectsModeAndEffectiveHumanizeTogether(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		config *config.RuntimeConfig
@@ -468,13 +453,11 @@ func TestExecuteAction_ClickRejectsModeAndEffectiveHumanizeTogether(t *testing.T
 }
 
 func TestExecuteAction_ClickModeAllowedWhenHumanizeOverrideDisablesDefault(t *testing.T) {
-	origJSClick := jsClickByBackendNodeAction
-	t.Cleanup(func() {
-		jsClickByBackendNodeAction = origJSClick
-	})
+	t.Parallel()
+	ops := defaultPointerOps()
 
 	called := false
-	jsClickByBackendNodeAction = func(ctx context.Context, nodeID int64) error {
+	ops.jsClickByBackendNode = func(ctx context.Context, nodeID int64) error {
 		called = true
 		if nodeID != 42 {
 			t.Fatalf("nodeID = %d, want 42", nodeID)
@@ -483,6 +466,7 @@ func TestExecuteAction_ClickModeAllowedWhenHumanizeOverrideDisablesDefault(t *te
 	}
 
 	b := New(context.TODO(), nil, &config.RuntimeConfig{Humanize: true})
+	b.pointerOps = ops
 	res, err := b.ExecuteAction(context.Background(), ActionClick, ActionRequest{
 		Kind:     ActionClick,
 		NodeID:   42,
@@ -501,6 +485,7 @@ func TestExecuteAction_ClickModeAllowedWhenHumanizeOverrideDisablesDefault(t *te
 }
 
 func TestClickAction_HumanizeOptInUsesHumanizedPath(t *testing.T) {
+	t.Parallel()
 	raw := New(context.TODO(), nil, &config.RuntimeConfig{Humanize: true})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -522,16 +507,17 @@ func TestClickAction_HumanizeOptInUsesHumanizedPath(t *testing.T) {
 }
 
 func TestClickAction_HumanizedCoordinateClick(t *testing.T) {
-	origHumanClick := humanClickCoordinateAction
-	t.Cleanup(func() { humanClickCoordinateAction = origHumanClick })
+	t.Parallel()
+	ops := defaultPointerOps()
 
 	var clicked [][2]float64
-	humanClickCoordinateAction = func(ctx context.Context, x, y float64) error {
+	ops.humanClickCoordinate = func(ctx context.Context, x, y float64) error {
 		clicked = append(clicked, [2]float64{x, y})
 		return nil
 	}
 
 	b := New(context.TODO(), nil, &config.RuntimeConfig{Humanize: true})
+	b.pointerOps = ops
 	res, err := b.ExecuteAction(context.Background(), ActionClick, ActionRequest{
 		Kind:  ActionClick,
 		HasXY: true,
@@ -553,19 +539,13 @@ func TestClickAction_HumanizedCoordinateClick(t *testing.T) {
 }
 
 func TestClickAction_HumanizedHonoursWaitNav(t *testing.T) {
-	origHumanClick := humanClickCoordinateAction
-	origClickElement := clickElementAction
-	origWaitNav := waitNavAction
-	t.Cleanup(func() {
-		humanClickCoordinateAction = origHumanClick
-		clickElementAction = origClickElement
-		waitNavAction = origWaitNav
-	})
-	humanClickCoordinateAction = func(ctx context.Context, x, y float64) error { return nil }
-	clickElementAction = func(ctx context.Context, backendNodeID cdp.BackendNodeID) error { return nil }
+	t.Parallel()
+	ops := defaultPointerOps()
+	ops.humanClickCoordinate = func(ctx context.Context, x, y float64) error { return nil }
+	ops.clickElement = func(ctx context.Context, backendNodeID cdp.BackendNodeID) error { return nil }
 
 	var waits []time.Duration
-	waitNavAction = func(ctx context.Context, delay time.Duration) { waits = append(waits, delay) }
+	ops.waitNav = func(ctx context.Context, delay time.Duration) { waits = append(waits, delay) }
 
 	tests := []struct {
 		name      string
@@ -580,6 +560,7 @@ func TestClickAction_HumanizedHonoursWaitNav(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			waits = nil
 			b := New(context.TODO(), nil, &config.RuntimeConfig{Humanize: true, WaitNavDelay: 7 * time.Millisecond})
+			b.pointerOps = ops
 			tc.req.Kind = ActionClick
 			res, err := b.ExecuteAction(context.Background(), ActionClick, tc.req)
 			if err != nil {
@@ -601,15 +582,14 @@ func TestClickAction_HumanizedHonoursWaitNav(t *testing.T) {
 }
 
 func TestClickAction_HumanizedDialogActionArmsAutoHandler(t *testing.T) {
-	origClickElement := clickElementAction
-	t.Cleanup(func() {
-		clickElementAction = origClickElement
-	})
+	t.Parallel()
+	ops := defaultPointerOps()
 
 	b := New(context.TODO(), nil, &config.RuntimeConfig{Humanize: true})
+	b.pointerOps = ops
 	dm := b.GetDialogManager()
 
-	clickElementAction = func(ctx context.Context, backendNodeID cdp.BackendNodeID) error {
+	ops.clickElement = func(ctx context.Context, backendNodeID cdp.BackendNodeID) error {
 		if backendNodeID != 42 {
 			return errors.New("unexpected backend node id")
 		}
@@ -645,28 +625,24 @@ func TestClickAction_HumanizedDialogActionArmsAutoHandler(t *testing.T) {
 }
 
 func TestClickByNodeIDWithJSFallback_UsesTrustedPathFirst(t *testing.T) {
-	origTrusted := clickByNodeIDAction
-	origFallback := jsClickByBackendNodeAction
-	t.Cleanup(func() {
-		clickByNodeIDAction = origTrusted
-		jsClickByBackendNodeAction = origFallback
-	})
+	t.Parallel()
+	ops := defaultPointerOps()
 
 	var trustedCalled bool
 	var fallbackCalled bool
-	clickByNodeIDAction = func(ctx context.Context, nodeID int64) error {
+	ops.clickByNodeID = func(ctx context.Context, nodeID int64) error {
 		trustedCalled = true
 		if nodeID != 42 {
 			t.Fatalf("nodeID = %d, want 42", nodeID)
 		}
 		return nil
 	}
-	jsClickByBackendNodeAction = func(context.Context, int64) error {
+	ops.jsClickByBackendNode = func(context.Context, int64) error {
 		fallbackCalled = true
 		return nil
 	}
 
-	if err := clickByNodeIDWithJSFallback(context.Background(), 42); err != nil {
+	if err := ops.clickByNodeIDWithJSFallback(context.Background(), 42); err != nil {
 		t.Fatalf("clickByNodeIDWithJSFallback error = %v", err)
 	}
 	if !trustedCalled {
@@ -678,23 +654,19 @@ func TestClickByNodeIDWithJSFallback_UsesTrustedPathFirst(t *testing.T) {
 }
 
 func TestClickByNodeIDWithJSFallback_FallsBackOnlyOnTimeout(t *testing.T) {
-	origTrusted := clickByNodeIDAction
-	origFallback := jsClickByBackendNodeAction
-	t.Cleanup(func() {
-		clickByNodeIDAction = origTrusted
-		jsClickByBackendNodeAction = origFallback
-	})
+	t.Parallel()
+	ops := defaultPointerOps()
 
 	var fallbackCalled bool
-	clickByNodeIDAction = func(context.Context, int64) error {
+	ops.clickByNodeID = func(context.Context, int64) error {
 		return context.DeadlineExceeded
 	}
-	jsClickByBackendNodeAction = func(context.Context, int64) error {
+	ops.jsClickByBackendNode = func(context.Context, int64) error {
 		fallbackCalled = true
 		return nil
 	}
 
-	if err := clickByNodeIDWithJSFallback(context.Background(), 42); err != nil {
+	if err := ops.clickByNodeIDWithJSFallback(context.Background(), 42); err != nil {
 		t.Fatalf("clickByNodeIDWithJSFallback error = %v", err)
 	}
 	if !fallbackCalled {
@@ -703,24 +675,20 @@ func TestClickByNodeIDWithJSFallback_FallsBackOnlyOnTimeout(t *testing.T) {
 }
 
 func TestClickByNodeIDWithJSFallback_DoesNotFallbackOnOtherErrors(t *testing.T) {
-	origTrusted := clickByNodeIDAction
-	origFallback := jsClickByBackendNodeAction
-	t.Cleanup(func() {
-		clickByNodeIDAction = origTrusted
-		jsClickByBackendNodeAction = origFallback
-	})
+	t.Parallel()
+	ops := defaultPointerOps()
 
 	boom := errors.New("boom")
 	var fallbackCalled bool
-	clickByNodeIDAction = func(context.Context, int64) error {
+	ops.clickByNodeID = func(context.Context, int64) error {
 		return boom
 	}
-	jsClickByBackendNodeAction = func(context.Context, int64) error {
+	ops.jsClickByBackendNode = func(context.Context, int64) error {
 		fallbackCalled = true
 		return nil
 	}
 
-	err := clickByNodeIDWithJSFallback(context.Background(), 42)
+	err := ops.clickByNodeIDWithJSFallback(context.Background(), 42)
 	if !errors.Is(err, boom) {
 		t.Fatalf("error = %v, want boom", err)
 	}
@@ -730,25 +698,21 @@ func TestClickByNodeIDWithJSFallback_DoesNotFallbackOnOtherErrors(t *testing.T) 
 }
 
 func TestClickByNodeIDWithJSFallback_SkipsFallbackOnCancelledCtx(t *testing.T) {
-	origTrusted := clickByNodeIDAction
-	origFallback := jsClickByBackendNodeAction
-	t.Cleanup(func() {
-		clickByNodeIDAction = origTrusted
-		jsClickByBackendNodeAction = origFallback
-	})
+	t.Parallel()
+	ops := defaultPointerOps()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var fallbackCalled bool
-	clickByNodeIDAction = func(context.Context, int64) error {
+	ops.clickByNodeID = func(context.Context, int64) error {
 		cancel() // simulate dialog-detection cancelling the context
 		return context.DeadlineExceeded
 	}
-	jsClickByBackendNodeAction = func(context.Context, int64) error {
+	ops.jsClickByBackendNode = func(context.Context, int64) error {
 		fallbackCalled = true
 		return nil
 	}
 
-	err := clickByNodeIDWithJSFallback(ctx, 42)
+	err := ops.clickByNodeIDWithJSFallback(ctx, 42)
 	if err == nil {
 		t.Fatal("expected context cancelled error")
 	}
@@ -758,35 +722,30 @@ func TestClickByNodeIDWithJSFallback_SkipsFallbackOnCancelledCtx(t *testing.T) {
 }
 
 func TestClickSubmitUsesOneJSTransactionWithoutFallback(t *testing.T) {
-	origJS := jsClickByBackendNodeAction
-	origTrusted := clickByNodeIDAction
-	origFlyout := clickFloatingFlyoutItemAction
-	t.Cleanup(func() {
-		jsClickByBackendNodeAction = origJS
-		clickByNodeIDAction = origTrusted
-		clickFloatingFlyoutItemAction = origFlyout
-	})
+	t.Parallel()
+	ops := defaultPointerOps()
 
 	jsCalls := 0
 	trustedCalls := 0
 	flyoutCalls := 0
-	jsClickByBackendNodeAction = func(_ context.Context, nodeID int64) error {
+	ops.jsClickByBackendNode = func(_ context.Context, nodeID int64) error {
 		jsCalls++
 		if nodeID != 42 {
 			t.Fatalf("nodeID = %d, want 42", nodeID)
 		}
 		return context.DeadlineExceeded
 	}
-	clickByNodeIDAction = func(context.Context, int64) error {
+	ops.clickByNodeID = func(context.Context, int64) error {
 		trustedCalls++
 		return nil
 	}
-	clickFloatingFlyoutItemAction = func(context.Context, int64) (bool, error) {
+	ops.clickFloatingFlyoutItem = func(context.Context, int64) (bool, error) {
 		flyoutCalls++
 		return false, nil
 	}
 
 	b := New(context.Background(), nil, &config.RuntimeConfig{Humanize: true})
+	b.pointerOps = ops
 	_, err := b.actionClick(context.Background(), ActionRequest{
 		Kind:   ActionClick,
 		NodeID: 42,
@@ -859,17 +818,12 @@ func TestTypeAction_HumanizeOptInUsesHumanizedPath(t *testing.T) {
 }
 
 func TestScrollAction_UsesCoordinateWheelPath(t *testing.T) {
+	ops := defaultPointerOps()
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
-
-	origScrollByCoordinate := scrollByCoordinateAction
-	origScrollViewportCenter := scrollViewportCenter
-	t.Cleanup(func() {
-		scrollByCoordinateAction = origScrollByCoordinate
-		scrollViewportCenter = origScrollViewportCenter
-	})
+	b.pointerOps = ops
 
 	called := false
-	scrollByCoordinateAction = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
+	ops.scrollByCoordinate = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
 		called = true
 		if x != 12.5 || y != 34.5 {
 			t.Fatalf("wheel coordinates = (%v, %v), want (12.5, 34.5)", x, y)
@@ -879,7 +833,7 @@ func TestScrollAction_UsesCoordinateWheelPath(t *testing.T) {
 		}
 		return nil
 	}
-	scrollViewportCenter = func(context.Context) (float64, float64, error) {
+	ops.scrollViewportCenter = func(context.Context) (float64, float64, error) {
 		t.Fatal("viewport center should not be used when explicit coordinates are provided")
 		return 0, 0, nil
 	}
@@ -902,21 +856,16 @@ func TestScrollAction_UsesCoordinateWheelPath(t *testing.T) {
 }
 
 func TestScrollAction_UsesViewportCenterWhenCoordinatesMissing(t *testing.T) {
+	ops := defaultPointerOps()
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	b.pointerOps = ops
 
-	origScrollByCoordinate := scrollByCoordinateAction
-	origScrollViewportCenter := scrollViewportCenter
-	t.Cleanup(func() {
-		scrollByCoordinateAction = origScrollByCoordinate
-		scrollViewportCenter = origScrollViewportCenter
-	})
-
-	scrollViewportCenter = func(context.Context) (float64, float64, error) {
+	ops.scrollViewportCenter = func(context.Context) (float64, float64, error) {
 		return 400, 300, nil
 	}
 
 	called := false
-	scrollByCoordinateAction = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
+	ops.scrollByCoordinate = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
 		called = true
 		if x != 400 || y != 300 {
 			t.Fatalf("wheel coordinates = (%v, %v), want (400, 300)", x, y)
@@ -943,19 +892,14 @@ func TestScrollAction_UsesViewportCenterWhenCoordinatesMissing(t *testing.T) {
 }
 
 func TestScrollAction_PropagatesViewportCenterError(t *testing.T) {
+	ops := defaultPointerOps()
 	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	b.pointerOps = ops
 
-	origScrollByCoordinate := scrollByCoordinateAction
-	origScrollViewportCenter := scrollViewportCenter
-	t.Cleanup(func() {
-		scrollByCoordinateAction = origScrollByCoordinate
-		scrollViewportCenter = origScrollViewportCenter
-	})
-
-	scrollViewportCenter = func(context.Context) (float64, float64, error) {
+	ops.scrollViewportCenter = func(context.Context) (float64, float64, error) {
 		return 0, 0, context.Canceled
 	}
-	scrollByCoordinateAction = func(context.Context, float64, float64, int, int, int) error {
+	ops.scrollByCoordinate = func(context.Context, float64, float64, int, int, int) error {
 		t.Fatal("wheel dispatch should not be called when viewport center resolution fails")
 		return nil
 	}
@@ -1251,20 +1195,16 @@ func TestScrollIntoViewAction_WithSelector_UsesCSSPath(t *testing.T) {
 }
 
 func TestHoverAction_HumanizeRoutesEveryTargetForm(t *testing.T) {
-	origElement := hoverElementAction
-	origCoordinate := hoverCoordinateAction
-	t.Cleanup(func() {
-		hoverElementAction = origElement
-		hoverCoordinateAction = origCoordinate
-	})
+	t.Parallel()
+	ops := defaultPointerOps()
 
 	var nodes []cdp.BackendNodeID
 	var points [][2]float64
-	hoverElementAction = func(ctx context.Context, backendNodeID cdp.BackendNodeID) error {
+	ops.hoverElement = func(ctx context.Context, backendNodeID cdp.BackendNodeID) error {
 		nodes = append(nodes, backendNodeID)
 		return nil
 	}
-	hoverCoordinateAction = func(ctx context.Context, x, y float64) error {
+	ops.hoverCoordinate = func(ctx context.Context, x, y float64) error {
 		points = append(points, [2]float64{x, y})
 		return nil
 	}
@@ -1303,6 +1243,7 @@ func TestHoverAction_HumanizeRoutesEveryTargetForm(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			nodes, points = nil, nil
 			b := New(context.TODO(), nil, tc.config)
+			b.pointerOps = ops
 
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
@@ -1333,6 +1274,7 @@ func TestHoverAction_HumanizeRoutesEveryTargetForm(t *testing.T) {
 }
 
 func TestHoverAction_HumanizedStillRequiresATarget(t *testing.T) {
+	t.Parallel()
 	b := New(context.TODO(), nil, &config.RuntimeConfig{Humanize: true})
 
 	_, err := b.Actions[ActionHover](context.Background(), ActionRequest{})

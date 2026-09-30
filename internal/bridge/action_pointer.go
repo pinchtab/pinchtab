@@ -17,22 +17,56 @@ import (
 	"github.com/pinchtab/pinchtab/internal/readiness"
 )
 
-var scrollByCoordinateAction = ScrollByCoordinate
-var mouseMoveByCoordinateAction = MouseMoveByCoordinate
-var mouseDownByCoordinateAction = MouseDownByCoordinate
-var mouseUpByCoordinateAction = MouseUpByCoordinate
-var clickByCoordinateAction = ClickByCoordinate
-var clickElementAction = ClickElement
-var humanClickCoordinateAction = Click
-var hoverElementAction = HoverElement
-var hoverCoordinateAction = Hover
-var clickByNodeIDAction = ClickByNodeID
-var jsClickByBackendNodeAction = JSClickByBackendNode
-var dispatchClickByBackendNodeAction = JSDispatchClickByBackendNode
-var clickFloatingFlyoutItemAction = clickFloatingFlyoutItem
-var doubleClickByNodeIDAction = DoubleClickByNodeID
-var jsDoubleClickByBackendNodeAction = JSDoubleClickByBackendNode
-var waitNavAction = func(ctx context.Context, delay time.Duration) {
+type pointerOps struct {
+	scrollByCoordinate      func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error
+	mouseMoveByCoordinate   func(ctx context.Context, x, y float64) error
+	mouseDownByCoordinate   func(ctx context.Context, x, y float64, button string, modifiers int) error
+	mouseUpByCoordinate     func(ctx context.Context, x, y float64, button string, modifiers int) error
+	clickByCoordinate       func(ctx context.Context, x, y float64, modifiers int) error
+	clickElement            func(ctx context.Context, backendNodeID cdp.BackendNodeID) error
+	humanClickCoordinate    func(ctx context.Context, x, y float64) error
+	hoverElement            func(ctx context.Context, backendNodeID cdp.BackendNodeID) error
+	hoverCoordinate         func(ctx context.Context, x, y float64) error
+	clickByNodeID           func(ctx context.Context, nodeID int64) error
+	jsClickByBackendNode    func(ctx context.Context, nodeID int64) error
+	dispatchClickByBackend  func(ctx context.Context, nodeID int64) error
+	clickFloatingFlyoutItem func(ctx context.Context, nodeID int64) (bool, error)
+	doubleClickByNodeID     func(ctx context.Context, nodeID int64) error
+	jsDoubleClickByBackend  func(ctx context.Context, nodeID int64) error
+	waitNav                 func(ctx context.Context, delay time.Duration)
+	scrollViewportCenter    func(ctx context.Context) (float64, float64, error)
+}
+
+func defaultPointerOps() *pointerOps {
+	return &pointerOps{
+		scrollByCoordinate:      ScrollByCoordinate,
+		mouseMoveByCoordinate:   MouseMoveByCoordinate,
+		mouseDownByCoordinate:   MouseDownByCoordinate,
+		mouseUpByCoordinate:     MouseUpByCoordinate,
+		clickByCoordinate:       ClickByCoordinate,
+		clickElement:            ClickElement,
+		humanClickCoordinate:    Click,
+		hoverElement:            HoverElement,
+		hoverCoordinate:         Hover,
+		clickByNodeID:           ClickByNodeID,
+		jsClickByBackendNode:    JSClickByBackendNode,
+		dispatchClickByBackend:  JSDispatchClickByBackendNode,
+		clickFloatingFlyoutItem: clickFloatingFlyoutItem,
+		doubleClickByNodeID:     DoubleClickByNodeID,
+		jsDoubleClickByBackend:  JSDoubleClickByBackendNode,
+		waitNav:                 sleepForNav,
+		scrollViewportCenter:    viewportCenter,
+	}
+}
+
+func (b *Bridge) pointer() *pointerOps {
+	if b.pointerOps != nil {
+		return b.pointerOps
+	}
+	return defaultPointerOps()
+}
+
+func sleepForNav(ctx context.Context, delay time.Duration) {
 	_ = chromedp.Run(ctx, chromedp.Sleep(delay))
 }
 
@@ -44,8 +78,8 @@ var waitNavAction = func(ctx context.Context, delay time.Duration) {
 // action. 250ms keeps the dialog-hang bound small while surviving contention.
 const trustedNodeClickTimeout = 250 * time.Millisecond
 
-func clickByNodeIDWithJSFallback(ctx context.Context, nodeID int64) error {
-	return withTrustedFallback(ctx, nodeID, clickByNodeIDAction, jsClickByBackendNodeAction)
+func (p *pointerOps) clickByNodeIDWithJSFallback(ctx context.Context, nodeID int64) error {
+	return withTrustedFallback(ctx, nodeID, p.clickByNodeID, p.jsClickByBackendNode)
 }
 
 func withTrustedFallback(ctx context.Context, nodeID int64, trusted, js func(context.Context, int64) error) error {
@@ -70,18 +104,18 @@ func withTrustedFallback(ctx context.Context, nodeID int64, trusted, js func(con
 	return js(jsCtx, nodeID)
 }
 
-func clickByNodeIDWithMode(ctx context.Context, nodeID int64, mode string) error {
+func (p *pointerOps) clickByNodeIDWithMode(ctx context.Context, nodeID int64, mode string) error {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "", "default":
-		handled, err := clickFloatingFlyoutItemAction(ctx, nodeID)
+		handled, err := p.clickFloatingFlyoutItem(ctx, nodeID)
 		if err != nil || handled {
 			return err
 		}
-		return clickByNodeIDWithJSFallback(ctx, nodeID)
+		return p.clickByNodeIDWithJSFallback(ctx, nodeID)
 	case "dom":
-		return jsClickByBackendNodeAction(ctx, nodeID)
+		return p.jsClickByBackendNode(ctx, nodeID)
 	case "dispatch":
-		return dispatchClickByBackendNodeAction(ctx, nodeID)
+		return p.dispatchClickByBackend(ctx, nodeID)
 	default:
 		return fmt.Errorf("invalid click mode: %s", mode)
 	}
@@ -130,8 +164,8 @@ func clickFloatingFlyoutItem(ctx context.Context, nodeID int64) (handled bool, e
 	return handled, err
 }
 
-func doubleClickByNodeIDWithJSFallback(ctx context.Context, nodeID int64) error {
-	return withTrustedFallback(ctx, nodeID, doubleClickByNodeIDAction, jsDoubleClickByBackendNodeAction)
+func (p *pointerOps) doubleClickByNodeIDWithJSFallback(ctx context.Context, nodeID int64) error {
+	return withTrustedFallback(ctx, nodeID, p.doubleClickByNodeID, p.jsDoubleClickByBackend)
 }
 
 // effectiveHumanize resolves whether an action should use the humanized
@@ -165,7 +199,7 @@ type pointerState struct {
 	Known bool
 }
 
-var scrollViewportCenter = func(ctx context.Context) (float64, float64, error) {
+func viewportCenter(ctx context.Context) (float64, float64, error) {
 	l, err := cdptk.Layout(ctx)
 	if err != nil {
 		return 0, 0, err
@@ -244,7 +278,7 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 	defer func() { result = auto.settle(ctx, result, err) }()
 
 	if err := b.runWatchingDialogs(ctx, req, func(clickCtx context.Context) error {
-		return clickTarget(clickCtx, req, auto)
+		return b.pointer().clickTarget(clickCtx, req, auto)
 	}); err != nil {
 		return nil, err
 	}
@@ -252,7 +286,7 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 	return map[string]any{"clicked": true}, nil
 }
 
-func clickTarget(ctx context.Context, req ActionRequest, auto *autoSwitchSession) error {
+func (p *pointerOps) clickTarget(ctx context.Context, req ActionRequest, auto *autoSwitchSession) error {
 	if auto != nil {
 		auto.prepareWindowOpenCapture(ctx)
 	}
@@ -273,19 +307,19 @@ func clickTarget(ctx context.Context, req ActionRequest, auto *autoSwitchSession
 		prepare(nodeID)
 		// One DOM click only. In particular, do not use the trusted-click
 		// timeout fallback: its second dispatch can double-submit a slow SPA.
-		return jsClickByBackendNodeAction(ctx, nodeID)
+		return p.jsClickByBackendNode(ctx, nodeID)
 	case req.Selector != "":
 		nodeID, err := ResolveCSSToNodeID(ctx, req.Selector)
 		if err != nil {
 			return err
 		}
 		prepare(nodeID)
-		return clickByNodeIDWithMode(ctx, nodeID, req.Mode)
+		return p.clickByNodeIDWithMode(ctx, nodeID, req.Mode)
 	case req.NodeID > 0:
 		prepare(req.NodeID)
-		return clickByNodeIDWithMode(ctx, req.NodeID, req.Mode)
+		return p.clickByNodeIDWithMode(ctx, req.NodeID, req.Mode)
 	case req.HasXY:
-		return clickByCoordinateAction(ctx, req.X, req.Y, req.Modifiers)
+		return p.clickByCoordinate(ctx, req.X, req.Y, req.Modifiers)
 	default:
 		return NewInvalidActionRequestError("need selector, ref, nodeId, or x/y coordinates")
 	}
@@ -331,7 +365,7 @@ func (b *Bridge) runWatchingDialogs(ctx context.Context, req ActionRequest, clic
 
 func (b *Bridge) waitNavIfRequested(ctx context.Context, req ActionRequest) {
 	if req.WaitNav {
-		waitNavAction(ctx, b.Config.WaitNavDelay)
+		b.pointer().waitNav(ctx, b.Config.WaitNavDelay)
 	}
 }
 
@@ -365,12 +399,12 @@ func (b *Bridge) actionDoubleClick(ctx context.Context, req ActionRequest) (resu
 		if auto != nil {
 			auto.prepareNode(ctx, nodeID)
 		}
-		err = doubleClickByNodeIDWithJSFallback(ctx, nodeID)
+		err = b.pointer().doubleClickByNodeIDWithJSFallback(ctx, nodeID)
 	} else if req.NodeID > 0 {
 		if auto != nil {
 			auto.prepareNode(ctx, req.NodeID)
 		}
-		err = doubleClickByNodeIDWithJSFallback(ctx, req.NodeID)
+		err = b.pointer().doubleClickByNodeIDWithJSFallback(ctx, req.NodeID)
 	} else if req.HasXY {
 		if auto != nil {
 			auto.prepareWindowOpenCapture(ctx)
@@ -409,9 +443,9 @@ func (b *Bridge) actionHumanizedHover(ctx context.Context, req ActionRequest) (m
 	}
 	switch {
 	case nodeID > 0:
-		err = hoverElementAction(ctx, cdp.BackendNodeID(nodeID))
+		err = b.pointer().hoverElement(ctx, cdp.BackendNodeID(nodeID))
 	case req.HasXY:
-		err = hoverCoordinateAction(ctx, req.X, req.Y)
+		err = b.pointer().hoverCoordinate(ctx, req.X, req.Y)
 	default:
 		return nil, NewInvalidActionRequestError("need selector, ref, nodeId, or x/y coordinates")
 	}
@@ -480,7 +514,7 @@ func (b *Bridge) actionMouseMove(ctx context.Context, req ActionRequest) (map[st
 	if err != nil {
 		return nil, err
 	}
-	if err := mouseMoveByCoordinateAction(ctx, x, y); err != nil {
+	if err := b.pointer().mouseMoveByCoordinate(ctx, x, y); err != nil {
 		return nil, err
 	}
 	b.rememberPointerPosition(req.TabID, x, y)
@@ -496,7 +530,7 @@ func (b *Bridge) actionMouseDown(ctx context.Context, req ActionRequest) (map[st
 	if button == "" {
 		button = "left"
 	}
-	if err := mouseDownByCoordinateAction(ctx, x, y, button, req.Modifiers); err != nil {
+	if err := b.pointer().mouseDownByCoordinate(ctx, x, y, button, req.Modifiers); err != nil {
 		return nil, err
 	}
 	b.rememberPointerPosition(req.TabID, x, y)
@@ -512,7 +546,7 @@ func (b *Bridge) actionMouseUp(ctx context.Context, req ActionRequest) (map[stri
 	if button == "" {
 		button = "left"
 	}
-	if err := mouseUpByCoordinateAction(ctx, x, y, button, req.Modifiers); err != nil {
+	if err := b.pointer().mouseUpByCoordinate(ctx, x, y, button, req.Modifiers); err != nil {
 		return nil, err
 	}
 	b.rememberPointerPosition(req.TabID, x, y)
@@ -531,12 +565,12 @@ func (b *Bridge) actionMouseWheel(ctx context.Context, req ActionRequest) (map[s
 		if req.HasXY || req.NodeID > 0 || req.Selector != "" || req.TabID == "" {
 			return nil, err
 		}
-		x, y, err = scrollViewportCenter(ctx)
+		x, y, err = b.pointer().scrollViewportCenter(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("resolve wheel viewport center: %w", err)
 		}
 	}
-	if err := scrollByCoordinateAction(ctx, x, y, deltaX, deltaY, req.Modifiers); err != nil {
+	if err := b.pointer().scrollByCoordinate(ctx, x, y, deltaX, deltaY, req.Modifiers); err != nil {
 		return nil, err
 	}
 	b.rememberPointerPosition(req.TabID, x, y)
@@ -588,7 +622,7 @@ func (b *Bridge) actionScroll(ctx context.Context, req ActionRequest) (map[strin
 	scrollTargetX := req.X
 	scrollTargetY := req.Y
 	if !req.HasXY {
-		scrollTargetX, scrollTargetY, err = scrollViewportCenter(ctx)
+		scrollTargetX, scrollTargetY, err = b.pointer().scrollViewportCenter(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("resolve scroll viewport center: %w", err)
 		}
@@ -604,7 +638,7 @@ func (b *Bridge) actionScroll(ctx context.Context, req ActionRequest) (map[strin
 			"deltaX":  scrollX,
 			"deltaY":  scrollY,
 		},
-		scrollByCoordinateAction(ctx, scrollTargetX, scrollTargetY, scrollX, scrollY, req.Modifiers)
+		b.pointer().scrollByCoordinate(ctx, scrollTargetX, scrollTargetY, scrollX, scrollY, req.Modifiers)
 }
 
 func (b *Bridge) actionDrag(ctx context.Context, req ActionRequest) (map[string]any, error) {
@@ -689,10 +723,10 @@ func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (r
 		if auto != nil {
 			auto.prepareNode(ctx, nodeID)
 		}
-		click = humanClickNode(cdp.BackendNodeID(nodeID))
+		click = b.pointer().humanClickNode(cdp.BackendNodeID(nodeID))
 	case req.HasXY:
 		x, y := req.X, req.Y
-		click = func(ctx context.Context) error { return humanClickCoordinateAction(ctx, x, y) }
+		click = func(ctx context.Context) error { return b.pointer().humanClickCoordinate(ctx, x, y) }
 	default:
 		return nil, NewInvalidActionRequestError("need selector, ref, nodeId, or x/y coordinates")
 	}
@@ -704,8 +738,8 @@ func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (r
 	return map[string]any{"clicked": true, "human": true}, nil
 }
 
-func humanClickNode(backendNodeID cdp.BackendNodeID) func(context.Context) error {
-	return func(ctx context.Context) error { return clickElementAction(ctx, backendNodeID) }
+func (p *pointerOps) humanClickNode(backendNodeID cdp.BackendNodeID) func(context.Context) error {
+	return func(ctx context.Context) error { return p.clickElement(ctx, backendNodeID) }
 }
 
 func (b *Bridge) actionScrollIntoView(ctx context.Context, req ActionRequest) (map[string]any, error) {
