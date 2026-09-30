@@ -1,12 +1,11 @@
 package bench
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -83,39 +82,12 @@ func (r *OpenAIRunner) Send(systemPrompt string, conversation []interface{}) (in
 		body["prompt_cache_retention"] = "24h"
 	}
 
-	payload, err := json.Marshal(body)
+	result, err := postJSON(context.Background(), r.client, r.retryCfg, r.baseURL, map[string]string{
+		"Authorization": "Bearer " + r.apiKey,
+	}, body)
 	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
+		return nil, fmt.Errorf("OpenAI %w", err)
 	}
-
-	var result map[string]interface{}
-	resp, err := DoWithRetry(context.Background(), r.retryCfg, func() (*http.Response, error) {
-		req, err := http.NewRequest("POST", r.baseURL, bytes.NewReader(payload))
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer "+r.apiKey)
-		return r.client.Do(req)
-	})
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal response: %w", err)
-	}
-
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("OpenAI API error %d: %s", resp.StatusCode, string(respBody))
-	}
-
 	r.updateUsage(result)
 	return result, nil
 }
@@ -212,5 +184,5 @@ func (r *OpenAIRunner) ExtractFinalText(response interface{}) string {
 			}
 		}
 	}
-	return joinStrings(texts, "\n")
+	return strings.Join(texts, "\n")
 }

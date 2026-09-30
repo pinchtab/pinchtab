@@ -167,7 +167,10 @@ type testTransport struct {
 }
 
 func (t *testTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	newReq, _ := http.NewRequest(req.Method, t.targetURL, req.Body)
+	newReq, err := http.NewRequest(req.Method, t.targetURL, req.Body)
+	if err != nil {
+		return nil, err
+	}
 	for k, v := range req.Header {
 		newReq.Header[k] = v
 	}

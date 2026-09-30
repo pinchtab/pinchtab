@@ -3,7 +3,6 @@ package bench
 import (
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -88,17 +87,11 @@ func setupAgentBrowserContainer(benchDir string, stdout, stderr io.Writer) error
 
 func waitForPinchtabHealth(timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
-	client := &http.Client{Timeout: 2 * time.Second}
+	pinchtab := newBenchPinchtabClient(2 * time.Second)
 
 	for time.Now().Before(deadline) {
-		req, _ := http.NewRequest("GET", "http://localhost:9867/health", nil)
-		req.Header.Set("Authorization", "Bearer benchmark-token")
-		resp, err := client.Do(req)
-		if err == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode == 200 {
-				return nil
-			}
+		if pinchtab.health() == nil {
+			return nil
 		}
 		time.Sleep(1 * time.Second)
 	}

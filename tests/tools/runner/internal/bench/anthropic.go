@@ -1,12 +1,10 @@
 package bench
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -100,40 +98,13 @@ func (r *AnthropicRunner) Send(systemPrompt string, conversation []interface{}) 
 		"messages":    conversation,
 	}
 
-	payload, err := json.Marshal(body)
+	result, err := postJSON(context.Background(), r.client, r.retryCfg, AnthropicAPIURL, map[string]string{
+		"X-Api-Key":         r.apiKey,
+		"Anthropic-Version": "2023-06-01",
+	}, body)
 	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
+		return nil, fmt.Errorf("anthropic %w", err)
 	}
-
-	var result map[string]interface{}
-	resp, err := DoWithRetry(context.Background(), r.retryCfg, func() (*http.Response, error) {
-		req, err := http.NewRequest("POST", AnthropicAPIURL, bytes.NewReader(payload))
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-Api-Key", r.apiKey)
-		req.Header.Set("Anthropic-Version", "2023-06-01")
-		return r.client.Do(req)
-	})
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal response: %w", err)
-	}
-
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("anthropic API error %d: %s", resp.StatusCode, string(respBody))
-	}
-
 	r.updateUsage(result)
 	return result, nil
 }
@@ -225,16 +196,5 @@ func (r *AnthropicRunner) ExtractFinalText(response interface{}) string {
 			texts = append(texts, text)
 		}
 	}
-	return joinStrings(texts, "\n")
-}
-
-func joinStrings(strs []string, sep string) string {
-	if len(strs) == 0 {
-		return ""
-	}
-	result := strs[0]
-	for _, s := range strs[1:] {
-		result += sep + s
-	}
-	return result
+	return strings.Join(texts, "\n")
 }

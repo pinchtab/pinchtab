@@ -2,6 +2,7 @@ package bench
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -161,5 +162,5 @@ func (r *FakeRunner) ExtractFinalText(response interface{}) string {
 			texts = append(texts, text)
 		}
 	}
-	return joinStrings(texts, "\n")
+	return strings.Join(texts, "\n")
 }

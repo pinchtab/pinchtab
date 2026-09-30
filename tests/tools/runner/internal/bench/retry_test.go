@@ -76,12 +76,16 @@ func TestRetryExhausted(t *testing.T) {
 	cfg.Sleep = func(d time.Duration) {}
 
 	var callCount int32
-	_, err := DoWithRetry(context.Background(), cfg, func() (*http.Response, error) {
+	resp, err := DoWithRetry(context.Background(), cfg, func() (*http.Response, error) {
 		atomic.AddInt32(&callCount, 1)
 		return http.Get(server.URL)
 	})
-	if err == nil {
-		t.Fatal("expected error")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != 429 {
+		t.Errorf("status = %d; want final 429 handed to caller", resp.StatusCode)
 	}
 	if callCount != 3 {
 		t.Errorf("callCount = %d; want 3", callCount)

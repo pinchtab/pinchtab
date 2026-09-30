@@ -54,26 +54,18 @@ func DoWithRetry(ctx context.Context, cfg RetryConfig, do DoFunc) (*http.Respons
 			continue
 		}
 
-		if resp.StatusCode < 400 {
+		if !isRetryable(resp.StatusCode) || attempt == cfg.MaxAttempts-1 {
 			return resp, nil
 		}
 
-		if !isRetryable(resp.StatusCode) {
-			return resp, nil
-		}
-
-		lastErr = fmt.Errorf("HTTP %d", resp.StatusCode)
 		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
 
-		if attempt < cfg.MaxAttempts-1 {
-			retryDelay := parseRetryAfter(resp.Header.Get("Retry-After"), cfg.Clock())
-			if retryDelay > 0 {
-				delay = min(retryDelay, cfg.MaxDelay)
-			}
-			cfg.Sleep(delay)
-			delay = min(delay*2, cfg.MaxDelay)
+		if retryDelay := parseRetryAfter(resp.Header.Get("Retry-After"), cfg.Clock()); retryDelay > 0 {
+			delay = min(retryDelay, cfg.MaxDelay)
 		}
+		cfg.Sleep(delay)
+		delay = min(delay*2, cfg.MaxDelay)
 	}
 
 	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)

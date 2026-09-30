@@ -356,7 +356,8 @@ func runBrowserBenchTask(args BrowserBenchArgs, provider, model string, task Bro
 	if _, _, err := shell.Run(fmt.Sprintf("mkdir -p %q && ./scripts/pt console --clear >/dev/null 2>&1 || true", artifactsDir), 30*time.Second); err != nil {
 		return row, err
 	}
-	_, _, _ = shell.Run(`curl -sS -X POST -H 'Authorization: Bearer benchmark-token' http://localhost:9867/network/clear >/dev/null 2>&1 || true`, 15*time.Second)
+	pinchtab := newBenchPinchtabClient(30 * time.Second)
+	_ = pinchtab.post("/network/clear")
 	if _, _, err := shell.Run(fmt.Sprintf("./scripts/pt nav %q >/dev/null", task.StartingURL), 45*time.Second); err != nil {
 		return row, fmt.Errorf("pre-nav failed: %w", err)
 	}
@@ -399,10 +400,10 @@ func runBrowserBenchTask(args BrowserBenchArgs, provider, model string, task Bro
 	row.HARPath = harPath
 	row.ConsoleLogPath = consolePath
 
-	_, _, _ = shell.Run(fmt.Sprintf("curl -sS -H 'Authorization: Bearer benchmark-token' http://localhost:9867/stealth/status > %q || true", stealthPath), 15*time.Second)
-	_, _, _ = shell.Run(fmt.Sprintf("curl -sS -H 'Authorization: Bearer benchmark-token' http://localhost:9867/config/autosolver > %q || true", autosolverPath), 15*time.Second)
-	_, _, _ = shell.Run(fmt.Sprintf("curl -sS -H 'Authorization: Bearer benchmark-token' 'http://localhost:9867/screenshot?format=png&raw=true' > %q || true", screenshotPath), 30*time.Second)
-	_, _, _ = shell.Run(fmt.Sprintf("curl -sS -H 'Authorization: Bearer benchmark-token' 'http://localhost:9867/network/export?format=har' > %q || true", harPath), 30*time.Second)
+	_ = pinchtab.saveTo("/stealth/status", stealthPath)
+	_ = pinchtab.saveTo("/config/autosolver", autosolverPath)
+	_ = pinchtab.saveTo("/screenshot?format=png&raw=true", screenshotPath)
+	_ = pinchtab.saveTo("/network/export?format=har", harPath)
 	_, _, _ = shell.Run(fmt.Sprintf("./scripts/pt console > %q 2>/dev/null || true", consolePath), 15*time.Second)
 
 	row.StealthLevel = readJSONField(stealthPath, "level")
