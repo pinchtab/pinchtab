@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/audit"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -89,7 +90,7 @@ func TestAuditPDFWithoutOutputDirReturnsBeforePOST(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := Audit(http.DefaultClient, srv.URL, "", newAuditTestCmd("--format", "pdf"), "https://example.com")
+	err := Audit(apiclient.Conn{Client: http.DefaultClient, Base: srv.URL}, newAuditTestCmd("--format", "pdf"), "https://example.com")
 	if err == nil || !strings.Contains(err.Error(), "--format pdf requires --output-dir") {
 		t.Fatalf("Audit() error = %v, want missing output-dir error", err)
 	}
@@ -133,7 +134,7 @@ func TestAuditCookieRunStopsIsolatedInstanceOnFailure(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := Audit(http.DefaultClient, srv.URL, "", newAuditTestCmd("--cookie", "session=temporary"), "https://example.com")
+	err := Audit(apiclient.Conn{Client: http.DefaultClient, Base: srv.URL}, newAuditTestCmd("--cookie", "session=temporary"), "https://example.com")
 	if err == nil || !strings.Contains(err.Error(), "upstream failed") {
 		t.Fatalf("Audit() error = %v, want upstream failure", err)
 	}
@@ -155,7 +156,7 @@ func TestAuditCookieRunStopsIsolatedInstanceOnFailure(t *testing.T) {
 }
 
 func TestApplyRunAuthRejectsProfileWithCookies(t *testing.T) {
-	_, _, err := applyRunAuth(http.DefaultClient, "http://example.invalid", "", newAuditTestCmd("--profile", "work", "--cookie", "session=temporary"), "https://example.com")
+	_, _, err := applyRunAuth(apiclient.Conn{Client: http.DefaultClient, Base: "http://example.invalid"}, newAuditTestCmd("--profile", "work", "--cookie", "session=temporary"), "https://example.com")
 	if err == nil || !strings.Contains(err.Error(), "--profile cannot be combined") {
 		t.Fatalf("applyRunAuth() error = %v, want profile/cookie conflict", err)
 	}
@@ -170,7 +171,7 @@ func TestResolveProfileBaseUsesOrchestratorProxy(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	base, err := resolveProfileBase(http.DefaultClient, srv.URL, "", "work")
+	base, err := resolveProfileBase(apiclient.Conn{Client: http.DefaultClient, Base: srv.URL}, "work")
 	if err != nil {
 		t.Fatalf("resolveProfileBase() error = %v", err)
 	}
@@ -194,7 +195,7 @@ func TestSetRunCookiesRejectsPartialWrite(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := setRunCookies(http.DefaultClient, srv.URL, "", "https://example.com", []audit.Cookie{{Name: "session", Value: "temporary"}})
+	err := setRunCookies(apiclient.Conn{Client: http.DefaultClient, Base: srv.URL}, "https://example.com", []audit.Cookie{{Name: "session", Value: "temporary"}})
 	if err == nil || !strings.Contains(err.Error(), "cookie injection incomplete") {
 		t.Fatalf("setRunCookies() error = %v, want incomplete cookie injection", err)
 	}
@@ -229,7 +230,7 @@ func TestCompareInjectsShorthandCookiesForBothSites(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := Compare(http.DefaultClient, srv.URL, "", newCompareTestCmd("--cookie", "session=temporary"), "https://live.example", "https://staging.example")
+	err := Compare(apiclient.Conn{Client: http.DefaultClient, Base: srv.URL}, newCompareTestCmd("--cookie", "session=temporary"), "https://live.example", "https://staging.example")
 	if err != nil {
 		t.Fatalf("Compare() error = %v", err)
 	}
@@ -271,7 +272,7 @@ func TestAuditSeaportalReportInjectsCookiesWithoutPositionalURL(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := Audit(http.DefaultClient, srv.URL, "", newAuditTestCmd("--seaportal-report", reportPath, "--cookie", "session=temporary"), "")
+	err := Audit(apiclient.Conn{Client: http.DefaultClient, Base: srv.URL}, newAuditTestCmd("--seaportal-report", reportPath, "--cookie", "session=temporary"), "")
 	if err != nil {
 		t.Fatalf("Audit() error = %v", err)
 	}

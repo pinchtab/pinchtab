@@ -3,7 +3,6 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -14,7 +13,7 @@ import (
 // printing the full JSON envelope with --json or a short summary otherwise. The
 // summary shape follows the engine: axe reports rule ids with impact and refs,
 // native reports its scored findings.
-func A11yAudit(client *http.Client, base, token string, cmd *cobra.Command) {
+func A11yAudit(conn apiclient.Conn, cmd *cobra.Command) {
 	params := url.Values{}
 	if v, _ := cmd.Flags().GetString("tab"); v != "" {
 		params.Set("tabId", v)
@@ -45,10 +44,10 @@ func A11yAudit(client *http.Client, base, token string, cmd *cobra.Command) {
 	// token the audit minted instead of a stale one the server would refuse 409.
 	capture := apiclient.CaptureVocab(namedNoTab(cmd))
 	if jsonOutput, _ := cmd.Flags().GetBool("json"); jsonOutput {
-		apiclient.DoGet(client, base, token, "/a11y/audit", params, capture)
+		conn.Get("/a11y/audit", params, capture)
 		return
 	}
-	printA11ySummary(apiclient.DoGetRaw(client, base, token, "/a11y/audit", params, capture))
+	printA11ySummary(apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/a11y/audit", params, capture))
 }
 
 // printA11ySummary renders a compact human summary for either engine, falling

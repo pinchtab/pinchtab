@@ -2,7 +2,6 @@ package actions
 
 import (
 	"fmt"
-	"net/http"
 	"strconv"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -10,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func Wait(client *http.Client, base, token string, args []string, cmd *cobra.Command) {
+func Wait(conn apiclient.Conn, args []string, cmd *cobra.Command) {
 	body := map[string]any{}
 
 	textFlag, _ := cmd.Flags().GetString("text")
@@ -61,7 +60,7 @@ func Wait(client *http.Client, base, token string, args []string, cmd *cobra.Com
 
 	path := apiclient.TabPath(tabID, "wait")
 
-	result := apiclient.DoPostQuiet(client, base, token, path, body)
+	result := apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, path, body)
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {

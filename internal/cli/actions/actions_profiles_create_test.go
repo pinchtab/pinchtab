@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +29,7 @@ func TestProfilesCreatePostsTheNameAndPrintsTheCreatedIdentity(t *testing.T) {
 	defer srv.Close()
 
 	out := captureStdout(t, func() {
-		ProfilesCreate(srv.Client(), srv.URL, "", "work")
+		ProfilesCreate(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, "work")
 	})
 
 	if sent.Name != "work" {
@@ -52,7 +53,7 @@ func TestInstanceStartMissingProfilePrintsTheCreateRemedy(t *testing.T) {
 		cmd.Flags().String("browser", "", "")
 		cmd.Flags().StringArray("browser-fallback", nil, "")
 		_ = cmd.Flags().Set("profile", "missing")
-		InstanceStart(http.DefaultClient, os.Getenv("PINCHTAB_TEST_SERVER"), "", cmd)
+		InstanceStart(apiclient.Conn{Client: http.DefaultClient, Base: os.Getenv("PINCHTAB_TEST_SERVER")}, cmd)
 		return
 	}
 

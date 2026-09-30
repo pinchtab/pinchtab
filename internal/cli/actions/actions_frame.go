@@ -3,14 +3,13 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
-func Frame(client *http.Client, base, token string, args []string, cmd *cobra.Command) {
+func Frame(conn apiclient.Conn, args []string, cmd *cobra.Command) {
 	tabID, _ := cmd.Flags().GetString("tab")
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 
@@ -20,11 +19,11 @@ func Frame(client *http.Client, base, token string, args []string, cmd *cobra.Co
 			params.Set("tabId", tabID)
 		}
 		if jsonOutput {
-			apiclient.DoGet(client, base, token, "/frame", params)
+			conn.Get("/frame", params)
 			return
 		}
 
-		body := apiclient.DoGetRaw(client, base, token, "/frame", params)
+		body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/frame", params)
 		var resp struct {
 			Current any  `json:"current"`
 			Scoped  bool `json:"scoped"`
@@ -56,11 +55,11 @@ func Frame(client *http.Client, base, token string, args []string, cmd *cobra.Co
 		body["tabId"] = tabID
 	}
 	if jsonOutput {
-		apiclient.DoPost(client, base, token, "/frame", body)
+		conn.Post("/frame", body)
 		return
 	}
 
-	result := apiclient.DoPostQuiet(client, base, token, "/frame", body)
+	result := apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, "/frame", body)
 	if scoped, ok := result["scoped"].(bool); ok && !scoped {
 		fmt.Println("main")
 		return

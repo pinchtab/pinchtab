@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"sort"
 	"strconv"
@@ -19,7 +18,7 @@ import (
 
 const schemaFromStdin = "-"
 
-func Extract(client *http.Client, base, token string, cmd *cobra.Command) {
+func Extract(conn apiclient.Conn, cmd *cobra.Command) {
 	tabID, _ := cmd.Flags().GetString("tab")
 	schemaPath, _ := cmd.Flags().GetString("schema")
 	scope, _ := cmd.Flags().GetString("scope")
@@ -44,10 +43,10 @@ func Extract(client *http.Client, base, token string, cmd *cobra.Command) {
 	capture := apiclient.CaptureVocab(tabID == "")
 
 	if jsonOutput {
-		apiclient.DoPost(client, base, token, path, body, capture)
+		conn.Post(path, body, capture)
 		return
 	}
-	result := apiclient.DoPostQuiet(client, base, token, path, body, capture)
+	result := apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, path, body, capture)
 	output.JSON(result["data"])
 	if withFields || explain {
 		fields, _ := result["fields"].(map[string]any)

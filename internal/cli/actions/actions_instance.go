@@ -2,13 +2,13 @@ package actions
 
 import (
 	"fmt"
+
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
-	"net/http"
 )
 
-func InstanceStart(client *http.Client, base, token string, cmd *cobra.Command) {
+func InstanceStart(conn apiclient.Conn, cmd *cobra.Command) {
 	body := map[string]any{}
 	if v, _ := cmd.Flags().GetString("profile"); v != "" {
 		body["profileId"] = v
@@ -33,10 +33,10 @@ func InstanceStart(client *http.Client, base, token string, cmd *cobra.Command) 
 	if fallbacks, _ := cmd.Flags().GetStringArray("browser-fallback"); len(fallbacks) > 0 {
 		body["fallbackTargets"] = fallbacks
 	}
-	apiclient.DoPost(client, base, token, "/instances/start", body)
+	conn.Post("/instances/start", body)
 }
 
-func InstanceNavigate(client *http.Client, base, token string, args []string) {
+func InstanceNavigate(conn apiclient.Conn, args []string) {
 	if len(args) < 2 {
 		cli.Fatal("Usage: pinchtab instance navigate <instance-id> <url>")
 	}
@@ -44,23 +44,23 @@ func InstanceNavigate(client *http.Client, base, token string, args []string) {
 	instID := args[0]
 	targetURL := args[1]
 
-	apiclient.DoPost(client, base, token, fmt.Sprintf("/instances/%s/tabs/open", instID), map[string]any{
+	conn.Post(fmt.Sprintf("/instances/%s/tabs/open", instID), map[string]any{
 		"url": targetURL,
 	})
 }
 
-func InstanceLogs(client *http.Client, base, token string, args []string) {
+func InstanceLogs(conn apiclient.Conn, args []string) {
 	instID := args[0]
-	logs := apiclient.DoGetRaw(client, base, token, fmt.Sprintf("/instances/%s/logs", instID), nil)
+	logs := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, fmt.Sprintf("/instances/%s/logs", instID), nil)
 	fmt.Println(string(logs))
 }
 
-func InstanceStop(client *http.Client, base, token string, args []string) {
+func InstanceStop(conn apiclient.Conn, args []string) {
 	instID := args[0]
-	apiclient.DoPost(client, base, token, fmt.Sprintf("/instances/%s/stop", instID), nil)
+	conn.Post(fmt.Sprintf("/instances/%s/stop", instID), nil)
 }
 
-func InstanceRestart(client *http.Client, base, token string, args []string) {
+func InstanceRestart(conn apiclient.Conn, args []string) {
 	instID := args[0]
-	apiclient.DoPost(client, base, token, fmt.Sprintf("/instances/%s/restart", instID), nil)
+	conn.Post(fmt.Sprintf("/instances/%s/restart", instID), nil)
 }

@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -46,7 +47,7 @@ func TestARunWhoseAutoNameIsTakenSuffixesAndPrintsTheNameItUsed(t *testing.T) {
 				defer m.close()
 				m.response = `{"status":"ok","image":{"format":"jpeg","base64":"aW1n"}}`
 				cmd := captureCmd()
-				return captureStdout(t, func() { Capture(m.server.Client(), m.base(), "", cmd) })
+				return captureStdout(t, func() { Capture(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd) })
 			},
 		},
 		{
@@ -58,7 +59,7 @@ func TestARunWhoseAutoNameIsTakenSuffixesAndPrintsTheNameItUsed(t *testing.T) {
 				defer m.close()
 				m.response = "%PDF-1.4 fake"
 				cmd := pdfCmd()
-				return captureStdout(t, func() { PDF(m.server.Client(), m.base(), "", cmd) })
+				return captureStdout(t, func() { PDF(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd) })
 			},
 		},
 		{
@@ -70,7 +71,7 @@ func TestARunWhoseAutoNameIsTakenSuffixesAndPrintsTheNameItUsed(t *testing.T) {
 				defer m.close()
 				m.response = "rawimagebytes"
 				cmd := screenshotCmd()
-				return captureStdout(t, func() { Screenshot(m.server.Client(), m.base(), "", cmd) })
+				return captureStdout(t, func() { Screenshot(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd) })
 			},
 		},
 		{
@@ -83,7 +84,7 @@ func TestARunWhoseAutoNameIsTakenSuffixesAndPrintsTheNameItUsed(t *testing.T) {
 				m.response = `{"format":"jpeg","base64":"aW1n","annotations":[]}`
 				cmd := screenshotCmd()
 				_ = cmd.Flags().Set("annotate", "true")
-				return captureStdout(t, func() { Screenshot(m.server.Client(), m.base(), "", cmd) })
+				return captureStdout(t, func() { Screenshot(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd) })
 			},
 		},
 	} {
@@ -153,7 +154,7 @@ func TestAnExplicitOutputPathStillOverwrites(t *testing.T) {
 	cmd := captureCmd()
 	_ = cmd.Flags().Set("output", target)
 
-	captureStdout(t, func() { Capture(m.server.Client(), m.base(), "", cmd) })
+	captureStdout(t, func() { Capture(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd) })
 
 	got, err := os.ReadFile(target) // #nosec G304 -- path built by this test.
 	if err != nil {
@@ -318,7 +319,7 @@ func TestTwoRecordStopsInOneSecondKeepBothRecordings(t *testing.T) {
 		defer m.close()
 		m.setResponse("POST", "/record/stop", 200, recordStopBody(t, serverPath))
 		m.setResponse("GET", "/record/status", 200, `{"state":"finished"}`)
-		return captureStdout(t, func() { RecordStop(m.server.Client(), m.base(), "") })
+		return captureStdout(t, func() { RecordStop(apiclient.Conn{Client: m.server.Client(), Base: m.base()}) })
 	}
 
 	firstOut := stop("srv-a.gif")
@@ -387,7 +388,7 @@ func runFailedRenameChild(dir string) {
 	}))
 	defer srv.Close()
 
-	RecordStop(srv.Client(), srv.URL, "")
+	RecordStop(apiclient.Conn{Client: srv.Client(), Base: srv.URL})
 }
 
 func assertNonEmpty(t *testing.T, path string) {
@@ -464,7 +465,7 @@ func TestARunWhoseAutoNameIsFreeUsesItUnsuffixed(t *testing.T) {
 	m := newMockServer()
 	defer m.close()
 	m.response = `{"status":"ok","image":{"format":"jpeg","base64":"aW1n"}}`
-	out := captureStdout(t, func() { Capture(m.server.Client(), m.base(), "", captureCmd()) })
+	out := captureStdout(t, func() { Capture(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, captureCmd()) })
 
 	name := printedName(t, out, "capture-", ".jpg")
 	if _, suffixed := splitCollisionSuffix(t, name, ".jpg"); suffixed {

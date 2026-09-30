@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +19,7 @@ func TestTabHandoff(t *testing.T) {
 	defer m.close()
 	client := m.server.Client()
 
-	TabHandoff(client, m.base(), "", "tab_123", "captcha_manual", 60000, newHandoffCmd())
+	TabHandoff(apiclient.Conn{Client: client, Base: m.base()}, "tab_123", "captcha_manual", 60000, newHandoffCmd())
 
 	if m.lastMethod != "POST" {
 		t.Fatalf("expected POST, got %s", m.lastMethod)
@@ -44,7 +45,7 @@ func TestTabResume(t *testing.T) {
 	defer m.close()
 	client := m.server.Client()
 
-	TabResume(client, m.base(), "", "tab_123", "completed", newHandoffCmd())
+	TabResume(apiclient.Conn{Client: client, Base: m.base()}, "tab_123", "completed", newHandoffCmd())
 
 	if m.lastMethod != "POST" {
 		t.Fatalf("expected POST, got %s", m.lastMethod)
@@ -68,7 +69,7 @@ func TestTabHandoffStatus(t *testing.T) {
 	defer m.close()
 	client := m.server.Client()
 
-	TabHandoffStatus(client, m.base(), "", "tab_123", newHandoffCmd())
+	TabHandoffStatus(apiclient.Conn{Client: client, Base: m.base()}, "tab_123", newHandoffCmd())
 
 	if m.lastMethod != "GET" {
 		t.Fatalf("expected GET, got %s", m.lastMethod)
@@ -82,7 +83,7 @@ func TestTabHandoffEscapesTheTabID(t *testing.T) {
 	m := newMockServer()
 	defer m.close()
 
-	TabHandoff(m.server.Client(), m.base(), "", "a/b", "", 0, newHandoffCmd())
+	TabHandoff(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "a/b", "", 0, newHandoffCmd())
 
 	if m.lastRawPath != "/tabs/a%2Fb/handoff" {
 		t.Fatalf("expected /tabs/a%%2Fb/handoff, got %s", m.lastRawPath)

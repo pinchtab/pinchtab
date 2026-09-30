@@ -18,7 +18,7 @@ var setViewportCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.SetViewport(rt.Client, rt.Base, rt.Token, cmd, args)
+			browseractions.SetViewport(rt, cmd, args)
 		})
 	},
 }
@@ -36,7 +36,7 @@ south of the equator are written the same way as anywhere else:
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.SetGeolocation(rt.Client, rt.Base, rt.Token, cmd, args)
+			browseractions.SetGeolocation(rt, cmd, args)
 		})
 	},
 }
@@ -48,7 +48,7 @@ var setOfflineCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.SetOffline(rt.Client, rt.Base, rt.Token, cmd, args)
+			browseractions.SetOffline(rt, cmd, args)
 		})
 	},
 }
@@ -60,7 +60,7 @@ var setHeadersCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.SetHeaders(rt.Client, rt.Base, rt.Token, cmd, args)
+			browseractions.SetHeaders(rt, cmd, args)
 		})
 	},
 }
@@ -72,7 +72,7 @@ var setCredentialsCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.SetCredentials(rt.Client, rt.Base, rt.Token, cmd, args)
+			browseractions.SetCredentials(rt, cmd, args)
 		})
 	},
 }
@@ -84,7 +84,7 @@ var setMediaCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.SetMedia(rt.Client, rt.Base, rt.Token, cmd, args)
+			browseractions.SetMedia(rt, cmd, args)
 		})
 	},
 }

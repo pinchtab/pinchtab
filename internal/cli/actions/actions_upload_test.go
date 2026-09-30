@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 )
 
 func TestUploadDefaultPath(t *testing.T) {
@@ -19,7 +21,7 @@ func TestUploadDefaultPath(t *testing.T) {
 	}
 
 	captureStdout(t, func() {
-		Upload(m.server.Client(), m.base(), "", []string{f}, "#file", "")
+		Upload(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, []string{f}, "#file", "")
 	})
 
 	if m.lastPath != "/upload" {
@@ -37,7 +39,7 @@ func TestUploadTabScopedPath(t *testing.T) {
 	}
 
 	captureStdout(t, func() {
-		Upload(m.server.Client(), m.base(), "", []string{f}, "#file", "tab1")
+		Upload(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, []string{f}, "#file", "tab1")
 	})
 
 	if m.lastPath != "/tabs/tab1/upload" {
@@ -62,7 +64,7 @@ func TestUploadSendsTheBasenameOfEachFile(t *testing.T) {
 	}
 
 	captureStdout(t, func() {
-		Upload(m.server.Client(), m.base(), "", []string{first, second}, "#file", "")
+		Upload(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, []string{first, second}, "#file", "")
 	})
 
 	var body struct {
@@ -100,7 +102,7 @@ func TestUploadSendsNoDirectoryComponent(t *testing.T) {
 	}
 
 	captureStdout(t, func() {
-		Upload(m.server.Client(), m.base(), "", []string{f}, "#file", "")
+		Upload(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, []string{f}, "#file", "")
 	})
 
 	var body struct {

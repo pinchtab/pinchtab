@@ -3,6 +3,7 @@ package actions
 import (
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -19,7 +20,7 @@ func TestHealth(t *testing.T) {
 	client := m.server.Client()
 
 	cmd := newHealthCmd()
-	Health(client, m.base(), "", cmd)
+	Health(apiclient.Conn{Client: client, Base: m.base()}, cmd)
 	if m.lastPath != "/health" {
 		t.Errorf("expected /health, got %s", m.lastPath)
 	}
@@ -31,7 +32,7 @@ func TestAuthHeader(t *testing.T) {
 	client := m.server.Client()
 
 	cmd := newHealthCmd()
-	Health(client, m.base(), "my-secret-token", cmd)
+	Health(apiclient.Conn{Client: client, Base: m.base(), Token: "my-secret-token"}, cmd)
 	auth := m.lastHeaders.Get("Authorization")
 	if auth != "Bearer my-secret-token" {
 		t.Errorf("expected 'Bearer my-secret-token', got %q", auth)
@@ -44,7 +45,7 @@ func TestNoAuthHeader(t *testing.T) {
 	client := m.server.Client()
 
 	cmd := newHealthCmd()
-	Health(client, m.base(), "", cmd)
+	Health(apiclient.Conn{Client: client, Base: m.base()}, cmd)
 	auth := m.lastHeaders.Get("Authorization")
 	if auth != "" {
 		t.Errorf("expected no auth header, got %q", auth)

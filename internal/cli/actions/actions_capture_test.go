@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +27,7 @@ func TestCaptureThreadsExplicitTabIntoPairedRequest(t *testing.T) {
 	_ = cmd.Flags().Set("tab", "tab-target")
 
 	out := captureStdout(t, func() {
-		Capture(m.server.Client(), m.base(), "", cmd)
+		Capture(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd)
 	})
 	if m.lastPath != "/capture" || !strings.Contains(m.lastQuery, "tabId=tab-target") {
 		t.Fatalf("paired capture request = %s?%s, want /capture?tabId=tab-target", m.lastPath, m.lastQuery)
@@ -89,7 +90,7 @@ func TestCaptureInfersFormatFromOutputExtension(t *testing.T) {
 				_ = cmd.Flags().Set("format", tc.setFormat)
 			}
 			_ = captureStdout(t, func() {
-				Capture(srv.Client(), srv.URL, "", cmd)
+				Capture(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, cmd)
 			})
 			got, err := os.ReadFile(out)
 			if err != nil {
@@ -107,7 +108,7 @@ func TestCaptureInfersFormatFromOutputExtension(t *testing.T) {
 		t.Chdir(dir)
 		cmd := newCaptureCmd()
 		_ = captureStdout(t, func() {
-			Capture(srv.Client(), srv.URL, "", cmd)
+			Capture(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, cmd)
 		})
 		matches, _ := filepath.Glob(filepath.Join(dir, "capture-*.jpg"))
 		if len(matches) != 1 {

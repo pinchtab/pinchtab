@@ -1,7 +1,6 @@
 package actions
 
 import (
-	"net/http"
 	"net/url"
 	"strconv"
 
@@ -10,13 +9,13 @@ import (
 )
 
 // Activity lists recorded activity events.
-func Activity(client *http.Client, base, token string, cmd *cobra.Command) {
-	apiclient.DoGet(client, base, token, "/api/activity", activityParams(cmd, ""))
+func Activity(conn apiclient.Conn, cmd *cobra.Command) {
+	conn.Get("/api/activity", activityParams(cmd, ""))
 }
 
 // ActivityTab lists recorded activity events for a specific tab.
-func ActivityTab(client *http.Client, base, token, tabID string, cmd *cobra.Command) {
-	apiclient.DoGet(client, base, token, "/api/activity", activityParams(cmd, tabID))
+func ActivityTab(conn apiclient.Conn, tabID string, cmd *cobra.Command) {
+	conn.Get("/api/activity", activityParams(cmd, tabID))
 }
 
 func activityParams(cmd *cobra.Command, tabID string) url.Values {

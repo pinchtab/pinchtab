@@ -2,10 +2,10 @@ package actions
 
 import (
 	"encoding/json"
-	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -22,7 +22,7 @@ func newEmulationCmd() *cobra.Command {
 func TestEmulationSetters(t *testing.T) {
 	setters := []struct {
 		name     string
-		setter   func(*http.Client, string, string, *cobra.Command, []string)
+		setter   func(apiclient.Conn, *cobra.Command, []string)
 		args     []string
 		endpoint string
 		wantBody map[string]any
@@ -56,7 +56,7 @@ func TestEmulationSetters(t *testing.T) {
 					_ = cmd.Flags().Set("json", "true")
 				}
 
-				out := captureStdout(t, func() { s.setter(m.server.Client(), m.base(), "", cmd, s.args) })
+				out := captureStdout(t, func() { s.setter(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd, s.args) })
 
 				if want := mode.wantPath + s.endpoint; m.lastPath != want {
 					t.Errorf("path = %s, want %s", m.lastPath, want)

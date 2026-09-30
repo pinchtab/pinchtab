@@ -3,7 +3,6 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 
@@ -13,14 +12,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func Health(client *http.Client, base, token string, cmd *cobra.Command) {
+func Health(conn apiclient.Conn, cmd *cobra.Command) {
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoGet(client, base, token, "/health", nil)
+		conn.Get("/health", nil)
 		return
 	}
 
-	body := apiclient.DoGetRaw(client, base, token, "/health", nil)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/health", nil)
 	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		output.Value("ok")
@@ -55,14 +54,14 @@ func printHealthHints(ok bool) {
 	}, 44, false)
 }
 
-func Instances(client *http.Client, base, token string, cmd *cobra.Command) {
+func Instances(conn apiclient.Conn, cmd *cobra.Command) {
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoGet(client, base, token, "/instances", nil)
+		conn.Get("/instances", nil)
 		return
 	}
 
-	body := apiclient.DoGetRaw(client, base, token, "/instances", nil)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/instances", nil)
 
 	instances, err := decodeInstancesResponse(body)
 	if err != nil {
@@ -90,14 +89,14 @@ func Instances(client *http.Client, base, token string, cmd *cobra.Command) {
 	}
 }
 
-func Profiles(client *http.Client, base, token string, cmd *cobra.Command) {
+func Profiles(conn apiclient.Conn, cmd *cobra.Command) {
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoGet(client, base, token, "/profiles", nil)
+		conn.Get("/profiles", nil)
 		return
 	}
 
-	body := apiclient.DoGetRaw(client, base, token, "/profiles", nil)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/profiles", nil)
 
 	profiles, err := decodeProfilesResponse(body)
 	if err != nil {
@@ -107,8 +106,8 @@ func Profiles(client *http.Client, base, token string, cmd *cobra.Command) {
 	fmt.Print(formatProfileList(profiles))
 }
 
-func ProfilesCreate(client *http.Client, base, token, name string) {
-	raw := apiclient.DoPostRaw(client, base, token, "/profiles", map[string]any{"name": name})
+func ProfilesCreate(conn apiclient.Conn, name string) {
+	raw := apiclient.DoPostRaw(conn.Client, conn.Base, conn.Token, "/profiles", map[string]any{"name": name})
 	var created struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
@@ -122,7 +121,7 @@ func ProfilesCreate(client *http.Client, base, token, name string) {
 
 // ProfilesPrune reclaims quarantine backlog. Without --confirm it reports what would go
 // and frees nothing, so the bare invocation is safe for an agent to run.
-func ProfilesPrune(client *http.Client, base, token string, cmd *cobra.Command) {
+func ProfilesPrune(conn apiclient.Conn, cmd *cobra.Command) {
 	confirm, _ := cmd.Flags().GetBool("confirm")
 	profile, _ := cmd.Flags().GetString("profile")
 	body := map[string]any{"confirm": confirm}
@@ -131,11 +130,11 @@ func ProfilesPrune(client *http.Client, base, token string, cmd *cobra.Command) 
 	}
 
 	if jsonOutput, _ := cmd.Flags().GetBool("json"); jsonOutput {
-		apiclient.DoPost(client, base, token, "/profiles/prune", body)
+		conn.Post("/profiles/prune", body)
 		return
 	}
 
-	raw := apiclient.DoPostRaw(client, base, token, "/profiles/prune", body)
+	raw := apiclient.DoPostRaw(conn.Client, conn.Base, conn.Token, "/profiles/prune", body)
 	var resp struct {
 		Removed    bool  `json:"removed"`
 		Count      int   `json:"count"`

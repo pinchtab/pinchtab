@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"strconv"
@@ -41,7 +40,7 @@ type memorySummary struct {
 	heapsnap.Summary
 }
 
-func Memory(client *http.Client, base, token string, cmd *cobra.Command) {
+func Memory(conn apiclient.Conn, cmd *cobra.Command) {
 	params := url.Values{}
 	if v, _ := cmd.Flags().GetString("tab"); v != "" {
 		params.Set("tabId", v)
@@ -50,10 +49,10 @@ func Memory(client *http.Client, base, token string, cmd *cobra.Command) {
 		params.Set("gc", "true")
 	}
 	if jsonOutput, _ := cmd.Flags().GetBool("json"); jsonOutput {
-		apiclient.DoGet(client, base, token, "/memory", params)
+		conn.Get("/memory", params)
 		return
 	}
-	body := apiclient.DoGetRaw(client, base, token, "/memory", params)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/memory", params)
 	var usage memoryUsage
 	if err := json.Unmarshal(body, &usage); err != nil {
 		fmt.Println(string(body))
@@ -72,12 +71,12 @@ func formatMemoryUsage(u memoryUsage) string {
 		u.Documents, u.Nodes, u.Listeners, u.Frames)
 }
 
-func MemorySnapshot(client *http.Client, base, token string, cmd *cobra.Command) {
+func MemorySnapshot(conn apiclient.Conn, cmd *cobra.Command) {
 	body := map[string]any{}
 	if v, _ := cmd.Flags().GetString("tab"); v != "" {
 		body["tabId"] = v
 	}
-	raw := apiclient.DoPostRaw(client, base, token, "/memory/snapshot", body)
+	raw := apiclient.DoPostRaw(conn.Client, conn.Base, conn.Token, "/memory/snapshot", body)
 	var snap memorySnapshot
 	if err := json.Unmarshal(raw, &snap); err != nil {
 		cli.Fatal("Decode heap snapshot response: %v", err)
@@ -115,17 +114,17 @@ func copyLocalFile(src, dst string) error {
 	return out.Close()
 }
 
-func MemorySummary(client *http.Client, base, token string, cmd *cobra.Command, id string) {
+func MemorySummary(conn apiclient.Conn, cmd *cobra.Command, id string) {
 	params := url.Values{}
 	if top, _ := cmd.Flags().GetInt("top"); top > 0 {
 		params.Set("top", strconv.Itoa(top))
 	}
 	path := "/memory/snapshot/" + url.PathEscape(id) + "/summary"
 	if jsonOutput, _ := cmd.Flags().GetBool("json"); jsonOutput {
-		apiclient.DoGet(client, base, token, path, params)
+		conn.Get(path, params)
 		return
 	}
-	body := apiclient.DoGetRaw(client, base, token, path, params)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, path, params)
 	var summary memorySummary
 	if err := json.Unmarshal(body, &summary); err != nil {
 		fmt.Println(string(body))
@@ -163,7 +162,7 @@ type memoryComparison struct {
 	heapsnap.Comparison
 }
 
-func MemoryCompare(client *http.Client, base, token string, cmd *cobra.Command, baseID, headID string) {
+func MemoryCompare(conn apiclient.Conn, cmd *cobra.Command, baseID, headID string) {
 	params := url.Values{}
 	params.Set("base", baseID)
 	params.Set("head", headID)
@@ -174,10 +173,10 @@ func MemoryCompare(client *http.Client, base, token string, cmd *cobra.Command, 
 		params.Set("retained", "true")
 	}
 	if jsonOutput, _ := cmd.Flags().GetBool("json"); jsonOutput {
-		apiclient.DoGet(client, base, token, "/memory/compare", params)
+		conn.Get("/memory/compare", params)
 		return
 	}
-	body := apiclient.DoGetRaw(client, base, token, "/memory/compare", params)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/memory/compare", params)
 	var cmp memoryComparison
 	if err := json.Unmarshal(body, &cmp); err != nil {
 		fmt.Println(string(body))

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -109,11 +110,11 @@ func TestConsoleAndErrors_JSONPrintsBodyOnce(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	run := map[string]func(*http.Client, string, string, *cobra.Command){"/console": Console, "/errors": Errors}
+	run := map[string]func(apiclient.Conn, *cobra.Command){"/console": Console, "/errors": Errors}
 	for path, action := range run {
 		hits = nil
 		output := captureStdout(t, func() {
-			action(srv.Client(), srv.URL, "", logCommand(t, "--json", "--tab", "tab1", "--limit", "5"))
+			action(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, logCommand(t, "--json", "--tab", "tab1", "--limit", "5"))
 		})
 		var got, want map[string]any
 		if err := json.Unmarshal([]byte(output), &got); err != nil {
@@ -129,7 +130,7 @@ func TestConsoleAndErrors_JSONPrintsBodyOnce(t *testing.T) {
 	}
 
 	terse := captureStdout(t, func() {
-		Errors(srv.Client(), srv.URL, "", logCommand(t))
+		Errors(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, logCommand(t))
 	})
 	if strings.Contains(terse, "{") || !strings.Contains(terse, "12:00:00 [ERROR] boom") {
 		t.Errorf("terse errors output changed: %q", terse)

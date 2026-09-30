@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +24,7 @@ func TestNetworkRulesListsEveryRuleWithItsAction(t *testing.T) {
 	m.responses["GET /tabs/t1/network/route"] = mockResponse{statusCode: 200, body: routeRulesPayload}
 
 	out := captureStdout(t, func() {
-		NetworkRules(m.server.Client(), m.base(), "", networkRulesCommand("t1"))
+		NetworkRules(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, networkRulesCommand("t1"))
 	})
 	if m.lastMethod != "GET" || m.lastPath != "/tabs/t1/network/route" {
 		t.Fatalf("listed via %s %s, want GET /tabs/t1/network/route", m.lastMethod, m.lastPath)
@@ -41,7 +42,7 @@ func TestNetworkRulesOnATabWithNoRulesAnswersNone(t *testing.T) {
 	m.responses["GET /tabs/t1/network/route"] = mockResponse{statusCode: 200, body: `{"tabId":"t1","rules":[]}`}
 
 	out := captureStdout(t, func() {
-		NetworkRules(m.server.Client(), m.base(), "", networkRulesCommand("t1"))
+		NetworkRules(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, networkRulesCommand("t1"))
 	})
 	if !strings.Contains(out, "no interception rules") {
 		t.Fatalf("an empty listing must say none, got %q", out)

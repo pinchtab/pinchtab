@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +16,7 @@ func TestTabCloseUsesCloseEndpoint(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.Flags().Bool("json", false, "")
 
-	TabClose(http.DefaultClient, m.base(), "", "tab_123", cmd)
+	TabClose(apiclient.Conn{Client: http.DefaultClient, Base: m.base()}, "tab_123", cmd)
 
 	if m.lastPath != "/close" {
 		t.Fatalf("expected /close, got %s", m.lastPath)
@@ -36,7 +37,7 @@ func TestTabFocusUsesResolvedTabID(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.Flags().Bool("json", false, "")
 
-	got := TabFocus(http.DefaultClient, m.base(), "", "tab_123", cmd)
+	got := TabFocus(apiclient.Conn{Client: http.DefaultClient, Base: m.base()}, "tab_123", cmd)
 
 	if got != "tab_123" {
 		t.Fatalf("focused tab = %q, want tab_123", got)
@@ -57,7 +58,7 @@ func TestTabFocusResolvesOneBasedIndex(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.Flags().Bool("json", false, "")
 
-	got := TabFocus(http.DefaultClient, m.base(), "", "2", cmd)
+	got := TabFocus(apiclient.Conn{Client: http.DefaultClient, Base: m.base()}, "2", cmd)
 
 	if got != "tab_2" {
 		t.Fatalf("focused tab = %q, want tab_2", got)

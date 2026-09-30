@@ -1,14 +1,13 @@
 package actions
 
 import (
-	"net/http"
 	"net/url"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
-func Snapshot(client *http.Client, base, token string, cmd *cobra.Command, selectorOverride string) {
+func Snapshot(conn apiclient.Conn, cmd *cobra.Command, selectorOverride string) {
 	params := url.Values{}
 	full, _ := cmd.Flags().GetBool("full")
 	if !full {
@@ -34,7 +33,7 @@ func Snapshot(client *http.Client, base, token string, cmd *cobra.Command, selec
 	if v, _ := cmd.Flags().GetString("tab"); v != "" {
 		params.Set("tabId", v)
 	}
-	result := apiclient.DoGet(client, base, token, "/snapshot", params, apiclient.CaptureVocab(namedNoTab(cmd)))
+	result := conn.Get("/snapshot", params, apiclient.CaptureVocab(namedNoTab(cmd)))
 	apiclient.SuggestNextAction("snapshot", result)
 }
 

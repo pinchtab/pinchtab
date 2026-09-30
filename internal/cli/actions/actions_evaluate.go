@@ -3,7 +3,6 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -11,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func Evaluate(client *http.Client, base, token string, args []string, cmd *cobra.Command) {
+func Evaluate(conn apiclient.Conn, args []string, cmd *cobra.Command) {
 	body := map[string]any{"expression": strings.Join(args, " ")}
 	if awaitPromise, _ := cmd.Flags().GetBool("await-promise"); awaitPromise {
 		body["awaitPromise"] = true
@@ -21,12 +20,12 @@ func Evaluate(client *http.Client, base, token string, args []string, cmd *cobra
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoPost(client, base, token, path, body)
+		conn.Post(path, body)
 		return
 	}
 
 	// Terse: scalar verbatim, object/array as compact JSON
-	result := apiclient.DoPostQuiet(client, base, token, path, body)
+	result := apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, path, body)
 	if val, ok := result["result"]; ok {
 		switch v := val.(type) {
 		case string:

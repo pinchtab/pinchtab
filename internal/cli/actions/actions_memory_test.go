@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/heapsnap"
 	"github.com/spf13/cobra"
 )
@@ -37,7 +38,7 @@ func TestMemoryUsageSendsGCAndTabAndPrintsTheCounters(t *testing.T) {
 	defer srv.Close()
 
 	out := captureStdout(t, func() {
-		Memory(srv.Client(), srv.URL, "", memoryCommand(t, "--gc", "--tab", "t1"))
+		Memory(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, memoryCommand(t, "--gc", "--tab", "t1"))
 	})
 	if got != "GET /memory?gc=true&tabId=t1" {
 		t.Fatalf("request = %q", got)
@@ -67,7 +68,7 @@ func TestMemorySnapshotCopiesToOutAndReportsTheLocalPath(t *testing.T) {
 
 	local := filepath.Join(t.TempDir(), "copy.heapsnapshot")
 	out := captureStdout(t, func() {
-		MemorySnapshot(srv.Client(), srv.URL, "", memoryCommand(t, "--tab", "t1", "--out", local))
+		MemorySnapshot(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, memoryCommand(t, "--tab", "t1", "--out", local))
 	})
 	if body["tabId"] != "t1" {
 		t.Fatalf("body = %v, want the tab forwarded", body)
@@ -93,7 +94,7 @@ func TestMemorySummaryPrintsTheConstructorTable(t *testing.T) {
 	defer srv.Close()
 
 	out := captureStdout(t, func() {
-		MemorySummary(srv.Client(), srv.URL, "", memoryCommand(t, "--top", "5"), "heap_1")
+		MemorySummary(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, memoryCommand(t, "--top", "5"), "heap_1")
 	})
 	if got != "/memory/snapshot/heap_1/summary?top=5" {
 		t.Fatalf("request = %q", got)
@@ -125,7 +126,7 @@ func TestMemoryComparePrintsTheDeltaTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := captureStdout(t, func() {
-		MemoryCompare(srv.Client(), srv.URL, "", cmd, "heap_a", "heap_b")
+		MemoryCompare(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, cmd, "heap_a", "heap_b")
 	})
 	if got != "/memory/compare?base=heap_a&head=heap_b&retained=true&top=5" {
 		t.Fatalf("request = %q", got)

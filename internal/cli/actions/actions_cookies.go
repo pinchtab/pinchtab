@@ -3,7 +3,6 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -11,7 +10,7 @@ import (
 )
 
 // CookiesGet reads the cookies visible to a tab's current URL.
-func CookiesGet(client *http.Client, base, token string, cmd *cobra.Command) {
+func CookiesGet(conn apiclient.Conn, cmd *cobra.Command) {
 	params := url.Values{}
 	if tab, _ := cmd.Flags().GetString("tab"); tab != "" {
 		params.Set("tabId", tab)
@@ -23,14 +22,14 @@ func CookiesGet(client *http.Client, base, token string, cmd *cobra.Command) {
 		params.Set("url", target)
 	}
 
-	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/cookies", params), "Failed to get cookies")
+	result := requireBytes(apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/cookies", params), "Failed to get cookies")
 	printIndented(decodeMap(result, "Failed to parse response"))
 }
 
 // CookiesSet sets one cookie on the tab's current URL. The URL is left to the
 // server to default from the tab, so injecting a session cookie is one command
 // and never needs the caller to look the page up first.
-func CookiesSet(client *http.Client, base, token string, cmd *cobra.Command, name, value string) {
+func CookiesSet(conn apiclient.Conn, cmd *cobra.Command, name, value string) {
 	cookie := map[string]any{"name": name, "value": value}
 	for flag, key := range map[string]string{
 		"domain":    "domain",
@@ -56,7 +55,7 @@ func CookiesSet(client *http.Client, base, token string, cmd *cobra.Command, nam
 		body["url"] = target
 	}
 
-	result := requireMap(apiclient.DoPostQuiet(client, base, token, "/cookies", body), "Failed to set cookie")
+	result := requireMap(apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, "/cookies", body), "Failed to set cookie")
 	if !cookieWriteConfirmed(result) {
 		runtimeErr("ERROR: cookies: %q was not set (%v)", name, jsonLine(result))
 	}
@@ -64,8 +63,8 @@ func CookiesSet(client *http.Client, base, token string, cmd *cobra.Command, nam
 }
 
 // CookiesClear clears all browser cookies.
-func CookiesClear(client *http.Client, base, token string, cmd *cobra.Command) {
-	result := apiclient.DoDelete(client, base, token, "/cookies", nil, apiclient.Quiet())
+func CookiesClear(conn apiclient.Conn, cmd *cobra.Command) {
+	result := apiclient.DoDelete(conn.Client, conn.Base, conn.Token, "/cookies", nil, apiclient.Quiet())
 	if result == nil {
 		runtimeErr("ERROR: cookies: clear failed")
 	}

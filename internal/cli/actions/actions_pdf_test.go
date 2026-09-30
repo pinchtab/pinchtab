@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -45,7 +46,7 @@ func TestPDF(t *testing.T) {
 	_ = cmd.Flags().Set("tab", "tab-abc")
 	_ = cmd.Flags().Set("landscape", "true")
 	_ = cmd.Flags().Set("scale", "0.8")
-	PDF(client, m.base(), "", cmd)
+	PDF(apiclient.Conn{Client: client, Base: m.base()}, cmd)
 	if m.lastPath != "/tabs/tab-abc/pdf" {
 		t.Errorf("expected /tabs/tab-abc/pdf, got %s", m.lastPath)
 	}
@@ -90,7 +91,7 @@ func TestPDFAllOptions(t *testing.T) {
 	_ = cmd.Flags().Set("generate-tagged-pdf", "true")
 	_ = cmd.Flags().Set("generate-document-outline", "true")
 
-	PDF(client, m.base(), "", cmd)
+	PDF(apiclient.Conn{Client: client, Base: m.base()}, cmd)
 	if m.lastPath != "/tabs/tab-123/pdf" {
 		t.Errorf("expected /tabs/tab-123/pdf, got %s", m.lastPath)
 	}

@@ -2,7 +2,6 @@ package actions
 
 import (
 	"encoding/json"
-	"net/http"
 	"net/url"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -11,7 +10,7 @@ import (
 )
 
 // Checked checks whether an element identified by ref is checked.
-func Checked(client *http.Client, base, token string, cmd *cobra.Command, args []string) {
+func Checked(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 	if len(args) == 0 {
 		output.Error("checked", "ref argument is required", 1)
 		return
@@ -26,11 +25,11 @@ func Checked(client *http.Client, base, token string, cmd *cobra.Command, args [
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoGet(client, base, token, "/checked", params)
+		conn.Get("/checked", params)
 		return
 	}
 
-	body := apiclient.DoGetRaw(client, base, token, "/checked", params)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/checked", params)
 	var result struct {
 		Checked bool `json:"checked"`
 	}

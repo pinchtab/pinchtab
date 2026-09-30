@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -16,20 +15,20 @@ import (
 )
 
 // Network lists recent network requests.
-func Network(client *http.Client, base, token string, cmd *cobra.Command, args []string) {
+func Network(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 	// If a positional arg is given, treat it as a requestId detail lookup
 	if len(args) > 0 {
-		NetworkDetail(client, base, token, cmd, args[0])
+		NetworkDetail(conn, cmd, args[0])
 		return
 	}
 
 	if v, _ := cmd.Flags().GetBool("clear"); v {
-		NetworkClear(client, base, token, cmd)
+		NetworkClear(conn, cmd)
 		return
 	}
 
 	if v, _ := cmd.Flags().GetBool("stream"); v {
-		NetworkStream(client, base, token, cmd)
+		NetworkStream(conn, cmd)
 		return
 	}
 
@@ -58,11 +57,11 @@ func Network(client *http.Client, base, token string, cmd *cobra.Command, args [
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoGet(client, base, token, "/network", params)
+		conn.Get("/network", params)
 		return
 	}
 
-	body := apiclient.DoGetRaw(client, base, token, "/network", params)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/network", params)
 	var resp struct {
 		Count   int `json:"count"`
 		Entries []struct {
@@ -90,7 +89,7 @@ func Network(client *http.Client, base, token string, cmd *cobra.Command, args [
 const networkURLDisplayMaxBytes = 80
 
 // NetworkDetail shows full details for a specific request.
-func NetworkDetail(client *http.Client, base, token string, cmd *cobra.Command, requestID string) {
+func NetworkDetail(conn apiclient.Conn, cmd *cobra.Command, requestID string) {
 	params := url.Values{}
 	if v, _ := cmd.Flags().GetString("tab"); v != "" {
 		params.Set("tabId", v)
@@ -99,23 +98,23 @@ func NetworkDetail(client *http.Client, base, token string, cmd *cobra.Command, 
 		params.Set("body", "true")
 	}
 	path := fmt.Sprintf("/network/%s", url.PathEscape(requestID))
-	apiclient.DoGet(client, base, token, path, params)
+	conn.Get(path, params)
 }
 
 // NetworkClear clears captured network data.
-func NetworkClear(client *http.Client, base, token string, cmd *cobra.Command) {
+func NetworkClear(conn apiclient.Conn, cmd *cobra.Command) {
 	params := url.Values{}
 	if v, _ := cmd.Flags().GetString("tab"); v != "" {
 		params.Set("tabId", v)
 	}
-	result := apiclient.DoPost(client, base, token, "/network/clear?"+params.Encode(), map[string]any{})
+	result := conn.Post("/network/clear?"+params.Encode(), map[string]any{})
 	if result == nil {
 		fmt.Fprintln(os.Stderr, "Failed to clear network data")
 	}
 }
 
 // NetworkStream connects to the SSE stream and prints entries as they arrive.
-func NetworkStream(client *http.Client, base, token string, cmd *cobra.Command) {
+func NetworkStream(conn apiclient.Conn, cmd *cobra.Command) {
 	params := url.Values{}
 	if v, _ := cmd.Flags().GetString("tab"); v != "" {
 		params.Set("tabId", v)
@@ -136,7 +135,7 @@ func NetworkStream(client *http.Client, base, token string, cmd *cobra.Command) 
 		params.Set("bufferSize", v)
 	}
 
-	resp, err := apiclient.OpenStream(client, base, token, "/network/stream", params)
+	resp, err := apiclient.OpenStream(conn.Client, conn.Base, conn.Token, "/network/stream", params)
 	if err != nil {
 		runtimeErr("Error connecting to stream: %v", err)
 	}

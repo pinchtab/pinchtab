@@ -8,6 +8,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/sanitize"
 	"github.com/spf13/cobra"
 )
@@ -47,7 +48,7 @@ func TestNetworkListingTruncatesURLsOnARuneBoundary(t *testing.T) {
 	defer srv.Close()
 
 	out := captureStdout(t, func() {
-		Network(http.DefaultClient, srv.URL, "", newNetworkTestCmd(), nil)
+		Network(apiclient.Conn{Client: http.DefaultClient, Base: srv.URL}, newNetworkTestCmd(), nil)
 	})
 
 	if !utf8.ValidString(out) {
@@ -88,7 +89,7 @@ func TestNetworkListingLeavesAShortURLIntact(t *testing.T) {
 	defer srv.Close()
 
 	out := captureStdout(t, func() {
-		Network(http.DefaultClient, srv.URL, "", newNetworkTestCmd(), nil)
+		Network(apiclient.Conn{Client: http.DefaultClient, Base: srv.URL}, newNetworkTestCmd(), nil)
 	})
 	if !strings.Contains(out, shortURL) {
 		t.Errorf("listing %q does not contain the untruncated URL %q", out, shortURL)

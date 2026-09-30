@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/spf13/cobra"
 )
@@ -110,7 +111,7 @@ func TestNavigate(t *testing.T) {
 	client := m.server.Client()
 
 	cmd := newNavigateCmd()
-	Navigate(client, m.base(), "", "https://pinchtab.com", cmd)
+	Navigate(apiclient.Conn{Client: client, Base: m.base()}, "https://pinchtab.com", cmd)
 	if m.lastMethod != "POST" {
 		t.Errorf("expected POST, got %s", m.lastMethod)
 	}
@@ -135,7 +136,7 @@ func TestNavigateReusesImplicitTabWhenItExists(t *testing.T) {
 	_ = cmd.Flags().Set("tab", "ABC123")
 	cmd.Flags().Lookup("tab").Changed = false
 
-	Navigate(client, m.base(), "", "https://pinchtab.com", cmd)
+	Navigate(apiclient.Conn{Client: client, Base: m.base()}, "https://pinchtab.com", cmd)
 
 	if len(m.requests) != 1 {
 		t.Fatalf("requests = %d, want 1", len(m.requests))
@@ -157,7 +158,7 @@ func TestNavigateFallsBackToNewTabForStaleImplicitTab(t *testing.T) {
 	_ = cmd.Flags().Set("tab", "STALE123")
 	cmd.Flags().Lookup("tab").Changed = false
 
-	Navigate(client, m.base(), "", "https://pinchtab.com", cmd)
+	Navigate(apiclient.Conn{Client: client, Base: m.base()}, "https://pinchtab.com", cmd)
 
 	if len(m.requests) != 2 {
 		t.Fatalf("requests = %d, want 2", len(m.requests))
@@ -192,7 +193,7 @@ func TestNavigateWithAllFlags(t *testing.T) {
 	cmd := newNavigateCmd()
 	_ = cmd.Flags().Set("new-tab", "true")
 	_ = cmd.Flags().Set("block-images", "true")
-	Navigate(client, m.base(), "", "https://pinchtab.com", cmd)
+	Navigate(apiclient.Conn{Client: client, Base: m.base()}, "https://pinchtab.com", cmd)
 	var body map[string]any
 	_ = json.Unmarshal([]byte(m.lastBody), &body)
 	if body["newTab"] != true {
@@ -210,7 +211,7 @@ func TestNavigateWithBlockAds(t *testing.T) {
 
 	cmd := newNavigateCmd()
 	_ = cmd.Flags().Set("block-ads", "true")
-	Navigate(client, m.base(), "", "https://pinchtab.com", cmd)
+	Navigate(apiclient.Conn{Client: client, Base: m.base()}, "https://pinchtab.com", cmd)
 	var body map[string]any
 	_ = json.Unmarshal([]byte(m.lastBody), &body)
 	if body["blockAds"] != true {
@@ -225,7 +226,7 @@ func TestNavigateDismissBanners(t *testing.T) {
 
 	cmd := newNavigateCmd()
 	_ = cmd.Flags().Set("dismiss-banners", "true")
-	Navigate(client, m.base(), "", "https://pinchtab.com", cmd)
+	Navigate(apiclient.Conn{Client: client, Base: m.base()}, "https://pinchtab.com", cmd)
 	var body map[string]any
 	_ = json.Unmarshal([]byte(m.lastBody), &body)
 	if body["dismissBanners"] != true {
@@ -240,7 +241,7 @@ func TestReloadDismissBannersAppendsQuery(t *testing.T) {
 
 	cmd := newHistoryCmd()
 	_ = cmd.Flags().Set("dismiss-banners", "true")
-	Reload(client, m.base(), "", cmd)
+	Reload(apiclient.Conn{Client: client, Base: m.base()}, cmd)
 	if m.lastPath != "/reload" {
 		t.Errorf("expected /reload path, got %q", m.lastPath)
 	}
@@ -256,7 +257,7 @@ func TestBackDismissBannersAppendsQuery(t *testing.T) {
 
 	cmd := newHistoryCmd()
 	_ = cmd.Flags().Set("dismiss-banners", "true")
-	Back(client, m.base(), "", cmd)
+	Back(apiclient.Conn{Client: client, Base: m.base()}, cmd)
 	if m.lastPath != "/back" {
 		t.Errorf("expected /back path, got %q", m.lastPath)
 	}
@@ -273,7 +274,7 @@ func TestForwardDismissBannersAppendsQueryWithTab(t *testing.T) {
 	cmd := newHistoryCmd()
 	_ = cmd.Flags().Set("tab", "TAB1")
 	_ = cmd.Flags().Set("dismiss-banners", "true")
-	Forward(client, m.base(), "", cmd)
+	Forward(apiclient.Conn{Client: client, Base: m.base()}, cmd)
 	if m.lastPath != "/tabs/TAB1/forward" {
 		t.Errorf("expected /tabs/TAB1/forward, got %q", m.lastPath)
 	}
@@ -288,7 +289,7 @@ func TestReloadWithoutDismissBannersOmitsQuery(t *testing.T) {
 	client := m.server.Client()
 
 	cmd := newHistoryCmd()
-	Reload(client, m.base(), "", cmd)
+	Reload(apiclient.Conn{Client: client, Base: m.base()}, cmd)
 	if m.lastQuery != "" {
 		t.Errorf("expected empty query, got %q", m.lastQuery)
 	}
@@ -304,7 +305,7 @@ func TestNavigatePrintTabID(t *testing.T) {
 	_ = cmd.Flags().Set("print-tab-id", "true")
 
 	out := captureStdout(t, func() {
-		Navigate(client, m.base(), "", "https://pinchtab.com", cmd)
+		Navigate(apiclient.Conn{Client: client, Base: m.base()}, "https://pinchtab.com", cmd)
 	})
 	got := strings.TrimSpace(out)
 	if got != "ABC123" {
@@ -321,7 +322,7 @@ func TestNavigateNoSessionHintNamesPrerequisiteAndCommand(t *testing.T) {
 
 	stderr := captureStderr(t, func() {
 		captureStdout(t, func() {
-			Navigate(m.server.Client(), m.base(), "", "https://pinchtab.com", newNavigateCmd())
+			Navigate(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "https://pinchtab.com", newNavigateCmd())
 		})
 	})
 
@@ -353,7 +354,7 @@ func TestNavigateIdentifiedCallerPrintsNoSessionHint(t *testing.T) {
 
 	stderr := captureStderr(t, func() {
 		captureStdout(t, func() {
-			Navigate(m.server.Client(), m.base(), "", "https://pinchtab.com", newNavigateCmd())
+			Navigate(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "https://pinchtab.com", newNavigateCmd())
 		})
 	})
 
@@ -378,7 +379,7 @@ func TestNavigateReportsTheLandedURLAtATerminal(t *testing.T) {
 	defer m.close()
 
 	out := captureStdout(t, func() {
-		Navigate(m.server.Client(), m.base(), "", "https://httpbin.org/redirect-to?url=https://example.com/", newNavigateCmd())
+		Navigate(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "https://httpbin.org/redirect-to?url=https://example.com/", newNavigateCmd())
 	})
 
 	lines := strings.Split(strings.TrimSpace(out), "\n")
@@ -432,7 +433,7 @@ func TestNavigateStdoutHasOneOwner(t *testing.T) {
 			var stdout string
 			stderr := captureStderr(t, func() {
 				stdout = captureStdout(t, func() {
-					Navigate(m.server.Client(), m.base(), "", "https://example.com", cmd)
+					Navigate(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "https://example.com", cmd)
 				})
 			})
 
@@ -453,7 +454,7 @@ func TestNavigateStdoutHasOneOwner(t *testing.T) {
 func TestHistoryNavigationPrintsTheLandedURLThroughAPipe(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		run  func(*http.Client, string, string, *cobra.Command)
+		run  func(apiclient.Conn, *cobra.Command)
 		path string
 	}{
 		{name: "back", run: Back, path: "/back"},
@@ -468,7 +469,7 @@ func TestHistoryNavigationPrintsTheLandedURLThroughAPipe(t *testing.T) {
 			stdoutTerminal(t, false)
 
 			out := captureStdout(t, func() {
-				tc.run(m.server.Client(), m.base(), "", newHistoryCmd())
+				tc.run(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, newHistoryCmd())
 			})
 
 			if m.lastPath != tc.path {
@@ -486,7 +487,7 @@ func TestHistoryNavigationPrintsTheLandedURLThroughAPipe(t *testing.T) {
 func TestLandingReportDegradesWithoutAURL(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		run  func(*http.Client, string, string, *cobra.Command)
+		run  func(apiclient.Conn, *cobra.Command)
 	}{
 		{name: "back", run: Back},
 		{name: "forward", run: Forward},
@@ -498,7 +499,7 @@ func TestLandingReportDegradesWithoutAURL(t *testing.T) {
 			defer m.close()
 
 			out := captureStdout(t, func() {
-				tc.run(m.server.Client(), m.base(), "", newHistoryCmd())
+				tc.run(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, newHistoryCmd())
 			})
 			if got := strings.TrimSpace(out); got != "OK" {
 				t.Errorf("stdout = %q, want the terse OK", got)
@@ -516,7 +517,7 @@ func TestLandingReportDegradesWithoutAURL(t *testing.T) {
 		defer m.close()
 
 		out := captureStdout(t, func() {
-			Navigate(m.server.Client(), m.base(), "", "https://example.com", newNavigateCmd())
+			Navigate(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "https://example.com", newNavigateCmd())
 		})
 		if got := strings.TrimSpace(out); got != "ABC123" {
 			t.Errorf("stdout = %q, want just the tab ID", got)
@@ -544,7 +545,7 @@ func TestJSONOutputIsTheRawResponseForAllFour(t *testing.T) {
 		cmd.Flags().Bool("json", false, "")
 		_ = cmd.Flags().Set("json", "true")
 		out := captureStdout(t, func() {
-			Navigate(m.server.Client(), m.base(), "", "https://example.com", cmd)
+			Navigate(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "https://example.com", cmd)
 		})
 		if got := strings.TrimSpace(out); got != want {
 			t.Errorf("stdout = %q, want the response body alone %q", got, want)
@@ -553,7 +554,7 @@ func TestJSONOutputIsTheRawResponseForAllFour(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		run  func(*http.Client, string, string, *cobra.Command)
+		run  func(apiclient.Conn, *cobra.Command)
 	}{
 		{name: "back", run: Back},
 		{name: "forward", run: Forward},
@@ -568,7 +569,7 @@ func TestJSONOutputIsTheRawResponseForAllFour(t *testing.T) {
 			cmd := newHistoryCmd()
 			_ = cmd.Flags().Set("json", "true")
 			out := captureStdout(t, func() {
-				tc.run(m.server.Client(), m.base(), "", cmd)
+				tc.run(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd)
 			})
 			if got := strings.TrimSpace(out); got != want {
 				t.Errorf("stdout = %q, want the response body alone %q", got, want)
@@ -589,7 +590,7 @@ func TestNavigateTextFetchesPageText(t *testing.T) {
 	_ = cmd.Flags().Set("text", "true")
 
 	out := captureStdout(t, func() {
-		Navigate(m.server.Client(), m.base(), "", "https://example.com", cmd)
+		Navigate(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "https://example.com", cmd)
 	})
 
 	if !strings.Contains(out, "PAGE TEXT") {
@@ -612,7 +613,7 @@ func TestNavigateFallbackAnnouncesTheNewTabWithoutASession(t *testing.T) {
 
 	stderr := captureStderr(t, func() {
 		captureStdout(t, func() {
-			Navigate(m.server.Client(), m.base(), "", "https://pinchtab.com", staleTabCmd(t, "STALE123"))
+			Navigate(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "https://pinchtab.com", staleTabCmd(t, "STALE123"))
 		})
 	})
 
@@ -642,7 +643,7 @@ func TestNavigateFallbackStaysSilentForAnIdentifiedCaller(t *testing.T) {
 
 	stderr := captureStderr(t, func() {
 		captureStdout(t, func() {
-			Navigate(m.server.Client(), m.base(), "", "https://pinchtab.com", staleTabCmd(t, "STALE123"))
+			Navigate(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "https://pinchtab.com", staleTabCmd(t, "STALE123"))
 		})
 	})
 
@@ -677,7 +678,7 @@ func TestNavigateFallbackStaysSilentForACallerIdentifiedByTheFlagAlone(t *testin
 
 	stderr := captureStderr(t, func() {
 		captureStdout(t, func() {
-			Navigate(m.server.Client(), m.base(), "", "https://pinchtab.com", agentIDFlagCmd(t, "STALE123", "bosch"))
+			Navigate(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "https://pinchtab.com", agentIDFlagCmd(t, "STALE123", "bosch"))
 		})
 	})
 
@@ -707,7 +708,7 @@ func TestNavigateWithoutFallbackAnnouncesNothingExtra(t *testing.T) {
 
 	stderr := captureStderr(t, func() {
 		captureStdout(t, func() {
-			Navigate(m.server.Client(), m.base(), "", "https://pinchtab.com", newNavigateCmd())
+			Navigate(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "https://pinchtab.com", newNavigateCmd())
 		})
 	})
 
@@ -729,7 +730,7 @@ func TestFallbackNoticeDoesNotRepeatTheSessionRemedy(t *testing.T) {
 
 	stderr := captureStderr(t, func() {
 		captureStdout(t, func() {
-			Navigate(m.server.Client(), m.base(), "", "https://pinchtab.com", staleTabCmd(t, "STALE123"))
+			Navigate(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "https://pinchtab.com", staleTabCmd(t, "STALE123"))
 		})
 	})
 
@@ -757,7 +758,7 @@ func TestFallbackNoticeStaysOffStdout(t *testing.T) {
 	var out string
 	_ = captureStderr(t, func() {
 		out = captureStdout(t, func() {
-			Navigate(m.server.Client(), m.base(), "", "https://pinchtab.com", staleTabCmd(t, "STALE123"))
+			Navigate(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "https://pinchtab.com", staleTabCmd(t, "STALE123"))
 		})
 	})
 

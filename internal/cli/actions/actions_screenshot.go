@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -33,7 +32,7 @@ func refLabelDigits(ref string) string {
 	return string(out)
 }
 
-func Screenshot(client *http.Client, base, token string, cmd *cobra.Command) {
+func Screenshot(conn apiclient.Conn, cmd *cobra.Command) {
 	params := url.Values{}
 
 	outFile, _ := cmd.Flags().GetString("output")
@@ -72,7 +71,7 @@ func Screenshot(client *http.Client, base, token string, cmd *cobra.Command) {
 
 	if annotate {
 		params.Set("annotate", "true")
-		raw := apiclient.DoGetRaw(client, base, token, "/screenshot", params, apiclient.CaptureVocab(params.Get("tabId") == ""))
+		raw := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/screenshot", params, apiclient.CaptureVocab(params.Get("tabId") == ""))
 		if raw == nil {
 			return
 		}
@@ -126,7 +125,7 @@ func Screenshot(client *http.Client, base, token string, cmd *cobra.Command) {
 	if autoNamed {
 		outFile = fmt.Sprintf("screenshot-%s%s", time.Now().Format("20060102-150405"), ext)
 	}
-	data := apiclient.DoGetRaw(client, base, token, "/screenshot", params)
+	data := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/screenshot", params)
 	if data == nil {
 		return
 	}

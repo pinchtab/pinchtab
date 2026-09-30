@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -82,7 +83,7 @@ func TestTimeoutFlagUnitsPerVerb(t *testing.T) {
 	t.Run("wait --timeout-ms feeds milliseconds", func(t *testing.T) {
 		cmd := newWaitCmd()
 		_ = cmd.Flags().Set("timeout-ms", "2500")
-		Wait(client, base, "", []string{"#x"}, cmd)
+		Wait(apiclient.Conn{Client: client, Base: base}, []string{"#x"}, cmd)
 		if lastBody["timeout"] != float64(2500) {
 			t.Fatalf("wait --timeout-ms 2500 sent timeout=%v, want 2500 (ms)", lastBody["timeout"])
 		}
@@ -91,7 +92,7 @@ func TestTimeoutFlagUnitsPerVerb(t *testing.T) {
 	t.Run("wait --timeout (deprecated alias) still feeds milliseconds", func(t *testing.T) {
 		cmd := newWaitCmd()
 		_ = cmd.Flags().Set("timeout", "2500")
-		Wait(client, base, "", []string{"#x"}, cmd)
+		Wait(apiclient.Conn{Client: client, Base: base}, []string{"#x"}, cmd)
 		if lastBody["timeout"] != float64(2500) {
 			t.Fatalf("wait --timeout 2500 sent timeout=%v, want 2500 (ms, back-compat)", lastBody["timeout"])
 		}
@@ -109,7 +110,7 @@ func TestTimeoutFlagUnitsPerVerb(t *testing.T) {
 	t.Run("scrape --timeout feeds seconds on the unit-named key", func(t *testing.T) {
 		cmd := newScrapeTimeoutCmd()
 		_ = cmd.Flags().Set("timeout", "10")
-		if err := Scrape(client, base, "", cmd, "http://example.test"); err != nil {
+		if err := Scrape(apiclient.Conn{Client: client, Base: base}, cmd, "http://example.test"); err != nil {
 			t.Fatalf("Scrape: %v", err)
 		}
 		if lastBody["timeoutSeconds"] != float64(10) {
@@ -146,7 +147,7 @@ func runWaitChild(mode string) {
 		_ = cmd.Flags().Set("json", "true")
 	}
 	_ = cmd.Flags().Set("timeout", "1000")
-	Wait(srv.Client(), srv.URL, "", []string{"#neverever"}, cmd)
+	Wait(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, []string{"#neverever"}, cmd)
 	os.Exit(0)
 }
 

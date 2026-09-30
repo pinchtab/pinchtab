@@ -19,7 +19,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func Action(client *http.Client, base, token, kind, selectorArg string, cmd *cobra.Command) {
+func Action(conn apiclient.Conn, kind, selectorArg string, cmd *cobra.Command) {
 	req := bridge.ActionRequest{Kind: kind}
 
 	css, _ := cmd.Flags().GetString("css")
@@ -44,7 +44,7 @@ func Action(client *http.Client, base, token, kind, selectorArg string, cmd *cob
 		applyClickFlags(&req, cmd)
 	}
 
-	postAction(client, base, token, cmd, req)
+	postAction(conn, cmd, req)
 }
 
 func applyClickFlags(req *bridge.ActionRequest, cmd *cobra.Command) {
@@ -89,16 +89,16 @@ func setSelector(req *bridge.ActionRequest, s string) {
 	}
 }
 
-func postAction(client *http.Client, base, token string, cmd *cobra.Command, req bridge.ActionRequest) {
-	postActionWithHeaders(client, base, token, cmd, req, nil)
+func postAction(conn apiclient.Conn, cmd *cobra.Command, req bridge.ActionRequest) {
+	postActionWithHeaders(conn, cmd, req, nil)
 }
 
-func postActionWithHeaders(client *http.Client, base, token string, cmd *cobra.Command, req bridge.ActionRequest, headers map[string]string) {
+func postActionWithHeaders(conn apiclient.Conn, cmd *cobra.Command, req bridge.ActionRequest, headers map[string]string) {
 	tabID, _ := cmd.Flags().GetString("tab")
 	path := apiclient.TabPath(tabID, "action")
 
 	if req.Vocab == "" {
-		if vocabTab, tok := apiclient.VocabForAction(base, tabID); tok != "" {
+		if vocabTab, tok := apiclient.VocabForAction(conn.Base, tabID); tok != "" {
 			req.Vocab, req.VocabTab = tok, vocabTab
 		}
 	}
@@ -106,22 +106,22 @@ func postActionWithHeaders(client *http.Client, base, token string, cmd *cobra.C
 	opts := []apiclient.RequestOption{apiclient.WithJSONBody(req), apiclient.WithHeaders(headers), apiclient.CaptureVocab(namedNoTab(cmd))}
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoPost(client, base, token, path, nil, opts...)
+		conn.Post(path, nil, opts...)
 		return
 	}
 
-	result := apiclient.DoPostQuiet(client, base, token, path, nil, opts...)
+	result := apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, path, nil, opts...)
 	printActionResult(req.Kind, result)
 
 	snap, _ := cmd.Flags().GetBool("snap")
 	snapDiff, _ := cmd.Flags().GetBool("snap-diff")
 	if snap || snapDiff {
-		fetchAndPrintSnapshot(client, base, token, cmd, tabID, snapDiff)
+		fetchAndPrintSnapshot(conn, cmd, tabID, snapDiff)
 	}
 
 	text, _ := cmd.Flags().GetBool("text")
 	if text {
-		fetchAndPrintText(client, base, token, tabID)
+		fetchAndPrintText(conn, tabID)
 	}
 }
 
@@ -134,7 +134,7 @@ func namedNoTab(cmd *cobra.Command) bool {
 // a transport or HTTP failure warns on stderr and returns, never exits: this tail
 // runs after an action that already succeeded, so a cosmetic snapshot failure
 // must not turn a successful action into a non-zero exit.
-func fetchAndPrintSnapshot(client *http.Client, base, token string, cmd *cobra.Command, tabID string, diff bool) {
+func fetchAndPrintSnapshot(conn apiclient.Conn, cmd *cobra.Command, tabID string, diff bool) {
 	params := url.Values{"filter": {"interactive"}, "format": {"compact"}}
 	if diff {
 		params.Set("diff", "true")
@@ -142,7 +142,7 @@ func fetchAndPrintSnapshot(client *http.Client, base, token string, cmd *cobra.C
 	if tabID != "" {
 		params.Set("tabId", tabID)
 	}
-	body, err := apiclient.DoRawE(client, base, token, http.MethodGet, "/snapshot", apiclient.WithQuery(params), apiclient.CaptureVocab(namedNoTab(cmd)))
+	body, err := conn.Raw(http.MethodGet, "/snapshot", apiclient.WithQuery(params), apiclient.CaptureVocab(namedNoTab(cmd)))
 	var statusErr *apiclient.StatusError
 	switch {
 	case errors.As(err, &statusErr):
@@ -154,9 +154,9 @@ func fetchAndPrintSnapshot(client *http.Client, base, token string, cmd *cobra.C
 	}
 }
 
-func fetchAndPrintText(client *http.Client, base, token, tabID string) {
+func fetchAndPrintText(conn apiclient.Conn, tabID string) {
 	path := apiclient.TabPath(tabID, "text")
-	body := apiclient.DoGetRaw(client, base, token, path, nil)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, path, nil)
 	var result struct {
 		Text string `json:"text"`
 	}
@@ -321,7 +321,7 @@ func applyMouseTarget(req *bridge.ActionRequest, selectorArg string, cmd *cobra.
 	return false
 }
 
-func MouseAction(client *http.Client, base, token, kind string, args []string, cmd *cobra.Command) {
+func MouseAction(conn apiclient.Conn, kind string, args []string, cmd *cobra.Command) {
 	req := bridge.ActionRequest{Kind: kind}
 	req.Button, _ = cmd.Flags().GetString("button")
 
@@ -380,7 +380,7 @@ func MouseAction(client *http.Client, base, token, kind string, args []string, c
 	}
 
 	readHumanizeFlag(&req, cmd)
-	postAction(client, base, token, cmd, req)
+	postAction(conn, cmd, req)
 }
 
 type dragTarget struct {
@@ -419,7 +419,7 @@ func actionRequestForTarget(kind string, target dragTarget) bridge.ActionRequest
 	return req
 }
 
-func Drag(client *http.Client, base, token string, args []string, cmd *cobra.Command) {
+func Drag(conn apiclient.Conn, args []string, cmd *cobra.Command) {
 	hasDragX := cmd.Flags().Changed("drag-x")
 	hasDragY := cmd.Flags().Changed("drag-y")
 
@@ -432,7 +432,7 @@ func Drag(client *http.Client, base, token string, args []string, cmd *cobra.Com
 		req.DragX, _ = cmd.Flags().GetInt("drag-x")
 		req.DragY, _ = cmd.Flags().GetInt("drag-y")
 		req.Button, _ = cmd.Flags().GetString("button")
-		postAction(client, base, token, cmd, req)
+		postAction(conn, cmd, req)
 		return
 	}
 
@@ -443,7 +443,7 @@ func Drag(client *http.Client, base, token string, args []string, cmd *cobra.Com
 	req := actionRequestForTarget(bridge.ActionDrag, parseDragTarget(args[0]))
 	setDragDestination(&req, parseDragTarget(args[1]))
 	req.Button, _ = cmd.Flags().GetString("button")
-	postAction(client, base, token, cmd, req)
+	postAction(conn, cmd, req)
 }
 
 func setDragDestination(req *bridge.ActionRequest, target dragTarget) {
@@ -454,7 +454,7 @@ func setDragDestination(req *bridge.ActionRequest, target dragTarget) {
 	req.ToSelector = target.selector
 }
 
-func ActionSimple(client *http.Client, base, token, kind string, args []string, cmd *cobra.Command) {
+func ActionSimple(conn apiclient.Conn, kind string, args []string, cmd *cobra.Command) {
 	req := bridge.ActionRequest{Kind: kind}
 
 	switch kind {
@@ -484,7 +484,7 @@ func ActionSimple(client *http.Client, base, token, kind string, args []string, 
 	}
 
 	readHumanizeFlag(&req, cmd)
-	postAction(client, base, token, cmd, req)
+	postAction(conn, cmd, req)
 }
 
 func setText(req *bridge.ActionRequest, text string) {

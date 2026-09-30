@@ -2,14 +2,13 @@ package actions
 
 import (
 	"fmt"
-	"net/http"
 	"net/url"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 )
 
-func Quick(client *http.Client, base, token string, args []string) {
+func Quick(conn apiclient.Conn, args []string) {
 	if len(args) < 1 {
 		cli.Fatal("Usage: pinchtab quick <url>")
 	}
@@ -22,7 +21,7 @@ func Quick(client *http.Client, base, token string, args []string) {
 	// ceiling), so it returns promptly on fast pages and replaces the old fixed
 	// 1s sleep without regressing slow ones.
 	navBody := map[string]any{"url": args[0], "waitFor": "networkidle"}
-	navResult := apiclient.DoPost(client, base, token, "/navigate", navBody)
+	navResult := conn.Post("/navigate", navBody)
 
 	fmt.Println()
 	fmt.Println(cli.StyleStdout(cli.HeadingStyle, "Page structure"))
@@ -30,7 +29,7 @@ func Quick(client *http.Client, base, token string, args []string) {
 	snapParams := url.Values{}
 	snapParams.Set("filter", "interactive")
 	snapParams.Set("format", "compact")
-	apiclient.DoGet(client, base, token, "/snapshot", snapParams)
+	conn.Get("/snapshot", snapParams)
 
 	if title, ok := navResult["title"].(string); ok {
 		fmt.Println()

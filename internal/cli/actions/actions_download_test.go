@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 )
 
 func TestDownloadTruncatesPrintedBase64(t *testing.T) {
@@ -16,7 +18,7 @@ func TestDownloadTruncatesPrintedBase64(t *testing.T) {
 	defer m.close()
 
 	output := captureStdout(t, func() {
-		Download(m.server.Client(), m.base(), "", []string{"https://example.com/image.png"}, "", "")
+		Download(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, []string{"https://example.com/image.png"}, "", "")
 	})
 
 	if !strings.Contains(output, `"dataTruncated": true`) {
@@ -43,7 +45,7 @@ func TestDownloadWithOutputConfirmsTheFileAndPrintsNoEnvelope(t *testing.T) {
 
 	outFile := filepath.Join(t.TempDir(), "image.bin")
 	output := captureStdout(t, func() {
-		Download(m.server.Client(), m.base(), "", []string{"https://example.com/image.png"}, outFile, "")
+		Download(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, []string{"https://example.com/image.png"}, outFile, "")
 	})
 
 	written, err := os.ReadFile(outFile)
@@ -82,7 +84,7 @@ func TestTheSaveConfirmationIsTheSameSentenceEverywhere(t *testing.T) {
 		defer m.close()
 		m.response = `{"data":"` + base64.StdEncoding.EncodeToString(payload) + `"}`
 		return captureStdout(t, func() {
-			Download(m.server.Client(), m.base(), "", []string{"https://example.com/f.bin"}, filepath.Join(dir, "d.bin"), "")
+			Download(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, []string{"https://example.com/f.bin"}, filepath.Join(dir, "d.bin"), "")
 		})
 	}
 	screenshot := func() string {
@@ -91,7 +93,7 @@ func TestTheSaveConfirmationIsTheSameSentenceEverywhere(t *testing.T) {
 		m.response = "0123456789"
 		cmd := screenshotCmd()
 		_ = cmd.Flags().Set("output", filepath.Join(dir, "s.jpg"))
-		return captureStdout(t, func() { Screenshot(m.server.Client(), m.base(), "", cmd) })
+		return captureStdout(t, func() { Screenshot(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd) })
 	}
 	pdf := func() string {
 		m := newMockServer()
@@ -99,7 +101,7 @@ func TestTheSaveConfirmationIsTheSameSentenceEverywhere(t *testing.T) {
 		m.response = "0123456789"
 		cmd := pdfCmd()
 		_ = cmd.Flags().Set("output", filepath.Join(dir, "p.pdf"))
-		return captureStdout(t, func() { PDF(m.server.Client(), m.base(), "", cmd) })
+		return captureStdout(t, func() { PDF(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd) })
 	}
 
 	want := "Saved " + filepath.Join(dir, "d.bin") + " (10 bytes)"
@@ -164,7 +166,7 @@ func TestDownloadTabScopedPath(t *testing.T) {
 	defer m.close()
 
 	captureStdout(t, func() {
-		Download(m.server.Client(), m.base(), "", []string{"https://example.com/f.txt"}, "", "tab1")
+		Download(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, []string{"https://example.com/f.txt"}, "", "tab1")
 	})
 
 	if m.lastPath != "/tabs/tab1/download" {

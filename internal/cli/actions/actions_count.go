@@ -3,7 +3,6 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -12,7 +11,7 @@ import (
 )
 
 // Count returns the number of elements matching a CSS selector.
-func Count(client *http.Client, base, token string, cmd *cobra.Command, args []string) {
+func Count(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 	if len(args) == 0 {
 		output.Error("count", "selector argument is required", 1)
 		return
@@ -27,11 +26,11 @@ func Count(client *http.Client, base, token string, cmd *cobra.Command, args []s
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoGet(client, base, token, "/count", params)
+		conn.Get("/count", params)
 		return
 	}
 
-	body := apiclient.DoGetRaw(client, base, token, "/count", params)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/count", params)
 	var result struct {
 		Count int `json:"count"`
 	}

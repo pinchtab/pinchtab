@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -31,7 +32,7 @@ func TestText(t *testing.T) {
 	client := m.server.Client()
 
 	cmd := newTextCmd()
-	Text(client, m.base(), "", cmd, nil)
+	Text(apiclient.Conn{Client: client, Base: m.base()}, cmd, nil)
 	if m.lastPath != "/text" {
 		t.Errorf("expected /text, got %s", m.lastPath)
 	}
@@ -44,7 +45,7 @@ func TestTextRaw(t *testing.T) {
 
 	cmd := newTextCmd()
 	_ = cmd.Flags().Set("raw", "true")
-	Text(client, m.base(), "", cmd, nil)
+	Text(apiclient.Conn{Client: client, Base: m.base()}, cmd, nil)
 	if !strings.Contains(m.lastQuery, "mode=raw") {
 		t.Errorf("expected mode=raw, got %s", m.lastQuery)
 	}
@@ -60,7 +61,7 @@ func TestTextFull(t *testing.T) {
 
 	cmd := newTextCmd()
 	_ = cmd.Flags().Set("full", "true")
-	Text(client, m.base(), "", cmd, nil)
+	Text(apiclient.Conn{Client: client, Base: m.base()}, cmd, nil)
 	if !strings.Contains(m.lastQuery, "mode=raw") {
 		t.Errorf("expected --full to set mode=raw, got %s", m.lastQuery)
 	}
@@ -76,7 +77,7 @@ func TestTextMarkdown(t *testing.T) {
 
 	cmd := newTextCmd()
 	_ = cmd.Flags().Set("markdown", "true")
-	Text(client, m.base(), "", cmd, nil)
+	Text(apiclient.Conn{Client: client, Base: m.base()}, cmd, nil)
 	if !strings.Contains(m.lastQuery, "mode=markdown") {
 		t.Errorf("expected mode=markdown, got %s", m.lastQuery)
 	}
@@ -96,7 +97,7 @@ func TestTextMarkdownOutputWritesFileAndPrintsConfirmation(t *testing.T) {
 	_ = cmd.Flags().Set("output", out)
 
 	stdout := captureStdout(t, func() {
-		Text(m.server.Client(), m.base(), "", cmd, nil)
+		Text(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd, nil)
 	})
 
 	data, err := os.ReadFile(out)
@@ -121,7 +122,7 @@ func TestTextFrame(t *testing.T) {
 
 	cmd := newTextCmd()
 	_ = cmd.Flags().Set("frame", "FRAME123")
-	Text(client, m.base(), "", cmd, nil)
+	Text(apiclient.Conn{Client: client, Base: m.base()}, cmd, nil)
 	if !strings.Contains(m.lastQuery, "frameId=FRAME123") {
 		t.Errorf("expected frameId=FRAME123, got %s", m.lastQuery)
 	}
@@ -134,7 +135,7 @@ func TestTextTab(t *testing.T) {
 
 	cmd := newTextCmd()
 	_ = cmd.Flags().Set("tab", "TAB1")
-	Text(client, m.base(), "", cmd, nil)
+	Text(apiclient.Conn{Client: client, Base: m.base()}, cmd, nil)
 	if !strings.Contains(m.lastQuery, "tabId=TAB1") {
 		t.Errorf("expected tabId=TAB1, got %s", m.lastQuery)
 	}
@@ -177,7 +178,7 @@ func runTextAgainst(t *testing.T, response string) (stdout, stderr string) {
 
 	stderr = captureStderr(t, func() {
 		stdout = captureStdout(t, func() {
-			Text(m.server.Client(), m.base(), "", newTextCmd(), nil)
+			Text(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, newTextCmd(), nil)
 		})
 	})
 	return stdout, stderr

@@ -13,7 +13,7 @@ var stateCmd = &cobra.Command{
 	Long:  "Show current browser state for the current tab, or save, load, and manage persistent browser state (cookies, localStorage, sessionStorage).",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.StateCurrent(rt.Client, rt.Base, rt.Token, cmd)
+			browseractions.StateCurrent(rt, cmd)
 		})
 	},
 }
@@ -24,7 +24,7 @@ var stateListCmd = &cobra.Command{
 	Long:  "List all saved state files in the state directory.",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.StateList(rt.Client, rt.Base, rt.Token)
+			browseractions.StateList(rt)
 		})
 	},
 }
@@ -37,7 +37,7 @@ var stateSaveCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		name := operandOrFlag(cmd, args, "name")
 		runCLI(func(rt cliRuntime) {
-			browseractions.StateSave(rt.Client, rt.Base, rt.Token, cmd, name)
+			browseractions.StateSave(rt, cmd, name)
 		})
 	},
 }
@@ -50,7 +50,7 @@ var stateLoadCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		name := operandOrFlag(cmd, args, "name")
 		runCLI(func(rt cliRuntime) {
-			browseractions.StateLoad(rt.Client, rt.Base, rt.Token, cmd, name)
+			browseractions.StateLoad(rt, cmd, name)
 		})
 	},
 }
@@ -63,7 +63,7 @@ var stateShowCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		name := operandOrFlag(cmd, args, "name")
 		runCLI(func(rt cliRuntime) {
-			browseractions.StateShow(rt.Client, rt.Base, rt.Token, name)
+			browseractions.StateShow(rt, name)
 		})
 	},
 }
@@ -76,7 +76,7 @@ var stateDeleteCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		name := operandOrFlag(cmd, args, "name")
 		runCLI(func(rt cliRuntime) {
-			browseractions.StateDelete(rt.Client, rt.Base, rt.Token, name)
+			browseractions.StateDelete(rt, name)
 		})
 	},
 }
@@ -87,7 +87,7 @@ var stateCleanCmd = &cobra.Command{
 	Long:  "Delete state files older than a given number of hours (default: 24). Requires security.allowStateExport=true.",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.StateClean(rt.Client, rt.Base, rt.Token, cmd)
+			browseractions.StateClean(rt, cmd)
 		})
 	},
 }

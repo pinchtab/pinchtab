@@ -17,43 +17,43 @@ import (
 )
 
 // Back navigates the current (or specified) tab back in history.
-func Back(client *http.Client, base, token string, cmd *cobra.Command) {
-	historyNav(client, base, token, "back", cmd)
+func Back(conn apiclient.Conn, cmd *cobra.Command) {
+	historyNav(conn, "back", cmd)
 }
 
 // Forward navigates the current (or specified) tab forward in history.
-func Forward(client *http.Client, base, token string, cmd *cobra.Command) {
-	historyNav(client, base, token, "forward", cmd)
+func Forward(conn apiclient.Conn, cmd *cobra.Command) {
+	historyNav(conn, "forward", cmd)
 }
 
 // Reload reloads the current (or specified) tab.
-func Reload(client *http.Client, base, token string, cmd *cobra.Command) {
-	historyNav(client, base, token, "reload", cmd)
+func Reload(conn apiclient.Conn, cmd *cobra.Command) {
+	historyNav(conn, "reload", cmd)
 }
 
 // historyNav is the one body behind back, forward and reload. The server answers
 // all three from a single handler returning {"tabId","url"}, so the CLI reports
 // the landed URL the same way for each rather than keeping three copies that
 // drift — reload used to discard the response and print a bare OK.
-func historyNav(client *http.Client, base, token, action string, cmd *cobra.Command) {
+func historyNav(conn apiclient.Conn, action string, cmd *cobra.Command) {
 	tabID, _ := cmd.Flags().GetString("tab")
 	path := apiclient.TabPath(tabID, action)
 	path = appendDismissBannersQuery(path, cmd)
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoPost(client, base, token, path, nil)
+		conn.Post(path, nil)
 		return
 	}
 
-	result := apiclient.DoPostQuiet(client, base, token, path, nil)
+	result := apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, path, nil)
 	if landed := landedURL(result); landed != "" {
 		output.Value(landed)
 	} else {
 		output.Success()
 	}
 
-	printPostActionOutput(client, base, token, tabID, cmd)
+	printPostActionOutput(conn, tabID, cmd)
 }
 
 // printPostActionOutput runs the shared --snap / --snap-diff / --text tail. The
@@ -62,14 +62,14 @@ func historyNav(client *http.Client, base, token, action string, cmd *cobra.Comm
 // implicit ref action (the common nav --snap then fill e0 flow) echoes it — the
 // resolved id is always non-empty here and keying implicit on it would never set
 // the current pointer.
-func printPostActionOutput(client *http.Client, base, token, tabID string, cmd *cobra.Command) {
+func printPostActionOutput(conn apiclient.Conn, tabID string, cmd *cobra.Command) {
 	snap, _ := cmd.Flags().GetBool("snap")
 	snapDiff, _ := cmd.Flags().GetBool("snap-diff")
 	if snap || snapDiff {
-		fetchAndPrintSnapshot(client, base, token, cmd, tabID, snapDiff)
+		fetchAndPrintSnapshot(conn, cmd, tabID, snapDiff)
 	}
 	if text, _ := cmd.Flags().GetBool("text"); text {
-		fetchAndPrintText(client, base, token, tabID)
+		fetchAndPrintText(conn, tabID)
 	}
 }
 
@@ -82,23 +82,23 @@ func landedURL(result map[string]any) string {
 	return landed
 }
 
-func Navigate(client *http.Client, base, token string, url string, cmd *cobra.Command) string {
+func Navigate(conn apiclient.Conn, url string, cmd *cobra.Command) string {
 	req := buildNavigateRequest(url, cmd)
 
 	if timeoutSeconds, ok := req.body["timeout"].(float64); ok {
-		client = navigationHTTPClient(client, timeoutSeconds)
+		conn.Client = navigationHTTPClient(conn.Client, timeoutSeconds)
 	}
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		result, usedFallback := postNavigate(client, base, token, req, true)
+		result, usedFallback := postNavigate(conn, req, true)
 		resultTabID := tabIDFromNavigateResult(result)
 		reportFallbackNewTab(cmd, usedFallback, req.tabID, resultTabID)
 		apiclient.SuggestNextAction("navigate", result)
 		return resultTabID
 	}
 
-	result, usedFallback := postNavigate(client, base, token, req, false)
+	result, usedFallback := postNavigate(conn, req, false)
 	resultTabID := tabIDFromNavigateResult(result)
 	reportFallbackNewTab(cmd, usedFallback, req.tabID, resultTabID)
 	stdout := navigateStdoutFor(cmd)
@@ -119,7 +119,7 @@ func Navigate(client *http.Client, base, token string, url string, cmd *cobra.Co
 		output.Advisory(cli.NoSessionHint)
 	}
 
-	printPostActionOutput(client, base, token, resultTabID, cmd)
+	printPostActionOutput(conn, resultTabID, cmd)
 
 	return resultTabID
 }
@@ -223,12 +223,12 @@ func navigationHTTPClient(client *http.Client, timeoutSeconds float64) *http.Cli
 
 // postNavigate returns the decoded response and whether the tab-scoped request
 // 404'd and was retried unscoped, which is the case the caller has to report.
-func postNavigate(client *http.Client, base, token string, req navigateRequest, printResponse bool) (map[string]any, bool) {
-	statusCode, respBody, result := apiclient.DoPostQuietWithStatus(client, base, token, req.path, req.body)
+func postNavigate(conn apiclient.Conn, req navigateRequest, printResponse bool) (map[string]any, bool) {
+	statusCode, respBody, result := apiclient.DoPostQuietWithStatus(conn.Client, conn.Base, conn.Token, req.path, req.body)
 	usedFallback := false
 	if statusCode == http.StatusNotFound && req.fallbackOnNotFound {
 		usedFallback = true
-		statusCode, respBody, result = apiclient.DoPostQuietWithStatus(client, base, token, "/navigate", req.body)
+		statusCode, respBody, result = apiclient.DoPostQuietWithStatus(conn.Client, conn.Base, conn.Token, "/navigate", req.body)
 	}
 	if statusCode >= 400 {
 		apiclient.ExitWithAPIError(statusCode, respBody)

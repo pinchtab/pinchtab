@@ -3,7 +3,6 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -12,8 +11,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func Title(client *http.Client, base, token string, cmd *cobra.Command) {
-	inspectGet(client, base, token, "/title", cmd, nil, func(body []byte) {
+func Title(conn apiclient.Conn, cmd *cobra.Command) {
+	inspectGet(conn, "/title", cmd, nil, func(body []byte) {
 		var result struct {
 			Title string `json:"title"`
 		}
@@ -25,8 +24,8 @@ func Title(client *http.Client, base, token string, cmd *cobra.Command) {
 	})
 }
 
-func URL(client *http.Client, base, token string, cmd *cobra.Command) {
-	inspectGet(client, base, token, "/url", cmd, nil, func(body []byte) {
+func URL(conn apiclient.Conn, cmd *cobra.Command) {
+	inspectGet(conn, "/url", cmd, nil, func(body []byte) {
 		var result struct {
 			URL string `json:"url"`
 		}
@@ -38,8 +37,8 @@ func URL(client *http.Client, base, token string, cmd *cobra.Command) {
 	})
 }
 
-func HTML(client *http.Client, base, token string, cmd *cobra.Command, args []string) {
-	inspectGet(client, base, token, "/html", cmd, args, func(body []byte) {
+func HTML(conn apiclient.Conn, cmd *cobra.Command, args []string) {
+	inspectGet(conn, "/html", cmd, args, func(body []byte) {
 		var result struct {
 			HTML string `json:"html"`
 		}
@@ -51,8 +50,8 @@ func HTML(client *http.Client, base, token string, cmd *cobra.Command, args []st
 	})
 }
 
-func Styles(client *http.Client, base, token string, cmd *cobra.Command, args []string) {
-	inspectGet(client, base, token, "/styles", cmd, args, func(body []byte) {
+func Styles(conn apiclient.Conn, cmd *cobra.Command, args []string) {
+	inspectGet(conn, "/styles", cmd, args, func(body []byte) {
 		var result struct {
 			Styles map[string]any `json:"styles"`
 		}
@@ -77,7 +76,7 @@ func Styles(client *http.Client, base, token string, cmd *cobra.Command, args []
 	})
 }
 
-func inspectGet(client *http.Client, base, token, path string, cmd *cobra.Command, args []string, terse func([]byte)) {
+func inspectGet(conn apiclient.Conn, path string, cmd *cobra.Command, args []string, terse func([]byte)) {
 	params := url.Values{}
 	if v, _ := cmd.Flags().GetString("tab"); v != "" {
 		params.Set("tabId", v)
@@ -109,9 +108,9 @@ func inspectGet(client *http.Client, base, token, path string, cmd *cobra.Comman
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoGet(client, base, token, path, params)
+		conn.Get(path, params)
 		return
 	}
-	body := apiclient.DoGetRaw(client, base, token, path, params)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, path, params)
 	terse(body)
 }

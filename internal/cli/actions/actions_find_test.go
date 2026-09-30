@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -30,7 +31,7 @@ func TestFind_NegativeQueryForwarded(t *testing.T) {
 
 	cmd := newFindCmd()
 	_ = cmd.Flags().Set("ref-only", "true")
-	Find(m.server.Client(), m.base(), "", "button not submit", cmd)
+	Find(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "button not submit", cmd)
 
 	if m.lastPath != "/find" {
 		t.Errorf("expected /find, got %s", m.lastPath)
@@ -50,7 +51,7 @@ func TestFind_VisualQueryWithTabRoute(t *testing.T) {
 	cmd := newFindCmd()
 	_ = cmd.Flags().Set("tab", "tab1")
 	_ = cmd.Flags().Set("ref-only", "true")
-	Find(m.server.Client(), m.base(), "", "bottom button", cmd)
+	Find(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "bottom button", cmd)
 
 	if m.lastPath != "/tabs/tab1/find" {
 		t.Errorf("expected /tabs/tab1/find, got %s", m.lastPath)
@@ -74,7 +75,7 @@ func TestFind_NoMatchPrintsTheEmptyStateNamingTheQuery(t *testing.T) {
 
 	cmd := newFindCmd()
 	out := captureStdout(t, func() {
-		Find(m.server.Client(), m.base(), "", "a unicorn that does not exist", cmd)
+		Find(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "a unicorn that does not exist", cmd)
 	})
 
 	want := `No elements matched "a unicorn that does not exist"`
@@ -92,7 +93,7 @@ func TestFind_AMatchDoesNotPrintTheEmptyState(t *testing.T) {
 
 	cmd := newFindCmd()
 	out := captureStdout(t, func() {
-		Find(m.server.Client(), m.base(), "", "the password box", cmd)
+		Find(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "the password box", cmd)
 	})
 
 	if strings.Contains(out, "No elements matched") {
@@ -112,7 +113,7 @@ func TestFind_JSONOutputCarriesNoEmptyStateLine(t *testing.T) {
 	cmd := newFindCmd()
 	_ = cmd.Flags().Set("json", "true")
 	out := captureStdout(t, func() {
-		Find(m.server.Client(), m.base(), "", "a unicorn that does not exist", cmd)
+		Find(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "a unicorn that does not exist", cmd)
 	})
 
 	if strings.Contains(out, "No elements matched") {
@@ -173,5 +174,5 @@ func runFindNoMatchChild(refOnly bool) {
 	if refOnly {
 		_ = cmd.Flags().Set("ref-only", "true")
 	}
-	Find(srv.Client(), srv.URL, "", "a unicorn that does not exist", cmd)
+	Find(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, "a unicorn that does not exist", cmd)
 }

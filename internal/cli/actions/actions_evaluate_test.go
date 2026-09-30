@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -21,7 +22,7 @@ func TestEvaluate(t *testing.T) {
 	client := m.server.Client()
 
 	cmd := newEvalCmd()
-	Evaluate(client, m.base(), "", []string{"document.title"}, cmd)
+	Evaluate(apiclient.Conn{Client: client, Base: m.base()}, []string{"document.title"}, cmd)
 	if m.lastPath != "/evaluate" {
 		t.Errorf("expected /evaluate, got %s", m.lastPath)
 	}
@@ -38,7 +39,7 @@ func TestEvaluateMultiWord(t *testing.T) {
 	client := m.server.Client()
 
 	cmd := newEvalCmd()
-	Evaluate(client, m.base(), "", []string{"1", "+", "2"}, cmd)
+	Evaluate(apiclient.Conn{Client: client, Base: m.base()}, []string{"1", "+", "2"}, cmd)
 	var body map[string]any
 	_ = json.Unmarshal([]byte(m.lastBody), &body)
 	if body["expression"] != "1 + 2" {
@@ -53,7 +54,7 @@ func TestEvaluateAwaitPromise(t *testing.T) {
 
 	cmd := newEvalCmd()
 	_ = cmd.Flags().Set("await-promise", "true")
-	Evaluate(client, m.base(), "", []string{"Promise.resolve(1)"}, cmd)
+	Evaluate(apiclient.Conn{Client: client, Base: m.base()}, []string{"Promise.resolve(1)"}, cmd)
 	var body map[string]any
 	_ = json.Unmarshal([]byte(m.lastBody), &body)
 	if body["awaitPromise"] != true {
@@ -67,7 +68,7 @@ func TestEvaluateAwaitPromiseOmittedByDefault(t *testing.T) {
 	client := m.server.Client()
 
 	cmd := newEvalCmd()
-	Evaluate(client, m.base(), "", []string{"document.title"}, cmd)
+	Evaluate(apiclient.Conn{Client: client, Base: m.base()}, []string{"document.title"}, cmd)
 	var body map[string]any
 	_ = json.Unmarshal([]byte(m.lastBody), &body)
 	if _, present := body["awaitPromise"]; present {

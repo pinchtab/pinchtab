@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -57,7 +58,7 @@ func TestExtractSendsTheSchemaFileUnchangedAndPrintsTypedData(t *testing.T) {
 	defer m.close()
 
 	out := captureStdout(t, func() {
-		Extract(m.server.Client(), m.base(), "", newExtractCmd(writeSchemaFile(t, extractTestSchema+"\n"), nil))
+		Extract(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, newExtractCmd(writeSchemaFile(t, extractTestSchema+"\n"), nil))
 	})
 
 	if m.lastPath != "/extract" {
@@ -91,7 +92,7 @@ func TestExtractReadsTheSchemaFromStdinAndForwardsScopeMaxItemsAndTab(t *testing
 
 	cmd := newExtractCmd("-", map[string]string{"scope": "role:table", "max-items": "2", "tab": "tab1"})
 	cmd.SetIn(strings.NewReader(extractTestSchema))
-	captureStdout(t, func() { Extract(m.server.Client(), m.base(), "", cmd) })
+	captureStdout(t, func() { Extract(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd) })
 
 	if m.lastPath != "/tabs/tab1/extract" {
 		t.Errorf("path = %s, want the tab route", m.lastPath)
@@ -119,7 +120,7 @@ func TestExtractFieldsAppendsTheRefTableAndExplainAddsScores(t *testing.T) {
 			defer m.close()
 
 			out := captureStdout(t, func() {
-				Extract(m.server.Client(), m.base(), "", newExtractCmd(writeSchemaFile(t, extractTestSchema), map[string]string{tc.flag: "true"}))
+				Extract(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, newExtractCmd(writeSchemaFile(t, extractTestSchema), map[string]string{tc.flag: "true"}))
 			})
 			for _, row := range tc.want {
 				if !strings.Contains(out, row+"\n") {
@@ -177,8 +178,8 @@ func TestExtractCapturesTheVocabularySoTheNextClickEchoesIt(t *testing.T) {
 	defer srv.Close()
 
 	captureStdout(t, func() {
-		Extract(srv.Client(), srv.URL, "", newExtractCmd(writeSchemaFile(t, extractTestSchema), nil))
-		Action(srv.Client(), srv.URL, "", "click", "e3", newActionCmd())
+		Extract(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, newExtractCmd(writeSchemaFile(t, extractTestSchema), nil))
+		Action(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, "click", "e3", newActionCmd())
 	})
 	if clickVocab != "vocab-extract" {
 		t.Errorf("click after extract echoed vocab %q, want the token extract returned", clickVocab)

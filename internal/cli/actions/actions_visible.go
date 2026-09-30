@@ -2,7 +2,6 @@ package actions
 
 import (
 	"encoding/json"
-	"net/http"
 	"net/url"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -11,7 +10,7 @@ import (
 )
 
 // Visible checks whether an element identified by ref is visible on the page.
-func Visible(client *http.Client, base, token string, cmd *cobra.Command, args []string) {
+func Visible(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 	if len(args) == 0 {
 		output.Error("visible", "ref argument is required", 1)
 		return
@@ -26,11 +25,11 @@ func Visible(client *http.Client, base, token string, cmd *cobra.Command, args [
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoGet(client, base, token, "/visible", params)
+		conn.Get("/visible", params)
 		return
 	}
 
-	body := apiclient.DoGetRaw(client, base, token, "/visible", params)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/visible", params)
 	var result struct {
 		Visible bool `json:"visible"`
 	}

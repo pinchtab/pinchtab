@@ -21,13 +21,13 @@ const scrapeTimeout = 15 * time.Minute
 const scrapeFormatMarkdown = "md"
 
 // Scrape runs a site scrape via POST /scrape and prints or writes the report.
-func Scrape(client *http.Client, base, token string, cmd *cobra.Command, target string) (err error) {
+func Scrape(conn apiclient.Conn, cmd *cobra.Command, target string) (err error) {
 	format := renderFormat(cmd)
 	if format != "json" && format != scrapeFormatMarkdown {
 		return fmt.Errorf("unsupported --format %q (json or md)", format)
 	}
 
-	base, cleanup, err := applyRunAuth(client, base, token, cmd, target)
+	conn, cleanup, err := applyRunAuth(conn, cmd, target)
 	if err != nil {
 		return err
 	}
@@ -74,8 +74,8 @@ func Scrape(client *http.Client, base, token string, cmd *cobra.Command, target 
 		body["only"] = v
 	}
 
-	longClient := &http.Client{Transport: client.Transport, Timeout: scrapeTimeout}
-	raw, err := apiclient.DoRawE(longClient, base, token, http.MethodPost, "/scrape", apiclient.WithBody(body))
+	longClient := &http.Client{Transport: conn.Client.Transport, Timeout: scrapeTimeout}
+	raw, err := apiclient.DoRawE(longClient, conn.Base, conn.Token, http.MethodPost, "/scrape", apiclient.WithBody(body))
 	if err != nil {
 		return err
 	}

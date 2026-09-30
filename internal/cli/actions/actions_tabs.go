@@ -3,7 +3,6 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -12,15 +11,15 @@ import (
 )
 
 // TabList lists all open tabs.
-func TabList(client *http.Client, base, token string, cmd *cobra.Command) {
+func TabList(conn apiclient.Conn, cmd *cobra.Command) {
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoGet(client, base, token, "/tabs", nil)
+		conn.Get("/tabs", nil)
 		return
 	}
 
 	// Terse: one line per tab: [*]<id>\t<url>\t<title>
-	body := apiclient.DoGetRaw(client, base, token, "/tabs", nil)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/tabs", nil)
 	var tabs []map[string]any
 	if err := json.Unmarshal(body, &tabs); err != nil {
 		fmt.Println(string(body))
@@ -40,28 +39,28 @@ func TabList(client *http.Client, base, token string, cmd *cobra.Command) {
 }
 
 // TabClose closes a tab by ID.
-func TabClose(client *http.Client, base, token string, tabID string, cmd *cobra.Command) {
+func TabClose(conn apiclient.Conn, tabID string, cmd *cobra.Command) {
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoPost(client, base, token, "/close", map[string]any{"tabId": tabID})
+		conn.Post("/close", map[string]any{"tabId": tabID})
 		return
 	}
 
-	apiclient.DoPostQuiet(client, base, token, "/close", map[string]any{"tabId": tabID})
+	apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, "/close", map[string]any{"tabId": tabID})
 	output.Success()
 }
 
 // TabFocus switches to a tab by ID, making it the active tab
 // for subsequent commands.
-func TabFocus(client *http.Client, base, token string, tabID string, cmd *cobra.Command) string {
-	resolvedTabID, err := resolveTabReference(client, base, token, tabID)
+func TabFocus(conn apiclient.Conn, tabID string, cmd *cobra.Command) string {
+	resolvedTabID, err := resolveTabReference(conn, tabID)
 	if err != nil {
 		cli.Fatal("%v", err)
 	}
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		result := apiclient.DoPost(client, base, token, "/tab", map[string]any{
+		result := conn.Post("/tab", map[string]any{
 			"action": "focus",
 			"tabId":  resolvedTabID,
 		})
@@ -71,7 +70,7 @@ func TabFocus(client *http.Client, base, token string, tabID string, cmd *cobra.
 		return resolvedTabID
 	}
 
-	result := apiclient.DoPostQuiet(client, base, token, "/tab", map[string]any{
+	result := apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, "/tab", map[string]any{
 		"action": "focus",
 		"tabId":  resolvedTabID,
 	})
@@ -84,7 +83,7 @@ func TabFocus(client *http.Client, base, token string, tabID string, cmd *cobra.
 }
 
 // TabHandoff pauses automation on a tab for manual operator intervention.
-func TabHandoff(client *http.Client, base, token, tabID, reason string, timeoutMS int, cmd *cobra.Command) {
+func TabHandoff(conn apiclient.Conn, tabID, reason string, timeoutMS int, cmd *cobra.Command) {
 	body := map[string]any{}
 	if reason != "" {
 		body["reason"] = reason
@@ -94,10 +93,10 @@ func TabHandoff(client *http.Client, base, token, tabID, reason string, timeoutM
 	}
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoPost(client, base, token, apiclient.TabPath(tabID, "handoff"), body)
+		conn.Post(apiclient.TabPath(tabID, "handoff"), body)
 		return
 	}
-	apiclient.DoPostQuiet(client, base, token, apiclient.TabPath(tabID, "handoff"), body)
+	apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, apiclient.TabPath(tabID, "handoff"), body)
 	output.Value("paused")
 	if reason != "" {
 		output.Hint(fmt.Sprintf("reason: %s", reason))
@@ -105,28 +104,28 @@ func TabHandoff(client *http.Client, base, token, tabID, reason string, timeoutM
 }
 
 // TabResume resumes automation on a tab after manual intervention.
-func TabResume(client *http.Client, base, token, tabID, status string, cmd *cobra.Command) {
+func TabResume(conn apiclient.Conn, tabID, status string, cmd *cobra.Command) {
 	body := map[string]any{}
 	if status != "" {
 		body["status"] = status
 	}
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoPost(client, base, token, apiclient.TabPath(tabID, "resume"), body)
+		conn.Post(apiclient.TabPath(tabID, "resume"), body)
 		return
 	}
-	apiclient.DoPostQuiet(client, base, token, apiclient.TabPath(tabID, "resume"), body)
+	apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, apiclient.TabPath(tabID, "resume"), body)
 	output.Value("resumed")
 }
 
 // TabHandoffStatus shows whether a tab is in paused_handoff or active state.
-func TabHandoffStatus(client *http.Client, base, token, tabID string, cmd *cobra.Command) {
+func TabHandoffStatus(conn apiclient.Conn, tabID string, cmd *cobra.Command) {
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoGet(client, base, token, apiclient.TabPath(tabID, "handoff"), nil)
+		conn.Get(apiclient.TabPath(tabID, "handoff"), nil)
 		return
 	}
-	body := apiclient.DoGetRaw(client, base, token, apiclient.TabPath(tabID, "handoff"), nil)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, apiclient.TabPath(tabID, "handoff"), nil)
 	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		fmt.Println(string(body))

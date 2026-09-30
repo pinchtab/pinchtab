@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,7 +18,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func RecordStart(client *http.Client, base, token string, cmd *cobra.Command, args []string) {
+func RecordStart(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 	outFile := args[0]
 
 	ext := strings.ToLower(filepath.Ext(outFile))
@@ -50,13 +49,13 @@ func RecordStart(client *http.Client, base, token string, cmd *cobra.Command, ar
 		body["tabId"] = tab
 	}
 
-	apiclient.DoPost(client, base, token, "/record/start", body)
+	conn.Post("/record/start", body)
 
 	writeRecordingState(outFile)
 	fmt.Println(cli.StyleStdout(cli.SuccessStyle, fmt.Sprintf("Recording started → %s (%s, %d fps)", outFile, format, fps)))
 }
 
-func RecordStop(client *http.Client, base, token string) {
+func RecordStop(conn apiclient.Conn) {
 	outFile := readRecordingState()
 	autoNamed := outFile == ""
 	if autoNamed {
@@ -70,7 +69,7 @@ func RecordStop(client *http.Client, base, token string) {
 
 	// Server encodes to its own recordings directory; we move the file
 	// to the user's desired location after encoding completes.
-	raw := apiclient.DoPostRaw(client, base, token, "/record/stop", map[string]any{})
+	raw := apiclient.DoPostRaw(conn.Client, conn.Base, conn.Token, "/record/stop", map[string]any{})
 	clearRecordingState()
 
 	if raw == nil {
@@ -98,7 +97,7 @@ func RecordStop(client *http.Client, base, token string) {
 
 	serverPath := result.Path
 	err = readiness.WaitForRecordEncode(context.Background(), func() ([]byte, error) {
-		raw := apiclient.DoGetRaw(client, base, token, "/record/status", nil)
+		raw := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/record/status", nil)
 		if raw == nil {
 			return nil, errors.New("no status response")
 		}
@@ -112,7 +111,7 @@ func RecordStop(client *http.Client, base, token string) {
 	}
 
 	var warning string
-	if raw := apiclient.DoGetRaw(client, base, token, "/record/status", nil); raw != nil {
+	if raw := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/record/status", nil); raw != nil {
 		var st struct {
 			Warning string `json:"warning"`
 		}
@@ -146,8 +145,8 @@ func RecordStop(client *http.Client, base, token string) {
 	}
 }
 
-func RecordStatus(client *http.Client, base, token string) {
-	raw := apiclient.DoGetRaw(client, base, token, "/record/status", nil)
+func RecordStatus(conn apiclient.Conn) {
+	raw := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/record/status", nil)
 	if raw == nil {
 		return
 	}

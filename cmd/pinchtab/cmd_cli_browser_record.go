@@ -16,7 +16,7 @@ var recordStartCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.RecordStart(rt.Client, rt.Base, rt.Token, cmd, args)
+			browseractions.RecordStart(rt, cmd, args)
 		})
 	},
 }
@@ -26,7 +26,7 @@ var recordStopCmd = &cobra.Command{
 	Short: "Stop recording and save",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.RecordStop(rt.Client, rt.Base, rt.Token)
+			browseractions.RecordStop(rt)
 		})
 	},
 }
@@ -36,7 +36,7 @@ var recordStatusCmd = &cobra.Command{
 	Short: "Check recording status",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.RecordStatus(rt.Client, rt.Base, rt.Token)
+			browseractions.RecordStatus(rt)
 		})
 	},
 }

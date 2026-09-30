@@ -16,12 +16,12 @@ import (
 
 // Compare audits the same pages on two base URLs and reports visual and
 // data differences per page.
-func Compare(client *http.Client, base, token string, cmd *cobra.Command, liveBase, stagingBase string) (err error) {
+func Compare(conn apiclient.Conn, cmd *cobra.Command, liveBase, stagingBase string) (err error) {
 	paths := comparePaths(cmd)
 	visual := mustBool(cmd, "visual-diff")
 	concurrency, _ := cmd.Flags().GetInt("concurrency")
 
-	base, cleanup, err := applyRunAuth(client, base, token, cmd, liveBase)
+	conn, cleanup, err := applyRunAuth(conn, cmd, liveBase)
 	if err != nil {
 		return err
 	}
@@ -44,13 +44,13 @@ func Compare(client *http.Client, base, token string, cmd *cobra.Command, liveBa
 			}
 		}
 		if len(stagingCookies) > 0 {
-			if err := setRunCookies(client, base, token, stagingBase, stagingCookies); err != nil {
+			if err := setRunCookies(conn, stagingBase, stagingCookies); err != nil {
 				return fmt.Errorf("set staging run cookies: %w", err)
 			}
 		}
 	}
 
-	longClient := &http.Client{Transport: client.Transport, Timeout: auditTimeout}
+	longClient := &http.Client{Transport: conn.Client.Transport, Timeout: auditTimeout}
 	runSide := func(siteBase string) (audit.AuditReport, error) {
 		body := map[string]any{
 			"urls":    joinPaths(siteBase, paths),
@@ -59,7 +59,7 @@ func Compare(client *http.Client, base, token string, cmd *cobra.Command, liveBa
 		if concurrency > 0 {
 			body["concurrency"] = concurrency
 		}
-		raw, err := apiclient.DoRawE(longClient, base, token, http.MethodPost, "/audit", apiclient.WithBody(body))
+		raw, err := apiclient.DoRawE(longClient, conn.Base, conn.Token, http.MethodPost, "/audit", apiclient.WithBody(body))
 		if err != nil {
 			return audit.AuditReport{}, err
 		}

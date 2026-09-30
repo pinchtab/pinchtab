@@ -2,14 +2,14 @@ package actions
 
 import (
 	"fmt"
-	"net/http"
 	"strconv"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
 // SetGeolocation sets the browser geolocation via the HTTP API.
-func SetGeolocation(client *http.Client, base, token string, cmd *cobra.Command, args []string) {
+func SetGeolocation(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 	requireArgs(args, 2, "set geo requires <latitude> <longitude> arguments")
 	latitude := parseFloatArg("latitude", args[0])
 	longitude := parseFloatArg("longitude", args[1])
@@ -19,7 +19,7 @@ func SetGeolocation(client *http.Client, base, token string, cmd *cobra.Command,
 		body["accuracy"] = accuracy
 	}
 
-	postEmulation(client, base, token, cmd, "geolocation", body, func(map[string]any) string {
+	postEmulation(conn, cmd, "geolocation", body, func(map[string]any) string {
 		return fmt.Sprintf("%.6f,%.6f", latitude, longitude)
 	})
 }

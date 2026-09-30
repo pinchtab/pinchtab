@@ -3,13 +3,12 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strconv"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 )
 
-func resolveTabReference(client *http.Client, base, token, ref string) (string, error) {
+func resolveTabReference(conn apiclient.Conn, ref string) (string, error) {
 	index, err := strconv.Atoi(ref)
 	if err != nil {
 		return ref, nil
@@ -18,7 +17,7 @@ func resolveTabReference(client *http.Client, base, token, ref string) (string, 
 		return "", fmt.Errorf("tab index %d out of range", index)
 	}
 
-	tabIDs, err := listTabIDs(client, base, token)
+	tabIDs, err := listTabIDs(conn)
 	if err != nil {
 		return "", err
 	}
@@ -28,8 +27,8 @@ func resolveTabReference(client *http.Client, base, token, ref string) (string, 
 	return tabIDs[index-1], nil
 }
 
-func listTabIDs(client *http.Client, base, token string) ([]string, error) {
-	body := apiclient.DoGetRaw(client, base, token, "/tabs", nil)
+func listTabIDs(conn apiclient.Conn) ([]string, error) {
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/tabs", nil)
 	var resp struct {
 		Tabs []struct {
 			ID string `json:"id"`

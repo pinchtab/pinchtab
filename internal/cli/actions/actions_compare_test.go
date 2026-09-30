@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/audit"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -59,7 +60,7 @@ func runCompareGate(t *testing.T, live, staging audit.BrowserPageData) (*cobra.C
 	srv := compareStub(t, live, staging)
 	defer srv.Close()
 	cmd := newCompareTestCmd("--fail-on-diff")
-	return cmd, Compare(http.DefaultClient, srv.URL, "", cmd, compareLiveBase, compareStagingBase)
+	return cmd, Compare(apiclient.Conn{Client: http.DefaultClient, Base: srv.URL}, cmd, compareLiveBase, compareStagingBase)
 }
 
 func TestCompareGateFailsOnEitherErrorChannel(t *testing.T) {

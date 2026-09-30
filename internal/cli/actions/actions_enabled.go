@@ -2,7 +2,6 @@ package actions
 
 import (
 	"encoding/json"
-	"net/http"
 	"net/url"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -11,7 +10,7 @@ import (
 )
 
 // Enabled checks whether an element identified by ref is enabled (not disabled).
-func Enabled(client *http.Client, base, token string, cmd *cobra.Command, args []string) {
+func Enabled(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 	if len(args) == 0 {
 		output.Error("enabled", "ref argument is required", 1)
 		return
@@ -26,11 +25,11 @@ func Enabled(client *http.Client, base, token string, cmd *cobra.Command, args [
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoGet(client, base, token, "/enabled", params)
+		conn.Get("/enabled", params)
 		return
 	}
 
-	body := apiclient.DoGetRaw(client, base, token, "/enabled", params)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/enabled", params)
 	var result struct {
 		Enabled bool `json:"enabled"`
 	}

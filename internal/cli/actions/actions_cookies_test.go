@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -76,13 +77,13 @@ func TestCookiesSetThenGetRoundTripsThroughTheCLI(t *testing.T) {
 	srv := cookieJarServer(t, jar)
 	defer srv.Close()
 
-	CookiesSet(http.DefaultClient, srv.URL, "", newCookiesTestCmd("--tab", "tab1"), "session", "abc123")
+	CookiesSet(apiclient.Conn{Client: http.DefaultClient, Base: srv.URL}, newCookiesTestCmd("--tab", "tab1"), "session", "abc123")
 	if jar["session"] != "abc123" {
 		t.Fatalf("jar = %v, want the cookie the CLI set", jar)
 	}
 
 	out := captureStdout(t, func() {
-		CookiesGet(http.DefaultClient, srv.URL, "", newCookiesTestCmd("--tab", "tab1", "--name", "session"))
+		CookiesGet(apiclient.Conn{Client: http.DefaultClient, Base: srv.URL}, newCookiesTestCmd("--tab", "tab1", "--name", "session"))
 	})
 	if !strings.Contains(out, "abc123") || !strings.Contains(out, "session") {
 		t.Fatalf("cookies get printed %q, want the value that was just set", out)
@@ -103,7 +104,7 @@ func TestCookiesSetSendsAnEmptyValue(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	CookiesSet(http.DefaultClient, srv.URL, "", newCookiesTestCmd(), "session", "")
+	CookiesSet(apiclient.Conn{Client: http.DefaultClient, Base: srv.URL}, newCookiesTestCmd(), "session", "")
 
 	cookies, ok := body["cookies"].([]any)
 	if !ok || len(cookies) != 1 {
@@ -132,7 +133,7 @@ func TestCookiesSetForwardsOnlyTheFlagsGiven(t *testing.T) {
 	defer srv.Close()
 
 	cmd := newCookiesTestCmd("--domain", "example.com", "--secure", "--tab", "tab1")
-	CookiesSet(http.DefaultClient, srv.URL, "", cmd, "session", "abc")
+	CookiesSet(apiclient.Conn{Client: http.DefaultClient, Base: srv.URL}, cmd, "session", "abc")
 
 	cookies, ok := body["cookies"].([]any)
 	if !ok || len(cookies) != 1 {
@@ -197,7 +198,7 @@ func TestCookiesSetAndClearPrintExactlyOnce(t *testing.T) {
 
 	t.Run("set --json is one object", func(t *testing.T) {
 		out := captureStdout(t, func() {
-			CookiesSet(http.DefaultClient, srv.URL, "", newCookiesTestCmd("--json"), "z1", "v1")
+			CookiesSet(apiclient.Conn{Client: http.DefaultClient, Base: srv.URL}, newCookiesTestCmd("--json"), "z1", "v1")
 		})
 		if n := countJSONObjects(t, out); n != 1 {
 			t.Errorf("set --json emitted %d JSON objects, want exactly 1: %q", n, out)
@@ -206,7 +207,7 @@ func TestCookiesSetAndClearPrintExactlyOnce(t *testing.T) {
 
 	t.Run("set terse is only the status line", func(t *testing.T) {
 		out := captureStdout(t, func() {
-			CookiesSet(http.DefaultClient, srv.URL, "", newCookiesTestCmd(), "z2", "v2")
+			CookiesSet(apiclient.Conn{Client: http.DefaultClient, Base: srv.URL}, newCookiesTestCmd(), "z2", "v2")
 		})
 		if strings.Contains(out, "{") {
 			t.Errorf("terse set printed a JSON body before its status line: %q", out)
@@ -218,7 +219,7 @@ func TestCookiesSetAndClearPrintExactlyOnce(t *testing.T) {
 
 	t.Run("clear --json is one object", func(t *testing.T) {
 		out := captureStdout(t, func() {
-			CookiesClear(http.DefaultClient, srv.URL, "", newCookiesTestCmd("--json"))
+			CookiesClear(apiclient.Conn{Client: http.DefaultClient, Base: srv.URL}, newCookiesTestCmd("--json"))
 		})
 		if n := countJSONObjects(t, out); n != 1 {
 			t.Errorf("clear --json emitted %d JSON objects, want exactly 1: %q", n, out)
@@ -227,7 +228,7 @@ func TestCookiesSetAndClearPrintExactlyOnce(t *testing.T) {
 
 	t.Run("clear terse is only the status line", func(t *testing.T) {
 		out := captureStdout(t, func() {
-			CookiesClear(http.DefaultClient, srv.URL, "", newCookiesTestCmd())
+			CookiesClear(apiclient.Conn{Client: http.DefaultClient, Base: srv.URL}, newCookiesTestCmd())
 		})
 		if strings.Contains(out, "{") {
 			t.Errorf("terse clear printed a JSON body before its status line: %q", out)

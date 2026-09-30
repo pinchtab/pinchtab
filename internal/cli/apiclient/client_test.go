@@ -129,9 +129,9 @@ func TestNavSnapCapturesTokenSoNextActionIsNotRefused(t *testing.T) {
 	defer srv.httpServer.Close()
 	base, client := srv.httpServer.URL, srv.httpServer.Client()
 
-	actions.Snapshot(client, base, "", snapshotOnlyCmd(""), "") // files X-e1, current=X
-	actions.Navigate(client, base, "", "http://example.test", navCmd("", true, false))
-	actions.Action(client, base, "", "fill", "e0", actionCmd("", false))
+	actions.Snapshot(apiclient.Conn{Client: client, Base: base}, snapshotOnlyCmd(""), "") // files X-e1, current=X
+	actions.Navigate(apiclient.Conn{Client: client, Base: base}, "http://example.test", navCmd("", true, false))
+	actions.Action(apiclient.Conn{Client: client, Base: base}, "fill", "e0", actionCmd("", false))
 
 	if !srv.hadVocab {
 		t.Fatal("the action after nav --snap sent no token; a superseded ref would be resolved positionally")
@@ -148,9 +148,9 @@ func TestNavSnapDiffCapturesTokenToo(t *testing.T) {
 	defer srv.httpServer.Close()
 	base, client := srv.httpServer.URL, srv.httpServer.Client()
 
-	actions.Snapshot(client, base, "", snapshotOnlyCmd(""), "")
-	actions.Navigate(client, base, "", "http://example.test", navCmd("", false, true))
-	actions.Action(client, base, "", "fill", "e0", actionCmd("", false))
+	actions.Snapshot(apiclient.Conn{Client: client, Base: base}, snapshotOnlyCmd(""), "")
+	actions.Navigate(apiclient.Conn{Client: client, Base: base}, "http://example.test", navCmd("", false, true))
+	actions.Action(apiclient.Conn{Client: client, Base: base}, "fill", "e0", actionCmd("", false))
 
 	if srv.lastVocab != "X-e2" {
 		t.Fatalf("action after nav --snap-diff echoed %q, want X-e2", srv.lastVocab)
@@ -166,9 +166,9 @@ func TestPostActionSnapCapturesTheNewToken(t *testing.T) {
 	defer srv.httpServer.Close()
 	base, client := srv.httpServer.URL, srv.httpServer.Client()
 
-	actions.Snapshot(client, base, "", snapshotOnlyCmd(""), "") // files X-e1, current=X
-	actions.Action(client, base, "", "click", "e0", actionCmd("", true))
-	actions.Action(client, base, "", "fill", "e0", actionCmd("", false))
+	actions.Snapshot(apiclient.Conn{Client: client, Base: base}, snapshotOnlyCmd(""), "") // files X-e1, current=X
+	actions.Action(apiclient.Conn{Client: client, Base: base}, "click", "e0", actionCmd("", true))
+	actions.Action(apiclient.Conn{Client: client, Base: base}, "fill", "e0", actionCmd("", false))
 
 	if srv.lastVocab != "X-e2" {
 		t.Fatalf("the second action echoed %q, want X-e2 (captured by the first click's --snap tail)", srv.lastVocab)
@@ -186,7 +186,7 @@ func TestSnapTailDoesNotExitWhenSnapshotFails(t *testing.T) {
 	defer srv.httpServer.Close()
 	base, client := srv.httpServer.URL, srv.httpServer.Client()
 
-	actions.Action(client, base, "", "click", "e0", actionCmd("", true))
+	actions.Action(apiclient.Conn{Client: client, Base: base}, "click", "e0", actionCmd("", true))
 
 	if tok := apiclient.VocabTokenFor(base, "X"); tok != "" {
 		t.Fatalf("a failed snapshot stored a token %q; nothing should be captured from a non-2xx", tok)

@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -58,7 +59,7 @@ func TestProfilesPruneWithoutConfirmAsksForADryRun(t *testing.T) {
 	defer srv.Close()
 
 	out := captureStdout(t, func() {
-		ProfilesPrune(srv.Client(), srv.URL, "", newPruneTestCmd())
+		ProfilesPrune(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, newPruneTestCmd())
 	})
 
 	if hits.Load() != 1 {
@@ -86,7 +87,7 @@ func TestProfilesPruneWithConfirmAsksForRemovalAndReportsWhatWasFreed(t *testing
 	defer srv.Close()
 
 	out := captureStdout(t, func() {
-		ProfilesPrune(srv.Client(), srv.URL, "", newPruneTestCmd("--confirm"))
+		ProfilesPrune(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, newPruneTestCmd("--confirm"))
 	})
 
 	if !sent.Confirm {
@@ -104,7 +105,7 @@ func TestProfilesPruneForwardsTheNamedProfile(t *testing.T) {
 	defer srv.Close()
 
 	captureStdout(t, func() {
-		ProfilesPrune(srv.Client(), srv.URL, "", newPruneTestCmd("--confirm", "--profile", "work.quarantine-1700000002"))
+		ProfilesPrune(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, newPruneTestCmd("--confirm", "--profile", "work.quarantine-1700000002"))
 	})
 
 	if sent.Profile != "work.quarantine-1700000002" {
@@ -121,7 +122,7 @@ func TestProfilesPruneSaysSoWhenThereIsNothingToReclaim(t *testing.T) {
 	defer srv.Close()
 
 	out := captureStdout(t, func() {
-		ProfilesPrune(srv.Client(), srv.URL, "", newPruneTestCmd())
+		ProfilesPrune(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, newPruneTestCmd())
 	})
 
 	if !strings.Contains(out, "No quarantined profiles to reclaim") {

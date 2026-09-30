@@ -3,7 +3,6 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
@@ -14,7 +13,7 @@ import (
 // Annotate injects (or clears) the persistent, clickable annotation overlay.
 // On inject it prints a legend correlating each visible ref label with its role
 // and accessible name, mirroring `screenshot --annotate`.
-func Annotate(client *http.Client, base, token string, cmd *cobra.Command) {
+func Annotate(conn apiclient.Conn, cmd *cobra.Command) {
 	params := url.Values{}
 	if v, _ := cmd.Flags().GetString("selector"); v != "" {
 		params.Set("selector", v)
@@ -25,14 +24,14 @@ func Annotate(client *http.Client, base, token string, cmd *cobra.Command) {
 
 	if clear, _ := cmd.Flags().GetBool("clear"); clear {
 		params.Set("clear", "true")
-		if apiclient.DoGetRaw(client, base, token, "/annotate", params) == nil {
+		if apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/annotate", params) == nil {
 			return
 		}
 		fmt.Println(cli.StyleStdout(cli.SuccessStyle, "Overlay cleared"))
 		return
 	}
 
-	raw := apiclient.DoGetRaw(client, base, token, "/annotate", params, apiclient.CaptureVocab(params.Get("tabId") == ""))
+	raw := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/annotate", params, apiclient.CaptureVocab(params.Get("tabId") == ""))
 	if raw == nil {
 		return
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/scroll"
 	"github.com/spf13/cobra"
 )
@@ -984,7 +985,7 @@ func cliSelectBody(t *testing.T, value string) string {
 	cmd.Flags().Bool("snap", false, "")
 	cmd.Flags().Bool("snap-diff", false, "")
 	cmd.Flags().Bool("text", false, "")
-	browseractions.ActionSimple(srv.Client(), srv.URL, "", "select", []string{"e5", value}, cmd)
+	browseractions.ActionSimple(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, "select", []string{"e5", value}, cmd)
 
 	return string(raw)
 }
@@ -1032,7 +1033,7 @@ func cliScrollBody(t *testing.T, keyword string) map[string]any {
 	cmd.Flags().Bool("text", false, "")
 	cmd.Flags().Int("dy", 0, "")
 	cmd.Flags().Int("dx", 0, "")
-	browseractions.ActionSimple(srv.Client(), srv.URL, "", "scroll", []string{keyword}, cmd)
+	browseractions.ActionSimple(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, "scroll", []string{keyword}, cmd)
 
 	var body map[string]any
 	if err := json.Unmarshal(raw, &body); err != nil {

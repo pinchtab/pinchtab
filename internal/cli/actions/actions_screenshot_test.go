@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -22,7 +23,7 @@ func TestScreenshot(t *testing.T) {
 	cmd.Flags().String("selector", "#target", "")
 	cmd.Flags().String("scale", "0.5", "")
 	cmd.Flags().String("tab", "", "")
-	Screenshot(client, m.base(), "", cmd)
+	Screenshot(apiclient.Conn{Client: client, Base: m.base()}, cmd)
 	if m.lastPath != "/screenshot" {
 		t.Errorf("expected /screenshot, got %s", m.lastPath)
 	}
@@ -53,7 +54,7 @@ func TestScreenshotInfersPNGFromOutputExtension(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.Flags().String("output", outFile, "")
 	cmd.Flags().String("format", "", "")
-	Screenshot(m.server.Client(), m.base(), "", cmd)
+	Screenshot(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd)
 
 	if !strings.Contains(m.lastQuery, "format=png") {
 		t.Fatalf("query = %q, want format=png inferred from output extension", m.lastQuery)

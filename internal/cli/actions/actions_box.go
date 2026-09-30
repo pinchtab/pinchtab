@@ -3,7 +3,6 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -12,7 +11,7 @@ import (
 )
 
 // Box retrieves the bounding box of an element identified by ref.
-func Box(client *http.Client, base, token string, cmd *cobra.Command, args []string) {
+func Box(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 	if len(args) == 0 {
 		output.Error("box", "ref argument is required", 1)
 		return
@@ -27,11 +26,11 @@ func Box(client *http.Client, base, token string, cmd *cobra.Command, args []str
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoGet(client, base, token, "/box", params)
+		conn.Get("/box", params)
 		return
 	}
 
-	body := apiclient.DoGetRaw(client, base, token, "/box", params)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/box", params)
 	var result struct {
 		Box struct {
 			X      float64 `json:"x"`

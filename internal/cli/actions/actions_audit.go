@@ -36,41 +36,42 @@ func mustBool(cmd *cobra.Command, name string) bool {
 // applyRunAuth resolves --profile routing and injects --cookie /
 // --cookies-file cookies before the run. Cookie-authenticated runs receive a
 // disposable instance so they never alter a persistent browser profile.
-func applyRunAuth(client *http.Client, base, token string, cmd *cobra.Command, scopeURLs ...string) (string, func() error, error) {
+func applyRunAuth(conn apiclient.Conn, cmd *cobra.Command, scopeURLs ...string) (apiclient.Conn, func() error, error) {
 	cookies, err := loadRunCookies(cmd)
 	if err != nil {
-		return "", nil, err
+		return apiclient.Conn{}, nil, err
 	}
 	if len(cookies) == 0 {
 		if profile := mustString(cmd, "profile"); profile != "" {
-			base, err = resolveProfileBase(client, base, token, profile)
+			conn.Base, err = resolveProfileBase(conn, profile)
 			if err != nil {
-				return "", nil, err
+				return apiclient.Conn{}, nil, err
 			}
 		}
-		return base, func() error { return nil }, nil
+		return conn, func() error { return nil }, nil
 	}
 	if mustString(cmd, "profile") != "" {
-		return "", nil, fmt.Errorf("--profile cannot be combined with --cookie or --cookies-file; cookie-authenticated runs use an isolated temporary instance")
+		return apiclient.Conn{}, nil, fmt.Errorf("--profile cannot be combined with --cookie or --cookies-file; cookie-authenticated runs use an isolated temporary instance")
 	}
 	scopes := cookieScopeURLs(scopeURLs)
 	if len(scopes) == 0 {
-		return "", nil, fmt.Errorf("cookie injection requires a URL target")
+		return apiclient.Conn{}, nil, fmt.Errorf("cookie injection requires a URL target")
 	}
 
-	instanceBase, cleanup, err := startIsolatedInstance(client, base, token)
+	instanceBase, cleanup, err := startIsolatedInstance(conn)
 	if err != nil {
-		return "", nil, err
+		return apiclient.Conn{}, nil, err
 	}
+	conn.Base = instanceBase
 	for _, scope := range scopes {
-		if err := setRunCookies(client, instanceBase, token, scope, cookies); err != nil {
+		if err := setRunCookies(conn, scope, cookies); err != nil {
 			if cleanupErr := cleanup(); cleanupErr != nil {
-				return "", nil, fmt.Errorf("set run cookies: %w (also failed to stop isolated instance: %v)", err, cleanupErr)
+				return apiclient.Conn{}, nil, fmt.Errorf("set run cookies: %w (also failed to stop isolated instance: %w)", err, cleanupErr)
 			}
-			return "", nil, fmt.Errorf("set run cookies: %w", err)
+			return apiclient.Conn{}, nil, fmt.Errorf("set run cookies: %w", err)
 		}
 	}
-	return instanceBase, cleanup, nil
+	return conn, cleanup, nil
 }
 
 func cookieScopeURLs(urls []string) []string {
@@ -109,8 +110,8 @@ func loadRunCookies(cmd *cobra.Command) ([]audit.Cookie, error) {
 
 // setRunCookies injects cookies through POST /cookies, using a throwaway
 // blank tab for the required tab context so it works on a fresh browser.
-func setRunCookies(client *http.Client, base, token, url string, cookies []audit.Cookie) error {
-	raw, err := apiclient.DoRawE(client, base, token, http.MethodPost, "/tab", apiclient.WithBody(map[string]any{"action": "new"}))
+func setRunCookies(conn apiclient.Conn, url string, cookies []audit.Cookie) error {
+	raw, err := conn.Raw(http.MethodPost, "/tab", apiclient.WithBody(map[string]any{"action": "new"}))
 	if err != nil {
 		return err
 	}
@@ -122,14 +123,14 @@ func setRunCookies(client *http.Client, base, token, url string, cookies []audit
 	}
 	if tab.TabID != "" {
 		defer func() {
-			_, _ = apiclient.DoRawE(client, base, token, http.MethodPost, "/close", apiclient.WithBody(map[string]any{"tabId": tab.TabID}))
+			_, _ = conn.Raw(http.MethodPost, "/close", apiclient.WithBody(map[string]any{"tabId": tab.TabID}))
 		}()
 	}
 	body := map[string]any{"url": url, "cookies": cookies}
 	if tab.TabID != "" {
 		body["tabId"] = tab.TabID
 	}
-	raw, err = apiclient.DoRawE(client, base, token, http.MethodPost, "/cookies", apiclient.WithBody(body))
+	raw, err = conn.Raw(http.MethodPost, "/cookies", apiclient.WithBody(body))
 	if err != nil {
 		return err
 	}
@@ -149,8 +150,8 @@ func setRunCookies(client *http.Client, base, token, url string, cookies []audit
 
 // startIsolatedInstance creates an unnamed instance. The orchestrator assigns
 // these an instance-* profile and removes its profile directory on stop.
-func startIsolatedInstance(client *http.Client, base, token string) (string, func() error, error) {
-	raw, err := apiclient.DoRawE(client, base, token, http.MethodPost, "/instances/start", apiclient.WithBody(map[string]any{}))
+func startIsolatedInstance(conn apiclient.Conn) (string, func() error, error) {
+	raw, err := conn.Raw(http.MethodPost, "/instances/start", apiclient.WithBody(map[string]any{}))
 	if err != nil {
 		return "", nil, fmt.Errorf("start isolated instance: %w", err)
 	}
@@ -165,31 +166,31 @@ func startIsolatedInstance(client *http.Client, base, token string) (string, fun
 		return "", nil, fmt.Errorf("start isolated instance: response omitted id or url")
 	}
 	cleanup := func() error {
-		_, err := apiclient.DoRawE(client, base, token, http.MethodPost, "/instances/"+url.PathEscape(instance.ID)+"/stop")
+		_, err := conn.Raw(http.MethodPost, "/instances/"+url.PathEscape(instance.ID)+"/stop")
 		if err != nil {
 			return fmt.Errorf("stop isolated instance: %w", err)
 		}
 		return nil
 	}
-	if err := waitForIsolatedInstance(client, base, token, instance.ID); err != nil {
+	if err := waitForIsolatedInstance(conn, instance.ID); err != nil {
 		if cleanupErr := cleanup(); cleanupErr != nil {
-			return "", nil, fmt.Errorf("wait for isolated instance: %w (also failed to stop isolated instance: %v)", err, cleanupErr)
+			return "", nil, fmt.Errorf("wait for isolated instance: %w (also failed to stop isolated instance: %w)", err, cleanupErr)
 		}
 		return "", nil, fmt.Errorf("wait for isolated instance: %w", err)
 	}
 	// Child instance URLs bind to the orchestrator's local interface. They are
 	// therefore not generally reachable by a remote CLI client (including the
 	// E2E runner container). Use the orchestrator's per-instance proxy instead.
-	return strings.TrimSuffix(base, "/") + "/instances/" + url.PathEscape(instance.ID), cleanup, nil
+	return strings.TrimSuffix(conn.Base, "/") + "/instances/" + url.PathEscape(instance.ID), cleanup, nil
 }
 
-func waitForIsolatedInstance(client *http.Client, base, token, instanceID string) error {
+func waitForIsolatedInstance(conn apiclient.Conn, instanceID string) error {
 	const timeout = 30 * time.Second
 	deadline := time.Now().Add(timeout)
 	path := "/instances/" + url.PathEscape(instanceID)
 
 	for {
-		raw, err := apiclient.DoRawE(client, base, token, http.MethodGet, path)
+		raw, err := conn.Raw(http.MethodGet, path)
 		if err == nil {
 			var instance struct {
 				Status string `json:"status"`
@@ -217,8 +218,8 @@ func waitForIsolatedInstance(client *http.Client, base, token, instanceID string
 // resolveProfileBase routes the run at the instance owning the named profile
 // through the orchestrator proxy. Child URLs normally bind to localhost and
 // are therefore not reachable by remote CLI clients.
-func resolveProfileBase(client *http.Client, base, token, profile string) (string, error) {
-	raw, err := apiclient.DoRawE(client, base, token, http.MethodGet, "/instances")
+func resolveProfileBase(conn apiclient.Conn, profile string) (string, error) {
+	raw, err := conn.Raw(http.MethodGet, "/instances")
 	if err != nil {
 		return "", err
 	}
@@ -234,7 +235,7 @@ func resolveProfileBase(client *http.Client, base, token, profile string) (strin
 		if inst.ProfileName != profile || inst.Status != "running" {
 			continue
 		}
-		return strings.TrimSuffix(base, "/") + "/instances/" + url.PathEscape(inst.ID), nil
+		return strings.TrimSuffix(conn.Base, "/") + "/instances/" + url.PathEscape(inst.ID), nil
 	}
 	return "", fmt.Errorf("no running instance for profile %q (start one: pinchtab instance start --profile %s)", profile, profile)
 }
@@ -256,7 +257,7 @@ func validateAuditFlags(cmd *cobra.Command) error {
 }
 
 // Audit runs a multi-page site audit via POST /audit and writes artifacts.
-func Audit(client *http.Client, base, token string, cmd *cobra.Command, target string) (err error) {
+func Audit(conn apiclient.Conn, cmd *cobra.Command, target string) (err error) {
 	if err := validateAuditFlags(cmd); err != nil {
 		return err
 	}
@@ -289,7 +290,7 @@ func Audit(client *http.Client, base, token string, cmd *cobra.Command, target s
 		body["urls"] = []string{target}
 	}
 
-	base, cleanup, err := applyRunAuth(client, base, token, cmd, authScopes...)
+	conn, cleanup, err := applyRunAuth(conn, cmd, authScopes...)
 	if err != nil {
 		return err
 	}
@@ -313,8 +314,8 @@ func Audit(client *http.Client, base, token string, cmd *cobra.Command, target s
 		body["sampleSize"] = v
 	}
 
-	longClient := &http.Client{Transport: client.Transport, Timeout: auditTimeout}
-	raw, err := apiclient.DoRawE(longClient, base, token, http.MethodPost, "/audit", apiclient.WithBody(body))
+	longClient := &http.Client{Transport: conn.Client.Transport, Timeout: auditTimeout}
+	raw, err := apiclient.DoRawE(longClient, conn.Base, conn.Token, http.MethodPost, "/audit", apiclient.WithBody(body))
 	if err != nil {
 		return err
 	}
@@ -337,7 +338,7 @@ func Audit(client *http.Client, base, token string, cmd *cobra.Command, target s
 		}
 		switch {
 		case format == auditreport.FormatPDF:
-			if err := exportAuditPDF(client, base, token, dir, typedForPDF); err != nil {
+			if err := exportAuditPDF(conn, dir, typedForPDF); err != nil {
 				return err
 			}
 		case format != auditreport.FormatJSON:
@@ -386,8 +387,8 @@ func typedAuditReport(report map[string]any) audit.AuditReport {
 // Graceful-degradation contract: report.json is already on disk by the time
 // this runs; a print failure surfaces as a warning and a non-zero exit
 // (pdf being the sole requested format).
-func exportAuditPDF(client *http.Client, base, token, dir string, report audit.AuditReport) error {
-	pdf, err := auditreport.ExportPDF(report, serverPDFPrinter(client, base, token))
+func exportAuditPDF(conn apiclient.Conn, dir string, report audit.AuditReport) error {
+	pdf, err := auditreport.ExportPDF(report, serverPDFPrinter(conn))
 	if err != nil {
 		return fmt.Errorf("PDF export failed: %w (report.json was still written)", err)
 	}
@@ -401,36 +402,36 @@ func exportAuditPDF(client *http.Client, base, token, dir string, report audit.A
 // serverPDFPrinter prints self-contained HTML through the running server:
 // a fresh tab, content injected via the evaluate capability, exported with
 // GET /pdf.
-func serverPDFPrinter(client *http.Client, base, token string) auditreport.PDFPrinter {
+func serverPDFPrinter(conn apiclient.Conn) auditreport.PDFPrinter {
 	return func(html []byte) ([]byte, error) {
-		status, _, tab := apiclient.DoPostQuietWithStatus(client, base, token, "/tab", map[string]any{"action": "new"})
+		status, _, tab := apiclient.DoPostQuietWithStatus(conn.Client, conn.Base, conn.Token, "/tab", map[string]any{"action": "new"})
 		tabID, _ := tab["tabId"].(string)
 		if status >= 400 || tabID == "" {
 			return nil, fmt.Errorf("create print tab: HTTP %d", status)
 		}
 		defer func() {
-			_, _, _ = apiclient.DoPostQuietWithStatus(client, base, token, "/close", map[string]any{"tabId": tabID})
+			_, _, _ = apiclient.DoPostQuietWithStatus(conn.Client, conn.Base, conn.Token, "/close", map[string]any{"tabId": tabID})
 		}()
 
 		doc, _ := json.Marshal(string(html))
-		status, body, _ := apiclient.DoPostQuietWithStatus(client, base, token, "/evaluate", map[string]any{
+		status, body, _ := apiclient.DoPostQuietWithStatus(conn.Client, conn.Base, conn.Token, "/evaluate", map[string]any{
 			"tabId":      tabID,
 			"expression": fmt.Sprintf("document.open(); document.write(%s); document.close(); true", doc),
 		})
 		if status >= 400 {
 			return nil, fmt.Errorf("inject report HTML (requires the evaluate capability): HTTP %d: %s", status, strings.TrimSpace(string(body)))
 		}
-		return fetchRawPDF(client, base, token, tabID)
+		return fetchRawPDF(conn, tabID)
 	}
 }
 
-func fetchRawPDF(client *http.Client, base, token, tabID string) ([]byte, error) {
-	req, err := http.NewRequest(http.MethodGet, base+"/pdf?raw=true&tabId="+url.QueryEscape(tabID), nil)
+func fetchRawPDF(conn apiclient.Conn, tabID string) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodGet, conn.Base+"/pdf?raw=true&tabId="+url.QueryEscape(tabID), nil)
 	if err != nil {
 		return nil, err
 	}
-	authn.SetAuthorization(req.Header, token)
-	resp, err := client.Do(req)
+	authn.SetAuthorization(req.Header, conn.Token)
+	resp, err := conn.Client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("print pdf: %w", err)
 	}

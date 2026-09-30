@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/handlers"
 )
 
@@ -38,7 +39,7 @@ func captureSnapshotQuery(t *testing.T, run func(client *http.Client, base strin
 
 func TestQuickAsksForTheCompactSnapshotItIntendedTo(t *testing.T) {
 	got := captureSnapshotQuery(t, func(client *http.Client, base string) {
-		Quick(client, base, "", []string{"http://example.test/"})
+		Quick(apiclient.Conn{Client: client, Base: base}, []string{"http://example.test/"})
 	})
 
 	if format := got.Get("format"); format != "compact" {
@@ -57,7 +58,7 @@ func TestQuickAsksForTheCompactSnapshotItIntendedTo(t *testing.T) {
 // emitted query catches the next one without anybody having to notice it.
 func TestQuickSendsOnlyParametersTheServerHonours(t *testing.T) {
 	got := captureSnapshotQuery(t, func(client *http.Client, base string) {
-		Quick(client, base, "", []string{"http://example.test/"})
+		Quick(apiclient.Conn{Client: client, Base: base}, []string{"http://example.test/"})
 	})
 
 	controls, err := handlers.ParseSnapshotCostControls(got)

@@ -2,7 +2,6 @@ package actions
 
 import (
 	"encoding/json"
-	"net/http"
 	"net/url"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
@@ -12,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func Text(client *http.Client, base, token string, cmd *cobra.Command, args []string) {
+func Text(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 	params := url.Values{}
 	// --full is the preferred, discoverable name; --raw is kept as a
 	// backward-compatible alias. Both switch the server off its default
@@ -56,13 +55,13 @@ func Text(client *http.Client, base, token string, cmd *cobra.Command, args []st
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoGet(client, base, token, "/text", params)
+		conn.Get("/text", params)
 		return
 	}
 
 	outFile, _ := cmd.Flags().GetString("output")
 
-	body := apiclient.DoGetRaw(client, base, token, "/text", params)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/text", params)
 	var result struct {
 		Text       string `json:"text"`
 		Extraction string `json:"extraction"`

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +25,7 @@ func TestTitle(t *testing.T) {
 	defer m.close()
 
 	cmd := newInspectCmd()
-	Title(m.server.Client(), m.base(), "", cmd)
+	Title(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd)
 	if m.lastPath != "/title" {
 		t.Fatalf("expected /title, got %s", m.lastPath)
 	}
@@ -36,7 +37,7 @@ func TestURL(t *testing.T) {
 	defer m.close()
 
 	cmd := newInspectCmd()
-	URL(m.server.Client(), m.base(), "", cmd)
+	URL(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd)
 	if m.lastPath != "/url" {
 		t.Fatalf("expected /url, got %s", m.lastPath)
 	}
@@ -50,7 +51,7 @@ func TestHTML_WithSelectorAndFrameAndMaxChars(t *testing.T) {
 	cmd := newInspectCmd()
 	_ = cmd.Flags().Set("frame", "FRAME123")
 	_ = cmd.Flags().Set("max-chars", "120")
-	HTML(m.server.Client(), m.base(), "", cmd, []string{"main article"})
+	HTML(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd, []string{"main article"})
 
 	if m.lastPath != "/html" {
 		t.Fatalf("expected /html, got %s", m.lastPath)
@@ -72,7 +73,7 @@ func TestHTML_UsesRefForRefSelector(t *testing.T) {
 	defer m.close()
 
 	cmd := newInspectCmd()
-	HTML(m.server.Client(), m.base(), "", cmd, []string{"e12"})
+	HTML(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd, []string{"e12"})
 
 	if !strings.Contains(m.lastQuery, "ref=e12") {
 		t.Fatalf("expected ref=e12, got %s", m.lastQuery)
@@ -90,7 +91,7 @@ func TestStyles_WithPropAndTab(t *testing.T) {
 	cmd := newInspectCmd()
 	_ = cmd.Flags().Set("tab", "TAB1")
 	_ = cmd.Flags().Set("prop", "display")
-	Styles(m.server.Client(), m.base(), "", cmd, []string{"button.primary"})
+	Styles(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd, []string{"button.primary"})
 
 	if m.lastPath != "/styles" {
 		t.Fatalf("expected /styles, got %s", m.lastPath)
@@ -112,7 +113,7 @@ func TestStyles_WithoutSelectorHitsDocumentStyles(t *testing.T) {
 	defer m.close()
 
 	cmd := newInspectCmd()
-	Styles(m.server.Client(), m.base(), "", cmd, nil)
+	Styles(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd, nil)
 
 	if m.lastPath != "/styles" {
 		t.Fatalf("expected /styles, got %s", m.lastPath)
@@ -129,7 +130,7 @@ func TestInspectJSONOutputUsesRawEndpoint(t *testing.T) {
 
 	cmd := newInspectCmd()
 	_ = cmd.Flags().Set("json", "true")
-	Title(m.server.Client(), m.base(), "", cmd)
+	Title(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd)
 
 	if m.lastPath != "/title" {
 		t.Fatalf("expected /title, got %s", m.lastPath)

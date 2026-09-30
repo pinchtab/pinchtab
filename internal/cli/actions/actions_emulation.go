@@ -2,13 +2,13 @@ package actions
 
 import (
 	"fmt"
-	"net/http"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
 // SetViewport sets the browser viewport dimensions via the HTTP API.
-func SetViewport(client *http.Client, base, token string, cmd *cobra.Command, args []string) {
+func SetViewport(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 	requireArgs(args, 2, "set viewport requires <width> <height> arguments")
 	width := parsePositiveIntArg("width", args[0])
 	height := parsePositiveIntArg("height", args[1])
@@ -21,7 +21,7 @@ func SetViewport(client *http.Client, base, token string, cmd *cobra.Command, ar
 		body["mobile"] = true
 	}
 
-	postEmulation(client, base, token, cmd, "viewport", body, func(map[string]any) string {
+	postEmulation(conn, cmd, "viewport", body, func(map[string]any) string {
 		return fmt.Sprintf("%dx%d", width, height)
 	})
 }

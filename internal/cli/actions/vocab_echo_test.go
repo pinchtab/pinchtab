@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 )
 
 // vocabEchoServer stamps a vocabulary token on every /snapshot response and records
@@ -54,11 +56,11 @@ func TestCLISnapshotVocabTokenIsEchoedOnTheNextAction(t *testing.T) {
 
 	snap := newSnapshotCmd()
 	_ = snap.Flags().Set("tab", "t1")
-	Snapshot(client, srv.URL, "", snap, "")
+	Snapshot(apiclient.Conn{Client: client, Base: srv.URL}, snap, "")
 
 	act := newActionCmd()
 	_ = act.Flags().Set("tab", "t1")
-	Action(client, srv.URL, "", "click", "e5", act)
+	Action(apiclient.Conn{Client: client, Base: srv.URL}, "click", "e5", act)
 
 	got, ok := actionBodyVocab(t, lastActionBody)
 	if !ok {
@@ -78,7 +80,7 @@ func TestCLIActionWithoutAPriorSnapshotSendsNoToken(t *testing.T) {
 
 	act := newActionCmd()
 	_ = act.Flags().Set("tab", "t1")
-	Action(srv.Client(), srv.URL, "", "click", "e5", act)
+	Action(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, "click", "e5", act)
 
 	if got, ok := actionBodyVocab(t, lastActionBody); ok {
 		t.Errorf("an action with no prior snapshot echoed a token %q", got)
@@ -95,11 +97,11 @@ func TestCLIEchoedTokenIsScopedToItsTab(t *testing.T) {
 
 	snap := newSnapshotCmd()
 	_ = snap.Flags().Set("tab", "t1")
-	Snapshot(client, srv.URL, "", snap, "")
+	Snapshot(apiclient.Conn{Client: client, Base: srv.URL}, snap, "")
 
 	act := newActionCmd()
 	_ = act.Flags().Set("tab", "t2")
-	Action(client, srv.URL, "", "click", "e5", act)
+	Action(apiclient.Conn{Client: client, Base: srv.URL}, "click", "e5", act)
 
 	if got, ok := actionBodyVocab(t, lastActionBody); ok {
 		t.Errorf("an action on t2 echoed t1's vocabulary token %q", got)

@@ -2,15 +2,14 @@ package actions
 
 import (
 	"fmt"
-	"net/http"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
 // CacheClear clears the browser's HTTP disk cache.
-func CacheClear(client *http.Client, base, token string, cmd *cobra.Command) {
-	result := requireMap(apiclient.DoPostQuiet(client, base, token, "/cache/clear", nil), "ERROR: cache: clear failed")
+func CacheClear(conn apiclient.Conn, cmd *cobra.Command) {
+	result := requireMap(apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, "/cache/clear", nil), "ERROR: cache: clear failed")
 
 	jsonOut, _ := cmd.Flags().GetBool("json")
 	if jsonOut {
@@ -21,8 +20,8 @@ func CacheClear(client *http.Client, base, token string, cmd *cobra.Command) {
 }
 
 // CacheStatus checks if the browser cache can be cleared.
-func CacheStatus(client *http.Client, base, token string, cmd *cobra.Command) {
-	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/cache/status", nil), "ERROR: cache: status check failed")
+func CacheStatus(conn apiclient.Conn, cmd *cobra.Command) {
+	result := requireBytes(apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/cache/status", nil), "ERROR: cache: status check failed")
 	buf := decodeMap(result, "ERROR: cache")
 
 	jsonOut, _ := cmd.Flags().GetBool("json")

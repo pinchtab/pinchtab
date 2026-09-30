@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 )
 
 const setGeoChildEnv = "PINCHTAB_SET_GEO_EXIT_CHILD"
@@ -22,7 +23,7 @@ func runSetGeoChild(mode string) {
 	case "api-500":
 		m.setResponse(http.MethodPost, "/emulation/geolocation", http.StatusInternalServerError, `{"error":"boom"}`)
 	}
-	SetGeolocation(m.server.Client(), m.base(), "", newEmulationCmd(), args)
+	SetGeolocation(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, newEmulationCmd(), args)
 	os.Exit(0)
 }
 

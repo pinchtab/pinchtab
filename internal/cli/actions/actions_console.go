@@ -3,7 +3,6 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -12,48 +11,48 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func Console(client *http.Client, base, token string, cmd *cobra.Command) {
+func Console(conn apiclient.Conn, cmd *cobra.Command) {
 	if v, _ := cmd.Flags().GetBool("clear"); v {
-		ConsoleClear(client, base, token, cmd)
+		ConsoleClear(conn, cmd)
 		return
 	}
-	readLog(client, base, token, cmd, "/console", "Failed to get console logs", printConsoleLogs)
+	readLog(conn, cmd, "/console", "Failed to get console logs", printConsoleLogs)
 }
 
-func ConsoleClear(client *http.Client, base, token string, cmd *cobra.Command) {
-	clearLog(client, base, token, cmd, "/console/clear", "Console logs cleared")
+func ConsoleClear(conn apiclient.Conn, cmd *cobra.Command) {
+	clearLog(conn, cmd, "/console/clear", "Console logs cleared")
 }
 
-func Errors(client *http.Client, base, token string, cmd *cobra.Command) {
+func Errors(conn apiclient.Conn, cmd *cobra.Command) {
 	if v, _ := cmd.Flags().GetBool("clear"); v {
-		ErrorsClear(client, base, token, cmd)
+		ErrorsClear(conn, cmd)
 		return
 	}
-	readLog(client, base, token, cmd, "/errors", "Failed to get error logs", printErrorLogs)
+	readLog(conn, cmd, "/errors", "Failed to get error logs", printErrorLogs)
 }
 
-func ErrorsClear(client *http.Client, base, token string, cmd *cobra.Command) {
-	clearLog(client, base, token, cmd, "/errors/clear", "Error logs cleared")
+func ErrorsClear(conn apiclient.Conn, cmd *cobra.Command) {
+	clearLog(conn, cmd, "/errors/clear", "Error logs cleared")
 }
 
-func readLog(client *http.Client, base, token string, cmd *cobra.Command, path, failMsg string, print func([]byte)) {
+func readLog(conn apiclient.Conn, cmd *cobra.Command, path, failMsg string, print func([]byte)) {
 	params := tabParams(cmd)
 	if v, _ := cmd.Flags().GetString("limit"); v != "" {
 		params.Set("limit", v)
 	}
 	if v, _ := cmd.Flags().GetBool("json"); v {
-		apiclient.DoGet(client, base, token, path, params)
+		conn.Get(path, params)
 		return
 	}
-	result := apiclient.DoGetRaw(client, base, token, path, params)
+	result := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, path, params)
 	if result == nil {
 		runtimeErr("%s", failMsg)
 	}
 	print(result)
 }
 
-func clearLog(client *http.Client, base, token string, cmd *cobra.Command, path, doneMsg string) {
-	if apiclient.DoPost(client, base, token, path+"?"+tabParams(cmd).Encode(), nil) != nil {
+func clearLog(conn apiclient.Conn, cmd *cobra.Command, path, doneMsg string) {
+	if conn.Post(path+"?"+tabParams(cmd).Encode(), nil) != nil {
 		fmt.Println(doneMsg)
 	}
 }

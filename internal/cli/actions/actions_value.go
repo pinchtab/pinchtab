@@ -2,7 +2,6 @@ package actions
 
 import (
 	"encoding/json"
-	"net/http"
 	"net/url"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -11,7 +10,7 @@ import (
 )
 
 // Value retrieves the .value property of a form element identified by ref.
-func Value(client *http.Client, base, token string, cmd *cobra.Command, args []string) {
+func Value(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 	if len(args) == 0 {
 		output.Error("value", "ref argument is required", 1)
 		return
@@ -26,11 +25,11 @@ func Value(client *http.Client, base, token string, cmd *cobra.Command, args []s
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoGet(client, base, token, "/value", params)
+		conn.Get("/value", params)
 		return
 	}
 
-	body := apiclient.DoGetRaw(client, base, token, "/value", params)
+	body := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/value", params)
 	var result struct {
 		Value *string `json:"value"`
 	}

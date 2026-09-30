@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/cli/actions"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -119,10 +120,10 @@ func TestExplicitClickSendsTheLatestTokenForItsResolvedTab(t *testing.T) {
 	defer srv.httpServer.Close()
 	base, client := srv.httpServer.URL, srv.httpServer.Client()
 
-	actions.Snapshot(client, base, "", snapCmd("X"), "")
+	actions.Snapshot(apiclient.Conn{Client: client, Base: base}, snapCmd("X"), "")
 	srv.bumpEpoch("X")
-	actions.Snapshot(client, base, "", snapCmd(""), "")
-	actions.Action(client, base, "", "click", "e5", clickCmd("X"))
+	actions.Snapshot(apiclient.Conn{Client: client, Base: base}, snapCmd(""), "")
+	actions.Action(apiclient.Conn{Client: client, Base: base}, "click", "e5", clickCmd("X"))
 
 	if srv.lastVocab != "X-e2" {
 		t.Fatalf("click sent vocab %q (hadVocab=%v), want the current token X-e2", srv.lastVocab, srv.hadVocab)
@@ -145,8 +146,8 @@ func TestImplicitClickSendsTheCurrentTabsTaggedToken(t *testing.T) {
 	defer srv.httpServer.Close()
 	base, client := srv.httpServer.URL, srv.httpServer.Client()
 
-	actions.Snapshot(client, base, "", snapCmd(""), "")
-	actions.Action(client, base, "", "click", "e5", clickCmd(""))
+	actions.Snapshot(apiclient.Conn{Client: client, Base: base}, snapCmd(""), "")
+	actions.Action(apiclient.Conn{Client: client, Base: base}, "click", "e5", clickCmd(""))
 
 	if !srv.hadVocab {
 		t.Fatal("implicit click sent no token; the common snap-then-click flow lost its supersession protection")
@@ -189,10 +190,10 @@ func TestFindCapturesTheVocabularyItMintedSoTheNextClickEchoesIt(t *testing.T) {
 			defer srv.httpServer.Close()
 			base, client := srv.httpServer.URL, srv.httpServer.Client()
 
-			actions.Snapshot(client, base, "", snapCmd(tc.tab), "")
+			actions.Snapshot(apiclient.Conn{Client: client, Base: base}, snapCmd(tc.tab), "")
 			srv.bumpEpoch("X")
-			actions.Find(client, base, "", "Go page 2", findCmd(tc.tab, tc.flag))
-			actions.Action(client, base, "", "click", "e11", clickCmd(tc.tab))
+			actions.Find(apiclient.Conn{Client: client, Base: base}, "Go page 2", findCmd(tc.tab, tc.flag))
+			actions.Action(apiclient.Conn{Client: client, Base: base}, "click", "e11", clickCmd(tc.tab))
 
 			if srv.lastVocab != "X-e2" || srv.lastVocabTab != "X" {
 				t.Fatalf("click after find sent vocab %q tagged %q, want the token find published (X-e2) tagged X", srv.lastVocab, srv.lastVocabTab)
@@ -211,7 +212,7 @@ func TestVocabStoreIsOneBoundedFilePerServer(t *testing.T) {
 	base, client := srv.httpServer.URL, srv.httpServer.Client()
 
 	for i := 0; i < 50; i++ {
-		actions.Snapshot(client, base, "", snapCmd(fmt.Sprintf("tab-%02d", i)), "")
+		actions.Snapshot(apiclient.Conn{Client: client, Base: base}, snapCmd(fmt.Sprintf("tab-%02d", i)), "")
 	}
 
 	files, err := filepath.Glob(filepath.Join(stateHome, "pinchtab", "vocab-*"))

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/cli/output"
 )
 
@@ -44,7 +45,7 @@ func navigateOverAStaleTab(t *testing.T, m *mockServer) func() {
 	return func() {
 		cmd := staleTabCmd(t, "STALE123")
 		captureStdout(t, func() {
-			Navigate(m.server.Client(), m.base(), "", "https://pinchtab.com", cmd)
+			Navigate(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "https://pinchtab.com", cmd)
 		})
 	}
 }

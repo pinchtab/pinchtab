@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -18,7 +17,7 @@ import (
 // Capture defaults to the agent-friendly terse form (image path +
 // epoch/pairing/viewport line + compact snapshot); --json dumps the full
 // server envelope.
-func Capture(client *http.Client, base, token string, cmd *cobra.Command) {
+func Capture(conn apiclient.Conn, cmd *cobra.Command) {
 	params := url.Values{}
 	params.Set("output", "inline")
 
@@ -74,7 +73,7 @@ func Capture(client *http.Client, base, token string, cmd *cobra.Command) {
 		params.Set("tabId", v)
 	}
 
-	raw := apiclient.DoGetRaw(client, base, token, "/capture", params, apiclient.CaptureVocab(params.Get("tabId") == ""))
+	raw := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/capture", params, apiclient.CaptureVocab(params.Get("tabId") == ""))
 	if raw == nil {
 		return
 	}

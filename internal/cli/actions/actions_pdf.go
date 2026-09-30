@@ -2,7 +2,6 @@ package actions
 
 import (
 	"fmt"
-	"net/http"
 	"net/url"
 	"time"
 
@@ -11,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func PDF(client *http.Client, base, token string, cmd *cobra.Command) {
+func PDF(conn apiclient.Conn, cmd *cobra.Command) {
 	params := url.Values{}
 	params.Set("raw", "true")
 
@@ -76,7 +75,7 @@ func PDF(client *http.Client, base, token string, cmd *cobra.Command) {
 		outFile = fmt.Sprintf("page-%s.pdf", time.Now().Format("20060102-150405"))
 	}
 
-	data := apiclient.DoGetRaw(client, base, token, apiclient.TabPath(tabID, "pdf"), params)
+	data := apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, apiclient.TabPath(tabID, "pdf"), params)
 	if data == nil {
 		return
 	}

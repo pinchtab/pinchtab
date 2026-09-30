@@ -1,7 +1,6 @@
 package actions
 
 import (
-	"net/http"
 	"net/url"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -9,7 +8,7 @@ import (
 )
 
 // StorageGet retrieves localStorage and/or sessionStorage items for the active tab.
-func StorageGet(client *http.Client, base, token string, cmd *cobra.Command, key string) {
+func StorageGet(conn apiclient.Conn, cmd *cobra.Command, key string) {
 	params := url.Values{}
 	if t, _ := cmd.Flags().GetString("type"); t != "" {
 		params.Set("type", t)
@@ -21,13 +20,13 @@ func StorageGet(client *http.Client, base, token string, cmd *cobra.Command, key
 		params.Set("tabId", tab)
 	}
 
-	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/storage", params), "Failed to get storage")
+	result := requireBytes(apiclient.DoGetRaw(conn.Client, conn.Base, conn.Token, "/storage", params), "Failed to get storage")
 	buf := decodeMap(result, "Failed to parse response")
 	printIndented(buf)
 }
 
 // StorageSet sets a single localStorage or sessionStorage item.
-func StorageSet(client *http.Client, base, token string, cmd *cobra.Command, key, value string) {
+func StorageSet(conn apiclient.Conn, cmd *cobra.Command, key, value string) {
 	storageType, _ := cmd.Flags().GetString("type")
 	if storageType == "" {
 		storageType = "local"
@@ -43,23 +42,23 @@ func StorageSet(client *http.Client, base, token string, cmd *cobra.Command, key
 		body["tabId"] = tabID
 	}
 
-	requireMap(apiclient.DoPost(client, base, token, "/storage", body), "Failed to set storage item")
+	requireMap(conn.Post("/storage", body), "Failed to set storage item")
 }
 
 // StorageDelete removes a single storage key.
-func StorageDelete(client *http.Client, base, token string, cmd *cobra.Command, key string) {
+func StorageDelete(conn apiclient.Conn, cmd *cobra.Command, key string) {
 	if key == "" {
 		usageErr(`Error: storage delete needs a key; to wipe the whole store use "pinchtab storage clear"`)
 	}
-	deleteStorage(client, base, token, cmd, key)
+	deleteStorage(conn, cmd, key)
 }
 
 // StorageClear clears storage (--type, or both stores with --all).
-func StorageClear(client *http.Client, base, token string, cmd *cobra.Command) {
-	deleteStorage(client, base, token, cmd, "")
+func StorageClear(conn apiclient.Conn, cmd *cobra.Command) {
+	deleteStorage(conn, cmd, "")
 }
 
-func deleteStorage(client *http.Client, base, token string, cmd *cobra.Command, key string) {
+func deleteStorage(conn apiclient.Conn, cmd *cobra.Command, key string) {
 	storageType, _ := cmd.Flags().GetString("type")
 	all, _ := cmd.Flags().GetBool("all")
 	tabID, _ := cmd.Flags().GetString("tab")
@@ -81,5 +80,5 @@ func deleteStorage(client *http.Client, base, token string, cmd *cobra.Command, 
 		body["tabId"] = tabID
 	}
 
-	requireMap(apiclient.DoDelete(client, base, token, "/storage", nil, apiclient.WithBody(body)), "Failed to delete storage")
+	requireMap(apiclient.DoDelete(conn.Client, conn.Base, conn.Token, "/storage", nil, apiclient.WithBody(body)), "Failed to delete storage")
 }

@@ -18,7 +18,7 @@ func newOptionalRefActionCmd(use, short, action string) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			runCLI(func(rt cliRuntime) {
-				browseractions.Action(rt.Client, rt.Base, rt.Token, action, optionalArg(args), cmd)
+				browseractions.Action(rt, action, optionalArg(args), cmd)
 			})
 		},
 	}
@@ -31,7 +31,7 @@ func newSimpleActionCmd(use, short, action string, argsValidator cobra.Positiona
 		Args:  argsValidator,
 		Run: func(cmd *cobra.Command, args []string) {
 			runCLI(func(rt cliRuntime) {
-				browseractions.ActionSimple(rt.Client, rt.Base, rt.Token, action, args, cmd)
+				browseractions.ActionSimple(rt, action, args, cmd)
 			})
 		},
 	}
@@ -44,7 +44,7 @@ func newRequiredRefActionCmd(use, short, action string) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			runCLI(func(rt cliRuntime) {
-				browseractions.Action(rt.Client, rt.Base, rt.Token, action, args[0], cmd)
+				browseractions.Action(rt, action, args[0], cmd)
 			})
 		},
 	}
@@ -57,7 +57,7 @@ func newMouseActionCmd(use, short, action string, argsValidator cobra.Positional
 		Args:  argsValidator,
 		Run: func(cmd *cobra.Command, args []string) {
 			runCLI(func(rt cliRuntime) {
-				browseractions.MouseAction(rt.Client, rt.Base, rt.Token, action, args, cmd)
+				browseractions.MouseAction(rt, action, args, cmd)
 			})
 		},
 	}
@@ -110,7 +110,7 @@ dragstart and the destination receives drop.
 	Args: cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Drag(rt.Client, rt.Base, rt.Token, args, cmd)
+			browseractions.Drag(rt, args, cmd)
 		})
 	},
 }
@@ -146,7 +146,7 @@ Precedence: integer and direction keywords win over selector parsing so that
 	Args: scrollArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.ActionSimple(rt.Client, rt.Base, rt.Token, "scroll", args, cmd)
+			browseractions.ActionSimple(rt, "scroll", args, cmd)
 		})
 	},
 }
@@ -226,7 +226,7 @@ var dialogAcceptCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Dialog(rt.Client, rt.Base, rt.Token, "accept", optionalArg(args), cmd)
+			browseractions.Dialog(rt, "accept", optionalArg(args), cmd)
 		})
 	},
 }
@@ -236,7 +236,7 @@ var dialogDismissCmd = &cobra.Command{
 	Short: "Dismiss (Cancel) the current dialog",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Dialog(rt.Client, rt.Base, rt.Token, "dismiss", "", cmd)
+			browseractions.Dialog(rt, "dismiss", "", cmd)
 		})
 	},
 }

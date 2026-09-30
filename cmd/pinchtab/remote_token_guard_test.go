@@ -139,7 +139,7 @@ func TestTheConfigTokenStillServesEveryLoopbackShape(t *testing.T) {
 // This was invisible because every other refusal test sets a config token.
 func TestAnEmptyConfigTokenIsNotRefused(t *testing.T) {
 	clearCredentialEnv(t)
-	cfg := &config.RuntimeConfig{Port: "9867", Token: ""}
+	cfg := &config.RuntimeConfig{Port: "9867"}
 
 	token, err := resolveCLIToken(cfg, "http://203.0.113.9:9867")
 	if err != nil {

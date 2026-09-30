@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 )
 
 func TestInstanceNavigateOpensTheTargetURLInOneRequestAndPrintsItsResponse(t *testing.T) {
@@ -14,7 +16,7 @@ func TestInstanceNavigateOpensTheTargetURLInOneRequestAndPrintsItsResponse(t *te
 		`{"tabId":"7DB8EC9AFB64D61281CE4628ADDEF4CE","title":"Fixture Index","url":"http://127.0.0.1:18777/index.html"}`)
 
 	out := captureStdout(t, func() {
-		InstanceNavigate(http.DefaultClient, m.base(), "", []string{"inst_1e0877aa", "http://127.0.0.1:18777/index.html"})
+		InstanceNavigate(apiclient.Conn{Client: http.DefaultClient, Base: m.base()}, []string{"inst_1e0877aa", "http://127.0.0.1:18777/index.html"})
 	})
 
 	if len(m.requests) != 1 {

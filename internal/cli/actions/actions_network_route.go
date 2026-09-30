@@ -2,7 +2,6 @@ package actions
 
 import (
 	"fmt"
-	"net/http"
 	"net/url"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -25,7 +24,7 @@ import (
 //
 // The --tab flag (state file) selects the target tab; when
 // empty the bare /network/route endpoint resolves to the active tab.
-func NetworkRoute(client *http.Client, base, token string, cmd *cobra.Command, pattern string) {
+func NetworkRoute(conn apiclient.Conn, cmd *cobra.Command, pattern string) {
 	abort, _ := cmd.Flags().GetBool("abort")
 	body, _ := cmd.Flags().GetString("body")
 	resourceType, _ := cmd.Flags().GetString("resource-type")
@@ -61,7 +60,7 @@ func NetworkRoute(client *http.Client, base, token string, cmd *cobra.Command, p
 	}
 
 	path := networkRoutePath(cmd)
-	result := requireMap(apiclient.DoPostQuiet(client, base, token, path, req), "Failed to install route")
+	result := requireMap(apiclient.DoPostQuiet(conn.Client, conn.Base, conn.Token, path, req), "Failed to install route")
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
@@ -73,13 +72,13 @@ func NetworkRoute(client *http.Client, base, token string, cmd *cobra.Command, p
 
 // NetworkUnroute removes one or all rules from the active tab. Empty pattern
 // removes all rules.
-func NetworkUnroute(client *http.Client, base, token string, cmd *cobra.Command, pattern string) {
+func NetworkUnroute(conn apiclient.Conn, cmd *cobra.Command, pattern string) {
 	params := url.Values{}
 	if pattern != "" {
 		params.Set("pattern", pattern)
 	}
 	path := networkRoutePath(cmd)
-	result := requireMap(apiclient.DoDelete(client, base, token, path, params), "Failed to remove route(s)")
+	result := requireMap(apiclient.DoDelete(conn.Client, conn.Base, conn.Token, path, params), "Failed to remove route(s)")
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
@@ -93,9 +92,9 @@ func NetworkUnroute(client *http.Client, base, token string, cmd *cobra.Command,
 	}
 }
 
-func NetworkRules(client *http.Client, base, token string, cmd *cobra.Command) {
+func NetworkRules(conn apiclient.Conn, cmd *cobra.Command) {
 	path := networkRoutePath(cmd)
-	result := requireMap(apiclient.DoGet(client, base, token, path, nil), "Failed to list routes")
+	result := requireMap(conn.Get(path, nil), "Failed to list routes")
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
