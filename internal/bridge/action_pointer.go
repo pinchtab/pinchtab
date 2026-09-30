@@ -45,29 +45,29 @@ var waitNavAction = func(ctx context.Context, delay time.Duration) {
 const trustedNodeClickTimeout = 250 * time.Millisecond
 
 func clickByNodeIDWithJSFallback(ctx context.Context, nodeID int64) error {
+	return withTrustedFallback(ctx, nodeID, clickByNodeIDAction, jsClickByBackendNodeAction)
+}
+
+func withTrustedFallback(ctx context.Context, nodeID int64, trusted, js func(context.Context, int64) error) error {
 	trustedCtx, cancel := context.WithTimeout(ctx, trustedNodeClickTimeout)
-	err := clickByNodeIDAction(trustedCtx, nodeID)
+	err := trusted(trustedCtx, nodeID)
 	cancel()
 	if err == nil {
 		return nil
 	}
+	// The parent may have been cancelled (e.g. by the dialog-detection
+	// polling loop) while the trusted click was running.
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		// Re-check: the parent context may have been cancelled (e.g. by the
-		// dialog-detection polling loop) while the trusted click was running.
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		// Use a bounded timeout for the JS fallback so it cannot hang for the
-		// full action timeout when JS execution is blocked (e.g. by an open
-		// dialog).
-		jsCtx, jsCancel := context.WithTimeout(ctx, trustedNodeClickTimeout)
-		defer jsCancel()
-		return jsClickByBackendNodeAction(jsCtx, nodeID)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		return err
 	}
-	return err
+	// Bounded so the JS fallback cannot hang for the full action timeout
+	// when JS execution is blocked (e.g. by an open dialog).
+	jsCtx, jsCancel := context.WithTimeout(ctx, trustedNodeClickTimeout)
+	defer jsCancel()
+	return js(jsCtx, nodeID)
 }
 
 func clickByNodeIDWithMode(ctx context.Context, nodeID int64, mode string) error {
@@ -131,24 +131,7 @@ func clickFloatingFlyoutItem(ctx context.Context, nodeID int64) (handled bool, e
 }
 
 func doubleClickByNodeIDWithJSFallback(ctx context.Context, nodeID int64) error {
-	trustedCtx, cancel := context.WithTimeout(ctx, trustedNodeClickTimeout)
-	err := doubleClickByNodeIDAction(trustedCtx, nodeID)
-	cancel()
-	if err == nil {
-		return nil
-	}
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		jsCtx, jsCancel := context.WithTimeout(ctx, trustedNodeClickTimeout)
-		defer jsCancel()
-		return jsDoubleClickByBackendNodeAction(jsCtx, nodeID)
-	}
-	return err
+	return withTrustedFallback(ctx, nodeID, doubleClickByNodeIDAction, jsDoubleClickByBackendNodeAction)
 }
 
 // effectiveHumanize resolves whether an action should use the humanized
@@ -212,10 +195,6 @@ func (s *autoSwitchSession) settle(ctx context.Context, result map[string]any, e
 	return result
 }
 
-// armDialogAutoHandler arms a one-shot dialog auto-handler when the request
-// names a DialogAction and the tab has a dialog manager. It returns the manager
-// (possibly nil) and whether a handler was armed. Shared by actionClick and
-// actionHumanizedClick.
 func (b *Bridge) armDialogAutoHandler(req ActionRequest) (*DialogManager, bool) {
 	dm := b.GetDialogManager()
 	if req.DialogAction != "" && req.TabID != "" && dm != nil {
@@ -225,9 +204,6 @@ func (b *Bridge) armDialogAutoHandler(req ActionRequest) (*DialogManager, bool) 
 	return dm, false
 }
 
-// dialogBlocking returns a populated *ErrDialogBlocking when a blocking dialog
-// is pending on the tab, or nil otherwise. Shared by the click handlers' dialog
-// poll loops so the pending-check and error construction stay identical.
 func dialogBlocking(dm *DialogManager, tabID string) error {
 	pending := dm.GetPending(tabID)
 	if pending == nil {
@@ -267,103 +243,90 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 	auto := b.beginAutoSwitch(req)
 	defer func() { result = auto.settle(ctx, result, err) }()
 
-	// Arm a one-shot dialog auto-handler if the caller expects the click
-	// to open a native JS dialog. Without this, the click would hang
-	// waiting for the dialog to be handled from a separate request.
-	dm, armedDialog := b.armDialogAutoHandler(req)
-
-	detectDialog := !armedDialog && req.TabID != "" && dm != nil
-	var clickCtx context.Context
-	var clickCancel context.CancelFunc
-	if detectDialog {
-		clickCtx, clickCancel = context.WithCancel(ctx)
-		defer clickCancel()
-	} else {
-		clickCtx = ctx
-	}
-
-	type clickResult struct {
-		err error
-	}
-	resultCh := make(chan clickResult, 1)
-
-	// Run click in goroutine so we can poll for dialogs
-	go func() {
-		var err error
-		if auto != nil {
-			auto.prepareWindowOpenCapture(clickCtx)
-		}
-		if req.Submit {
-			nodeID, nodeErr := targetNodeID(clickCtx, req.NodeID, req.Selector)
-			if nodeErr != nil {
-				resultCh <- clickResult{err: nodeErr}
-				return
-			}
-			if nodeID <= 0 {
-				resultCh <- clickResult{err: fmt.Errorf("click submit requires a selector, ref, or nodeId")}
-				return
-			}
-			if auto != nil {
-				auto.prepareNode(clickCtx, nodeID)
-			}
-			// One DOM click only. In particular, do not use the trusted-click
-			// timeout fallback: its second dispatch can double-submit a slow SPA.
-			err = jsClickByBackendNodeAction(clickCtx, nodeID)
-		} else if req.Selector != "" {
-			nodeID, nodeErr := ResolveCSSToNodeID(clickCtx, req.Selector)
-			if nodeErr != nil {
-				resultCh <- clickResult{err: nodeErr}
-				return
-			}
-			if auto != nil {
-				auto.prepareNode(clickCtx, nodeID)
-			}
-			err = clickByNodeIDWithMode(clickCtx, nodeID, req.Mode)
-		} else if req.NodeID > 0 {
-			if auto != nil {
-				auto.prepareNode(clickCtx, req.NodeID)
-			}
-			err = clickByNodeIDWithMode(clickCtx, req.NodeID, req.Mode)
-		} else if req.HasXY {
-			err = clickByCoordinateAction(clickCtx, req.X, req.Y, req.Modifiers)
-		} else {
-			resultCh <- clickResult{err: NewInvalidActionRequestError("need selector, ref, nodeId, or x/y coordinates")}
-			return
-		}
-		resultCh <- clickResult{err: err}
-	}()
-
-	if detectDialog {
-		ticker := time.NewTicker(dialogAutoHandlePollInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case result := <-resultCh:
-				if result.err != nil {
-					return nil, result.err
-				}
-				b.waitNavIfRequested(ctx, req)
-				return map[string]any{"clicked": true}, nil
-			case <-ticker.C:
-				if e := dialogBlocking(dm, req.TabID); e != nil {
-					clickCancel()
-					return nil, e
-				}
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-		}
-	}
-
-	res := <-resultCh
-	if res.err != nil {
-		return nil, res.err
-	}
-	if armedDialog {
-		waitForArmedDialogSettle(ctx, dm, req.TabID)
+	if err := b.runWatchingDialogs(ctx, req, func(clickCtx context.Context) error {
+		return clickTarget(clickCtx, req, auto)
+	}); err != nil {
+		return nil, err
 	}
 	b.waitNavIfRequested(ctx, req)
 	return map[string]any{"clicked": true}, nil
+}
+
+func clickTarget(ctx context.Context, req ActionRequest, auto *autoSwitchSession) error {
+	if auto != nil {
+		auto.prepareWindowOpenCapture(ctx)
+	}
+	prepare := func(nodeID int64) {
+		if auto != nil {
+			auto.prepareNode(ctx, nodeID)
+		}
+	}
+	switch {
+	case req.Submit:
+		nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
+		if err != nil {
+			return err
+		}
+		if nodeID <= 0 {
+			return fmt.Errorf("click submit requires a selector, ref, or nodeId")
+		}
+		prepare(nodeID)
+		// One DOM click only. In particular, do not use the trusted-click
+		// timeout fallback: its second dispatch can double-submit a slow SPA.
+		return jsClickByBackendNodeAction(ctx, nodeID)
+	case req.Selector != "":
+		nodeID, err := ResolveCSSToNodeID(ctx, req.Selector)
+		if err != nil {
+			return err
+		}
+		prepare(nodeID)
+		return clickByNodeIDWithMode(ctx, nodeID, req.Mode)
+	case req.NodeID > 0:
+		prepare(req.NodeID)
+		return clickByNodeIDWithMode(ctx, req.NodeID, req.Mode)
+	case req.HasXY:
+		return clickByCoordinateAction(ctx, req.X, req.Y, req.Modifiers)
+	default:
+		return NewInvalidActionRequestError("need selector, ref, nodeId, or x/y coordinates")
+	}
+}
+
+// runWatchingDialogs runs click with a one-shot dialog auto-handler armed when
+// the request names a DialogAction, so the click does not hang waiting for the
+// dialog to be handled from a separate request. Otherwise it polls for an
+// unexpected blocking dialog so that surfaces as ErrDialogBlocking rather than
+// hanging the renderer for the full action timeout.
+func (b *Bridge) runWatchingDialogs(ctx context.Context, req ActionRequest, click func(context.Context) error) error {
+	dm, armedDialog := b.armDialogAutoHandler(req)
+	if armedDialog || req.TabID == "" || dm == nil {
+		if err := click(ctx); err != nil {
+			return err
+		}
+		if armedDialog {
+			waitForArmedDialogSettle(ctx, dm, req.TabID)
+		}
+		return nil
+	}
+
+	clickCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	resultCh := make(chan error, 1)
+	go func() { resultCh <- click(clickCtx) }()
+
+	ticker := time.NewTicker(dialogAutoHandlePollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case err := <-resultCh:
+			return err
+		case <-ticker.C:
+			if err := dialogBlocking(dm, req.TabID); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
 
 func (b *Bridge) waitNavIfRequested(ctx context.Context, req ActionRequest) {
@@ -734,56 +697,8 @@ func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (r
 		return nil, NewInvalidActionRequestError("need selector, ref, nodeId, or x/y coordinates")
 	}
 
-	// If the caller expects this click to open a native JS dialog, arm a
-	// one-shot auto-handler so it gets accepted/dismissed instead of leaving the
-	// renderer blocked. Without this the humanized path can only ever report
-	// dialog_blocking. Mirrors actionClick's non-humanized branch.
-	dm, armedDialog := b.armDialogAutoHandler(req)
-
-	// Run the multi-step humanized click (bezier mouse-move + press + release) in
-	// a goroutine. When no dialog-action was provided, poll for an unexpected
-	// blocking dialog so it surfaces as ErrDialogBlocking rather than hanging the
-	// renderer for the full action timeout.
-	detectDialog := !armedDialog && req.TabID != "" && dm != nil
-	clickCtx := ctx
-	var clickCancel context.CancelFunc
-	if detectDialog {
-		clickCtx, clickCancel = context.WithCancel(ctx)
-		defer clickCancel()
-	}
-
-	resultCh := make(chan error, 1)
-	go func() {
-		resultCh <- click(clickCtx)
-	}()
-
-	if detectDialog {
-		ticker := time.NewTicker(dialogAutoHandlePollInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case err := <-resultCh:
-				if err != nil {
-					return nil, err
-				}
-				b.waitNavIfRequested(ctx, req)
-				return map[string]any{"clicked": true, "human": true}, nil
-			case <-ticker.C:
-				if e := dialogBlocking(dm, req.TabID); e != nil {
-					clickCancel()
-					return nil, e
-				}
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-		}
-	}
-
-	if err := <-resultCh; err != nil {
+	if err := b.runWatchingDialogs(ctx, req, click); err != nil {
 		return nil, err
-	}
-	if armedDialog {
-		waitForArmedDialogSettle(ctx, dm, req.TabID)
 	}
 	b.waitNavIfRequested(ctx, req)
 	return map[string]any{"clicked": true, "human": true}, nil
