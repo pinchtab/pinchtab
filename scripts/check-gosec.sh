@@ -1,64 +1,47 @@
 #!/bin/bash
-# Run gosec security scan locally with the same config as CI
-set -e
+# gosec scan used by both ./dev and CI. GOOS selects which build-constrained files
+# are scanned; the gosec binary itself is always built for the host.
+set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Running gosec security scan..."
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-echo "⏱️  This may take 3-5 minutes on local machines"
-echo "   (CI runs faster on optimized GitHub runners)"
-echo ""
+EXCLUDED_RULES="G301,G302,G304,G306,G404,G107,G115,G703,G704,G705,G706"
+CRITICAL_RULES='["G112","G204"]'
+RESULTS=gosec-results.json
+SCAN_GOOS="${GOOS:-$(go env GOHOSTOS)}"
 
+echo "Running gosec (GOOS=${SCAN_GOOS})..."
 START_TIME=$(date +%s)
 
-# Run gosec with the same config as CI
-# Note: This scans all Go code, same as the CI does
-go tool -modfile=tools/go.mod gosec -exclude=G301,G302,G304,G306,G404,G107,G115,G703,G704,G705,G706 \
-  -fmt=json \
-  -out=gosec-results.json \
-  ./... 2>&1 | grep -E "Checking (file|package)" | tail -10 || true
+GOSEC_BIN="$(mktemp -d)/gosec"
+trap 'rm -rf "$(dirname "$GOSEC_BIN")"' EXIT
+GOOS="$(go env GOHOSTOS)" GOARCH="$(go env GOHOSTARCH)" \
+  go build -modfile=tools/go.mod -o "$GOSEC_BIN" github.com/securego/gosec/v2/cmd/gosec
 
-END_TIME=$(date +%s)
-DURATION=$((END_TIME - START_TIME))
+rm -f "$RESULTS"
+GOOS="$SCAN_GOOS" "$GOSEC_BIN" -quiet -no-fail -exclude="$EXCLUDED_RULES" -fmt=json -out="$RESULTS" ./...
 
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Security Scan Results (${DURATION}s)"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-# Check if results file exists
-if [ ! -f gosec-results.json ]; then
-  echo "❌ No results file generated (scan may have failed)"
+if [ ! -f "$RESULTS" ]; then
+  echo "❌ No results file generated (scan failed)"
   exit 1
 fi
 
-cat gosec-results.json | jq -r '.Stats'
-echo ""
+echo "Scan finished in $(($(date +%s) - START_TIME))s"
+jq -r '.Stats' "$RESULTS"
 
-# Check for critical findings (same as CI)
-ISSUES=$(cat gosec-results.json | jq '[.Issues[] | select(.rule_id == "G112" or .rule_id == "G204")] | length')
-echo "Critical issues (G112, G204): $ISSUES"
+CRITICAL_FILTER=".Issues[] | select(.rule_id as \$id | $CRITICAL_RULES | index(\$id))"
+ISSUES=$(jq "[$CRITICAL_FILTER] | length" "$RESULTS")
+echo "Critical issues ($CRITICAL_RULES, GOOS=${SCAN_GOOS}): $ISSUES"
 
 if [ "$ISSUES" -gt 0 ]; then
-  echo ""
-  echo "❌ CRITICAL ISSUES FOUND (will fail CI):"
-  cat gosec-results.json | jq -r '.Issues[] | select(.rule_id == "G112" or .rule_id == "G204")'
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "❌ Critical gosec findings:"
+  jq -r "$CRITICAL_FILTER" "$RESULTS"
   exit 1
-else
-  echo "✅ No critical issues (CI will pass)"
-
-  TOTAL=$(cat gosec-results.json | jq '.Stats.found')
-  if [ "$TOTAL" -gt 0 ]; then
-    echo ""
-    echo "ℹ️  Other issues found (excluded from CI):"
-    cat gosec-results.json | jq -r '.Issues[0:5] | .[] | "  \(.severity): \(.rule_id) at \(.file):\(.line)"'
-    echo ""
-    echo "Full report: gosec-results.json"
-  fi
 fi
 
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "✅ No critical issues"
+TOTAL=$(jq '.Stats.found' "$RESULTS")
+if [ "$TOTAL" -gt 0 ]; then
+  echo "ℹ️  Non-critical findings (first 5, full report in $RESULTS):"
+  jq -r '.Issues[0:5] | .[] | "  \(.severity): \(.rule_id) at \(.file):\(.line)"' "$RESULTS"
+fi

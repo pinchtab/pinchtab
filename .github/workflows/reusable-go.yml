@@ -145,20 +145,7 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install gosec
-        run: go install -modfile=tools/go.mod github.com/securego/gosec/v2/cmd/gosec
-
       - name: Run gosec
         env:
           GOOS: ${{ matrix.goos }}
-        run: gosec -exclude=G301,G302,G304,G306,G404,G107,G115,G703,G704,G705,G706 -fmt=json -out=gosec-results.json ./... || true
-
-      - name: Check critical findings
-        run: |
-          ISSUES=$(cat gosec-results.json | jq '[.Issues[] | select(.rule_id == "G112" or .rule_id == "G204")] | length')
-          echo "Critical issues (GOOS=${{ matrix.goos }}): $ISSUES"
-          cat gosec-results.json | jq '.Stats'
-          if [ "$ISSUES" -gt 0 ]; then
-            cat gosec-results.json | jq '.Issues[] | select(.rule_id == "G112" or .rule_id == "G204")'
-            exit 1
-          fi
+        run: ./scripts/check-gosec.sh
