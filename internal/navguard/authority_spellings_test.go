@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pinchtab/pinchtab/internal/security"
+	"github.com/pinchtab/pinchtab/internal/netguard"
 	"github.com/pinchtab/pinchtab/internal/urls"
 )
 
@@ -73,7 +73,7 @@ func TestEverySpellingOfAPrivateHostIsRefused(t *testing.T) {
 	for _, spelling := range authoritySpellings("10.0.0.5/x") {
 		t.Run(spelling.raw, func(t *testing.T) {
 			normalized := urls.EnsureScheme(spelling.raw)
-			if host := security.ExtractHost(spelling.raw); host != "10.0.0.5" {
+			if host := netguard.ExtractHost(spelling.raw); host != "10.0.0.5" {
 				t.Errorf("host = %q, want 10.0.0.5 (%s): normalized to %q — the guard reads a different host than the browser", host, spelling.note, normalized)
 			}
 			if _, err := ValidateTarget(context.Background(), normalized, false, nil); err == nil {
@@ -146,7 +146,7 @@ func TestEnsureSchemeNeverDestroysAnAuthority(t *testing.T) {
 		for _, spelling := range authoritySpellings(hostAndPath) {
 			t.Run(spelling.raw, func(t *testing.T) {
 				normalized := urls.EnsureScheme(spelling.raw)
-				if security.ExtractHost(normalized) == "" {
+				if netguard.ExtractHost(normalized) == "" {
 					t.Errorf("EnsureScheme(%q) = %q, from which no host can be read (%s)", spelling.raw, normalized, spelling.note)
 				}
 			})

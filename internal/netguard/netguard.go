@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"net/url"
 	"strings"
+
+	"github.com/pinchtab/pinchtab/internal/urls"
 )
 
 var (
@@ -47,8 +50,79 @@ func embeddedIPv4(addr netip.Addr) (netip.Addr, bool) {
 	return netip.Addr{}, false
 }
 
+// NormalizeHost lowercases host and drops the DNS root label: "example.com." and
+// "example.com" name the same host and the browser fetches both. The allowlist is
+// read in both directions, so a listed host that stopped matching would refuse a
+// target the operator allowed and, read inverted by the response-forgery rule,
+// permit forgery on exactly the sensitive origin the list marks.
 func NormalizeHost(host string) string {
 	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
+}
+
+// ExtractHost returns the normalized host rawURL names; urls.EnsureScheme owns the
+// normalisation that decides which forms carry a host.
+func ExtractHost(rawURL string) string {
+	parsed, err := url.Parse(urls.EnsureScheme(rawURL))
+	if err != nil {
+		return ""
+	}
+	return NormalizeHost(parsed.Hostname())
+}
+
+// HostAllowed reports whether rawURL's host matches an entry in allowedDomains.
+//
+// An empty allowedDomains list means "no allowlist active" → returns true.
+// A non-empty list with no matching host → returns false. Special non-routable
+// URLs ("about:blank") are always allowed because they have no host to verify.
+//
+// Supported pattern forms:
+//   - "example.com"   – exact host match (case-insensitive, port stripped)
+//   - "*.example.com" – any single subdomain of example.com but NOT example.com
+//   - "*"             – matches any host (effectively disables the allowlist)
+func HostAllowed(rawURL string, allowedDomains []string) bool {
+	if len(allowedDomains) == 0 {
+		return true
+	}
+	if IsAllowedSpecialURL(rawURL) {
+		return true
+	}
+	host := ExtractHost(rawURL)
+	if host == "" {
+		return false
+	}
+	return HostMatchesPatterns(host, allowedDomains)
+}
+
+// HostMatchesPatterns reports whether host (already normalized) matches any of
+// the patterns, for callers that already have a host.
+func HostMatchesPatterns(host string, patterns []string) bool {
+	for _, pattern := range patterns {
+		pattern = strings.ToLower(strings.TrimSpace(pattern))
+		if pattern == "" {
+			continue
+		}
+		if matchDomain(host, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsAllowedSpecialURL reports whether rawURL is a non-routable URL that bypasses
+// host-based allowlist checks (e.g. "about:blank").
+func IsAllowedSpecialURL(rawURL string) bool {
+	return strings.EqualFold(strings.TrimSpace(rawURL), "about:blank")
+}
+
+func matchDomain(host, pattern string) bool {
+	switch {
+	case pattern == "*":
+		return true
+	case strings.HasPrefix(pattern, "*."):
+		return strings.HasSuffix(host, pattern[1:])
+	default:
+		return host == pattern
+	}
 }
 
 func HostInAllowlist(host string, allowlist []string) bool {

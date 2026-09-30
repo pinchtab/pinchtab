@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/pinchtab/pinchtab/internal/security"
+	"github.com/pinchtab/pinchtab/internal/netguard"
 )
 
 type RouteAction string
@@ -213,7 +213,7 @@ var forbiddenFulfillSchemes = map[string]struct{}{
 //     forgery is a normal test/dev tool.
 //
 // Yes, this is intentionally the opposite of "is the host allowlisted." If
-// you find yourself reading `!security.HostAllowed(...)` and reaching for the
+// you find yourself reading `!netguard.HostAllowed(...)` and reaching for the
 // `!`, that is the policy.
 func (rm *RouteManager) fulfillForgeryPermittedFor(rawURL string) bool {
 	if isForbiddenFulfillScheme(rawURL) {
@@ -226,7 +226,7 @@ func (rm *RouteManager) fulfillForgeryPermittedFor(rawURL string) bool {
 	if len(allow) == 0 {
 		return true
 	}
-	return !security.HostAllowed(rawURL, allow)
+	return !netguard.HostAllowed(rawURL, allow)
 }
 
 // isForbiddenFulfillScheme reports whether rawURL uses a scheme where

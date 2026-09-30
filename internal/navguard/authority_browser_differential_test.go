@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/security"
+	"github.com/pinchtab/pinchtab/internal/netguard"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
 	"github.com/pinchtab/pinchtab/internal/urls"
 )
@@ -77,7 +77,7 @@ func TestTheBrowserResolvesTheHostTheGuardExtracts(t *testing.T) {
 			reached := requested[authority+"/probe"]
 			mu.Unlock()
 
-			host := security.ExtractHost(spelling.raw)
+			host := netguard.ExtractHost(spelling.raw)
 			if !reached {
 				t.Fatalf("the browser did not reach the probe for %q (from %q, %s)", navigated, spelling.raw, spelling.note)
 			}
@@ -94,7 +94,7 @@ func TestTheBrowserResolvesTheHostTheGuardExtracts(t *testing.T) {
 func TestTheGuardAgreesWithTheRecordedBrowserAnswers(t *testing.T) {
 	for _, spelling := range authoritySpellings("127.0.0.1:9999/probe") {
 		t.Run(spelling.raw, func(t *testing.T) {
-			if host := security.ExtractHost(spelling.raw); host != "127.0.0.1" {
+			if host := netguard.ExtractHost(spelling.raw); host != "127.0.0.1" {
 				t.Errorf("host = %q, want 127.0.0.1 (%s) — the browser reaches this authority, so the guard must read it too", host, spelling.note)
 			}
 		})

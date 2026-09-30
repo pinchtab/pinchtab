@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/netguard"
-	"github.com/pinchtab/pinchtab/internal/security"
 )
 
 func stubHostResolution(t *testing.T, fn func(context.Context, string, string) ([]net.IP, error)) {
@@ -461,7 +460,7 @@ func cidrStrings(cidrs []*net.IPNet) []string {
 
 // The defect this card started from, stated as the property that prevents it:
 // the allowlist decision and the host this guard resolves must come from the same
-// extractor. They did not, so security.HostAllowed answered "yes, intranet is
+// extractor. They did not, so netguard.HostAllowed answered "yes, intranet is
 // listed" while this guard saw no host at all, dropped the override on the floor,
 // and the operator got an SSRF refusal on a target they had explicitly allowed.
 func TestTheAllowlistAnswerAndTheResolvedHostComeFromOneExtractor(t *testing.T) {
@@ -483,7 +482,7 @@ func TestTheAllowlistAnswerAndTheResolvedHostComeFromOneExtractor(t *testing.T) 
 	} {
 		t.Run(rawURL, func(t *testing.T) {
 			resolved = nil
-			listed := security.HostAllowed(rawURL, allowed)
+			listed := netguard.HostAllowed(rawURL, allowed)
 			if !listed {
 				t.Fatalf("HostAllowed(%q) = false; this table only carries listed hosts", rawURL)
 			}
@@ -495,7 +494,7 @@ func TestTheAllowlistAnswerAndTheResolvedHostComeFromOneExtractor(t *testing.T) 
 			if len(resolved) != 1 {
 				t.Fatalf("resolved %v; the guard did not resolve exactly the host the allowlist matched", resolved)
 			}
-			if got, want := resolved[0], security.ExtractHost(rawURL); got != want {
+			if got, want := resolved[0], netguard.ExtractHost(rawURL); got != want {
 				t.Errorf("guard resolved %q, allowlist matched %q — two answers to one question", got, want)
 			}
 			if len(target.TrustedResolvedIP) == 0 {
@@ -513,7 +512,7 @@ func TestAnUnlistedSingleLabelHostIsStillRefused(t *testing.T) {
 		return []net.IP{net.ParseIP("10.0.0.7")}, nil
 	})
 
-	listed := security.HostAllowed("intranet", []string{"example.com"})
+	listed := netguard.HostAllowed("intranet", []string{"example.com"})
 	if listed {
 		t.Fatal("the fixture allowlist matched a host it does not carry")
 	}

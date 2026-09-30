@@ -1,4 +1,4 @@
-package security
+package netguard
 
 import (
 	"path/filepath"
@@ -227,8 +227,8 @@ func TestOnePackageOwnsTheSecurityHostExtractor(t *testing.T) {
 		t.Fatalf("ExtractHost is declared in %d files, want exactly 1:\n  %s",
 			len(declarations), strings.Join(declarations, "\n  "))
 	}
-	if filepath.Base(filepath.Dir(declarations[0])) != "security" {
-		t.Errorf("the one extractor lives in %s; internal/security owns this primitive because every consumer already imports it and it imports none of them", declarations[0])
+	if filepath.Base(filepath.Dir(declarations[0])) != "netguard" {
+		t.Errorf("the one extractor lives in %s; internal/netguard owns this primitive, beside the host normaliser it calls", declarations[0])
 	}
 }
 

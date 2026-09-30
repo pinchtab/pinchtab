@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/netguard"
 	"github.com/pinchtab/pinchtab/internal/remedy"
-	"github.com/pinchtab/pinchtab/internal/security"
 )
 
 // idpiDomainBlockedCode is the one code every IDPI domain block reports, so a
@@ -49,7 +49,7 @@ func idpiBlockDetails(url, hint string, r remedy.Remedy) map[string]any {
 	details["url"] = url
 	// The domain is a discrete field as well as prose so MCP and dashboard
 	// consumers do not have to parse the sentence to learn what was blocked.
-	if host := security.ExtractHost(url); host != "" {
+	if host := netguard.ExtractHost(url); host != "" {
 		details["domain"] = host
 	}
 	return details
@@ -66,7 +66,7 @@ var allowlistWidening = remedy.Declare(
 // (about:blank) cannot be allowlisted at all, so it gets no remedy instead of one that
 // cannot work.
 func idpiAllowlistRemedy(url string) remedy.Remedy {
-	host := security.ExtractHost(url)
+	host := netguard.ExtractHost(url)
 	if host == "" {
 		return remedy.None
 	}

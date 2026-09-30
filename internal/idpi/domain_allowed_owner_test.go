@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/security"
+	"github.com/pinchtab/pinchtab/internal/netguard"
 	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
@@ -37,16 +37,16 @@ func TestEveryDomainAllowedImplementationAgreesOnAnEmptyAllowlist(t *testing.T) 
 	}
 }
 
-// security.HostAllowed answers a DIFFERENT question — "is this host permitted by the
+// netguard.HostAllowed answers a DIFFERENT question — "is this host permitted by the
 // allowlist" — where an empty list imposes no restriction and the answer is true. It is
 // asserted here, in the package whose fix could most easily have been swept into it,
 // because a change that "made them consistent" would break the allowlist itself.
 func TestTheAllowlistPredicateKeepsItsOwnEmptyListMeaning(t *testing.T) {
-	if !security.HostAllowed("https://10.0.0.5/x", nil) {
-		t.Error("security.HostAllowed refuses under an empty allowlist; an empty list imposes no restriction, and refusing here would block every navigation")
+	if !netguard.HostAllowed("https://10.0.0.5/x", nil) {
+		t.Error("netguard.HostAllowed refuses under an empty allowlist; an empty list imposes no restriction, and refusing here would block every navigation")
 	}
-	if security.HostAllowed("https://evil.com/x", []string{"example.com"}) {
-		t.Error("security.HostAllowed permitted an unlisted host")
+	if netguard.HostAllowed("https://evil.com/x", []string{"example.com"}) {
+		t.Error("netguard.HostAllowed permitted an unlisted host")
 	}
 }
 
