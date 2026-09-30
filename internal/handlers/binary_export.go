@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/fileout"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 // imageContentType maps an image format to its MIME type (jpeg default).
@@ -70,4 +72,34 @@ func saveBinaryToStateDir(stateDir, subdir, prefix, ext string, buf []byte) (fil
 		return "", "", err
 	}
 	return filePath, timestamp, nil
+}
+
+// callerFilePath resolves a caller-supplied file name under base, refusing
+// anything that resolves to base itself since a file cannot be written there.
+func callerFilePath(base, userPath string) (string, error) {
+	absPath, err := httpx.SafeCreatePath(base, userPath)
+	if err != nil {
+		return "", fmt.Errorf("invalid path: %w", err)
+	}
+	if absBase, _ := filepath.Abs(base); absPath == absBase {
+		return "", fmt.Errorf("invalid path: %q names the directory, not a file", userPath)
+	}
+	return absPath, nil
+}
+
+// saveToCallerPath writes buf to the caller-named path under stateDir with the
+// binary-export modes. Unlike the auto-named exports it overwrites: a caller
+// who names a file is entitled to replace it.
+func saveToCallerPath(stateDir, userPath string, buf []byte) (absPath string, status int, err error) {
+	absPath, err = callerFilePath(stateDir, userPath)
+	if err != nil {
+		return "", http.StatusBadRequest, err
+	}
+	if err := os.MkdirAll(filepath.Dir(absPath), 0750); err != nil {
+		return "", http.StatusInternalServerError, fmt.Errorf("create output dir: %w", err)
+	}
+	if err := os.WriteFile(absPath, buf, 0600); err != nil {
+		return "", http.StatusInternalServerError, fmt.Errorf("write file: %w", err)
+	}
+	return absPath, http.StatusOK, nil
 }

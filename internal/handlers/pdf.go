@@ -5,11 +5,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
@@ -181,26 +178,12 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 			}
 			savePath = p
 		} else {
-			safe, err := httpx.SafeCreatePath(h.Config.StateDir, savePath)
+			p, status, err := saveToCallerPath(h.Config.StateDir, savePath, buf)
 			if err != nil {
-				httpx.Error(w, 400, fmt.Errorf("invalid path: %w", err))
+				httpx.Error(w, status, fmt.Errorf("pdf: %w", err))
 				return
 			}
-			absBase, _ := filepath.Abs(h.Config.StateDir)
-			absPath, err := filepath.Abs(safe)
-			if err != nil || !strings.HasPrefix(absPath, absBase+string(filepath.Separator)) {
-				httpx.Error(w, 400, fmt.Errorf("invalid output path"))
-				return
-			}
-			savePath = absPath
-			if err := os.MkdirAll(filepath.Dir(savePath), 0750); err != nil {
-				httpx.Error(w, 500, fmt.Errorf("create dir: %w", err))
-				return
-			}
-			if err := os.WriteFile(savePath, buf, 0600); err != nil {
-				httpx.Error(w, 500, fmt.Errorf("write pdf: %w", err))
-				return
-			}
+			savePath = p
 		}
 
 		httpx.JSON(w, 200, map[string]any{

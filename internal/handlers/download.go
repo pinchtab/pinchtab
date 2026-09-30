@@ -8,8 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -217,26 +215,12 @@ func (h *Handlers) writeDownloadResponse(w http.ResponseWriter, body []byte, mim
 			httpx.Error(w, 400, fmt.Errorf("path required when output=file"))
 			return
 		}
-		safe, pathErr := httpx.SafeCreatePath(h.Config.StateDir, filePath)
-		if pathErr != nil {
-			httpx.Error(w, 400, fmt.Errorf("invalid path: %w", pathErr))
+		saved, status, err := saveToCallerPath(h.Config.StateDir, filePath, body)
+		if err != nil {
+			httpx.Error(w, status, fmt.Errorf("download: %w", err))
 			return
 		}
-		absBase, _ := filepath.Abs(h.Config.StateDir)
-		absPath, pathErr := filepath.Abs(safe)
-		if pathErr != nil || !strings.HasPrefix(absPath, absBase+string(filepath.Separator)) {
-			httpx.Error(w, 400, fmt.Errorf("invalid output path"))
-			return
-		}
-		filePath = absPath
-		if err := os.MkdirAll(filepath.Dir(filePath), 0750); err != nil {
-			httpx.Error(w, 500, fmt.Errorf("failed to create directory: %w", err))
-			return
-		}
-		if err := os.WriteFile(filePath, body, 0600); err != nil {
-			httpx.Error(w, 500, fmt.Errorf("failed to write file: %w", err))
-			return
-		}
+		filePath = saved
 		httpx.JSON(w, 200, map[string]any{
 			"status":      "saved",
 			"path":        filePath,

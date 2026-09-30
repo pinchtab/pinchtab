@@ -263,16 +263,40 @@ func TestSnapshotFileBranchRoutesTheGeneratedNameThroughTheUniqueHelper(t *testi
 	if !strings.Contains(src, `writeUniqueFile(snapshotDir, "snapshot-"+timestamp, ext, content)`) {
 		t.Error("the auto-named snapshot no longer goes through writeUniqueFile, so two snapshots in one second can overwrite again")
 	}
-	if strings.Count(src, "os.WriteFile(filePath, content, 0600)") != 1 {
-		t.Errorf("expected exactly one plain write in snapshot.go — the caller-supplied path — got %d", strings.Count(src, "os.WriteFile(filePath, content, 0600)"))
+	if strings.Contains(src, "os.WriteFile(") {
+		t.Error("snapshot.go writes a file directly; the caller-named path goes through saveToCallerPath")
 	}
-	// The plain write must sit in the outputPath branch, not the generated one.
 	explicitBranch := src[strings.Index(src, `if outputPath != "" {`):]
 	if end := strings.Index(explicitBranch, "\n\t\t} else {"); end >= 0 {
 		explicitBranch = explicitBranch[:end]
 	}
-	if !strings.Contains(explicitBranch, "os.WriteFile(filePath, content, 0600)") {
-		t.Error("the plain write is no longer inside the caller-supplied-path branch")
+	if !strings.Contains(explicitBranch, "saveToCallerPath(h.Config.StateDir, outputPath, content)") {
+		t.Error("the caller-supplied-path branch no longer goes through saveToCallerPath")
+	}
+}
+
+func TestSaveToCallerPathOverwritesInsideStateDirAndRefusesEverythingElse(t *testing.T) {
+	stateDir := t.TempDir()
+
+	first, status, err := saveToCallerPath(stateDir, "out/page.pdf", []byte("one"))
+	if err != nil || status != 200 {
+		t.Fatalf("first write: status %d err %v", status, err)
+	}
+	second, _, err := saveToCallerPath(stateDir, "out/page.pdf", []byte("two"))
+	if err != nil || second != first {
+		t.Fatalf("second write to the same name: path %q err %v, want overwrite of %q", second, err, first)
+	}
+	if got, _ := os.ReadFile(first); string(got) != "two" {
+		t.Fatalf("file content = %q, want the caller's replacement", got)
+	}
+	if info, _ := os.Stat(first); info.Mode().Perm() != 0600 {
+		t.Fatalf("file mode = %v, want 0600", info.Mode().Perm())
+	}
+
+	for _, bad := range []string{"../escape.pdf", "/abs.pdf", ".", ""} {
+		if _, status, err := saveToCallerPath(stateDir, bad, []byte("x")); err == nil || status != 400 {
+			t.Errorf("saveToCallerPath(%q) = status %d err %v, want a 400 refusal", bad, status, err)
+		}
 	}
 }
 

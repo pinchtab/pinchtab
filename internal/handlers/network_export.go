@@ -259,14 +259,9 @@ func (h *Handlers) resolveExportFile(userPath string) (absPath, tmpPath string, 
 		return "", "", nil, 500, fmt.Errorf("create dir: %w", err)
 	}
 	safeName := filepath.Base(userPath)
-	safePath, err := httpx.SafeCreatePath(exportDir, safeName)
+	absPath, err = callerFilePath(exportDir, safeName)
 	if err != nil {
-		return "", "", nil, 400, fmt.Errorf("invalid path: %w", err)
-	}
-	absBase, _ := filepath.Abs(exportDir)
-	absPath, err = filepath.Abs(safePath)
-	if err != nil || !strings.HasPrefix(absPath, absBase+string(filepath.Separator)) {
-		return "", "", nil, 400, fmt.Errorf("path escapes export directory")
+		return "", "", nil, 400, err
 	}
 	tmpPath = absPath + ".tmp"
 	f, err = os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)

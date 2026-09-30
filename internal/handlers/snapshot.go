@@ -419,28 +419,12 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 
 		var filePath string
 		if outputPath != "" {
-			safe, err := httpx.SafeCreatePath(h.Config.StateDir, outputPath)
+			p, status, err := saveToCallerPath(h.Config.StateDir, outputPath, content)
 			if err != nil {
-				httpx.Error(w, 400, fmt.Errorf("invalid path: %w", err))
+				httpx.Error(w, status, fmt.Errorf("snapshot: %w", err))
 				return
 			}
-			absBase, _ := filepath.Abs(h.Config.StateDir)
-			absPath, err := filepath.Abs(safe)
-			if err != nil || !strings.HasPrefix(absPath, absBase+string(filepath.Separator)) {
-				httpx.Error(w, 400, fmt.Errorf("invalid output path"))
-				return
-			}
-			filePath = absPath
-			if err := os.MkdirAll(filepath.Dir(filePath), 0750); err != nil {
-				httpx.Error(w, 500, fmt.Errorf("create output dir: %w", err))
-				return
-			}
-			// A caller-named path keeps overwriting: this fix is about generated
-			// default names, and a caller who names a file is entitled to replace it.
-			if err := os.WriteFile(filePath, content, 0600); err != nil {
-				httpx.Error(w, 500, fmt.Errorf("write snapshot: %w", err))
-				return
-			}
+			filePath = p
 		} else {
 			var err error
 			filePath, err = writeUniqueFile(snapshotDir, "snapshot-"+timestamp, ext, content)
