@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 )
 
@@ -45,6 +46,34 @@ func WaitForRecordEncode(ctx context.Context, fetchStatus func() ([]byte, error)
 		return struct{}{}, false, nil
 	})
 	return err
+}
+
+// ProbeDevToolsWebSocketURL makes one GET of a DevTools /json/version endpoint
+// and returns its webSocketDebuggerUrl, failing on transport errors, a non-200
+// status, an undecodable body or an empty URL.
+func ProbeDevToolsWebSocketURL(ctx context.Context, client *http.Client, versionURL string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, versionURL, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	var version struct {
+		WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&version); err != nil {
+		return "", fmt.Errorf("decode response: %w", err)
+	}
+	if version.WebSocketDebuggerURL == "" {
+		return "", errors.New("response missing webSocketDebuggerUrl")
+	}
+	return version.WebSocketDebuggerURL, nil
 }
 
 // ErrNotReady is returned by WaitUntil when the deadline passes before probe

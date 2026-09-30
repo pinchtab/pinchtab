@@ -8,6 +8,8 @@ import (
 	cdp "github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
+
+	"github.com/pinchtab/pinchtab/internal/readiness"
 )
 
 func (tm *TabManager) trackedCDPIDs() map[string]bool {
@@ -80,19 +82,15 @@ func (tm *TabManager) reconcileTabBudget() {
 		return
 	}
 
-	deadline := time.Now().Add(5 * time.Second)
 	live := len(pages)
-	for {
+	_, _ = readiness.WaitUntil(context.Background(), 5*time.Second, 25*time.Millisecond, func() (struct{}, bool, error) {
 		remaining, err := tm.ListTargets()
 		if err != nil {
-			break
+			return struct{}{}, false, err
 		}
 		live = len(remaining)
-		if live <= tm.config.MaxTabs || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(25 * time.Millisecond)
-	}
+		return struct{}{}, live <= tm.config.MaxTabs, nil
+	})
 
 	slog.Info("tab budget: reaped untracked targets on browser launch",
 		"closed", closed, "live", live, "maxTabs", tm.config.MaxTabs)

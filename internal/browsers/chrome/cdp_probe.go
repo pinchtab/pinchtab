@@ -3,7 +3,6 @@ package chrome
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 )
 
 type CDPProbeResult struct {
@@ -155,49 +155,28 @@ func scrapeDevtoolsPort(r io.ReadCloser, portCh chan<- int, errCh chan<- error) 
 	errCh <- errors.New("stderr closed before DevTools banner appeared")
 }
 
+const cdpProbeInterval = 100 * time.Millisecond
+
 func probeCDPVersionWithRetry(ctx context.Context, url string) (string, error) {
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		deadline = time.Now().Add(5 * time.Second)
+	timeout := 5 * time.Second
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout = time.Until(deadline)
 	}
 	client := &http.Client{Timeout: 2 * time.Second}
-	var lastErr error
-	for {
-		if time.Now().After(deadline) {
-			if lastErr == nil {
-				lastErr = errors.New("deadline exceeded")
-			}
-			return "", fmt.Errorf("probe %s: %w", url, lastErr)
+	lastErr := errors.New("deadline exceeded")
+	wsURL, err := readiness.WaitUntil(ctx, timeout, cdpProbeInterval, func() (string, bool, error) {
+		wsURL, probeErr := readiness.ProbeDevToolsWebSocketURL(ctx, client, url)
+		if probeErr != nil {
+			lastErr = probeErr
+			return "", false, nil
 		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		if err != nil {
-			return "", fmt.Errorf("probe %s: %w", url, err)
-		}
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = err
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		if resp.StatusCode != http.StatusOK {
-			_ = resp.Body.Close()
-			lastErr = fmt.Errorf("HTTP %d", resp.StatusCode)
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		var version struct {
-			WebSocketURL string `json:"webSocketDebuggerUrl"`
-		}
-		err = json.NewDecoder(resp.Body).Decode(&version)
-		_ = resp.Body.Close()
-		if err == nil && version.WebSocketURL != "" {
-			return version.WebSocketURL, nil
-		}
-		if err != nil {
-			lastErr = fmt.Errorf("decode response: %w", err)
-		} else {
-			lastErr = errors.New("response missing webSocketDebuggerUrl")
-		}
-		time.Sleep(100 * time.Millisecond)
+		return wsURL, true, nil
+	})
+	if errors.Is(err, readiness.ErrNotReady) {
+		err = lastErr
 	}
+	if err != nil {
+		return "", fmt.Errorf("probe %s: %w", url, err)
+	}
+	return wsURL, nil
 }

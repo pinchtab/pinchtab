@@ -2,10 +2,8 @@ package runtime
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/pinchtab/pinchtab/internal/readiness"
 	"log/slog"
 	"net"
 	"net/http"
@@ -17,6 +15,7 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 	"github.com/pinchtab/pinchtab/internal/stealth"
 )
 
@@ -222,17 +221,10 @@ func findFreePort(start, end int) (int, error) {
 func waitForBrowserDevTools(port int, timeout time.Duration) (string, error) {
 	endpoint := fmt.Sprintf("http://127.0.0.1:%d/json/version", port)
 	client := &http.Client{Timeout: 2 * time.Second}
-	wsURL, err := readiness.WaitUntil(context.Background(), timeout, 250*time.Millisecond, func() (string, bool, error) {
-		resp, err := client.Get(endpoint)
-		if err != nil {
-			return "", false, nil
-		}
-		var info struct {
-			WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
-		}
-		decodeErr := json.NewDecoder(resp.Body).Decode(&info)
-		_ = resp.Body.Close()
-		return info.WebSocketDebuggerURL, decodeErr == nil && info.WebSocketDebuggerURL != "", nil
+	ctx := context.Background()
+	wsURL, err := readiness.WaitUntil(ctx, timeout, 250*time.Millisecond, func() (string, bool, error) {
+		wsURL, probeErr := readiness.ProbeDevToolsWebSocketURL(ctx, client, endpoint)
+		return wsURL, probeErr == nil, nil
 	})
 	if err != nil {
 		return "", fmt.Errorf("browser devtools not ready on port %d after %v", port, timeout)

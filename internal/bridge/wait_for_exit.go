@@ -1,6 +1,11 @@
 package bridge
 
-import "time"
+import (
+	"context"
+	"time"
+
+	"github.com/pinchtab/pinchtab/internal/readiness"
+)
 
 // var (not const) so tests can shrink the poll interval.
 var chromeExitPollInterval = 50 * time.Millisecond
@@ -15,22 +20,8 @@ func waitForChromeExit(profileDir string, timeout time.Duration) bool {
 	if profileDir == "" {
 		return true
 	}
-	deadline := time.Now().Add(timeout)
-	for {
-		if len(findChromePIDsByProfileDirFunc(profileDir)) == 0 {
-			return true
-		}
-		if time.Now().After(deadline) {
-			return false
-		}
-		remaining := time.Until(deadline)
-		sleep := chromeExitPollInterval
-		if remaining < sleep {
-			sleep = remaining
-		}
-		if sleep <= 0 {
-			return false
-		}
-		time.Sleep(sleep)
-	}
+	_, err := readiness.WaitUntil(context.Background(), timeout, chromeExitPollInterval, func() (struct{}, bool, error) {
+		return struct{}{}, len(findChromePIDsByProfileDirFunc(profileDir)) == 0, nil
+	})
+	return err == nil
 }
