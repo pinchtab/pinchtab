@@ -179,11 +179,9 @@ func TestRegisteredSolversAreAllKnownToTheCatalog(t *testing.T) {
 		}
 	}
 
-	// Both key-gated solvers registered above, so the catalog's key-gated list is
-	// the real one rather than a guess.
-	for _, gated := range catalog.KeyGated() {
-		if !slices.Contains(registered, gated) {
-			t.Errorf("catalog lists %q as key-gated but it did not register with a key set (registered: %v)", gated, registered)
+	for _, gated := range autosolver.KeyGatedSolvers() {
+		if slices.Contains(registered, gated.Name) == gated.Planned {
+			t.Errorf("%q registered = %v with its key set, want %v (planned = %v; registered: %v)", gated.Name, !gated.Planned, !gated.Planned, gated.Planned, registered)
 		}
 	}
 }
@@ -207,8 +205,8 @@ func TestEveryGatedSolverKeyReachesTheNormalisedConfig(t *testing.T) {
 		if cfg.APIKey(solver.Name) == "" {
 			t.Errorf("%s is key-gated but its key never reaches the config the catalog reads; add it to autoSolverAPIKeys beside %s", solver.Name, solver.ConfigKey)
 		}
-		if !catalog.IsAvailable(solver.Name, cfg) {
-			t.Errorf("%s has its key configured but the catalog reports it unavailable", solver.Name)
+		if catalog.IsAvailable(solver.Name, cfg) == solver.Planned {
+			t.Errorf("%s available = %v with its key configured, want %v (planned = %v)", solver.Name, solver.Planned, !solver.Planned, solver.Planned)
 		}
 	}
 
@@ -239,8 +237,8 @@ func TestAvailableNamesFollowTheConfiguredKeys(t *testing.T) {
 				TwoCaptchaKey: "k",
 				Solvers:       []string{solver.Name},
 			}}}
-			if !slices.Contains(keyed.availableAutoSolverNames(), solver.Name) {
-				t.Errorf("%s is not listed available with its key set (list %v)", solver.Name, keyed.availableAutoSolverNames())
+			if slices.Contains(keyed.availableAutoSolverNames(), solver.Name) == solver.Planned {
+				t.Errorf("%s listed = %v with its key set, want %v (planned = %v; list %v)", solver.Name, solver.Planned, !solver.Planned, solver.Planned, keyed.availableAutoSolverNames())
 			}
 		})
 	}

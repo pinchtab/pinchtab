@@ -213,12 +213,18 @@ func (h *Handlers) HandleAutoSolverConfig(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// rejectUnavailableSolver distinguishes the two reasons a named solver cannot
-// run. A key-gated solver reaching here is always a keyless one — with its key
-// set it would be available — so it gets its own code and names the config key,
-// rather than being reported as a typo. Config validation deliberately accepts
+// rejectUnavailableSolver distinguishes why a named solver cannot run. A planned
+// solver never runs, so it says so rather than asking for a key. Any other
+// key-gated solver reaching here is a keyless one, so it gets its own code and
+// names the config key, rather than being reported as a typo. Config validation deliberately accepts
 // the same name without its key; see docs/endpoints.md.
 func (h *Handlers) rejectUnavailableSolver(w http.ResponseWriter, name string) {
+	if gated, ok := coreautosolver.KeyGatedSolverNamed(name); ok && gated.Planned {
+		httpx.ErrorCode(w, 400, "solver_not_implemented",
+			fmt.Sprintf("solver %q is planned but not implemented yet; it cannot run even with an API key", gated.Name),
+			false, nil)
+		return
+	}
 	if gated, ok := coreautosolver.KeyGatedSolverNamed(name); ok {
 		httpx.ErrorCode(w, 400, "solver_key_missing",
 			fmt.Sprintf("solver %q is configured but its API key is not set; set %s to use it", gated.Name, gated.ConfigKey),

@@ -33,13 +33,13 @@ func buildAll(cfg autosolver.Config) []autosolver.Solver {
 }
 
 // Registrable is every solver that may enter the registry for this config: the
-// unconditional ones, plus each key-gated one whose key is set. Registering a gated
+// unconditional ones, plus each key-gated one that is not Planned and whose key is set. Registering a gated
 // solver without its key is what this drops — the registry would accept it and every
 // request to it would fail at the provider.
 func Registrable(cfg autosolver.Config) []autosolver.Solver {
 	out := make([]autosolver.Solver, 0, len(registrable()))
 	for _, solver := range buildAll(cfg) {
-		if _, gated := autosolver.KeyGatedSolverNamed(solver.Name()); gated && cfg.APIKey(solver.Name()) == "" {
+		if gated, ok := autosolver.KeyGatedSolverNamed(solver.Name()); ok && (gated.Planned || cfg.APIKey(solver.Name()) == "") {
 			continue
 		}
 		out = append(out, solver)
@@ -49,7 +49,7 @@ func Registrable(cfg autosolver.Config) []autosolver.Solver {
 
 // Available answers the question the API asks: which solver names can actually run
 // under this config. It is the single owner of that rule — the unconditional set plus
-// every key-gated name whose key is set — so a caller never re-derives it from the
+// every non-Planned key-gated name whose key is set — so a caller never re-derives it from the
 // key fields, which is how the same rule came to be spelled three times.
 //
 // Derived from KeyGatedSolvers rather than from the constructed solvers, so a gated
@@ -57,7 +57,7 @@ func Registrable(cfg autosolver.Config) []autosolver.Solver {
 func Available(cfg autosolver.Config) []string {
 	names := AlwaysRegistered()
 	for _, gated := range autosolver.KeyGatedSolvers() {
-		if cfg.APIKey(gated.Name) != "" {
+		if !gated.Planned && cfg.APIKey(gated.Name) != "" {
 			names = append(names, gated.Name)
 		}
 	}

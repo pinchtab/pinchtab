@@ -119,12 +119,16 @@ func TestRegistrableFollowsTheSameKeyRuleAsAvailable(t *testing.T) {
 		cfg            autosolver.Config
 		wantRegistered map[string]bool
 	}{
+		{"planned solvers stay out even with keys", autosolver.Config{APIKeys: map[string]string{
+			autosolver.CapsolverSolverName:  "k",
+			autosolver.TwoCaptchaSolverName: "k2",
+		}}, map[string]bool{}},
 		{"no keys", autosolver.Config{}, map[string]bool{
 			autosolver.CapsolverSolverName:  false,
 			autosolver.TwoCaptchaSolverName: false,
 		}},
 		{"one key", autosolver.Config{APIKeys: map[string]string{autosolver.CapsolverSolverName: "k"}}, map[string]bool{
-			autosolver.CapsolverSolverName:  true,
+			autosolver.CapsolverSolverName:  false,
 			autosolver.TwoCaptchaSolverName: false,
 		}},
 		{"blank key", autosolver.Config{APIKeys: map[string]string{autosolver.CapsolverSolverName: " "}}, map[string]bool{
@@ -135,8 +139,8 @@ func TestRegistrableFollowsTheSameKeyRuleAsAvailable(t *testing.T) {
 			autosolver.CapsolverSolverName:  "k",
 			autosolver.TwoCaptchaSolverName: "k2",
 		}}, map[string]bool{
-			autosolver.CapsolverSolverName:  true,
-			autosolver.TwoCaptchaSolverName: true,
+			autosolver.CapsolverSolverName:  false,
+			autosolver.TwoCaptchaSolverName: false,
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

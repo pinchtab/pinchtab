@@ -13,11 +13,14 @@ const (
 type KeyGatedSolver struct {
 	Name      string
 	ConfigKey string
+	// Planned marks a provider whose API client does not exist yet: its name and
+	// key stay valid config, but it never registers, key or not.
+	Planned bool
 }
 
 var keyGatedSolvers = []KeyGatedSolver{
-	{Name: CapsolverSolverName, ConfigKey: "autoSolver.external.capsolverKey"},
-	{Name: TwoCaptchaSolverName, ConfigKey: "autoSolver.external.twoCaptchaKey"},
+	{Name: CapsolverSolverName, ConfigKey: "autoSolver.external.capsolverKey", Planned: true},
+	{Name: TwoCaptchaSolverName, ConfigKey: "autoSolver.external.twoCaptchaKey", Planned: true},
 }
 
 // KeyGatedSolvers returns a copy, so a caller iterating it cannot edit the set.

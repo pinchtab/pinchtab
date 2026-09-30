@@ -328,6 +328,10 @@ func solveErrorPayload(t *testing.T, w *httptest.ResponseRecorder) (code, messag
 // row "key-gated without any key configured"), so the API must not call it unknown.
 func TestHandleSolveKeylessGatedSolverNamesTheMissingKey(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	restore := coreautosolver.SetKeyGatedSolversForTest([]coreautosolver.KeyGatedSolver{
+		{Name: "fakegated", ConfigKey: "autoSolver.external.fakeKey"},
+	})
+	defer restore()
 
 	for _, gated := range coreautosolver.KeyGatedSolvers() {
 		t.Run(gated.Name, func(t *testing.T) {
@@ -392,6 +396,31 @@ func TestHandleSolveRejectionPrecedesAnySolveWork(t *testing.T) {
 			}
 			if w.Code != 400 {
 				t.Fatalf("status = %d, want 400: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestHandleSolvePlannedSolverIsNotImplementedEvenWithAKey(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{AutoSolver: config.AutoSolverConfig{
+		CapsolverKey:  "k",
+		TwoCaptchaKey: "k",
+	}}, nil, nil, nil)
+
+	for _, gated := range coreautosolver.KeyGatedSolvers() {
+		if !gated.Planned {
+			continue
+		}
+		t.Run(gated.Name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/solve", bytes.NewReader([]byte(`{"solver": "`+gated.Name+`"}`)))
+			w := httptest.NewRecorder()
+			h.HandleSolve(w, req)
+
+			if w.Code != 400 {
+				t.Fatalf("status = %d, want 400: %s", w.Code, w.Body.String())
+			}
+			if code, _ := solveErrorPayload(t, w); code != "solver_not_implemented" {
+				t.Errorf("code = %q, want solver_not_implemented", code)
 			}
 		})
 	}

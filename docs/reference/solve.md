@@ -26,7 +26,7 @@ curl http://localhost:9867/solvers
 }
 ```
 
-`capsolver` and `twocaptcha` are included when their API keys are configured.
+`capsolver` and `twocaptcha` are planned but not implemented, so they are never listed, even with an API key configured.
 
 ## Auto-Detect Solve
 
@@ -103,7 +103,7 @@ The path form (`/solve/{name}`) overrides a body `solver`. On `/tabs/{id}/solve`
 
 | Code | Meaning                                |
 |------|----------------------------------------|
-| 400  | Invalid body; `unknown_solver` for an unregistered name; `solver_key_missing` for `capsolver`/`twocaptcha` without their API key |
+| 400  | Invalid body; `unknown_solver` for an unregistered name; `solver_not_implemented` for the planned `capsolver`/`twocaptcha` |
 | 404  | Tab not found                          |
 | 409  | `dialog_blocked` (a JavaScript dialog is open) or `tab_paused_handoff` |
 | 423  | `tab_locked`: tab leased by another owner |
@@ -138,10 +138,11 @@ Handles Cloudflare Turnstile and interstitial challenges.
 
 **Stealth requirement**: The Cloudflare solver works best with `instanceDefaults.stealthLevel: "full"` in the PinchTab config. Cloudflare evaluates browser fingerprints (CDP detection, WebGL, canvas, navigator properties) before and after the checkbox interaction. Without full stealth, the solver may click correctly but the challenge can still fail fingerprint verification. Check stealth status with `GET /stealth/status`.
 
-### External Solvers
+### External Solvers (planned)
 
-- `capsolver` (requires `autoSolver.external.capsolverKey`)
-- `twocaptcha` (requires `autoSolver.external.twoCaptchaKey`)
+`capsolver` and `twocaptcha` have no API client yet. Their names and keys
+(`autoSolver.external.capsolverKey`, `autoSolver.external.twoCaptchaKey`) are
+accepted in config, but neither solver registers or runs, key or not.
 
 ## Writing a Custom Solver
 

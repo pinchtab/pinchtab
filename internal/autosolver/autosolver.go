@@ -244,6 +244,13 @@ func (as *AutoSolver) reportMissingSolvers(missing []string, running []Solver) {
 		if _, warned := as.warnedMissingKey.LoadOrStore(name, struct{}{}); warned {
 			continue
 		}
+		if gated.Planned {
+			slog.Warn(fmt.Sprintf("autosolver: %s is configured but not implemented yet, so it never runs", gated.Name),
+				"solver", gated.Name,
+				"configured", as.config.Solvers,
+				"running", solverNamesOf(running))
+			continue
+		}
 		slog.Warn(fmt.Sprintf("autosolver: %s is configured but its API key is not set, so it never runs", gated.Name),
 			"solver", gated.Name,
 			"config_key", gated.ConfigKey,

@@ -917,19 +917,19 @@ Solve body fields:
 - `timeout` optional in ms (auto-estimated when omitted, minimum `30000`)
 
 A named `solver` that cannot run is rejected with `400` before anything is
-solved, and the two reasons carry different codes:
+solved, and each reason carries its own code:
 
 | Code | Meaning | Example message |
 | --- | --- | --- |
 | `unknown_solver` | No solver answers to that name — normally a misspelling. Lists what is available. | `unknown solver "cloudlfare" (available: [cloudflare semantic jschallenge])` |
-| `solver_key_missing` | A known key-gated solver whose API key is unset. Names the config key to set. | `solver "capsolver" is configured but its API key is not set; set autoSolver.external.capsolverKey to use it` |
+| `solver_key_missing` | A known key-gated solver whose API key is unset. Names the config key to set. | `solver "<name>" is configured but its API key is not set; set <config key> to use it` |
+| `solver_not_implemented` | A planned solver with no API client yet (`capsolver`, `twocaptcha`). A key does not enable it. | `solver "capsolver" is planned but not implemented yet; it cannot run even with an API key` |
 
 The API is deliberately stricter here than config validation, which accepts
-`capsolver` or `twocaptcha` in `autoSolver.solvers` with no key set — configuring
-a paid solver before its key is legitimate ordering, and the run falls back to
-the solvers that can run. A request naming one solver has no such fallback: it
-must not silently run a different solver, so it is rejected and told which key
-would enable it.
+a key-gated solver in `autoSolver.solvers` with no key set, and accepts the
+planned `capsolver` and `twocaptcha` at all — the run falls back to the solvers
+that can run. A request naming one solver has no such fallback: it must not
+silently run a different solver, so it is rejected with the reason.
 
 `GET /config/autosolver` returns effective autosolver runtime settings and the
 currently available solver list.
@@ -954,7 +954,7 @@ Example response:
 
 Notes:
 
-- `capsolver` and `twocaptcha` appear in `solvers` only when their API keys are configured.
+- `capsolver` and `twocaptcha` are planned but not implemented, so they never appear in `solvers`, even with API keys configured.
 
 ## Profiles And Instances
 

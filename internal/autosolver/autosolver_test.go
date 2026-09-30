@@ -1184,6 +1184,8 @@ func TestOrderSolversDoesNotWarnWhenTheMissingSolverIsNotKeyGated(t *testing.T) 
 // solver-name validation deliberately admits, so the runtime is where the
 // operator has to learn about it.
 func TestOrderSolversWarnsWhenAKeyGatedSolverHasNoAPIKey(t *testing.T) {
+	restore := SetKeyGatedSolversForTest([]KeyGatedSolver{{Name: "fakegated", ConfigKey: "autoSolver.external.fakeKey"}})
+	defer restore()
 	for _, gated := range KeyGatedSolvers() {
 		t.Run(gated.Name, func(t *testing.T) {
 			recorder := captureLogs(t)
@@ -1361,5 +1363,24 @@ func TestSolveSurvivesANilIntentFromTheEngine(t *testing.T) {
 	}
 	if result.Solved {
 		t.Error("a nil intent cannot be a solved page; the engine reported nothing")
+	}
+}
+
+func TestOrderSolversWarnsThatAPlannedSolverIsNotImplemented(t *testing.T) {
+	for _, gated := range KeyGatedSolvers() {
+		if !gated.Planned {
+			continue
+		}
+		t.Run(gated.Name, func(t *testing.T) {
+			recorder := captureLogs(t)
+
+			as := New(Config{Solvers: []string{"cloudflare", gated.Name}, APIKeys: map[string]string{gated.Name: "k"}}, nil, nil)
+			as.orderSolvers([]Solver{&mockSolver{name: "cloudflare", priority: 10}})
+
+			rec := recorder.find(t, slog.LevelWarn, gated.Name)
+			if !strings.Contains(rec.Message, "not implemented") {
+				t.Errorf("warn message %q does not say the solver is not implemented", rec.Message)
+			}
+		})
 	}
 }

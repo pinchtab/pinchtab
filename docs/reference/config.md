@@ -375,8 +375,9 @@ Current nested file-config shape:
 `browser.targets`, `browser.defaultTarget` and `browser.fallbackOrder` are covered
 under Browser Selection below.
 
-`autoSolver.external` is config-file-only. Capsolver and 2Captcha credentials
-are stored there.
+`autoSolver.external` is config-file-only. It holds Capsolver and 2Captcha
+credentials, but both solvers are planned and not implemented yet, so setting
+a key does not enable them.
 
 ### Semantic Flow Credentials
 
