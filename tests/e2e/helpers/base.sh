@@ -43,6 +43,10 @@ ASSERTIONS_FAILED="${ASSERTIONS_FAILED:-0}"
 ASSERTIONS_SKIPPED="${ASSERTIONS_SKIPPED:-0}"
 TEST_START_TIME="${TEST_START_TIME:-0}"
 
+get_tab_id() {
+  jq -r '.tabId' <<<"${1:-$RESULT}"
+}
+
 get_time_ms() {
   if [ -f /proc/uptime ]; then
     awk '{printf "%.0f", $1 * 1000}' /proc/uptime

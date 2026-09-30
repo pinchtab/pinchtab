@@ -19,7 +19,7 @@ memory_disabled_tests() {
 
   pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/memory-leak.html\"}"
   assert_ok "navigate to memory-leak.html"
-  TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+  TAB_ID=$(get_tab_id)
 
   pt_get "/memory?tabId=${TAB_ID}"
   assert_ok "GET /memory is not capability-gated"
@@ -57,7 +57,7 @@ memory_cap_tests() {
 
   pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/memory-leak.html\"}"
   assert_ok "navigate to memory-leak.html"
-  TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+  TAB_ID=$(get_tab_id)
 
   pt_post /memory/snapshot -d "{\"tabId\":\"${TAB_ID}\"}"
   assert_http_status 413 "snapshot over the 64 KiB cap"

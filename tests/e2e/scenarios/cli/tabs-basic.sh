@@ -37,7 +37,7 @@ BASE_TAB_ID=$(echo "$PT_OUT" | tr -d '[:space:]')
 pt_ok nav "${FIXTURES_URL}/buttons.html" --new-tab --json
 assert_output_json
 assert_output_contains "tabId" "returns new tab ID"
-NEW_TAB_ID=$(echo "$PT_OUT" | jq -r '.tabId')
+NEW_TAB_ID=$(get_tab_id "$PT_OUT")
 
 if [ "$NEW_TAB_ID" != "$BASE_TAB_ID" ]; then
   echo -e "  ${GREEN}✓${NC} --new-tab returned a different tab"

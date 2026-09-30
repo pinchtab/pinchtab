@@ -191,7 +191,7 @@ idpi_setup() {
   E2E_SERVER="$base_url"
   pt_post /navigate "{\"url\":\"$page_url\"}" >/dev/null
   local tab_id
-  tab_id=$(echo "$RESULT" | jq -r '.tabId')
+  tab_id=$(get_tab_id)
   pt_post "/tabs/${tab_id}/wait" '{"selector":"body","timeout":1000}' >/dev/null
   E2E_SERVER="$old_url"
   echo "$tab_id"
@@ -408,7 +408,7 @@ end_test
 AGENT="test-agent-$$"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/index.html\"}"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 wait_for_task_not_queued() {
   local task_id="$1"

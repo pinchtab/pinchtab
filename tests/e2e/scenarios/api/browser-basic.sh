@@ -325,11 +325,11 @@ start_test "snapshot: multi-tab content isolation with tabId"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "navigate to index"
-TAB_A=$(echo "$RESULT" | jq -r '.tabId')
+TAB_A=$(get_tab_id)
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/form.html\"}"
 assert_ok "navigate to form"
-TAB_B=$(echo "$RESULT" | jq -r '.tabId')
+TAB_B=$(get_tab_id)
 
 pt_get "/snapshot?tabId=${TAB_A}"
 assert_ok "snapshot tab A"
@@ -422,7 +422,7 @@ start_test "pinchtab find --tab <id>"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/find.html\",\"newTab\":true}"
 assert_ok "navigate for find"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 pt_post "/tabs/${TAB_ID}/find" -d '{"query":"sign up link"}'
 assert_ok "tab find"
@@ -528,7 +528,7 @@ start_test "pinchtab evaluate --tab <id>"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/evaluate.html\",\"newTab\":true}"
 assert_ok "navigate for evaluate"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 pt_post "/tabs/${TAB_ID}/evaluate" -d '{"expression":"1 + 2 + 3"}'
 assert_ok "tab evaluate"

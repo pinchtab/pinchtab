@@ -89,7 +89,7 @@ start_test "GET /console with tabId parameter"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/index.html\",\"newTab\":true}"
 assert_ok "create new tab"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 pt_get "/console?tabId=${TAB_ID}"
 assert_ok "get console for specific tab"

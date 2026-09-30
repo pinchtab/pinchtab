@@ -57,11 +57,11 @@ start_test "provider-parity: navigate returns tabId on both engines"
 
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/form.html\"}"
 assert_ok "chrome navigate"
-CHROME_TAB=$(echo "$RESULT" | jq -r '.tabId')
+CHROME_TAB=$(get_tab_id)
 
 ghostchrome_post /navigate "{\"url\":\"${FIXTURES_URL}/form.html\"}"
 assert_ok "ghost-chrome navigate"
-GC_TAB=$(echo "$RESULT" | jq -r '.tabId')
+GC_TAB=$(get_tab_id)
 
 if [ -n "$CHROME_TAB" ] && [ "$CHROME_TAB" != "null" ]; then
   echo -e "  ${GREEN}✓${NC} chrome tabId: ${CHROME_TAB:0:12}..."
@@ -283,7 +283,7 @@ start_test "provider-routing: ghost-chrome route metadata on text"
 
 ghostchrome_post /navigate "{\"url\":\"${FIXTURES_URL}/form.html\"}"
 assert_ok "ghost-chrome navigate to form"
-GC_TAB_ROUTE=$(echo "$RESULT" | jq -r '.tabId')
+GC_TAB_ROUTE=$(get_tab_id)
 
 ghostchrome_get "/text?tabId=${GC_TAB_ROUTE}"
 assert_ok "ghost-chrome text"
@@ -299,7 +299,7 @@ fi
 
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/form.html\"}"
 assert_ok "chrome navigate to form"
-CHROME_TAB_ROUTE=$(echo "$RESULT" | jq -r '.tabId')
+CHROME_TAB_ROUTE=$(get_tab_id)
 
 pt_get "/text?tabId=${CHROME_TAB_ROUTE}"
 assert_ok "chrome text"
@@ -313,7 +313,7 @@ start_test "provider-routing: ghost-chrome static path serves text and snapshot"
 
 ghostchrome_post /navigate "{\"url\":\"${FIXTURES_URL}/table.html\"}"
 assert_ok "ghost-chrome navigate to table"
-GC_TAB_STATIC=$(echo "$RESULT" | jq -r '.tabId')
+GC_TAB_STATIC=$(get_tab_id)
 
 ghostchrome_get "/text?tabId=${GC_TAB_STATIC}&format=text"
 assert_ok "ghost-chrome text (static path)"
@@ -339,7 +339,7 @@ start_test "provider-routing: ghost-chrome escalation to chrome for screenshot"
 
 ghostchrome_post /navigate "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
 assert_ok "ghost-chrome navigate to buttons"
-GC_TAB_ESC=$(echo "$RESULT" | jq -r '.tabId')
+GC_TAB_ESC=$(get_tab_id)
 
 ghostchrome_get "/screenshot?tabId=${GC_TAB_ESC}"
 

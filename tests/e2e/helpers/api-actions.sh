@@ -54,13 +54,11 @@ action_type_humanized_selector() {
   assert_ok "humanized type '$text' into $selector"
 }
 
-# Navigate to a fixture page and wait for load.
+# Navigate to a fixture page; /navigate returns once the page has loaded.
 # Usage: navigate_fixture "human-type.html"
 navigate_fixture() {
   local page="$1"
-  local wait="${2:-1}"
   pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/$page\"}" > /dev/null
-  sleep "$wait"
 }
 
 # Take a fresh snapshot (sets $RESULT).

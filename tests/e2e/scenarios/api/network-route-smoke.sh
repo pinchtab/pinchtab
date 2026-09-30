@@ -25,7 +25,7 @@ netroute_smoke_tests() {
   # fixtures host is in allowedDomains, which is what we exercise below).
   pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
   assert_ok "navigate to fixture"
-  TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+  TAB_ID=$(get_tab_id)
 
   # Drive a fetch from inside the page and capture {ok,status,text} or {error}.
   # Uses mode:'no-cors' so a cross-origin fulfill (which we deliberately do NOT

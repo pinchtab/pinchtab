@@ -49,7 +49,7 @@ assert_instance_list_contains "$PLUGIN_INST" \
 pt_post "/instances/${PLUGIN_INST}/tabs/open" "{\"url\":\"${FIXTURES_URL}/form.html\"}"
 assert_ok "open tab on the named instance"
 assert_result_exists ".tabId" "returns tabId"
-PLUGIN_TAB=$(echo "$RESULT" | jq -r '.tabId')
+PLUGIN_TAB=$(get_tab_id)
 
 pt_get "/instances/tabs?fresh=1"
 assert_ok "list tabs across instances"
@@ -86,7 +86,7 @@ start_test "plugin: instance targeting is path-scoped, not a request-body field"
 
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\",\"instanceId\":\"${PLUGIN_INST}\"}"
 assert_ok "navigate carrying instanceId in the body"
-BODY_TAB=$(echo "$RESULT" | jq -r '.tabId')
+BODY_TAB=$(get_tab_id)
 
 pt_get "/instances/tabs?fresh=1"
 assert_ok "list tabs after the body-routed navigate"

@@ -26,7 +26,7 @@ start_test "security: wait fn BLOCKED when evaluate disabled"
 
 secure_post /navigate -d '{"url":"http://fixtures:80/index.html"}'
 assert_ok "navigate to allowed fixture page"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 secure_post /wait -d "{\"tabId\":\"${TAB_ID}\",\"fn\":\"true\",\"timeout\":1000}"
 assert_http_status 403 "wait fn blocked"

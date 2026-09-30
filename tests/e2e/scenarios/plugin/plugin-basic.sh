@@ -20,7 +20,7 @@ pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/form.html\"}"
 assert_ok "navigate"
 assert_result_exists ".tabId" "returns tabId"
 assert_json_contains "$RESULT" '.title' 'Form'
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 end_test
 
@@ -95,7 +95,7 @@ end_test
 start_test "plugin: wait for selector"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 pt_post /wait -d "{\"tabId\":\"${TAB_ID}\",\"selector\":\"button\"}"
 assert_ok "wait for selector"
@@ -107,7 +107,7 @@ start_test "plugin: wait for text"
 
 if [ -z "${TAB_ID:-}" ]; then
   pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
-  TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+  TAB_ID=$(get_tab_id)
 fi
 pt_post /wait -d "{\"tabId\":\"${TAB_ID}\",\"text\":\"Increment\",\"timeout\":1000}"
 assert_ok "wait for text"
@@ -129,7 +129,7 @@ start_test "plugin: /tab action=new"
 
 pt_post /tab -d '{"action":"new"}'
 assert_ok "new tab"
-NEW_TAB=$(echo "$RESULT" | jq -r '.tabId')
+NEW_TAB=$(get_tab_id)
 assert_result_exists ".tabId" "returns tabId"
 
 end_test
@@ -146,7 +146,7 @@ end_test
 start_test "plugin: evaluate JavaScript"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/evaluate.html\"}"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 pt_post /evaluate -d "{\"tabId\":\"${TAB_ID}\",\"expression\":\"document.title\"}"
 assert_ok "evaluate"
@@ -158,7 +158,7 @@ end_test
 start_test "plugin: text extraction"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/index.html\"}"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 pt_get "/text?tabId=${TAB_ID}"
 assert_ok "text extraction"

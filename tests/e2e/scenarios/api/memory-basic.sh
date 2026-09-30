@@ -13,7 +13,7 @@ start_test "memory: usedJSHeapSize grows with three leaks and falls back after r
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/memory-leak.html\"}"
 assert_ok "navigate to memory-leak.html"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 pt_get "/memory?tabId=${TAB_ID}&gc=true"
 assert_ok "baseline read with gc"

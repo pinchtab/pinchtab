@@ -254,7 +254,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "fill: textarea by ref"
 
-navigate_fixture "text-fields.html" 0
+navigate_fixture "text-fields.html"
 fresh_snapshot
 
 require_ref "textbox" "Notes" NOTES_REF && {
@@ -271,7 +271,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "type: textarea by ref"
 
-navigate_fixture "text-fields.html" 0
+navigate_fixture "text-fields.html"
 fresh_snapshot
 
 require_ref "textbox" "Notes" NOTES_REF && {
@@ -287,7 +287,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "iframe: snapshot refs support fill and click inside iframe"
 
-navigate_fixture "iframe.html" 0
+navigate_fixture "iframe.html"
 fresh_snapshot
 
 assert_json_exists "$RESULT" '.nodes[] | select(.name == "payment-frame")' "snapshot includes iframe owner"
@@ -310,7 +310,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "iframe: frame-scoped selectors support focus hover select check scroll and click"
 
-navigate_fixture "iframe.html" 0
+navigate_fixture "iframe.html"
 fresh_snapshot
 
 pt_get "/snapshot?filter=interactive&selector=%23card-number"
@@ -386,7 +386,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "iframe: nested frames require explicit frame hops"
 
-navigate_fixture "nested-iframe.html" 0
+navigate_fixture "nested-iframe.html"
 fresh_snapshot
 
 pt_get "/snapshot?filter=interactive&selector=%23nested-code"
@@ -424,7 +424,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "iframe: srcdoc frame-scoped selectors work"
 
-navigate_fixture "srcdoc-iframe.html" 0
+navigate_fixture "srcdoc-iframe.html"
 fresh_snapshot
 
 pt_post /frame -d '{"target":"#srcdoc-payment-frame"}'
@@ -458,7 +458,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "iframe: stale refs after rerender require a fresh snapshot"
 
-navigate_fixture "iframe-rerender.html" 0
+navigate_fixture "iframe-rerender.html"
 fresh_snapshot
 
 require_ref "textbox" "Legacy field" LEGACY_REF && {
@@ -492,7 +492,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "iframe: cross-origin selector scope is not claimed as supported"
 
-navigate_fixture "cross-origin-iframe.html" 0
+navigate_fixture "cross-origin-iframe.html"
 fresh_snapshot
 
 pt_post /frame -d '{"target":"#cross-origin-frame"}'
@@ -827,7 +827,7 @@ end_test
 # eN was clearly an iframe in the snap.
 start_test "iframe: /frame target=eN drills into child frame (ref-based scoping)"
 
-navigate_fixture "iframe.html" 0
+navigate_fixture "iframe.html"
 fresh_snapshot
 
 IFRAME_REF=$(echo "$RESULT" | jq -r '[.nodes[] | select(.role == "Iframe")][0].ref // empty')
@@ -858,7 +858,7 @@ end_test
 # successful "reset to main" — making the bug invisible to clients.
 start_test "iframe: /frame target=eN errors when ref is not an iframe owner"
 
-navigate_fixture "iframe.html" 0
+navigate_fixture "iframe.html"
 fresh_snapshot
 
 # Pick any non-iframe ref in main (a heading or paragraph is fine).
@@ -879,7 +879,7 @@ end_test
 # iframe directly because pierce:true descends into the outer frame.
 start_test "iframe: /frame target=eN drills into iframe surfaced via same-origin pierce"
 
-navigate_fixture "nested-iframe-outer.html" 0
+navigate_fixture "nested-iframe-outer.html"
 fresh_snapshot
 
 NESTED_IFRAME_REF=$(echo "$RESULT" | jq -r '[.nodes[] | select(.role == "Iframe")][0].ref // empty')

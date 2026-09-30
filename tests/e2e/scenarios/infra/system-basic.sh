@@ -10,7 +10,7 @@ start_test "config: Chrome version in user agent"
 
 pt_post /navigate '{"url":"about:blank"}'
 assert_ok "navigate"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 pt_post /evaluate "{\"tabId\":\"$TAB_ID\",\"expression\":\"navigator.userAgent\"}"
 assert_ok "evaluate UA"
@@ -38,7 +38,7 @@ if [ "${PINCHTAB_E2E_BROWSER:-chrome}" = "cloak" ]; then
 else
   pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
   assert_ok "navigate"
-  TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+  TAB_ID=$(get_tab_id)
 
   pt_post /evaluate "{\"tabId\":\"$TAB_ID\",\"expression\":\"navigator.userAgent\"}"
   assert_ok "initial UA"
@@ -80,7 +80,7 @@ start_test "config: server loads config file and starts"
 
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "navigate"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 pt_post /evaluate "{\"tabId\":\"$TAB_ID\",\"expression\":\"document.title\"}"
 assert_ok "evaluate"
@@ -99,7 +99,7 @@ start_test "config: server uses port from config file"
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "navigate (proves env port override works)"
 
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 pt_post /evaluate "{\"tabId\":\"$TAB_ID\",\"expression\":\"window.location.href\"}"
 assert_ok "evaluate"
 assert_json_exists "$RESULT" ".result" "got location result"

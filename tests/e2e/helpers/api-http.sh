@@ -330,10 +330,6 @@ _e2e_close_leaked_tabs() {
   done < <(_e2e_snapshot_tab_ids)
 }
 
-get_tab_id() {
-  echo "$RESULT" | jq -r '.tabId'
-}
-
 normalize_default_port_url() {
   local raw="${1:-}"
   raw="${raw/http:\/\/127.0.0.1:80\//http:\/\/127.0.0.1/}"

@@ -20,7 +20,7 @@ start_test "POST /tabs/{id}/network/route is 403 when capability off (default se
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
 assert_ok "navigate"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 pt_post "/tabs/${TAB_ID}/network/route" -d '{"pattern":"*.png","action":"abort"}'
 assert_not_ok "rejects when allowNetworkIntercept=false"
@@ -35,7 +35,7 @@ end_test
 netroute_full_server_tests() {
   pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
   assert_ok "navigate (full-permissive)"
-  TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+  TAB_ID=$(get_tab_id)
 
   # ─────────────────────────────────────────────────────────────────
   start_test "POST /tabs/{id}/network/route installs an abort rule"

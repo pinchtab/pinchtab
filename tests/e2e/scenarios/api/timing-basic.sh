@@ -56,7 +56,7 @@ start_test "GET /timing with tabId parameter"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/audit-site/clean.html\",\"newTab\":true}"
 assert_ok "create new tab"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 pt_get "/timing?tabId=${TAB_ID}"
 assert_ok "get timing for specific tab"

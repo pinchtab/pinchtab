@@ -26,7 +26,7 @@ vocab_request() {
 fresh_page() {
   pt_post /navigate -d "{\"url\":\"${PAGE}\"}"
   assert_ok "navigate to buttons.html"
-  TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+  TAB_ID=$(get_tab_id)
 }
 
 assert_published() {

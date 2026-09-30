@@ -118,14 +118,14 @@ secure_server_tests() {
   start_test "LRU eviction: open 2 tabs (at limit)"
 
   pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/index.html\"}"
-  TAB1=$(echo "$RESULT" | jq -r '.tabId')
+  TAB1=$(get_tab_id)
   assert_ok "open tab 1 (index)"
   echo -e "  ${MUTED}tab1: ${TAB1:0:12}...${NC}"
 
   short_ordering_wait
 
   pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/form.html\"}"
-  TAB2=$(echo "$RESULT" | jq -r '.tabId')
+  TAB2=$(get_tab_id)
   assert_ok "open tab 2 (form)"
   echo -e "  ${MUTED}tab2: ${TAB2:0:12}...${NC}"
 
@@ -144,7 +144,7 @@ secure_server_tests() {
   short_ordering_wait
 
   pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
-  TAB3=$(echo "$RESULT" | jq -r '.tabId')
+  TAB3=$(get_tab_id)
   assert_ok "open tab 3 (triggers eviction)"
   echo -e "  ${MUTED}tab3: ${TAB3:0:12}...${NC}"
 
@@ -167,7 +167,7 @@ secure_server_tests() {
   short_ordering_wait
 
   pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/table.html\"}"
-  TAB4=$(echo "$RESULT" | jq -r '.tabId')
+  TAB4=$(get_tab_id)
   assert_ok "open tab 4 (triggers second eviction)"
 
   pt_get "/tabs/$TAB2/snapshot"
@@ -195,7 +195,7 @@ secure_server_tests() {
 
   pt_post /tab "{\"action\":\"new\",\"url\":\"${FIXTURES_URL}/index.html\"}"
   assert_ok "new tab"
-  NEW_TAB=$(echo "$RESULT" | jq -r '.tabId')
+  NEW_TAB=$(get_tab_id)
 
   pt_post /close "{\"tabId\":\"${NEW_TAB}\"}"
   assert_ok "close tab"
@@ -207,7 +207,7 @@ secure_server_tests() {
 
   pt_post /tab "{\"action\":\"new\",\"url\":\"${FIXTURES_URL}/index.html\"}"
   assert_ok "new default tab"
-  DEFAULT_CLOSE_TAB=$(echo "$RESULT" | jq -r '.tabId')
+  DEFAULT_CLOSE_TAB=$(get_tab_id)
 
   pt_post /close '{}'
   assert_ok "close default tab"

@@ -14,7 +14,7 @@ start_test "extract: product schema returns typed data and live refs"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/extract-product.html\"}"
 assert_ok "navigate to extract-product.html"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 pt_post /extract -d "{\"schema\":${PRODUCT_SCHEMA}}"
 assert_ok "extract product"
@@ -36,7 +36,7 @@ start_test "extract: vocabulary token and tab id match between headers and body"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/extract-product.html\"}"
 assert_ok "navigate to extract-product.html"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 EXTRACT_HEADERS=$(mktemp)
 RESULT=$(e2e_curl -s -D "$EXTRACT_HEADERS" -X POST "${E2E_SERVER}/extract" -H "Content-Type: application/json" -d "{\"schema\":${PRODUCT_SCHEMA}}")
@@ -103,7 +103,7 @@ assert_http_status 404 "bogus tabId"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/extract-list.html\"}"
 assert_ok "navigate to extract-list.html for the tab route"
-LIST_TAB=$(echo "$RESULT" | jq -r '.tabId')
+LIST_TAB=$(get_tab_id)
 pt_get /tabs
 assert_ok "list tabs"
 assert_json_eq "$RESULT" "[.tabs[] | (.id // .tabId)] | index(\"${LIST_TAB}\") != null" 'true' "/tabs lists the navigated tab"

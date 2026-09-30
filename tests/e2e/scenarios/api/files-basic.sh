@@ -62,7 +62,7 @@ start_test "pinchtab pdf --tab <id> refuses a body tabId naming another tab"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "navigate"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 pt_post "/tabs/${TAB_ID}/pdf" -d '{"tabId":"OTHER"}'
 assert_http_status 400 "body tabId that does not match the path"
@@ -210,7 +210,7 @@ start_test "pinchtab upload --tab <id>"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/upload.html\",\"newTab\":true}"
 assert_ok "navigate for upload"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+TAB_ID=$(get_tab_id)
 
 # 1x1 transparent PNG
 PNG_DATA="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
