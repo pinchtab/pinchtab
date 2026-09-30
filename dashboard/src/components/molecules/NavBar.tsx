@@ -50,11 +50,6 @@ export default function NavBar({ onRefresh, showLogout = false }: NavBarProps) {
     (instance) => instance.status === "running",
   );
 
-  // Close mobile menu on route change
-  useEffect(() => {
-    setMobileMenuOpen(false);
-  }, [location]);
-
   const handleRefresh = useCallback(() => {
     if (!onRefresh || refreshing) return;
     setRefreshing(true);
@@ -78,6 +73,7 @@ export default function NavBar({ onRefresh, showLogout = false }: NavBarProps) {
       const num = parseInt(e.key);
       if (num >= 1 && num <= tabs.length) {
         e.preventDefault();
+        setMobileMenuOpen(false);
         navigate(tabs[num - 1].path);
         return;
       }
@@ -173,6 +169,7 @@ export default function NavBar({ onRefresh, showLogout = false }: NavBarProps) {
             <NavLink
               key={tab.id}
               to={tab.path}
+              onClick={() => setMobileMenuOpen(false)}
               className={({ isActive }) =>
                 `px-4 py-3 text-sm font-medium transition-colors duration-150 ${
                   isActive

@@ -1,36 +1,24 @@
-import { useState, useEffect } from "react";
 import { Input } from "../components/atoms";
-import type { Profile } from "../generated/types";
 
 interface Props {
-  profile: Profile;
+  name: string;
+  useWhen: string;
   onChange: (name: string, useWhen: string) => void;
   minHeight?: string;
 }
 
 export default function ProfileBasicInfoPanel({
-  profile,
+  name,
+  useWhen,
   onChange,
   minHeight = "min-h-[180px]",
 }: Props) {
-  const [name, setName] = useState(profile.name);
-  const [useWhen, setUseWhen] = useState(profile.useWhen || "");
-
-  useEffect(() => {
-    setName(profile.name);
-    setUseWhen(profile.useWhen || "");
-  }, [profile]);
-
-  useEffect(() => {
-    onChange(name, useWhen);
-  }, [name, useWhen, onChange]);
-
   return (
     <div className="space-y-4">
       <Input
         label="Name"
         value={name}
-        onChange={(e) => setName(e.target.value)}
+        onChange={(e) => onChange(e.target.value, useWhen)}
       />
 
       <div>
@@ -39,7 +27,7 @@ export default function ProfileBasicInfoPanel({
         </label>
         <textarea
           value={useWhen}
-          onChange={(e) => setUseWhen(e.target.value)}
+          onChange={(e) => onChange(name, e.target.value)}
           className={`${minHeight} w-full resize-y rounded border border-border-subtle bg-bg-elevated px-3 py-2 text-sm text-text-primary`}
         />
       </div>

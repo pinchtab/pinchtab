@@ -132,7 +132,8 @@ export default function ProfileDetailsPanel({
             <div className="h-full overflow-auto p-4">
               <div className="grid gap-4 xl:grid-cols-2">
                 <ProfileBasicInfoPanel
-                  profile={profile}
+                  name={formValues.name}
+                  useWhen={formValues.useWhen}
                   onChange={handleProfileChange}
                 />
 

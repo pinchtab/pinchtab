@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import type { Instance, InstanceTab } from "../../types";
 import { defaultActivityFilters, sameActivityFilters } from "../helpers";
 import type { ActivityFilters } from "../types";
@@ -63,18 +63,21 @@ export function useActivityFilters(
 
   const deferredFilters = useDeferredValue(filters);
 
-  useEffect(() => {
+  const [appliedDefaultSidebarTab, setAppliedDefaultSidebarTab] =
+    useState(defaultSidebarTab);
+  if (appliedDefaultSidebarTab !== defaultSidebarTab) {
+    setAppliedDefaultSidebarTab(defaultSidebarTab);
     setSidebarTab(defaultSidebarTab);
-  }, [defaultSidebarTab]);
+  }
 
-  useEffect(() => {
-    const next = initialBaseFilters;
-    setFilters((current) =>
-      sameActivityFilters(current, next) ? current : next,
-    );
-    setActivityScopedAgentId(next.agentId);
-    setActivityScopedSessionId(next.sessionId);
-  }, [initialBaseFilters]);
+  const [appliedInitialFilters, setAppliedInitialFilters] =
+    useState(initialBaseFilters);
+  if (!sameActivityFilters(appliedInitialFilters, initialBaseFilters)) {
+    setAppliedInitialFilters(initialBaseFilters);
+    setFilters(initialBaseFilters);
+    setActivityScopedAgentId(initialBaseFilters.agentId);
+    setActivityScopedSessionId(initialBaseFilters.sessionId);
+  }
 
   const updateFilter = (key: keyof ActivityFilters, value: string) => {
     if (sidebarTab === "activities") {

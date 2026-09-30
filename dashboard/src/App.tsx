@@ -1,28 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
   BrowserRouter,
   Navigate,
   Route,
   Routes,
   useLocation,
-  useNavigate,
 } from "react-router-dom";
 import { ActivityPage, AgentsPage } from "./activities";
 import { HandoffNotifications, NavBar } from "./components/molecules";
+import { useBackendAuth } from "./hooks/useBackendAuth";
 import { LoginPage, MonitoringPage, ProfilesPage, SettingsPage } from "./pages";
 import * as api from "./services/api";
 import {
-  AUTH_REQUIRED_EVENT,
-  AUTH_STATE_CHANGED_EVENT,
   INSECURE_DASHBOARD_TRANSPORT_WARNING,
-  SERVER_UNREACHABLE_EVENT,
   isInsecureDashboardTransport,
 } from "./services/auth";
 import { acquireDashboardRealtime } from "./services/dashboardRealtime";
 import { useAppStore } from "./stores/useAppStore";
-
-type AuthMode = "probing" | "required" | "open" | "unreachable";
-const AUTH_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 15000] as const;
 
 function AppContent() {
   const setInstances = useAppStore((state) => state.setInstances);
@@ -33,120 +27,13 @@ function AppContent() {
     (state) => state.settings.monitoring?.memoryMetrics ?? false,
   );
   const location = useLocation();
-  const navigate = useNavigate();
-  const [authMode, setAuthMode] = useState<AuthMode>("probing");
-  const [authProtected, setAuthProtected] = useState(false);
-  const [authRetryCount, setAuthRetryCount] = useState(0);
-  const dashboardAccessible = authMode === "open";
-  const loginRequired = authMode === "required";
+  const auth = useBackendAuth();
+  const dashboardAccessible = auth.mode === "open";
   const insecureDashboardTransport = isInsecureDashboardTransport();
 
   useEffect(() => {
     document.documentElement.setAttribute("data-site-mode", "agent");
   }, []);
-
-  useEffect(() => {
-    if (
-      authMode === "open" ||
-      authMode === "required" ||
-      authMode === "unreachable"
-    ) {
-      return;
-    }
-
-    let cancelled = false;
-    api
-      .probeBackendAuth()
-      .then((result) => {
-        if (cancelled) {
-          return;
-        }
-        setAuthProtected(result.mode !== "open");
-        setAuthMode(result.mode === "required" ? "required" : "open");
-        setAuthRetryCount(0);
-        if (result.health) {
-          setServerInfo(result.health);
-        }
-      })
-      .catch((error) => {
-        if (cancelled) {
-          return;
-        }
-        console.error("Failed to probe backend auth", error);
-        setAuthMode("unreachable");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [authMode, setServerInfo]);
-
-  useEffect(() => {
-    if (
-      authMode !== "unreachable" ||
-      authRetryCount >= AUTH_RETRY_DELAYS_MS.length
-    ) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setAuthRetryCount((count) => count + 1);
-      setAuthMode("probing");
-    }, AUTH_RETRY_DELAYS_MS[authRetryCount]);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [authMode, authRetryCount]);
-
-  useEffect(() => {
-    const handleAuthRequired = () => {
-      setAuthProtected(true);
-      setAuthMode("required");
-      setAuthRetryCount(0);
-      navigate("/login", {
-        replace: true,
-        state: { from: location.pathname },
-      });
-    };
-    const handleAuthStateChanged = () => {
-      setAuthMode("probing");
-      setAuthRetryCount(0);
-    };
-    const handleServerUnreachable = () => {
-      setAuthMode("unreachable");
-    };
-
-    window.addEventListener(AUTH_REQUIRED_EVENT, handleAuthRequired);
-    window.addEventListener(AUTH_STATE_CHANGED_EVENT, handleAuthStateChanged);
-    window.addEventListener(SERVER_UNREACHABLE_EVENT, handleServerUnreachable);
-    return () => {
-      window.removeEventListener(AUTH_REQUIRED_EVENT, handleAuthRequired);
-      window.removeEventListener(
-        AUTH_STATE_CHANGED_EVENT,
-        handleAuthStateChanged,
-      );
-      window.removeEventListener(
-        SERVER_UNREACHABLE_EVENT,
-        handleServerUnreachable,
-      );
-    };
-  }, [location.pathname, navigate]);
-
-  useEffect(() => {
-    if (loginRequired && location.pathname !== "/login") {
-      navigate("/login", {
-        replace: true,
-        state: { from: location.pathname },
-      });
-    }
-  }, [location.pathname, loginRequired, navigate]);
-
-  useEffect(() => {
-    if (dashboardAccessible && location.pathname === "/login") {
-      navigate("/dashboard/monitoring", { replace: true });
-    }
-  }, [dashboardAccessible, location.pathname, navigate]);
 
   useEffect(() => {
     if (!dashboardAccessible) {
@@ -184,7 +71,7 @@ function AppContent() {
     return acquireDashboardRealtime(memoryMetricsEnabled);
   }, [dashboardAccessible, memoryMetricsEnabled]);
 
-  if (authMode === "probing") {
+  if (auth.mode === "probing") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-bg-app px-4">
         <div className="rounded-sm border border-border-subtle bg-black/10 px-4 py-3 text-sm text-text-muted">
@@ -194,11 +81,8 @@ function AppContent() {
     );
   }
 
-  if (authMode === "unreachable") {
-    const nextRetryDelay =
-      authRetryCount < AUTH_RETRY_DELAYS_MS.length
-        ? AUTH_RETRY_DELAYS_MS[authRetryCount]
-        : null;
+  if (auth.mode === "unreachable") {
+    const nextRetryDelay = auth.retryDelay;
 
     return (
       <div className="flex min-h-screen items-center justify-center bg-bg-app px-4">
@@ -214,10 +98,7 @@ function AppContent() {
               <button
                 type="button"
                 className="rounded-sm border border-border-subtle px-3 py-2 text-sm text-text-primary transition-all duration-150 hover:border-primary/30 hover:bg-bg-elevated"
-                onClick={() => {
-                  setAuthRetryCount(0);
-                  setAuthMode("probing");
-                }}
+                onClick={auth.retryNow}
               >
                 Retry now
               </button>
@@ -235,18 +116,23 @@ function AppContent() {
     );
   }
 
-  if (loginRequired) {
+  if (auth.mode === "required") {
     return (
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route
+          path="*"
+          element={
+            <Navigate to="/login" replace state={{ from: location.pathname }} />
+          }
+        />
       </Routes>
     );
   }
 
   return (
     <div className="dashboard-shell flex h-screen flex-col bg-bg-app">
-      <NavBar showLogout={authProtected} />
+      <NavBar showLogout={auth.authProtected} />
       {insecureDashboardTransport && (
         <div className="border-b border-warning/25 bg-warning/10 px-4 py-2 text-sm text-warning">
           {INSECURE_DASHBOARD_TRANSPORT_WARNING}
