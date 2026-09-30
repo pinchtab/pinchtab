@@ -14,6 +14,7 @@ import (
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/chromedp"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 )
 
 // humanMouseStepTimeout caps each per-step Input.dispatchMouseEvent call in
@@ -247,7 +248,7 @@ var boxModelForBackendNodeAction = func(ctx context.Context, backendNodeID cdp.B
 var (
 	clickCoordinateHumanAction = Click
 	hoverCoordinateHumanAction = Hover
-	settleHoverAction          = HoverByCoordinate
+	settleHoverAction          = bridgecdpops.HoverByCoordinate
 )
 
 // Hover is the humanized sibling of Click: the same random-start bezier

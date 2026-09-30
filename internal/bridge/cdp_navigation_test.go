@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 )
 
 func TestWaitForTitle_ContextCancelled(t *testing.T) {
@@ -31,7 +33,7 @@ func TestNavigatePage_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := NavigatePage(ctx, "https://pinchtab.com")
+	err := bridgecdpops.NavigatePage(ctx, "https://pinchtab.com")
 	if err == nil {
 		t.Error("expected error for cancelled context")
 	}
@@ -52,7 +54,7 @@ func TestShouldReplaceBlankHistoryEntry(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := shouldReplaceBlankHistoryEntry(tc.curURL, tc.cur, tc.entryCount); got != tc.want {
+			if got := bridgecdpops.ShouldReplaceBlankHistoryEntry(tc.curURL, tc.cur, tc.entryCount); got != tc.want {
 				t.Fatalf("shouldReplaceBlankHistoryEntry(%q, %d, %d) = %v, want %v", tc.curURL, tc.cur, tc.entryCount, got, tc.want)
 			}
 		})

@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/bridge/cdpops"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
@@ -65,7 +66,7 @@ func TestPointerPointResistsForgedGeometry(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	x, y, err := cdpops.PointerPointForNode(ctx, nodeID, false)
+	x, y, err := bridgecdpops.PointerPointForNode(ctx, nodeID, false)
 	if err != nil {
 		t.Fatalf("pointer point: %v", err)
 	}
@@ -92,7 +93,7 @@ func TestPointerPointWalksNestedFrameOffsets(t *testing.T) {
 
 	deepNodeID := deepFrameNode(t, ctx)
 
-	x, y, err := cdpops.PointerPointForNode(ctx, deepNodeID, false)
+	x, y, err := bridgecdpops.PointerPointForNode(ctx, deepNodeID, false)
 	if err != nil {
 		t.Fatalf("pointer point: %v", err)
 	}
@@ -103,11 +104,11 @@ func TestPointerPointWalksNestedFrameOffsets(t *testing.T) {
 		t.Errorf("nested pointer point = (%.0f,%.0f), want (%.0f,%.0f); frame offsets were not applied", x, y, wantX, wantY)
 	}
 
-	if err := ClickByCoordinate(ctx, x, y, 0); err != nil {
+	if err := bridgecdpops.ClickByCoordinate(ctx, x, y, 0); err != nil {
 		t.Fatalf("click: %v", err)
 	}
 	var hits int
-	if err := cdpops.CallFunctionOnNode(ctx, deepNodeID,
+	if err := bridgecdpops.CallFunctionOnNode(ctx, deepNodeID,
 		`function(){ return Number(this.dataset.hits || 0); }`, nil, &hits); err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +130,7 @@ func deepFrameNode(t *testing.T, ctx context.Context) int64 {
 
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		tree, err := FetchFrameTree(ctx)
+		tree, err := bridgeobserve.FetchFrameTree(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -161,17 +162,17 @@ func TestPointerPointOcclusionUnchanged(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, _, err := cdpops.PointerPointForNode(ctx, nodeID, true); !errors.Is(err, cdpops.ErrElementOccluded) {
+	if _, _, err := bridgecdpops.PointerPointForNode(ctx, nodeID, true); !errors.Is(err, bridgecdpops.ErrElementOccluded) {
 		t.Errorf("covered element: err = %v, want ErrElementOccluded", err)
 	}
-	if _, _, err := cdpops.PointerPointForNode(ctx, nodeID, false); err != nil {
+	if _, _, err := bridgecdpops.PointerPointForNode(ctx, nodeID, false); err != nil {
 		t.Errorf("covered element without requireTopMost should still resolve: %v", err)
 	}
 
 	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.getElementById('cover').remove(), true`, new(bool))); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := cdpops.PointerPointForNode(ctx, nodeID, true); err != nil {
+	if _, _, err := bridgecdpops.PointerPointForNode(ctx, nodeID, true); err != nil {
 		t.Errorf("uncovered element: err = %v, want a clickable point", err)
 	}
 }

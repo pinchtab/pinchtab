@@ -4,12 +4,14 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 )
 
 const testMaxDialogTextBytes = 8 * 1024
 
 func TestDialogManager_SetAndGetPending(t *testing.T) {
-	dm := NewDialogManager()
+	dm := bridgetabs.NewDialogManager()
 
 	// No pending dialog initially
 	if got := dm.GetPending("tab1"); got != nil {
@@ -34,7 +36,7 @@ func TestDialogManager_SetAndGetPending(t *testing.T) {
 }
 
 func TestDialogManager_ClearPending(t *testing.T) {
-	dm := NewDialogManager()
+	dm := bridgetabs.NewDialogManager()
 	dm.SetPending("tab1", &DialogState{Type: "confirm", Message: "Are you sure?"})
 
 	dm.ClearPending("tab1")
@@ -45,13 +47,13 @@ func TestDialogManager_ClearPending(t *testing.T) {
 }
 
 func TestDialogManager_ClearPending_NoOp(t *testing.T) {
-	dm := NewDialogManager()
+	dm := bridgetabs.NewDialogManager()
 	// Should not panic
 	dm.ClearPending("nonexistent")
 }
 
 func TestDialogManager_GetAndClear(t *testing.T) {
-	dm := NewDialogManager()
+	dm := bridgetabs.NewDialogManager()
 	dm.SetPending("tab1", &DialogState{Type: "prompt", Message: "Enter name", DefaultPrompt: "default"})
 
 	got := dm.GetAndClear("tab1")
@@ -73,7 +75,7 @@ func TestDialogManager_GetAndClear(t *testing.T) {
 }
 
 func TestDialogManager_GetAndClear_NoPending(t *testing.T) {
-	dm := NewDialogManager()
+	dm := bridgetabs.NewDialogManager()
 	got := dm.GetAndClear("tab1")
 	if got != nil {
 		t.Fatalf("expected nil, got %+v", got)
@@ -81,7 +83,7 @@ func TestDialogManager_GetAndClear_NoPending(t *testing.T) {
 }
 
 func TestDialogManager_MultipleTabsIndependent(t *testing.T) {
-	dm := NewDialogManager()
+	dm := bridgetabs.NewDialogManager()
 	dm.SetPending("tab1", &DialogState{Type: "alert", Message: "Tab 1"})
 	dm.SetPending("tab2", &DialogState{Type: "confirm", Message: "Tab 2"})
 
@@ -106,7 +108,7 @@ func TestDialogManager_MultipleTabsIndependent(t *testing.T) {
 }
 
 func TestDialogManager_OverwritePending(t *testing.T) {
-	dm := NewDialogManager()
+	dm := bridgetabs.NewDialogManager()
 	dm.SetPending("tab1", &DialogState{Type: "alert", Message: "First"})
 	dm.SetPending("tab1", &DialogState{Type: "confirm", Message: "Second"})
 
@@ -142,7 +144,7 @@ func TestDialogState_Fields(t *testing.T) {
 }
 
 func TestDialogManager_TruncatesOversizedDialogText(t *testing.T) {
-	dm := NewDialogManager()
+	dm := bridgetabs.NewDialogManager()
 	dm.SetPending("tab1", &DialogState{
 		Type:          "prompt",
 		Message:       strings.Repeat("m", testMaxDialogTextBytes+256),
@@ -163,7 +165,7 @@ func TestDialogManager_TruncatesOversizedDialogText(t *testing.T) {
 }
 
 func TestHandlePendingDialog_NoPending(t *testing.T) {
-	dm := NewDialogManager()
+	dm := bridgetabs.NewDialogManager()
 	// No real CDP context needed — should fail before reaching CDP
 	_, err := HandlePendingDialog(context.TODO(), "tab1", dm, true, "")
 	if err == nil {

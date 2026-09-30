@@ -9,7 +9,7 @@ import (
 
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/bridge/cdpops"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 )
 
 // autoSwitchGraceTimeout is a short grace period after a click returns for the
@@ -201,7 +201,7 @@ func popupAnchorURL(ctx context.Context, backendNodeID int64) (string, error) {
 		return "";
 	}`
 	var href string
-	if err := cdpops.CallFunctionOnNode(ctx, backendNodeID, script, nil, &href); err != nil {
+	if err := bridgecdpops.CallFunctionOnNode(ctx, backendNodeID, script, nil, &href); err != nil {
 		return "", fmt.Errorf("popup anchor: %w", err)
 	}
 	return strings.TrimSpace(href), nil

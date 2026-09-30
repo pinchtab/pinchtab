@@ -17,7 +17,9 @@ import (
 	"github.com/chromedp/cdproto/page"
 	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	bridgeruntime "github.com/pinchtab/pinchtab/internal/bridge/runtime"
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/stealth"
 )
@@ -389,17 +391,17 @@ func (b *Bridge) RestartBrowser(cfg *config.RuntimeConfig) error {
 	b.stealthLaunchMode = stealth.LaunchModeUninitialized
 
 	b.LogStore = NewConsoleLogStore(1000)
-	b.netMonitor = NewNetworkMonitor(DefaultNetworkBufferSize)
+	b.netMonitor = bridgeobserve.NewNetworkMonitor(DefaultNetworkBufferSize)
 	if cfg.NetworkBufferSize > 0 {
-		b.netMonitor = NewNetworkMonitor(cfg.NetworkBufferSize)
+		b.netMonitor = bridgeobserve.NewNetworkMonitor(cfg.NetworkBufferSize)
 	}
 	b.netMonitor.ConfigureBodyRetention(cfg.RetainNetworkBodies, cfg.RetainNetworkBodyMaxBytes)
 	b.fingerprintMu.Lock()
 	b.fingerprintOverlays = make(map[string]bool)
 	b.fingerprintMu.Unlock()
 	b.workerStealthTargets = sync.Map{}
-	b.Dialogs = NewDialogManager()
-	b.Locks = NewLockManager()
+	b.Dialogs = bridgetabs.NewDialogManager()
+	b.Locks = bridgetabs.NewLockManager()
 	b.Config = cfg
 
 	b.StealthBundle = nil

@@ -6,10 +6,12 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 )
 
 func BenchmarkTabExecutor_SequentialSameTab(b *testing.B) {
-	te := NewTabExecutor(4)
+	te := bridgetabs.NewTabExecutor(4)
 	ctx := context.Background()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -20,7 +22,7 @@ func BenchmarkTabExecutor_SequentialSameTab(b *testing.B) {
 }
 
 func BenchmarkTabExecutor_ParallelDifferentTabs(b *testing.B) {
-	te := NewTabExecutor(8)
+	te := bridgetabs.NewTabExecutor(8)
 	ctx := context.Background()
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -36,7 +38,7 @@ func BenchmarkTabExecutor_ParallelDifferentTabs(b *testing.B) {
 }
 
 func BenchmarkTabExecutor_ParallelSameTab(b *testing.B) {
-	te := NewTabExecutor(8)
+	te := bridgetabs.NewTabExecutor(8)
 	ctx := context.Background()
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -49,7 +51,7 @@ func BenchmarkTabExecutor_ParallelSameTab(b *testing.B) {
 }
 
 func BenchmarkTabExecutor_WithWork(b *testing.B) {
-	te := NewTabExecutor(4)
+	te := bridgetabs.NewTabExecutor(4)
 	ctx := context.Background()
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -74,7 +76,7 @@ func BenchmarkSequentialVsParallel(b *testing.B) {
 	workDuration := time.Microsecond * 100
 
 	b.Run("Sequential_4Tabs", func(b *testing.B) {
-		te := NewTabExecutor(1)
+		te := bridgetabs.NewTabExecutor(1)
 		ctx := context.Background()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -88,7 +90,7 @@ func BenchmarkSequentialVsParallel(b *testing.B) {
 	})
 
 	b.Run("Parallel_4Tabs", func(b *testing.B) {
-		te := NewTabExecutor(4)
+		te := bridgetabs.NewTabExecutor(4)
 		ctx := context.Background()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {

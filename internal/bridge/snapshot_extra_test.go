@@ -3,6 +3,8 @@ package bridge
 import (
 	"encoding/json"
 	"testing"
+
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 )
 
 func TestFormatSnapshotCompact_Basic(t *testing.T) {
@@ -245,7 +247,7 @@ func TestFrameIDs_Recursive(t *testing.T) {
 			ChildFrames: []rawFrameTree{{Frame: RawFrame{ID: "grandchild"}}},
 		},
 	}
-	got := frameIDs(tree)
+	got := bridgeobserve.FrameIDs(tree)
 	want := []string{"root", "child-1", "child-2", "grandchild"}
 	if len(got) != len(want) {
 		t.Fatalf("len=%d want %d (%v)", len(got), len(want), got)
@@ -264,7 +266,7 @@ func TestFrameMap_Recursive(t *testing.T) {
 			{Frame: RawFrame{ID: "child-1", URL: "https://example.com/embed", Name: "embed"}},
 		},
 	}
-	got := FrameMap(tree)
+	got := bridgeobserve.FrameMap(tree)
 	if len(got) != 2 {
 		t.Fatalf("expected 2 frames, got %d", len(got))
 	}

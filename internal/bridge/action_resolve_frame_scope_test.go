@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
-
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/selector"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
@@ -93,7 +93,7 @@ func childFrameIDForTest(t *testing.T, ctx context.Context) string {
 
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		tree, err := FetchFrameTree(ctx)
+		tree, err := bridgeobserve.FetchFrameTree(ctx)
 		if err != nil {
 			t.Fatalf("fetch frame tree: %v", err)
 		}

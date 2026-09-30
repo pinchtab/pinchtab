@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"github.com/pinchtab/pinchtab/internal/cdptk"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/stealth"
@@ -498,7 +499,7 @@ func (m *healthTabsBridge) RemoveRouteRule(tabID, pattern string) (int, error) {
 func (m *healthTabsBridge) ListRouteRules(tabID string) ([]bridge.RouteRule, error) { return nil, nil }
 
 func (m *healthTabsBridge) GetDialogManager() *bridge.DialogManager {
-	return bridge.NewDialogManager()
+	return bridgetabs.NewDialogManager()
 }
 
 func (m *healthTabsBridge) Execute(ctx context.Context, tabID string, task func(ctx context.Context) error) error {

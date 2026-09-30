@@ -9,7 +9,9 @@ import (
 
 	"github.com/chromedp/chromedp"
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	bridgeruntime "github.com/pinchtab/pinchtab/internal/bridge/runtime"
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/stealth"
 )
@@ -82,7 +84,7 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 		AllocCtx:            allocCtx,
 		BrowserCtx:          browserCtx,
 		Config:              cfg,
-		netMonitor:          NewNetworkMonitor(netBufSize),
+		netMonitor:          bridgeobserve.NewNetworkMonitor(netBufSize),
 		fingerprintOverlays: make(map[string]bool),
 		handoffs:            make(map[string]TabHandoffState),
 		pointerByTab:        make(map[string]pointerState),
@@ -104,14 +106,14 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 		b.SetFetchPauseSuppressed,
 	)
 	b.ensureStealthBundle()
-	b.Dialogs = NewDialogManager()
+	b.Dialogs = bridgetabs.NewDialogManager()
 	if cfg != nil && browserCtx != nil {
 		b.wireTabManager(browserCtx)
 		if !b.quietStealthObservers() {
 			b.StartBrowserGuards()
 		}
 	}
-	b.Locks = NewLockManager()
+	b.Locks = bridgetabs.NewLockManager()
 	b.InitActionRegistry()
 	return b
 }
@@ -420,7 +422,7 @@ func (b *Bridge) BrowserContext() context.Context {
 
 func (b *Bridge) Navigate(ctx context.Context, url string, params NavigateParams) (*NavigateResult, error) {
 	if params.DispatchOnly {
-		if err := DispatchNavigation(ctx, url); err != nil {
+		if err := bridgecdpops.DispatchNavigation(ctx, url); err != nil {
 			return nil, fmt.Errorf("dispatch navigation: %w", err)
 		}
 		return &NavigateResult{URL: url}, nil

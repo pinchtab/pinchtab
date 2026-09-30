@@ -2,7 +2,6 @@ package bridge
 
 import (
 	"context"
-	"time"
 
 	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 )
@@ -33,34 +32,10 @@ type MemoryMetrics = bridgeobserve.MemoryMetrics
 
 type PageMetrics = bridgeobserve.PageMetrics
 
-func frameIDs(tree RawFrameTree) []string {
-	return bridgeobserve.FrameIDs(tree)
-}
-
-func FrameMap(tree RawFrameTree) map[string]RawFrame {
-	return bridgeobserve.FrameMap(tree)
-}
-
-func FrameOwnerMap(ctx context.Context, tree RawFrameTree) map[string]int64 {
-	return bridgeobserve.FrameOwnerMap(ctx, tree)
-}
-
-func FetchFrameTree(ctx context.Context) (RawFrameTree, error) {
-	return bridgeobserve.FetchFrameTree(ctx)
-}
-
 type FrameContext = bridgeobserve.FrameContext
 
 func FetchFrameContext(ctx context.Context) (FrameContext, error) {
 	return bridgeobserve.FetchFrameContext(ctx)
-}
-
-func WaitForQuietWindow(ctx context.Context, quiet, ceiling time.Duration) (time.Duration, error) {
-	return bridgeobserve.WaitForQuietWindow(ctx, quiet, ceiling)
-}
-
-func WaitForReadyState(ctx context.Context, ceiling time.Duration) (string, error) {
-	return bridgeobserve.WaitForReadyState(ctx, ceiling)
 }
 
 type BoundingBox = bridgeobserve.BoundingBox
@@ -68,10 +43,6 @@ type ViewportInfo = bridgeobserve.ViewportInfo
 
 func FetchLayout(ctx context.Context) (ViewportInfo, error) {
 	return bridgeobserve.FetchLayout(ctx)
-}
-
-func AnnotateBounds(ctx context.Context, nodes []A11yNode, pageCoords bool, vp ViewportInfo) error {
-	return bridgeobserve.AnnotateBounds(ctx, nodes, pageCoords, vp)
 }
 
 func ElementBorderBox(ctx context.Context, backendNodeID int64) (BoundingBox, bool) {
@@ -112,18 +83,6 @@ func FormatSnapshotCompactDiff(nodes, added, changed, removed []A11yNode) string
 
 func TruncateToTokens(nodes []A11yNode, maxTokens int, format string) ([]A11yNode, bool) {
 	return bridgeobserve.TruncateToTokens(nodes, maxTokens, format)
-}
-
-func NewNetworkBuffer(size int) *NetworkBuffer {
-	return bridgeobserve.NewNetworkBuffer(size)
-}
-
-func NewNetworkMonitor(bufferSize int) *NetworkMonitor {
-	return bridgeobserve.NewNetworkMonitor(bufferSize)
-}
-
-func matchStatusRange(status int, pattern string) bool {
-	return bridgeobserve.MatchStatusRange(status, pattern)
 }
 
 func GetResponseBody(ctx context.Context, requestID string) (string, bool, error) {

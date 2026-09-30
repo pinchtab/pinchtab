@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -16,7 +17,7 @@ const (
 )
 
 func TestNetworkBuffer_AddAndGet(t *testing.T) {
-	buf := NewNetworkBuffer(3)
+	buf := bridgeobserve.NewNetworkBuffer(3)
 
 	buf.Add(NetworkEntry{RequestID: "r1", URL: "https://example.com/a", Method: "GET"})
 	buf.Add(NetworkEntry{RequestID: "r2", URL: "https://example.com/b", Method: "POST"})
@@ -35,7 +36,7 @@ func TestNetworkBuffer_AddAndGet(t *testing.T) {
 }
 
 func TestNetworkBuffer_Eviction(t *testing.T) {
-	buf := NewNetworkBuffer(2)
+	buf := bridgeobserve.NewNetworkBuffer(2)
 
 	buf.Add(NetworkEntry{RequestID: "r1", URL: "https://example.com/1"})
 	buf.Add(NetworkEntry{RequestID: "r2", URL: "https://example.com/2"})
@@ -57,7 +58,7 @@ func TestNetworkBuffer_Eviction(t *testing.T) {
 }
 
 func TestNetworkBuffer_Update(t *testing.T) {
-	buf := NewNetworkBuffer(10)
+	buf := bridgeobserve.NewNetworkBuffer(10)
 	buf.Add(NetworkEntry{RequestID: "r1", URL: "https://example.com", Method: "GET"})
 
 	buf.Update("r1", func(e *NetworkEntry) {
@@ -78,7 +79,7 @@ func TestNetworkBuffer_Update(t *testing.T) {
 }
 
 func TestNetworkBuffer_TruncatesOversizedFields(t *testing.T) {
-	buf := NewNetworkBuffer(10)
+	buf := bridgeobserve.NewNetworkBuffer(10)
 	buf.Add(NetworkEntry{
 		RequestID: "r1",
 		URL:       "https://example.com/" + strings.Repeat("a", testMaxNetworkURLBytes),
@@ -114,7 +115,7 @@ func TestNetworkBuffer_TruncatesOversizedFields(t *testing.T) {
 }
 
 func TestNetworkBuffer_Clear(t *testing.T) {
-	buf := NewNetworkBuffer(10)
+	buf := bridgeobserve.NewNetworkBuffer(10)
 	buf.Add(NetworkEntry{RequestID: "r1"})
 	buf.Add(NetworkEntry{RequestID: "r2"})
 	buf.Clear()
@@ -174,7 +175,7 @@ func TestNetworkFilter_Match(t *testing.T) {
 }
 
 func TestNetworkBuffer_List_WithFilter(t *testing.T) {
-	buf := NewNetworkBuffer(10)
+	buf := bridgeobserve.NewNetworkBuffer(10)
 	buf.Add(NetworkEntry{RequestID: "r1", URL: "https://api.com/a", Method: "GET", Status: 200, ResourceType: "XHR"})
 	buf.Add(NetworkEntry{RequestID: "r2", URL: "https://api.com/b", Method: "POST", Status: 404, ResourceType: "XHR"})
 	buf.Add(NetworkEntry{RequestID: "r3", URL: "https://cdn.com/style.css", Method: "GET", Status: 200, ResourceType: "Stylesheet"})
@@ -205,7 +206,7 @@ func TestNetworkBuffer_List_WithFilter(t *testing.T) {
 }
 
 func TestNetworkMonitor_GetBuffer(t *testing.T) {
-	nm := NewNetworkMonitor(50)
+	nm := bridgeobserve.NewNetworkMonitor(50)
 
 	// No buffer yet
 	if buf := nm.GetBuffer("tab1"); buf != nil {
@@ -226,7 +227,7 @@ func TestNetworkMonitor_GetBuffer(t *testing.T) {
 }
 
 func TestNetworkMonitor_ClearTab(t *testing.T) {
-	nm := NewNetworkMonitor(50)
+	nm := bridgeobserve.NewNetworkMonitor(50)
 	buf := nm.GetOrCreateBufferForTest("tab1")
 	buf.Add(NetworkEntry{RequestID: "r1"})
 
@@ -237,7 +238,7 @@ func TestNetworkMonitor_ClearTab(t *testing.T) {
 }
 
 func TestNetworkMonitor_ClearAll(t *testing.T) {
-	nm := NewNetworkMonitor(50)
+	nm := bridgeobserve.NewNetworkMonitor(50)
 	buf1 := nm.GetOrCreateBufferForTest("tab1")
 	buf2 := nm.GetOrCreateBufferForTest("tab2")
 	buf1.Add(NetworkEntry{RequestID: "r1"})
@@ -265,7 +266,7 @@ func TestMatchStatusRange(t *testing.T) {
 		{0, "", true},
 	}
 	for _, tt := range tests {
-		got := matchStatusRange(tt.status, tt.pattern)
+		got := bridgeobserve.MatchStatusRange(tt.status, tt.pattern)
 		if got != tt.want {
 			t.Errorf("matchStatusRange(%d, %q) = %v, want %v", tt.status, tt.pattern, got, tt.want)
 		}
@@ -273,7 +274,7 @@ func TestMatchStatusRange(t *testing.T) {
 }
 
 func TestNetworkBuffer_Subscribe(t *testing.T) {
-	buf := NewNetworkBuffer(10)
+	buf := bridgeobserve.NewNetworkBuffer(10)
 	subID, ch := buf.Subscribe()
 	defer buf.Unsubscribe(subID)
 
@@ -292,7 +293,7 @@ func TestNetworkBuffer_Subscribe(t *testing.T) {
 }
 
 func TestNetworkBuffer_SubscribeMultiple(t *testing.T) {
-	buf := NewNetworkBuffer(10)
+	buf := bridgeobserve.NewNetworkBuffer(10)
 	id1, ch1 := buf.Subscribe()
 	id2, ch2 := buf.Subscribe()
 	defer buf.Unsubscribe(id1)
@@ -313,7 +314,7 @@ func TestNetworkBuffer_SubscribeMultiple(t *testing.T) {
 }
 
 func TestNetworkBuffer_SubscribeNoNotifyOnUpdate(t *testing.T) {
-	buf := NewNetworkBuffer(10)
+	buf := bridgeobserve.NewNetworkBuffer(10)
 	buf.Add(NetworkEntry{RequestID: "r1", Method: "GET"})
 
 	subID, ch := buf.Subscribe()
@@ -331,7 +332,7 @@ func TestNetworkBuffer_SubscribeNoNotifyOnUpdate(t *testing.T) {
 }
 
 func TestNetworkBuffer_Unsubscribe(t *testing.T) {
-	buf := NewNetworkBuffer(10)
+	buf := bridgeobserve.NewNetworkBuffer(10)
 	subID, ch := buf.Subscribe()
 	buf.Unsubscribe(subID)
 
@@ -349,7 +350,7 @@ func TestNetworkBuffer_Unsubscribe(t *testing.T) {
 }
 
 func TestNetworkMonitor_GetOrCreateBufferWithSize(t *testing.T) {
-	nm := NewNetworkMonitor(50)
+	nm := bridgeobserve.NewNetworkMonitor(50)
 
 	// Custom size
 	buf := nm.GetOrCreateBufferWithSizeForTest("tab1", 200)
@@ -374,7 +375,7 @@ func TestNetworkMonitor_GetOrCreateBufferWithSize(t *testing.T) {
 }
 
 func TestNewNetworkBuffer_CustomSize(t *testing.T) {
-	buf := NewNetworkBuffer(500)
+	buf := bridgeobserve.NewNetworkBuffer(500)
 	if buf.MaxSizeForTest() != 500 {
 		t.Errorf("expected maxSize 500, got %d", buf.MaxSizeForTest())
 	}
@@ -389,21 +390,21 @@ func TestNewNetworkBuffer_CustomSize(t *testing.T) {
 }
 
 func TestNewNetworkBuffer_ZeroDefaultsTo100(t *testing.T) {
-	buf := NewNetworkBuffer(0)
+	buf := bridgeobserve.NewNetworkBuffer(0)
 	if buf.MaxSizeForTest() != DefaultNetworkBufferSize {
 		t.Errorf("expected maxSize %d, got %d", DefaultNetworkBufferSize, buf.MaxSizeForTest())
 	}
 }
 
 func TestNewNetworkBuffer_ClampsOversizedBuffer(t *testing.T) {
-	buf := NewNetworkBuffer(config.MaxNetworkBufferSize + 1)
+	buf := bridgeobserve.NewNetworkBuffer(config.MaxNetworkBufferSize + 1)
 	if buf.MaxSizeForTest() != config.MaxNetworkBufferSize {
 		t.Errorf("expected maxSize %d, got %d", config.MaxNetworkBufferSize, buf.MaxSizeForTest())
 	}
 }
 
 func TestNewNetworkMonitor_ClampsOversizedBuffer(t *testing.T) {
-	nm := NewNetworkMonitor(config.MaxNetworkBufferSize + 1)
+	nm := bridgeobserve.NewNetworkMonitor(config.MaxNetworkBufferSize + 1)
 	if nm.BufferSizeForTest() != config.MaxNetworkBufferSize {
 		t.Errorf("expected bufSize %d, got %d", config.MaxNetworkBufferSize, nm.BufferSizeForTest())
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
@@ -142,7 +143,7 @@ func TestBoxAgreesWithCaptureCoordinateSpaceForInFrameRef(t *testing.T) {
 		t.Fatal(err)
 	}
 	captureNodes := []bridge.A11yNode{{NodeID: nodeID}}
-	if err := bridge.AnnotateBounds(f.ctx, captureNodes, false, vp); err != nil {
+	if err := observe.AnnotateBounds(f.ctx, captureNodes, false, vp); err != nil {
 		t.Fatal(err)
 	}
 	captured := captureNodes[0].BoundingBox

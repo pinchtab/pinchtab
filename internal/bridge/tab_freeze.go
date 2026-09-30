@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/bridge/cdpops"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 )
 
 const lifecycleCallTimeout = 5 * time.Second
@@ -30,7 +30,7 @@ func (tm *TabManager) SetLifecycleWriterForTests(write func(ctx context.Context,
 
 func setTabFrozen(ctx context.Context, frozen bool) error {
 	return chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
-		return cdpops.SetPageFrozen(c, frozen)
+		return bridgecdpops.SetPageFrozen(c, frozen)
 	}))
 }
 

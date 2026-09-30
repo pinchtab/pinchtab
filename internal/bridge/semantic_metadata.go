@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/bridge/cdpops"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 )
 
@@ -64,7 +64,7 @@ func hasNodeDOMMetadata(node A11yNode) bool {
 }
 
 func resolveNodeDOMMetadata(ctx context.Context, backendNodeID int64) (nodeDOMMetadata, bool) {
-	objectID, err := cdpops.ResolveNodeObjectID(ctx, backendNodeID)
+	objectID, err := bridgecdpops.ResolveNodeObjectID(ctx, backendNodeID)
 	if err != nil {
 		return nodeDOMMetadata{}, false
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 )
 
 func (tm *TabManager) browserGuardsActive() bool {
@@ -62,8 +63,8 @@ func (tm *TabManager) setupManagedTarget(ctx context.Context, tabID, rawCDPID st
 	}
 	if tm.dialogMgr != nil {
 		autoAccept := tm.config != nil && tm.config.DialogAutoAccept
-		ListenDialogEvents(ctx, tabID, tm.dialogMgr, autoAccept)
-		if err := EnableDialogEvents(ctx); err != nil {
+		bridgetabs.ListenDialogEvents(ctx, tabID, tm.dialogMgr, autoAccept)
+		if err := bridgetabs.EnableDialogEvents(ctx); err != nil {
 			slog.Warn("enable dialog events failed", "tabId", tabID, "err", err)
 		}
 	}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
@@ -76,7 +77,7 @@ func nodeIDForSelector(t *testing.T, ctx context.Context, css string) int64 {
 // to be resolved in the child frame's own execution context.
 func inFrameNodeID(t *testing.T, ctx context.Context, css string) int64 {
 	t.Helper()
-	tree, err := FetchFrameTree(ctx)
+	tree, err := bridgeobserve.FetchFrameTree(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

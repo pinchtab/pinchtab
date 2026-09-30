@@ -7,11 +7,13 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 )
 
 func TestTabExecutor_MultiTabSimulation(t *testing.T) {
 	// Simulate 3 tabs executing independently
-	te := NewTabExecutor(4)
+	te := bridgetabs.NewTabExecutor(4)
 	results := make(map[string][]int)
 	var mu sync.Mutex
 
@@ -50,7 +52,7 @@ func TestTabExecutor_MultiTabSimulation(t *testing.T) {
 }
 
 func TestTabExecutor_ErrorIsolation(t *testing.T) {
-	te := NewTabExecutor(4)
+	te := bridgetabs.NewTabExecutor(4)
 
 	// Tab1 fails
 	err1 := te.Execute(context.Background(), "tab1", func(ctx context.Context) error {
@@ -71,7 +73,7 @@ func TestTabExecutor_ErrorIsolation(t *testing.T) {
 }
 
 func TestTabExecutor_PanicIsolation(t *testing.T) {
-	te := NewTabExecutor(4)
+	te := bridgetabs.NewTabExecutor(4)
 
 	// Tab1 panics
 	err1 := te.Execute(context.Background(), "tab1", func(ctx context.Context) error {
@@ -92,7 +94,7 @@ func TestTabExecutor_PanicIsolation(t *testing.T) {
 }
 
 func TestTabExecutor_StressHighConcurrency(t *testing.T) {
-	te := NewTabExecutor(4)
+	te := bridgetabs.NewTabExecutor(4)
 	var completed int32
 	var wg sync.WaitGroup
 
@@ -119,7 +121,7 @@ func TestTabExecutor_StressHighConcurrency(t *testing.T) {
 }
 
 func TestTabExecutor_StressRapidCreateRemove(t *testing.T) {
-	te := NewTabExecutor(4)
+	te := bridgetabs.NewTabExecutor(4)
 	var wg sync.WaitGroup
 
 	for i := 0; i < 20; i++ {
@@ -138,7 +140,7 @@ func TestTabExecutor_StressRapidCreateRemove(t *testing.T) {
 }
 
 func TestTabExecutor_StressSameTabConcurrent(t *testing.T) {
-	te := NewTabExecutor(8)
+	te := bridgetabs.NewTabExecutor(8)
 	var counter int32
 	var wg sync.WaitGroup
 
@@ -183,7 +185,7 @@ func TestTabManager_ExecuteWithExecutor(t *testing.T) {
 	tm := &TabManager{
 		tabs:      make(map[string]*TabEntry),
 		snapshots: make(map[string]*RefCache),
-		executor:  NewTabExecutor(2),
+		executor:  bridgetabs.NewTabExecutor(2),
 	}
 	var executed bool
 	err := tm.Execute(context.Background(), "tab1", func(ctx context.Context) error {
@@ -199,7 +201,7 @@ func TestTabManager_ExecuteWithExecutor(t *testing.T) {
 }
 
 func TestTabManager_ExecutorAccessor(t *testing.T) {
-	te := NewTabExecutor(3)
+	te := bridgetabs.NewTabExecutor(3)
 	tm := &TabManager{
 		tabs:      make(map[string]*TabEntry),
 		snapshots: make(map[string]*RefCache),
@@ -223,7 +225,7 @@ func TestTabManager_ExecutorNilAccessor(t *testing.T) {
 func TestTabExecutor_ConcurrentRemoveAndExecute(t *testing.T) {
 	// Verify that concurrent RemoveTab + Execute for the same tab doesn't
 	// cause a race condition or deadlock.
-	te := NewTabExecutor(4)
+	te := bridgetabs.NewTabExecutor(4)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 50; i++ {
@@ -249,7 +251,7 @@ func TestTabExecutor_ConcurrentRemoveAndExecute(t *testing.T) {
 
 func TestTabExecutor_RemoveTabDuringActiveExecution(t *testing.T) {
 	// Verify that RemoveTab waits for an active task to finish before removing.
-	te := NewTabExecutor(2)
+	te := bridgetabs.NewTabExecutor(2)
 	taskStarted := make(chan struct{})
 	taskDone := make(chan struct{})
 	var taskCompleted bool
@@ -277,7 +279,7 @@ func TestTabExecutor_RemoveTabDuringActiveExecution(t *testing.T) {
 }
 
 func TestTabExecutor_StatsUnderLoad(t *testing.T) {
-	te := NewTabExecutor(2)
+	te := bridgetabs.NewTabExecutor(2)
 	started := make(chan struct{}, 2)
 
 	// Fill both semaphore slots
@@ -347,7 +349,7 @@ func (p *peakTracker) Peak() int64 { return atomic.LoadInt64(&p.peak) }
 // is not observable in it. This asks the safety question instead: how many
 // tasks were inside at the same time.
 func TestRemoveTabDoesNotAdmitASecondTaskToABusyTab(t *testing.T) {
-	te := NewTabExecutor(8)
+	te := bridgetabs.NewTabExecutor(8)
 	var peak peakTracker
 
 	blocking := func(hold <-chan struct{}) func(context.Context) error {

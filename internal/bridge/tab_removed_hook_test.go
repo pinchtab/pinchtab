@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -51,7 +52,7 @@ const builtInTabRemovedHooks = 4
 // leaking quietly.
 func TestClosingATabDropsItsLease(t *testing.T) {
 	b := &Bridge{}
-	b.Locks = NewLockManager()
+	b.Locks = bridgetabs.NewLockManager()
 	b.wireTabManager(context.Background())
 
 	if err := b.Locks.TryLock("tab1", "agent-a", time.Minute); err != nil {

@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/chromedp/chromedp"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 )
 
 func textEntryResult(kind, text string) map[string]any {
@@ -49,13 +50,13 @@ func (b *Bridge) actionFill(ctx context.Context, req ActionRequest) (map[string]
 		return finishFill(ctx, result, req.Submit)
 	}
 	if req.NodeID > 0 {
-		if err := FillByNodeID(ctx, req.NodeID, text); err != nil {
+		if err := bridgecdpops.FillByNodeID(ctx, req.NodeID, text); err != nil {
 			return nil, err
 		}
 		// Compared against what was asked for rather than against "", so a clear that
 		// did not land is reported too. ValidateFillAction has already refused the
 		// nothing-was-supplied case, which is what used to disable this check.
-		if actual, err := ReadInputValue(ctx, req.NodeID); err == nil && actual != text {
+		if actual, err := bridgecdpops.ReadInputValue(ctx, req.NodeID); err == nil && actual != text {
 			result["warning"] = "fill may not have been picked up by the page (e.g. React controlled input); try 'type' instead"
 		}
 		return finishFill(ctx, result, req.Submit)

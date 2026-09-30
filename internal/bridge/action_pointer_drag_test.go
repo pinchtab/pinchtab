@@ -101,7 +101,7 @@ func (f *dragFixture) nodeID(t *testing.T, selector string) int64 {
 
 func (f *dragFixture) point(t *testing.T, selector string) (float64, float64) {
 	t.Helper()
-	x, y, err := PointerPointForNode(f.ctx, f.nodeID(t, selector), true)
+	x, y, err := bridgecdpops.PointerPointForNode(f.ctx, f.nodeID(t, selector), true)
 	if err != nil {
 		t.Fatalf("%s: %v", selector, err)
 	}

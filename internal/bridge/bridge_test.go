@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/target"
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -375,7 +376,7 @@ func TestTabManagerStoresTabPolicyState(t *testing.T) {
 func TestPurgeTrackedTabStateByTargetID(t *testing.T) {
 	logStore := NewConsoleLogStore(10)
 	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, logStore, nil)
-	dm := NewDialogManager()
+	dm := bridgetabs.NewDialogManager()
 	tm.SetDialogManager(dm)
 
 	tabID := "public-tab-id"

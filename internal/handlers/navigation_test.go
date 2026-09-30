@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/navguard"
@@ -668,7 +669,7 @@ func TestNavigateRefusesAnErrorPageLanding(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			m := &mockBridge{currentURL: "chrome-error://chromewebdata/", navigateResult: &bridge.NavigateResult{URL: target}, networkMonitor: bridge.NewNetworkMonitor(10)}
+			m := &mockBridge{currentURL: "chrome-error://chromewebdata/", navigateResult: &bridge.NavigateResult{URL: target}, networkMonitor: observe.NewNetworkMonitor(10)}
 			if tc.netError != "" {
 				m.networkMonitor.GetOrCreateBufferForTest("tab1").Add(bridge.NetworkEntry{URL: target, Failed: true, Error: tc.netError})
 			}

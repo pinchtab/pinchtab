@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/selector"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
@@ -76,11 +78,11 @@ func TestDialogScopeReproducesGlobalEscapeAndContainsActionsAndReads(t *testing.
 		t.Fatalf("unscoped reproduction resolved %q, want background-action", globalID)
 	}
 
-	frameTree, err := FetchFrameTree(ctx)
+	frameTree, err := bridgeobserve.FetchFrameTree(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	frameIDs := frameIDs(frameTree)
+	frameIDs := bridgeobserve.FrameIDs(frameTree)
 	if len(frameIDs) < 2 {
 		t.Fatalf("frame ids = %v, want top frame plus child", frameIDs)
 	}
@@ -120,7 +122,7 @@ func TestDialogScopeReproducesGlobalEscapeAndContainsActionsAndReads(t *testing.
 	if scopedID != "dialog-action" {
 		t.Fatalf("dialog-scoped text resolved %q, want dialog-action", scopedID)
 	}
-	if err := JSClickByBackendNode(ctx, scopedNodeID); err != nil {
+	if err := bridgecdpops.JSClickByBackendNode(ctx, scopedNodeID); err != nil {
 		t.Fatal(err)
 	}
 	var clickState struct {

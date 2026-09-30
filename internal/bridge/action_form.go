@@ -90,7 +90,7 @@ func (b *Bridge) actionSelect(ctx context.Context, req ActionRequest) (map[strin
 	if nodeID <= 0 {
 		return nil, NewInvalidActionRequestError("need selector or ref")
 	}
-	return map[string]any{"selected": val}, SelectByNodeID(ctx, nodeID, val)
+	return map[string]any{"selected": val}, bridgecdpops.SelectByNodeID(ctx, nodeID, val)
 }
 
 func (b *Bridge) actionCheck(ctx context.Context, req ActionRequest) (map[string]any, error) {
@@ -130,7 +130,7 @@ func checkUncheck(ctx context.Context, req ActionRequest, wantChecked bool) (map
 	// Click only if state needs to change. Use the JS-dispatch path so the
 	// toggle isn't gated on the headless=new CDP renderer ack chain.
 	if state.State != desired {
-		if err := JSClickByBackendNode(ctx, nodeID); err != nil {
+		if err := bridgecdpops.JSClickByBackendNode(ctx, nodeID); err != nil {
 			return nil, err
 		}
 	}

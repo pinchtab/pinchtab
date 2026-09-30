@@ -9,10 +9,12 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 )
 
 func TestDefaultMaxParallel(t *testing.T) {
-	n := DefaultMaxParallel()
+	n := bridgetabs.DefaultMaxParallel()
 	if n < 1 {
 		t.Errorf("DefaultMaxParallel must be >= 1, got %d", n)
 	}
@@ -26,21 +28,21 @@ func TestDefaultMaxParallel(t *testing.T) {
 }
 
 func TestNewTabExecutor_DefaultLimit(t *testing.T) {
-	te := NewTabExecutor(0)
-	if te.MaxParallel() != DefaultMaxParallel() {
-		t.Errorf("expected default max parallel %d, got %d", DefaultMaxParallel(), te.MaxParallel())
+	te := bridgetabs.NewTabExecutor(0)
+	if te.MaxParallel() != bridgetabs.DefaultMaxParallel() {
+		t.Errorf("expected default max parallel %d, got %d", bridgetabs.DefaultMaxParallel(), te.MaxParallel())
 	}
 }
 
 func TestNewTabExecutor_CustomLimit(t *testing.T) {
-	te := NewTabExecutor(3)
+	te := bridgetabs.NewTabExecutor(3)
 	if te.MaxParallel() != 3 {
 		t.Errorf("expected max parallel 3, got %d", te.MaxParallel())
 	}
 }
 
 func TestTabExecutor_SingleTask(t *testing.T) {
-	te := NewTabExecutor(2)
+	te := bridgetabs.NewTabExecutor(2)
 	var executed bool
 	err := te.Execute(context.Background(), "tab1", func(ctx context.Context) error {
 		executed = true
@@ -55,7 +57,7 @@ func TestTabExecutor_SingleTask(t *testing.T) {
 }
 
 func TestTabExecutor_PropagatesError(t *testing.T) {
-	te := NewTabExecutor(2)
+	te := bridgetabs.NewTabExecutor(2)
 	wantErr := errors.New("task failed")
 	err := te.Execute(context.Background(), "tab1", func(ctx context.Context) error {
 		return wantErr
@@ -66,7 +68,7 @@ func TestTabExecutor_PropagatesError(t *testing.T) {
 }
 
 func TestTabExecutor_PanicRecovery(t *testing.T) {
-	te := NewTabExecutor(2)
+	te := bridgetabs.NewTabExecutor(2)
 	err := te.Execute(context.Background(), "tab1", func(ctx context.Context) error {
 		panic("boom")
 	})
@@ -79,7 +81,7 @@ func TestTabExecutor_PanicRecovery(t *testing.T) {
 }
 
 func TestTabExecutor_ContextCancellation(t *testing.T) {
-	te := NewTabExecutor(1)
+	te := bridgetabs.NewTabExecutor(1)
 
 	// Fill semaphore
 	te.AcquireExecutionSlotForTest()
@@ -99,7 +101,7 @@ func TestTabExecutor_ContextCancellation(t *testing.T) {
 }
 
 func TestTabExecutor_CancelledContextBeforeExecute(t *testing.T) {
-	te := NewTabExecutor(2)
+	te := bridgetabs.NewTabExecutor(2)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Pre-cancel
 
@@ -112,7 +114,7 @@ func TestTabExecutor_CancelledContextBeforeExecute(t *testing.T) {
 }
 
 func TestTabExecutor_PerTabSequential(t *testing.T) {
-	te := NewTabExecutor(4)
+	te := bridgetabs.NewTabExecutor(4)
 	var counter int32
 	var maxConcurrent int32
 
@@ -144,7 +146,7 @@ func TestTabExecutor_PerTabSequential(t *testing.T) {
 }
 
 func TestTabExecutor_CrossTabParallel(t *testing.T) {
-	te := NewTabExecutor(4)
+	te := bridgetabs.NewTabExecutor(4)
 	var maxConcurrent int32
 	var current int32
 
@@ -177,7 +179,7 @@ func TestTabExecutor_CrossTabParallel(t *testing.T) {
 
 func TestTabExecutor_SemaphoreLimit(t *testing.T) {
 	maxParallel := 2
-	te := NewTabExecutor(maxParallel)
+	te := bridgetabs.NewTabExecutor(maxParallel)
 	var maxConcurrent int32
 	var current int32
 
@@ -210,7 +212,7 @@ func TestTabExecutor_SemaphoreLimit(t *testing.T) {
 }
 
 func TestTabExecutor_RemoveTab(t *testing.T) {
-	te := NewTabExecutor(2)
+	te := bridgetabs.NewTabExecutor(2)
 	// Execute a task to create the per-tab mutex
 	_ = te.Execute(context.Background(), "tab1", func(ctx context.Context) error { return nil })
 
@@ -225,13 +227,13 @@ func TestTabExecutor_RemoveTab(t *testing.T) {
 }
 
 func TestTabExecutor_RemoveTab_Nonexistent(t *testing.T) {
-	te := NewTabExecutor(2)
+	te := bridgetabs.NewTabExecutor(2)
 	// Should not panic
 	te.RemoveTab("nonexistent")
 }
 
 func TestTabExecutor_Stats(t *testing.T) {
-	te := NewTabExecutor(4)
+	te := bridgetabs.NewTabExecutor(4)
 	stats := te.Stats()
 	if stats.MaxParallel != 4 {
 		t.Errorf("expected MaxParallel 4, got %d", stats.MaxParallel)
@@ -248,7 +250,7 @@ func TestTabExecutor_Stats(t *testing.T) {
 }
 
 func TestTabExecutor_ExecuteWithTimeout(t *testing.T) {
-	te := NewTabExecutor(2)
+	te := bridgetabs.NewTabExecutor(2)
 	err := te.ExecuteWithTimeout(context.Background(), "tab1", 100*time.Millisecond, func(ctx context.Context) error {
 		return nil
 	})
@@ -258,7 +260,7 @@ func TestTabExecutor_ExecuteWithTimeout(t *testing.T) {
 }
 
 func TestTabExecutor_ExecuteWithTimeout_Exceeded(t *testing.T) {
-	te := NewTabExecutor(2)
+	te := bridgetabs.NewTabExecutor(2)
 	err := te.ExecuteWithTimeout(context.Background(), "tab1", 20*time.Millisecond, func(ctx context.Context) error {
 		select {
 		case <-time.After(500 * time.Millisecond):
@@ -273,7 +275,7 @@ func TestTabExecutor_ExecuteWithTimeout_Exceeded(t *testing.T) {
 }
 
 func TestTabExecutor_EmptyTabID(t *testing.T) {
-	te := NewTabExecutor(2)
+	te := bridgetabs.NewTabExecutor(2)
 	err := te.Execute(context.Background(), "", func(ctx context.Context) error {
 		return nil
 	})
@@ -286,7 +288,7 @@ func TestTabExecutor_EmptyTabID(t *testing.T) {
 }
 
 func TestTabExecutor_NilTask(t *testing.T) {
-	te := NewTabExecutor(2)
+	te := bridgetabs.NewTabExecutor(2)
 	// Passing a nil task should panic and be recovered
 	err := te.Execute(context.Background(), "tab1", nil)
 	if err == nil {
@@ -296,7 +298,7 @@ func TestTabExecutor_NilTask(t *testing.T) {
 
 func TestTabExecutor_MaxParallelOne(t *testing.T) {
 	// With maxParallel=1, ALL tabs are fully serialized (no parallelism)
-	te := NewTabExecutor(1)
+	te := bridgetabs.NewTabExecutor(1)
 	var maxConcurrent int32
 	var current int32
 
@@ -328,14 +330,14 @@ func TestTabExecutor_MaxParallelOne(t *testing.T) {
 }
 
 func TestTabExecutor_NegativeMaxParallel(t *testing.T) {
-	te := NewTabExecutor(-5)
-	if te.MaxParallel() != DefaultMaxParallel() {
+	te := bridgetabs.NewTabExecutor(-5)
+	if te.MaxParallel() != bridgetabs.DefaultMaxParallel() {
 		t.Errorf("negative maxParallel should use default, got %d", te.MaxParallel())
 	}
 }
 
 func TestTabExecutor_MultiplePanicsAcrossTabs(t *testing.T) {
-	te := NewTabExecutor(4)
+	te := bridgetabs.NewTabExecutor(4)
 	var wg sync.WaitGroup
 	errs := make([]error, 4)
 
@@ -367,7 +369,7 @@ func TestTabExecutor_MultiplePanicsAcrossTabs(t *testing.T) {
 }
 
 func TestTabExecutor_ReusedTabIDAfterRemove(t *testing.T) {
-	te := NewTabExecutor(2)
+	te := bridgetabs.NewTabExecutor(2)
 	// Execute on tab, then remove, then reuse the same ID
 	var firstExecuted, secondExecuted bool
 
@@ -399,7 +401,7 @@ func TestTabExecutor_ReusedTabIDAfterRemove(t *testing.T) {
 }
 
 func TestTabExecutor_ContextTimeoutOnPerTabLock(t *testing.T) {
-	te := NewTabExecutor(4)
+	te := bridgetabs.NewTabExecutor(4)
 
 	// Hold the per-tab lock for tab1 via a long-running task
 	started := make(chan struct{})
@@ -432,7 +434,7 @@ func TestTabExecutor_SequentialVsParallelTiming(t *testing.T) {
 	// faster than sequential execution on a single tab.
 	taskDuration := 20 * time.Millisecond
 	numTasks := 4
-	te := NewTabExecutor(numTasks)
+	te := bridgetabs.NewTabExecutor(numTasks)
 
 	// Sequential: all tasks on one tab
 	seqStart := time.Now()
@@ -445,7 +447,7 @@ func TestTabExecutor_SequentialVsParallelTiming(t *testing.T) {
 	seqDuration := time.Since(seqStart)
 
 	// Parallel: each task on a different tab
-	te2 := NewTabExecutor(numTasks)
+	te2 := bridgetabs.NewTabExecutor(numTasks)
 	parStart := time.Now()
 	var wg sync.WaitGroup
 	for i := 0; i < numTasks; i++ {
@@ -480,7 +482,7 @@ func TestTabExecutor_SequentialVsParallelTiming(t *testing.T) {
 func TestTabExecutor_SemaphoreFairnessUnderContention(t *testing.T) {
 	// With maxParallel=2 and 10 tasks on different tabs, all tasks should complete.
 	// No task should starve.
-	te := NewTabExecutor(2)
+	te := bridgetabs.NewTabExecutor(2)
 	completed := make([]bool, 10)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -513,7 +515,7 @@ func TestTabExecutor_SemaphoreFairnessUnderContention(t *testing.T) {
 
 func TestTabExecutor_ErrorDoesNotCorruptState(t *testing.T) {
 	// After a task returns an error, the same tab should still accept new tasks.
-	te := NewTabExecutor(2)
+	te := bridgetabs.NewTabExecutor(2)
 
 	err := te.Execute(context.Background(), "err_tab", func(ctx context.Context) error {
 		return fmt.Errorf("deliberate error")
@@ -538,7 +540,7 @@ func TestTabExecutor_ErrorDoesNotCorruptState(t *testing.T) {
 
 func TestTabExecutor_ManyUniqueTabsCreation(t *testing.T) {
 	// Verify that creating many unique tabs doesn't cause issues.
-	te := NewTabExecutor(4)
+	te := bridgetabs.NewTabExecutor(4)
 	var wg sync.WaitGroup
 	numTabs := 100
 
@@ -569,7 +571,7 @@ func TestTabExecutor_ManyUniqueTabsCreation(t *testing.T) {
 
 func TestTabExecutor_SlowAndFastTabsConcurrent(t *testing.T) {
 	// One slow tab shouldn't block a fast tab from completing.
-	te := NewTabExecutor(4)
+	te := bridgetabs.NewTabExecutor(4)
 	fastDone := make(chan struct{})
 	slowDone := make(chan struct{})
 

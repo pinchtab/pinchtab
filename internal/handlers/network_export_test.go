@@ -21,7 +21,7 @@ import (
 // empty body in this harness) and that the order-preserving incremental pipeline
 // emits entries in capture order.
 func TestHandleNetworkExportPrefersRetainedBodyInOrder(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	buf := nm.GetOrCreateBufferForTest("tab1")
 	wantBodies := []string{"body-A", "body-B", "body-C"}
 	for i, body := range wantBodies {
@@ -173,7 +173,7 @@ func TestAFailedAutoNamedExportLeavesNothingBehind(t *testing.T) {
 	for _, failAt := range []string{"start", "encode", "finish"} {
 		t.Run(failAt, func(t *testing.T) {
 			stateDir := t.TempDir()
-			h := New(&networkMockBridge{nm: bridge.NewNetworkMonitor(10)}, &config.RuntimeConfig{StateDir: stateDir}, nil, nil, nil)
+			h := New(&networkMockBridge{nm: observe.NewNetworkMonitor(10)}, &config.RuntimeConfig{StateDir: stateDir}, nil, nil, nil)
 
 			req := httptest.NewRequest("GET", "/network/export", nil)
 			err := h.writeExportFile(httptest.NewRecorder(), req, failingExportEncoder{failAt: failAt}, "har",
@@ -198,7 +198,7 @@ func TestAFailedAutoNamedExportLeavesNothingBehind(t *testing.T) {
 // is what distinguishes that from a leak that merely litters.
 func TestAFailedExportDoesNotPoisonTheNextName(t *testing.T) {
 	stateDir := t.TempDir()
-	h := New(&networkMockBridge{nm: bridge.NewNetworkMonitor(10)}, &config.RuntimeConfig{StateDir: stateDir}, nil, nil, nil)
+	h := New(&networkMockBridge{nm: observe.NewNetworkMonitor(10)}, &config.RuntimeConfig{StateDir: stateDir}, nil, nil, nil)
 	req := httptest.NewRequest("GET", "/network/export", nil)
 
 	if err := h.writeExportFile(httptest.NewRecorder(), req, failingExportEncoder{failAt: "encode"}, "har",

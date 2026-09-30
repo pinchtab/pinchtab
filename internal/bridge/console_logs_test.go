@@ -1,11 +1,12 @@
 package bridge
 
 import (
-	"github.com/pinchtab/pinchtab/internal/sanitize"
 	"strings"
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"github.com/pinchtab/pinchtab/internal/sanitize"
 )
 
 func TestConsoleLogStore_AddAndGet(t *testing.T) {

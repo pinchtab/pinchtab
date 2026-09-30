@@ -7,13 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 )
 
 func TestPointerPointForNode_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, _, err := PointerPointForNode(ctx, 1, true)
+	_, _, err := bridgecdpops.PointerPointForNode(ctx, 1, true)
 	if err == nil {
 		t.Error("expected error for cancelled context, got nil")
 	}

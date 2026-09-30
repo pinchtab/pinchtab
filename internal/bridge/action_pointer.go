@@ -12,7 +12,7 @@ import (
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
-
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	"github.com/pinchtab/pinchtab/internal/cdptk"
 	"github.com/pinchtab/pinchtab/internal/readiness"
 )
@@ -39,21 +39,21 @@ type pointerOps struct {
 
 func defaultPointerOps() *pointerOps {
 	return &pointerOps{
-		scrollByCoordinate:      ScrollByCoordinate,
-		mouseMoveByCoordinate:   MouseMoveByCoordinate,
-		mouseDownByCoordinate:   MouseDownByCoordinate,
-		mouseUpByCoordinate:     MouseUpByCoordinate,
-		clickByCoordinate:       ClickByCoordinate,
+		scrollByCoordinate:      bridgecdpops.ScrollByCoordinate,
+		mouseMoveByCoordinate:   bridgecdpops.MouseMoveByCoordinate,
+		mouseDownByCoordinate:   bridgecdpops.MouseDownByCoordinate,
+		mouseUpByCoordinate:     bridgecdpops.MouseUpByCoordinate,
+		clickByCoordinate:       bridgecdpops.ClickByCoordinate,
 		clickElement:            ClickElement,
 		humanClickCoordinate:    Click,
 		hoverElement:            HoverElement,
 		hoverCoordinate:         Hover,
-		clickByNodeID:           ClickByNodeID,
-		jsClickByBackendNode:    JSClickByBackendNode,
-		dispatchClickByBackend:  JSDispatchClickByBackendNode,
+		clickByNodeID:           bridgecdpops.ClickByNodeID,
+		jsClickByBackendNode:    bridgecdpops.JSClickByBackendNode,
+		dispatchClickByBackend:  bridgecdpops.JSDispatchClickByBackendNode,
 		clickFloatingFlyoutItem: clickFloatingFlyoutItem,
-		doubleClickByNodeID:     DoubleClickByNodeID,
-		jsDoubleClickByBackend:  JSDoubleClickByBackendNode,
+		doubleClickByNodeID:     bridgecdpops.DoubleClickByNodeID,
+		jsDoubleClickByBackend:  bridgecdpops.JSDoubleClickByBackendNode,
 		waitNav:                 sleepForNav,
 		scrollViewportCenter:    viewportCenter,
 	}
@@ -409,7 +409,7 @@ func (b *Bridge) actionDoubleClick(ctx context.Context, req ActionRequest) (resu
 		if auto != nil {
 			auto.prepareWindowOpenCapture(ctx)
 		}
-		err = DoubleClickByCoordinate(ctx, req.X, req.Y)
+		err = bridgecdpops.DoubleClickByCoordinate(ctx, req.X, req.Y)
 	} else {
 		return nil, NewInvalidActionRequestError("need selector, ref, nodeId, or x/y coordinates")
 	}
@@ -428,10 +428,10 @@ func (b *Bridge) actionHover(ctx context.Context, req ActionRequest) (map[string
 		return nil, err
 	}
 	if nodeID > 0 {
-		return map[string]any{"hovered": true}, HoverByNodeID(ctx, nodeID)
+		return map[string]any{"hovered": true}, bridgecdpops.HoverByNodeID(ctx, nodeID)
 	}
 	if req.HasXY {
-		return map[string]any{"hovered": true}, HoverByCoordinate(ctx, req.X, req.Y)
+		return map[string]any{"hovered": true}, bridgecdpops.HoverByCoordinate(ctx, req.X, req.Y)
 	}
 	return nil, NewInvalidActionRequestError("need selector, ref, nodeId, or x/y coordinates")
 }
@@ -499,7 +499,7 @@ func (b *Bridge) pointerCoordinatesFromRequest(ctx context.Context, req ActionRe
 		return 0, 0, err
 	}
 	if nodeID > 0 {
-		return PointerPointForNode(ctx, nodeID, false)
+		return bridgecdpops.PointerPointForNode(ctx, nodeID, false)
 	}
 	if allowCurrent {
 		if x, y, ok := b.currentPointerPosition(req.TabID); ok {
@@ -611,7 +611,7 @@ func (b *Bridge) actionScroll(ctx context.Context, req ActionRequest) (map[strin
 		return nil, err
 	}
 	if nodeID > 0 {
-		return map[string]any{"scrolled": true}, ScrollByNodeID(ctx, nodeID)
+		return map[string]any{"scrolled": true}, bridgecdpops.ScrollByNodeID(ctx, nodeID)
 	}
 
 	scrollX, scrollY, err := scrollDelta(req)
@@ -658,7 +658,7 @@ func (b *Bridge) actionDrag(ctx context.Context, req ActionRequest) (map[string]
 	if nodeID <= 0 {
 		return nil, NewInvalidActionRequestError("need selector, ref, or nodeId")
 	}
-	if err := DragByNodeID(ctx, nodeID, req.DragX, req.DragY, req.Button); err != nil {
+	if err := bridgecdpops.DragByNodeID(ctx, nodeID, req.DragX, req.DragY, req.Button); err != nil {
 		return nil, err
 	}
 	return map[string]any{"dragged": true, "dragX": req.DragX, "dragY": req.DragY}, nil
@@ -673,7 +673,7 @@ func (b *Bridge) dragToDestination(ctx context.Context, req ActionRequest) (map[
 	if err != nil {
 		return nil, fmt.Errorf("drag destination: %w", err)
 	}
-	if err := DragBetweenPoints(ctx, fromX, fromY, toX, toY, req.Button); err != nil {
+	if err := bridgecdpops.DragBetweenPoints(ctx, fromX, fromY, toX, toY, req.Button); err != nil {
 		return nil, err
 	}
 	return map[string]any{
@@ -699,7 +699,7 @@ func dragPointFor(ctx context.Context, end dragEnd) (float64, float64, error) {
 	}
 	switch {
 	case nodeID > 0:
-		return PointerPointForNode(ctx, nodeID, true)
+		return bridgecdpops.PointerPointForNode(ctx, nodeID, true)
 	case end.hasPoint:
 		return end.x, end.y, nil
 	}

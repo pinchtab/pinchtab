@@ -206,7 +206,7 @@ func ScreenshotClipForNode(ctx context.Context, nodeID int64) (*ScreenshotClip, 
 
 	// Isolated world: boxFn reads getBoundingClientRect, so a main-world handle
 	// would let the page steer the clip origin by redefining it.
-	objectID, err := IsolatedNodeObjectID(ctx, nodeID)
+	objectID, err := cdptk.IsolatedNodeObjectID(ctx, nodeID)
 	if err != nil {
 		return nil, fmt.Errorf("resolve node: %w", err)
 	}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/cdptk"
 	"github.com/pinchtab/pinchtab/internal/selector"
 	"github.com/pinchtab/pinchtab/internal/srccensus"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
@@ -67,7 +68,7 @@ func newHijackFixture(t *testing.T) context.Context {
 // "button#decoy" rather than two opaque numbers.
 func nodeDescription(t *testing.T, ctx context.Context, backendNodeID int64) string {
 	t.Helper()
-	objectID, err := IsolatedNodeObjectID(ctx, backendNodeID)
+	objectID, err := cdptk.IsolatedNodeObjectID(ctx, backendNodeID)
 	if err != nil {
 		t.Fatalf("describe node %d: %v", backendNodeID, err)
 	}
@@ -152,7 +153,7 @@ func TestIsolatedNodeObjectIDFailsClosedWithoutContext(t *testing.T) {
 	dead, cancel := context.WithCancel(ctx)
 	cancel()
 
-	if objectID, err := IsolatedNodeObjectID(dead, nodeID); err == nil {
+	if objectID, err := cdptk.IsolatedNodeObjectID(dead, nodeID); err == nil {
 		t.Fatalf("resolution succeeded with object %q when no isolated context was obtainable; it must not fall back to the main world", objectID)
 	}
 }

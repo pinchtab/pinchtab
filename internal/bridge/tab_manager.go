@@ -12,6 +12,7 @@ import (
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -72,7 +73,7 @@ func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, logSto
 		frameScope: make(map[string]FrameScope),
 		onTabSetup: onTabSetup,
 		logStore:   logStore,
-		executor:   NewTabExecutor(maxParallel),
+		executor:   bridgetabs.NewTabExecutor(maxParallel),
 		setFrozen:  setTabFrozen,
 	}
 }
@@ -281,10 +282,10 @@ func (tm *TabManager) createTab(url, browserContextID string) (string, context.C
 
 	if tm.dialogMgr != nil {
 		autoAccept := tm.config != nil && tm.config.DialogAutoAccept
-		ListenDialogEvents(ctx, tabID, tm.dialogMgr, autoAccept)
+		bridgetabs.ListenDialogEvents(ctx, tabID, tm.dialogMgr, autoAccept)
 		// Page domain must be enabled for Page.javascriptDialogOpening events
 		// to be delivered to ListenTarget callbacks.
-		if err := EnableDialogEvents(ctx); err != nil {
+		if err := bridgetabs.EnableDialogEvents(ctx); err != nil {
 			slog.Warn("enable dialog events failed", "tabId", tabID, "err", err)
 		}
 	}

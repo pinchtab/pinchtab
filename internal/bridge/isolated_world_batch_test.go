@@ -209,10 +209,10 @@ func TestBackendNodeWithinScopeResolvesItsNodesOnce(t *testing.T) {
 		return count
 	}
 
-	if n := callsWithin("IsolatedNodeObjectIDs"); n != 1 {
+	if n := callsWithin("cdptk.IsolatedNodeObjectIDs"); n != 1 {
 		t.Errorf("BackendNodeWithinScope calls IsolatedNodeObjectIDs %d times, want exactly 1: one isolated context serves the whole check", n)
 	}
-	if n := callsWithin("IsolatedNodeObjectID"); n != 0 {
+	if n := callsWithin("cdptk.IsolatedNodeObjectID"); n != 0 {
 		t.Errorf("BackendNodeWithinScope calls the single-node IsolatedNodeObjectID %d times; each call recomputes the top-frame context", n)
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
-	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	"github.com/pinchtab/pinchtab/internal/cdptk"
 	"github.com/pinchtab/pinchtab/internal/selector"
 )
@@ -33,49 +32,8 @@ type FrameElementMeta struct {
 	Src     string `json:"src,omitempty"`
 }
 
-// FrameExecutionContextID returns a Runtime.executionContextId that
-// evaluates in the given frame's document. Safe to call from other packages
-// that need to scope `Runtime.evaluate` / `Runtime.callFunctionOn` to a
-// frame (for example, the /text handler when a frame scope is active).
-// Passes frameID == "" through as a no-op (returns 0, nil) so callers can
-// fall back to the default top-level context without branching.
-func FrameExecutionContextID(ctx context.Context, frameID string) (int64, error) {
-	return bridgecdpops.FrameExecutionContextID(ctx, frameID)
-}
-
-// isolatedExecutionContextID returns the isolated world's execution context for
-// frameID, or for the top frame when frameID is empty. Selector and modal
-// discovery run there so page script cannot hide or redirect targets by
-// replacing DOM methods in the main world. It never returns a usable zero: a
-// caller that cannot get an isolated context gets an error, not the main world.
-//
-// The frame fallback and the world creation both live with the owner in
-// internal/cdptk. This package kept its own copy of that sequence, which is how
-// two world names came to exist for one rule.
-func isolatedExecutionContextID(ctx context.Context, frameID string) (int64, error) {
-	return cdptk.IsolatedContextID(ctx, frameID)
-}
-
-// IsolatedNodeObjectID converts a backend node id to a JS object handle in the
-// isolated world, so Runtime.callFunctionOn against it cannot be answered by
-// page script that has redefined the DOM methods the call uses.
-//
-// The rule has one owner in internal/cdptk, the lowest CDP layer, because the
-// same resolution is needed by the clip builder there and this package already
-// depends on it. A second implementation here is how the two capture paths
-// drifted apart before.
-func IsolatedNodeObjectID(ctx context.Context, backendNodeID int64) (string, error) {
-	return cdptk.IsolatedNodeObjectID(ctx, backendNodeID)
-}
-
-// IsolatedNodeObjectIDs resolves several nodes against one isolated context, for an
-// operation whose handles are compared in a single call.
-func IsolatedNodeObjectIDs(ctx context.Context, backendNodeIDs ...int64) ([]string, error) {
-	return cdptk.IsolatedNodeObjectIDs(ctx, backendNodeIDs...)
-}
-
 func frameDocumentObjectID(ctx context.Context, frameID string) (string, error) {
-	execID, err := isolatedExecutionContextID(ctx, frameID)
+	execID, err := cdptk.IsolatedContextID(ctx, frameID)
 	if err != nil {
 		return "", err
 	}
@@ -304,7 +262,7 @@ func TopmostModalNodeID(ctx context.Context, frameID string) (int64, bool, error
 // resolveNodeWithinBackendNode invokes functionDeclaration with the scope
 // element as `this` and converts the returned DOM object to a backend node ID.
 func resolveNodeWithinBackendNode(ctx context.Context, scopeBackendNodeID int64, functionDeclaration string, args []map[string]any) (int64, error) {
-	scopeObjectID, err := IsolatedNodeObjectID(ctx, scopeBackendNodeID)
+	scopeObjectID, err := cdptk.IsolatedNodeObjectID(ctx, scopeBackendNodeID)
 	if err != nil {
 		return 0, fmt.Errorf("resolve scope node: %w", err)
 	}
@@ -356,7 +314,7 @@ func BackendNodeWithinScope(ctx context.Context, scopeBackendNodeID, targetBacke
 		return false, nil
 	}
 
-	objectIDs, err := IsolatedNodeObjectIDs(ctx, scopeBackendNodeID, targetBackendNodeID)
+	objectIDs, err := cdptk.IsolatedNodeObjectIDs(ctx, scopeBackendNodeID, targetBackendNodeID)
 	if err != nil {
 		return false, fmt.Errorf("resolve scope and target nodes: %w", err)
 	}

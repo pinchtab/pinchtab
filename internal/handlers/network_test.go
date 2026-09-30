@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"sort"
 )
@@ -56,7 +57,7 @@ func newNetworkTestHandler(nm *bridge.NetworkMonitor) *Handlers {
 }
 
 func TestNetworkDetailAndClearRequireNetworkIntercept(t *testing.T) {
-	h := New(&networkMockBridge{nm: bridge.NewNetworkMonitor(100)}, &config.RuntimeConfig{}, nil, nil, nil)
+	h := New(&networkMockBridge{nm: observe.NewNetworkMonitor(100)}, &config.RuntimeConfig{}, nil, nil, nil)
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, nil)
 
@@ -92,7 +93,7 @@ func seedBuffer(nm *bridge.NetworkMonitor, tabID string) {
 }
 
 func TestHandleNetwork_ReturnsEntries(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	seedBuffer(nm, "tab1")
 	h := newNetworkTestHandler(nm)
 
@@ -117,7 +118,7 @@ func TestHandleNetwork_ReturnsEntries(t *testing.T) {
 }
 
 func TestHandleNetwork_FilterByMethod(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	seedBuffer(nm, "tab1")
 	h := newNetworkTestHandler(nm)
 
@@ -143,7 +144,7 @@ func TestHandleNetwork_FilterByMethod(t *testing.T) {
 }
 
 func TestHandleNetwork_FilterByURLPattern(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	seedBuffer(nm, "tab1")
 	h := newNetworkTestHandler(nm)
 
@@ -165,7 +166,7 @@ func TestHandleNetwork_FilterByURLPattern(t *testing.T) {
 }
 
 func TestHandleNetwork_FilterByStatus(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	seedBuffer(nm, "tab1")
 	h := newNetworkTestHandler(nm)
 
@@ -187,7 +188,7 @@ func TestHandleNetwork_FilterByStatus(t *testing.T) {
 }
 
 func TestHandleNetwork_FilterByType(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	seedBuffer(nm, "tab1")
 	h := newNetworkTestHandler(nm)
 
@@ -209,7 +210,7 @@ func TestHandleNetwork_FilterByType(t *testing.T) {
 }
 
 func TestHandleNetwork_Limit(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	seedBuffer(nm, "tab1")
 	h := newNetworkTestHandler(nm)
 
@@ -252,7 +253,7 @@ func TestHandleNetwork_NilMonitor(t *testing.T) {
 }
 
 func TestHandleNetworkByIDUsesRetainedBody(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	buf := nm.GetOrCreateBufferForTest("tab1")
 	const retainedBody = "{\"ok\":true}"
 	buf.Add(bridge.NetworkEntry{
@@ -288,7 +289,7 @@ func TestHandleNetworkByIDUsesRetainedBody(t *testing.T) {
 }
 
 func TestHandleNetworkByIDRetainedPreferredReturnsBodyAfterPendingResolves(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	buf := nm.GetOrCreateBufferForTest("tab1")
 	buf.Add(bridge.NetworkEntry{
 		RequestID:    "pending-1",
@@ -345,7 +346,7 @@ func TestHandleNetworkByIDRetainedPreferredReturnsBodyAfterPendingResolves(t *te
 }
 
 func TestHandleNetworkByIDRetainedPreferredTimeoutReturnsPendingState(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	buf := nm.GetOrCreateBufferForTest("tab1")
 	buf.Add(bridge.NetworkEntry{
 		RequestID:    "pending-timeout",
@@ -388,7 +389,7 @@ func TestHandleNetworkByIDRetainedPreferredTimeoutReturnsPendingState(t *testing
 }
 
 func TestWaitForRetainedBodyWakesOnSignal(t *testing.T) {
-	buf := bridge.NewNetworkBuffer(10)
+	buf := observe.NewNetworkBuffer(10)
 	buf.Add(bridge.NetworkEntry{RequestID: "r1", Finished: true, BodyPending: true})
 
 	go func() {
@@ -414,7 +415,7 @@ func TestWaitForRetainedBodyWakesOnSignal(t *testing.T) {
 }
 
 func TestWaitForRetainedBodyTimeoutReturnsCurrentEntry(t *testing.T) {
-	buf := bridge.NewNetworkBuffer(10)
+	buf := observe.NewNetworkBuffer(10)
 	buf.Add(bridge.NetworkEntry{RequestID: "r1", Finished: true, BodyPending: true})
 
 	entry, ok := waitForRetainedBody(buf, "r1", 30*time.Millisecond)
@@ -432,7 +433,7 @@ func TestWaitForRetainedBodyTimeoutReturnsCurrentEntry(t *testing.T) {
 }
 
 func TestHandleNetworkByIDRetainedOnlyReturnsSkippedStateWithoutBodyError(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	buf := nm.GetOrCreateBufferForTest("tab1")
 	buf.Add(bridge.NetworkEntry{
 		RequestID:      "skipped-1",
@@ -472,7 +473,7 @@ func TestHandleNetworkByIDRetainedOnlyReturnsSkippedStateWithoutBodyError(t *tes
 }
 
 func TestHandleNetworkByIDRetainedPreferredDoesNotPretendSkippedBodyWasRetained(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	seedBuffer(nm, "tab1")
 	buf := nm.GetOrCreateBufferForTest("tab1")
 	buf.Update("r1", func(entry *bridge.NetworkEntry) {
@@ -512,7 +513,7 @@ func TestHandleNetworkByIDRetainedPreferredDoesNotPretendSkippedBodyWasRetained(
 }
 
 func TestHandleNetworkByID_Found(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	seedBuffer(nm, "tab1")
 	h := newNetworkTestHandler(nm)
 
@@ -538,7 +539,7 @@ func TestHandleNetworkByID_Found(t *testing.T) {
 }
 
 func TestHandleNetworkByID_NotFound(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	seedBuffer(nm, "tab1")
 	h := newNetworkTestHandler(nm)
 
@@ -553,7 +554,7 @@ func TestHandleNetworkByID_NotFound(t *testing.T) {
 }
 
 func TestHandleNetworkByID_MissingRequestID(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	h := newNetworkTestHandler(nm)
 
 	req := httptest.NewRequest("GET", "/network/", nil)
@@ -580,7 +581,7 @@ func TestHandleNetworkByID_NilMonitor(t *testing.T) {
 }
 
 func TestHandleNetworkClear_All(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	seedBuffer(nm, "tab1")
 	seedBuffer(nm, "tab2")
 	h := newNetworkTestHandler(nm)
@@ -613,7 +614,7 @@ func TestHandleNetworkClear_All(t *testing.T) {
 }
 
 func TestHandleNetworkClear_ByTab(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	seedBuffer(nm, "tab1")
 	h := newNetworkTestHandler(nm)
 
@@ -651,7 +652,7 @@ func TestHandleNetworkClear_NilMonitor(t *testing.T) {
 }
 
 func TestHandleTabNetwork(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	seedBuffer(nm, "tab1")
 	h := newNetworkTestHandler(nm)
 
@@ -676,7 +677,7 @@ func TestHandleTabNetwork(t *testing.T) {
 }
 
 func TestHandleTabNetwork_MissingTabID(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	h := newNetworkTestHandler(nm)
 
 	req := httptest.NewRequest("GET", "/tabs//network", nil)
@@ -689,7 +690,7 @@ func TestHandleTabNetwork_MissingTabID(t *testing.T) {
 }
 
 func TestHandleNetwork_CombinedFilters(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	seedBuffer(nm, "tab1")
 	h := newNetworkTestHandler(nm)
 
@@ -733,7 +734,7 @@ func (m *networkFailTabBridge) RestartBrowser(cfg *config.RuntimeConfig) error {
 }
 
 func TestHandleNetwork_TabNotFound(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	b := &networkFailTabBridge{nm: nm}
 	h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
 
@@ -747,7 +748,7 @@ func TestHandleNetwork_TabNotFound(t *testing.T) {
 }
 
 func TestHandleNetworkByID_NoBufferForTab(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	// Don't seed any buffer for tab1
 	h := newNetworkTestHandler(nm)
 
@@ -787,7 +788,7 @@ func TestParseBufferSize(t *testing.T) {
 }
 
 func TestHandleNetworkStream_SSEHeaders(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	seedBuffer(nm, "tab1")
 	h := newNetworkTestHandler(nm)
 
@@ -819,7 +820,7 @@ func TestHandleNetworkStream_SSEHeaders(t *testing.T) {
 }
 
 func TestHandleNetworkStream_ReceivesEntries(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	buf := nm.GetOrCreateBufferForTest("tab1")
 	h := newNetworkTestHandler(nm)
 
@@ -855,7 +856,7 @@ func TestHandleNetworkStream_ReceivesEntries(t *testing.T) {
 }
 
 func TestHandleNetworkStream_FilterApplied(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	buf := nm.GetOrCreateBufferForTest("tab1")
 	h := newNetworkTestHandler(nm)
 
@@ -902,7 +903,7 @@ func TestHandleNetworkStream_NilMonitor(t *testing.T) {
 }
 
 func TestHandleNetworkStream_StreamingNotSupportedReturnsProblem(t *testing.T) {
-	h := newNetworkTestHandler(bridge.NewNetworkMonitor(100))
+	h := newNetworkTestHandler(observe.NewNetworkMonitor(100))
 
 	req := httptest.NewRequest("GET", "/network/stream", nil)
 	w := &noFlusherResponseWriter{}
@@ -925,7 +926,7 @@ func TestHandleNetworkStream_StreamingNotSupportedReturnsProblem(t *testing.T) {
 }
 
 func TestHandleTabNetworkStream_MissingTabID(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	h := newNetworkTestHandler(nm)
 
 	req := httptest.NewRequest("GET", "/tabs//network/stream", nil)
@@ -951,7 +952,7 @@ func networkEnvelopeKeys(t *testing.T, body []byte) map[string]any {
 // entries was duplicated under items, so every response carried the whole
 // network log twice; items had no reader anywhere.
 func TestHandleNetwork_EnvelopeCarriesEntriesOnce(t *testing.T) {
-	nm := bridge.NewNetworkMonitor(100)
+	nm := observe.NewNetworkMonitor(100)
 	seedBuffer(nm, "tab1")
 	h := newNetworkTestHandler(nm)
 

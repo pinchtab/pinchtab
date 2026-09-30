@@ -20,7 +20,7 @@ func (b *Bridge) EvaluateInFrame(ctx context.Context, frameID string, expression
 		return b.Evaluate(ctx, expression, result, opts)
 	}
 
-	execID, err := FrameExecutionContextID(ctx, frameID)
+	execID, err := bridgecdpops.FrameExecutionContextID(ctx, frameID)
 	if err != nil {
 		return fmt.Errorf("resolve frame context: %w", err)
 	}

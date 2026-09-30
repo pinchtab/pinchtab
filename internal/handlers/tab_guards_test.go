@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/routes"
 	"github.com/pinchtab/pinchtab/internal/state"
@@ -61,7 +62,7 @@ func (b *guardProbeBridge) TabLockInfo(string) *bridge.LockInfo {
 var probePausedAt = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 
 func pendingDialogManager() *bridge.DialogManager {
-	dm := bridge.NewDialogManager()
+	dm := bridgetabs.NewDialogManager()
 	dm.SetPending("tab1", &bridge.DialogState{Type: "confirm", Message: "probe"})
 	return dm
 }
@@ -691,7 +692,7 @@ func (b *dialogMidBatchBridge) ExecuteAction(context.Context, string, bridge.Act
 }
 
 func TestActionsBatchStopsOnADialogOpenedMidRun(t *testing.T) {
-	b := &dialogMidBatchBridge{dialogs: bridge.NewDialogManager()}
+	b := &dialogMidBatchBridge{dialogs: bridgetabs.NewDialogManager()}
 	h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
 	body := `{"actions":[{"kind":"press","key":"Enter"},{"kind":"press","key":"Enter"},{"kind":"press","key":"Enter"}]}`
 	req := httptest.NewRequest("POST", "/actions", strings.NewReader(body))

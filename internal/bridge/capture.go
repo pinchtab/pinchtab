@@ -8,7 +8,7 @@ import (
 
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
-
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/cdptk"
 )
 
@@ -91,12 +91,12 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 	// Wait errors are non-fatal — degrade rather than fail the capture.
 	switch opts.Wait {
 	case WaitStable:
-		_, _ = WaitForQuietWindow(ctx, 250*time.Millisecond, 750*time.Millisecond)
+		_, _ = bridgeobserve.WaitForQuietWindow(ctx, 250*time.Millisecond, 750*time.Millisecond)
 	case WaitLoad:
-		_, _ = WaitForReadyState(ctx, 2*time.Second)
+		_, _ = bridgeobserve.WaitForReadyState(ctx, 2*time.Second)
 	}
 
-	pre, err := FetchFrameTree(ctx)
+	pre, err := bridgeobserve.FetchFrameTree(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +153,7 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 	}
 
 	if opts.WithBounds {
-		_ = AnnotateBounds(ctx, res.Nodes, pageCoords, res.Viewport)
+		_ = bridgeobserve.AnnotateBounds(ctx, res.Nodes, pageCoords, res.Viewport)
 		if opts.Image.Clip != nil {
 			projectBoundsToClip(res.Nodes, *opts.Image.Clip)
 		}
@@ -163,7 +163,7 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 	// navigation that happened during the capture window. We do not assert on
 	// in-document churn (React re-renders, observer mutations) — that's the
 	// residual risk wait:stable mitigates in P2.
-	post, err := FetchFrameTree(ctx)
+	post, err := bridgeobserve.FetchFrameTree(ctx)
 	if err == nil {
 		res.Navigated = pre.Frame.ID != post.Frame.ID || pre.Frame.LoaderID != post.Frame.LoaderID
 	}

@@ -15,6 +15,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -194,7 +195,7 @@ func (m *mockBridge) NetworkMonitor() *bridge.NetworkMonitor {
 
 func (m *mockBridge) GetDialogManager() *bridge.DialogManager {
 	if m.dialogManager == nil {
-		m.dialogManager = bridge.NewDialogManager()
+		m.dialogManager = bridgetabs.NewDialogManager()
 	}
 	return m.dialogManager
 }

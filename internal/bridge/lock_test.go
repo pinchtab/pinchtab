@@ -3,10 +3,12 @@ package bridge
 import (
 	"testing"
 	"time"
+
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 )
 
 func TestLockManager(t *testing.T) {
-	m := NewLockManager()
+	m := bridgetabs.NewLockManager()
 	tabID := "tab1"
 	owner1 := "agent1"
 	owner2 := "agent2"
@@ -39,7 +41,7 @@ func TestLockManager(t *testing.T) {
 }
 
 func TestLockManagerGet(t *testing.T) {
-	m := NewLockManager()
+	m := bridgetabs.NewLockManager()
 	tabID := "tab1"
 	owner := "agent1"
 	ttl := 1 * time.Hour
