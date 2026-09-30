@@ -44,9 +44,12 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 	format := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
 	maxChars := -1
 	if v := r.URL.Query().Get("maxChars"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			maxChars = n
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			httpx.ErrorCode(w, http.StatusBadRequest, "invalid_max_chars", fmt.Sprintf("maxChars must be a non-negative integer, got %q", v), false, nil)
+			return
 		}
+		maxChars = n
 	}
 
 	resolvedTabID, tCtx, cancel, ok := h.resolveReadContext(w, r, tabID, effectiveCfg.ActionTimeout)
@@ -518,12 +521,17 @@ func (h *Handlers) resolveTextTargetNodeID(ctx context.Context, tabID, frameID, 
 	return h.resolveSelectorNodeIDInFrame(ctx, tabID, raw, frameID)
 }
 
+const (
+	readyStateWaitTimeout  = 5 * time.Second
+	readyStatePollInterval = 100 * time.Millisecond
+)
+
 func (h *Handlers) waitForReadyState(ctx context.Context) {
-	wctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	wctx, cancel := context.WithTimeout(ctx, readyStateWaitTimeout)
 	defer cancel()
 	// An eval error or a non-loading state both stop the wait, matching the
 	// original loop which returned (silently) on either condition.
-	_ = pollUntil(wctx, 100*time.Millisecond, func() (bool, error) {
+	_ = pollUntil(wctx, readyStatePollInterval, func() (bool, error) {
 		var state string
 		if err := h.Bridge.Evaluate(wctx, `document.readyState`, &state, bridge.EvalOpts{}); err != nil {
 			return true, nil

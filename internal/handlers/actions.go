@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"reflect"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -535,7 +534,12 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 
 	vocabBefore := h.tabVocab(resolvedTabID)
 
-	tCtx, tCancel := httpx.WithClientTimeout(r.Context(), ctx, actionTimeoutFor(r, effectiveCfg.ActionTimeout))
+	actionTimeout, err := actionTimeoutFor(r, effectiveCfg.ActionTimeout)
+	if err != nil {
+		writeInvalidTimeout(w, err)
+		return
+	}
+	tCtx, tCancel := httpx.WithClientTimeout(r.Context(), ctx, actionTimeout)
 	defer tCancel()
 
 	if req.DismissKnownInterstitials {
@@ -621,18 +625,15 @@ func validateActionRequestFields(w http.ResponseWriter, req bridge.ActionRequest
 	return true
 }
 
-func actionTimeoutFor(r *http.Request, configured time.Duration) time.Duration {
+func actionTimeoutFor(r *http.Request, configured time.Duration) (time.Duration, error) {
 	if r.Method != http.MethodGet {
-		return configured
+		return configured, nil
 	}
 	v := r.URL.Query().Get("timeout")
 	if v == "" {
-		return configured
+		return configured, nil
 	}
-	if n, err := strconv.ParseFloat(v, 64); err == nil && n > 0 && n <= 60 {
-		return time.Duration(n * float64(time.Second))
-	}
-	return configured
+	return parseTimeoutSeconds("timeout", v)
 }
 
 // Both ends of a drag come from one snapshot, so a stale destination gets the
@@ -1090,8 +1091,13 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stepTimeout := routing.EffectiveCfg.ActionTimeout
-	if req.StepTimeout > 0 && req.StepTimeout <= 60 {
-		stepTimeout = time.Duration(req.StepTimeout * float64(time.Second))
+	if req.StepTimeout != 0 {
+		parsed, err := timeoutFromSeconds("stepTimeout", req.StepTimeout)
+		if err != nil {
+			writeInvalidTimeout(w, err)
+			return
+		}
+		stepTimeout = parsed
 	}
 
 	ctx, resolvedTabID, err := h.tabContext(r, req.TabID)
