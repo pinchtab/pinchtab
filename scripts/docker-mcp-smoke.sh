@@ -4,6 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/smoke-container.sh
 . "$SCRIPT_DIR/lib/smoke-container.sh"
+# shellcheck source=lib/term.sh
+. "$SCRIPT_DIR/lib/term.sh"
 
 # Docker MCP Smoke Test
 # Verifies that the MCP stdio server works correctly inside a Docker container.
@@ -14,13 +16,7 @@ SMOKE_TOKEN="pinchtab-mcp-smoke-${RANDOM}${RANDOM}"
 NAME="pinchtab-mcp-smoke-${RANDOM}${RANDOM}"
 FAILED=0
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BOLD='\033[1m'
-NC='\033[0m'
-
-pass() { echo -e "  ${GREEN}✓${NC} $1"; }
-check_failed() { echo -e "  ${RED}✗${NC} $1"; FAILED=1; }
+check_failed() { fail "$1"; FAILED=1; }
 
 smoke_container_trap "$NAME"
 
@@ -43,14 +39,14 @@ RESPONSE=$(echo "$INIT_MSG" | docker exec -i -e PINCHTAB_TOKEN="$SMOKE_TOKEN" "$
   pinchtab mcp 2>/dev/null | head -1)
 
 if echo "$RESPONSE" | grep -q '"serverInfo"'; then
-  pass "JSON-RPC initialize returns valid response"
+  ok "JSON-RPC initialize returns valid response"
 else
   check_failed "JSON-RPC initialize failed: $RESPONSE"
 fi
 
 # Verify server name
 if echo "$RESPONSE" | grep -q '"name":"PinchTab"'; then
-  pass "Server identifies as PinchTab"
+  ok "Server identifies as PinchTab"
 else
   check_failed "Unexpected server name in: $RESPONSE"
 fi
@@ -64,7 +60,7 @@ TOOLS_RESPONSE=$(printf '%s\n%s\n' "$INIT_MSG" "$TOOLS_MSG" | docker exec -i -e 
 if echo "$TOOLS_RESPONSE" | grep -q '"tools"'; then
   TOOL_COUNT=$(echo "$TOOLS_RESPONSE" | python3 -c "import sys,json; print(len(json.load(sys.stdin)['result']['tools']))" 2>/dev/null || echo "0")
   if [ "$TOOL_COUNT" -gt 0 ]; then
-    pass "tools/list returns $TOOL_COUNT tools"
+    ok "tools/list returns $TOOL_COUNT tools"
   else
     check_failed "tools/list returned 0 tools"
   fi
@@ -79,11 +75,11 @@ HEALTH_RESPONSE=$(printf '%s\n%s\n' "$INIT_MSG" "$HEALTH_MSG" | docker exec -i -
   pinchtab mcp 2>/dev/null | tail -1)
 
 if echo "$HEALTH_RESPONSE" | grep -q '"result"'; then
-  pass "pinchtab_health tool call returns result"
+  ok "pinchtab_health tool call returns result"
 else
   # Health may fail if server isn't running — that's OK, just check for valid JSON-RPC
   if echo "$HEALTH_RESPONSE" | grep -q '"jsonrpc"'; then
-    pass "pinchtab_health tool call returns valid JSON-RPC (server not running, expected)"
+    ok "pinchtab_health tool call returns valid JSON-RPC (server not running, expected)"
   else
     check_failed "pinchtab_health tool call failed: $HEALTH_RESPONSE"
   fi
@@ -121,10 +117,10 @@ AUTOSTART_RESPONSE=$(printf '%s\n%s\n' "$INIT_MSG" "$NAV_MSG" | docker exec -i \
 
 if echo "$AUTOSTART_RESPONSE" | grep -q '"jsonrpc"'; then
   if echo "$AUTOSTART_RESPONSE" | grep -q '"result"'; then
-    pass "MCP auto-started server and navigate tool call succeeded"
+    ok "MCP auto-started server and navigate tool call succeeded"
   elif echo "$AUTOSTART_RESPONSE" | grep -q '"error"'; then
     # An error response is still valid JSON-RPC — server started but tool may have failed
-    pass "MCP auto-started server (tool returned error, but server is running)"
+    ok "MCP auto-started server (tool returned error, but server is running)"
   else
     check_failed "MCP auto-start: unexpected response: $AUTOSTART_RESPONSE"
   fi
@@ -137,13 +133,13 @@ HEALTH_CHECK=$(docker exec -e PINCHTAB_TOKEN="$SMOKE_TOKEN" "$NAME2" \
   pinchtab health 2>&1 || true)
 
 if echo "$HEALTH_CHECK" | grep -qi "ok\|healthy\|running\|version"; then
-  pass "Server is running after MCP auto-start"
+  ok "Server is running after MCP auto-start"
 else
   # health command may have different output format, check if server responds
   HEALTH_HTTP=$(docker exec "$NAME2" sh -c \
     "wget -qO- --header='Authorization: Bearer $SMOKE_TOKEN' http://127.0.0.1:9867/health 2>/dev/null" || true)
   if [ -n "$HEALTH_HTTP" ]; then
-    pass "Server is running after MCP auto-start (confirmed via HTTP)"
+    ok "Server is running after MCP auto-start (confirmed via HTTP)"
   else
     check_failed "Server not running after MCP auto-start: $HEALTH_CHECK"
   fi
@@ -151,8 +147,8 @@ fi
 
 echo ""
 if [ "$FAILED" -eq 0 ]; then
-  echo -e "${GREEN}${BOLD}Docker MCP smoke test passed.${NC}"
+  echo -e "${SUCCESS}${BOLD}Docker MCP smoke test passed.${NC}"
 else
-  echo -e "${RED}${BOLD}Docker MCP smoke test FAILED.${NC}"
+  echo -e "${ERROR}${BOLD}Docker MCP smoke test FAILED.${NC}"
   exit 1
 fi
