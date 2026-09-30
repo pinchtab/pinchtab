@@ -74,7 +74,7 @@ run_autosolver_and_extract() {
     echo -e "  ${RED}✗${NC} [autosolver:${label}] navigate failed (HTTP $HTTP_STATUS)"
     return 1
   fi
-  AUTOSOLVER_LAST_TAB_ID=$(echo "$RESULT" | jq -r '.tabId // ""')
+  AUTOSOLVER_LAST_TAB_ID=$(get_tab_id)
   echo -e "  ${GREEN}✓${NC} [autosolver:${label}] navigated (tab: ${AUTOSOLVER_LAST_TAB_ID:-?})"
 
   sleep "$sleep_sec"

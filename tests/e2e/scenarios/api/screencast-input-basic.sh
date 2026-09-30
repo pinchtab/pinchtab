@@ -25,7 +25,7 @@ sc_navigate() {
   assert_ok "navigate"
   local tab_id
   tab_id=$(get_tab_id)
-  [ -n "$tab_id" ] && [ "$tab_id" != "null" ] && SC_TAB_ID="$tab_id"
+  [ -n "$tab_id" ] && SC_TAB_ID="$tab_id"
 }
 
 # sc_eval <expression> → echoes the evaluated .result value

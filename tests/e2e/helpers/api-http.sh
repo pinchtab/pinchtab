@@ -356,7 +356,7 @@ poll_instance_tab_id_by_url() {
     if [ -n "$tabs_json" ]; then
       local tab_id
       tab_id=$(echo "$tabs_json" | jq -r --arg url "$url" --arg normalized_url "$normalized_url" '[.[] | select(.url == $url or .url == $normalized_url) | .id] | first // empty' 2>/dev/null || true)
-      if [ -n "$tab_id" ] && [ "$tab_id" != "null" ]; then
+      if [ -n "$tab_id" ]; then
         printf '%s' "$tab_id"
         return 0
       fi
@@ -369,8 +369,8 @@ poll_instance_tab_id_by_url() {
 
 assert_tab_id() {
   local desc="${1:-tabId returned}"
-  TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
-  if [ -n "$TAB_ID" ] && [ "$TAB_ID" != "null" ]; then
+  TAB_ID=$(get_tab_id)
+  if [ -n "$TAB_ID" ]; then
     pass_assert "$desc: ${TAB_ID:0:12}..."
   else
     fail_assert "no tabId in response"

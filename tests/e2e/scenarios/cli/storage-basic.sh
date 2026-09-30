@@ -69,7 +69,7 @@ if [ "$PT_CODE" -eq 0 ]; then
   TAB_ID=$(echo "$PT_OUT" | safe_jq -r '.tabs[0].id // empty' 2>/dev/null)
 fi
 
-if [ -n "$TAB_ID" ] && [ "$TAB_ID" != "null" ]; then
+if [ -n "$TAB_ID" ]; then
   pt_cli storage get --tab "$TAB_ID"
   assert_cli_ok "get storage for tab $TAB_ID"
 else
@@ -82,7 +82,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab storage set --tab writes to specific tab"
 
-if [ -n "$TAB_ID" ] && [ "$TAB_ID" != "null" ]; then
+if [ -n "$TAB_ID" ]; then
   pt_cli storage set pt_cli_tab_key pt_cli_tab_value --type local --tab "$TAB_ID"
   assert_cli_ok "set with --tab"
 else
@@ -95,7 +95,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab storage delete --tab removes key from specific tab"
 
-if [ -n "$TAB_ID" ] && [ "$TAB_ID" != "null" ]; then
+if [ -n "$TAB_ID" ]; then
   pt_cli storage delete --key pt_cli_tab_key --type local --tab "$TAB_ID"
   assert_cli_ok "delete with --tab"
 else

@@ -63,7 +63,7 @@ ghostchrome_post /navigate "{\"url\":\"${FIXTURES_URL}/form.html\"}"
 assert_ok "ghost-chrome navigate"
 GC_TAB=$(get_tab_id)
 
-if [ -n "$CHROME_TAB" ] && [ "$CHROME_TAB" != "null" ]; then
+if [ -n "$CHROME_TAB" ]; then
   echo -e "  ${GREEN}✓${NC} chrome tabId: ${CHROME_TAB:0:12}..."
   ((ASSERTIONS_PASSED++)) || true
 else
@@ -71,7 +71,7 @@ else
   ((ASSERTIONS_FAILED++)) || true
 fi
 
-if [ -n "$GC_TAB" ] && [ "$GC_TAB" != "null" ]; then
+if [ -n "$GC_TAB" ]; then
   echo -e "  ${GREEN}✓${NC} ghost-chrome tabId: ${GC_TAB:0:12}..."
   ((ASSERTIONS_PASSED++)) || true
 else

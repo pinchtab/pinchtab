@@ -50,10 +50,10 @@ fi
 pt_ok tab
 assert_output_contains "$NEW_TAB_ID" "new tab appears in list"
 
-if [ -n "$NEW_TAB_ID" ] && [ "$NEW_TAB_ID" != "null" ]; then
+if [ -n "$NEW_TAB_ID" ]; then
   pt tabs close "$NEW_TAB_ID" > /dev/null 2>&1 || true
 fi
-if [ -n "$BASE_TAB_ID" ] && [ "$BASE_TAB_ID" != "null" ]; then
+if [ -n "$BASE_TAB_ID" ]; then
   pt tabs close "$BASE_TAB_ID" > /dev/null 2>&1 || true
 fi
 
@@ -124,7 +124,7 @@ FOCUS_TAB_ID=$(echo "$PT_OUT" | tr -d '[:space:]')
 pt_ok nav "${FIXTURES_URL}/buttons.html" --new-tab
 OTHER_TAB_ID=$(echo "$PT_OUT" | tr -d '[:space:]')
 
-if [ -n "$FOCUS_TAB_ID" ] && [ "$FOCUS_TAB_ID" != "null" ]; then
+if [ -n "$FOCUS_TAB_ID" ]; then
   echo -e "  ${BLUE}→ focusing on tab ID: ${FOCUS_TAB_ID:0:12}...${NC}"
   pt_ok tab "$FOCUS_TAB_ID"
   assert_output_contains "$FOCUS_TAB_ID" "output contains focused tab ID"
@@ -154,7 +154,7 @@ start_test "pinchtab tab close <id> (close by tab ID)"
 pt nav "${FIXTURES_URL}/form.html"
 CLOSE_ID=$(echo "$PT_OUT" | tr -d '[:space:]')
 
-if [ -n "$CLOSE_ID" ] && [ "$CLOSE_ID" != "null" ]; then
+if [ -n "$CLOSE_ID" ]; then
   echo -e "  ${MUTED}closing tab: ${CLOSE_ID:0:12}...${NC}"
   pt_ok tab close "$CLOSE_ID"
   assert_output_contains "OK" "output confirms tab was closed"

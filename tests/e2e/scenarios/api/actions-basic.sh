@@ -20,7 +20,7 @@ actions_navigate() {
 
   local tab_id
   tab_id=$(get_tab_id)
-  if [ -n "$tab_id" ] && [ "$tab_id" != "null" ]; then
+  if [ -n "$tab_id" ]; then
     ACTIONS_TAB_ID="$tab_id"
   fi
 }
