@@ -51,6 +51,31 @@ func NormalizeHost(host string) string {
 	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
 }
 
+func HostInAllowlist(host string, allowlist []string) bool {
+	host = normalizeAllowlistHost(host)
+	for _, raw := range allowlist {
+		allowed := normalizeAllowlistHost(raw)
+		if allowed == "*" || (allowed != "" && allowed == host) {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeAllowlistHost(host string) string {
+	return NormalizeHost(strings.Trim(strings.TrimSpace(host), "[]"))
+}
+
+func AttachSchemeAllowed(scheme string, allowlist []string) bool {
+	scheme = strings.TrimSpace(scheme)
+	for _, allowed := range allowlist {
+		if scheme != "" && strings.EqualFold(scheme, strings.TrimSpace(allowed)) {
+			return true
+		}
+	}
+	return false
+}
+
 func IsLocalHost(host string) bool {
 	host = NormalizeHost(host)
 	if host == "" {

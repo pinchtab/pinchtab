@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/netguard"
 )
 
 type healthProbePolicy int
@@ -34,7 +35,7 @@ func (o *Orchestrator) validatedHealthProbeBaseURL(rawURL, port string, policy h
 		if cfg == nil {
 			return nil, fmt.Errorf("blocked: attach not configured")
 		}
-		if !isAllowedAttachHost(host, cfg.AttachAllowHosts) {
+		if !netguard.HostInAllowlist(host, cfg.AttachAllowHosts) {
 			slog.Warn("health probe blocked: host not allowed", "url", rawURL, "host", host)
 			return nil, fmt.Errorf("blocked: host not allowed")
 		}

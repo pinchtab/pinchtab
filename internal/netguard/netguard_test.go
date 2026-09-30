@@ -208,3 +208,36 @@ func TestValidateRemoteIPAddress(t *testing.T) {
 		}
 	}
 }
+
+func TestHostInAllowlist(t *testing.T) {
+	tests := []struct {
+		host  string
+		entry string
+		want  bool
+	}{
+		{"localhost", "LOCALHOST", true},
+		{"LocalHost", " localhost ", true},
+		{"::1", "[::1]", true},
+		{"[::1]", "::1", true},
+		{"10.0.0.8", "*", true},
+		{"10.0.0.8", "10.0.0.9", false},
+		{"", "", false},
+	}
+	for _, tt := range tests {
+		if got := HostInAllowlist(tt.host, []string{tt.entry}); got != tt.want {
+			t.Errorf("HostInAllowlist(%q, [%q]) = %v, want %v", tt.host, tt.entry, got, tt.want)
+		}
+	}
+}
+
+func TestAttachSchemeAllowed(t *testing.T) {
+	if !AttachSchemeAllowed("WS", []string{" ws "}) {
+		t.Error("expected case- and whitespace-insensitive match")
+	}
+	if AttachSchemeAllowed("", []string{""}) {
+		t.Error("empty scheme must not match")
+	}
+	if AttachSchemeAllowed("https", []string{"http"}) {
+		t.Error("https must not match http")
+	}
+}

@@ -14,6 +14,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/netguard"
 	"github.com/pinchtab/pinchtab/internal/remedy"
 )
 
@@ -521,14 +522,7 @@ func (o *Orchestrator) validateAttachURL(rawURL string) error {
 		return fmt.Errorf("invalid attach URL: %w", err)
 	}
 
-	schemeAllowed := false
-	for _, allowed := range cfg.AttachAllowSchemes {
-		if parsed.Scheme == allowed {
-			schemeAllowed = true
-			break
-		}
-	}
-	if !schemeAllowed {
+	if !netguard.AttachSchemeAllowed(parsed.Scheme, cfg.AttachAllowSchemes) {
 		return fmt.Errorf("scheme %q not allowed (allowed: %v)", parsed.Scheme, cfg.AttachAllowSchemes)
 	}
 
@@ -546,18 +540,9 @@ func (o *Orchestrator) validateAttachURL(rawURL string) error {
 	}
 
 	host := parsed.Hostname()
-	if !isAllowedAttachHost(host, cfg.AttachAllowHosts) {
+	if !netguard.HostInAllowlist(host, cfg.AttachAllowHosts) {
 		return fmt.Errorf("host %q not allowed (allowed: %v)", host, cfg.AttachAllowHosts)
 	}
 
 	return nil
-}
-
-func isAllowedAttachHost(host string, allowedHosts []string) bool {
-	for _, allowed := range allowedHosts {
-		if allowed == "*" || host == allowed {
-			return true
-		}
-	}
-	return false
 }

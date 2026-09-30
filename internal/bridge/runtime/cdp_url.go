@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/netguard"
 )
 
 const cdpVersionBodyLimit = 64 * 1024
@@ -272,7 +274,7 @@ func validateAndResolveCDPHostWithContext(ctx context.Context, parsed *url.URL, 
 	if err != nil {
 		return netip.Addr{}, err
 	}
-	allowlisted := cdpHostAllowed(host, allowedHosts)
+	allowlisted := netguard.HostInAllowlist(host, allowedHosts)
 	allLoopback := true
 	for _, addr := range addrs {
 		if !addr.IsLoopback() {
@@ -324,17 +326,6 @@ func resolveCDPHostAddrs(ctx context.Context, host string) ([]netip.Addr, error)
 	return out, nil
 }
 
-func cdpHostAllowed(host string, allowedHosts []string) bool {
-	host = strings.ToLower(strings.Trim(host, "[] "))
-	for _, raw := range allowedHosts {
-		allowed := strings.ToLower(strings.Trim(raw, "[] "))
-		if allowed == "*" || allowed == host {
-			return true
-		}
-	}
-	return false
-}
-
 func validateCDPScheme(scheme string, allowedSchemes []string) error {
 	switch scheme {
 	case "ws", "wss", "http", "https":
@@ -343,10 +334,8 @@ func validateCDPScheme(scheme string, allowedSchemes []string) error {
 	}
 
 	effective := effectiveCDPAllowSchemes(allowedSchemes)
-	for _, allowed := range effective {
-		if scheme == allowed {
-			return nil
-		}
+	if netguard.AttachSchemeAllowed(scheme, effective) {
+		return nil
 	}
 	return fmt.Errorf("remote CDP scheme %q not allowed (allowed: %v)", scheme, effective)
 }
