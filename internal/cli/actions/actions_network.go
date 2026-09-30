@@ -10,7 +10,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/pinchtab/pinchtab/internal/authn"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/sanitize"
 	"github.com/spf13/cobra"
@@ -137,22 +136,7 @@ func NetworkStream(client *http.Client, base, token string, cmd *cobra.Command) 
 		params.Set("bufferSize", v)
 	}
 
-	u := base + "/network/stream"
-	if len(params) > 0 {
-		u += "?" + params.Encode()
-	}
-
-	req, err := http.NewRequest("GET", u, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-	authn.SetAuthorization(req.Header, token)
-	req.Header.Set("Accept", "text/event-stream")
-
-	// Use a client without timeout for streaming
-	streamClient := &http.Client{}
-	resp, err := streamClient.Do(req)
+	resp, err := apiclient.OpenStream(client, base, token, "/network/stream", params)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error connecting to stream: %v\n", err)
 		os.Exit(1)

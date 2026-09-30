@@ -120,3 +120,19 @@ func setClientHeaders(req *http.Request, token string) {
 	req.Header.Set(types.HeaderSource, "client")
 	authn.SetAuthorization(req.Header, token)
 }
+
+func OpenStream(client *http.Client, base, token, path string, params url.Values) (*http.Response, error) {
+	u := buildURL(base, path, params)
+	req, err := http.NewRequest(http.MethodGet, u, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build stream request: %w", err)
+	}
+	setClientHeaders(req, token)
+	req.Header.Set("Accept", "text/event-stream")
+	streamClient := &http.Client{Transport: client.Transport}
+	resp, err := streamClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("open stream %s: %w", u, err)
+	}
+	return resp, nil
+}
