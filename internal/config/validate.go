@@ -76,42 +76,47 @@ func (e ValidationError) Error() string {
 // later config write, including writes to unrelated keys.
 func ValidateFileConfig(fc *FileConfig) []error {
 	var errs []error
+	errs = append(errs, validateServer(fc.Server)...)
+	errs = append(errs, validateBrowserSection(fc)...)
+	errs = append(errs, validateMultiInstanceRestart(fc.MultiInstance)...)
+	errs = append(errs, validateInstanceDefaults(fc.InstanceDefaults)...)
+	errs = append(errs, validateMultiInstancePolicy(fc.MultiInstance)...)
+	errs = append(errs, validateSecurity(fc.Security, fc.Browser.BrowserExtraFlags)...)
+	errs = append(errs, validateTimeouts(fc.Timeouts)...)
+	errs = append(errs, validateAutoSolver(fc.AutoSolver)...)
+	errs = append(errs, validateObservability(fc.Observability)...)
+	errs = append(errs, validateSessions(fc.Sessions)...)
+	errs = appendIntPtrRule(errs, "profiles.quarantineKeep", fc.Profiles.QuarantineKeep)
+	return errs
+}
 
-	if fc.Server.Port != "" {
-		if err := validatePort(fc.Server.Port, "server.port"); err != nil {
+func validateServer(srv ServerConfig) []error {
+	var errs []error
+	if srv.Port != "" {
+		if err := validatePort(srv.Port, "server.port"); err != nil {
 			errs = append(errs, err)
 		}
 	}
-	if fc.Server.Bind != "" {
-		if err := validateBind(fc.Server.Bind, "server.bind"); err != nil {
+	if srv.Bind != "" {
+		if err := validateBind(srv.Bind, "server.bind"); err != nil {
 			errs = append(errs, err)
 		}
 	}
-	if fc.Server.LogLevel != "" {
-		if _, err := safelog.ParseLevel(fc.Server.LogLevel); err != nil {
+	if srv.LogLevel != "" {
+		if _, err := safelog.ParseLevel(srv.LogLevel); err != nil {
 			errs = append(errs, ValidationError{Field: "server.logLevel", Message: err.Error()})
 		}
 	}
-	if fc.Server.NetworkBufferSize != nil {
-		if *fc.Server.NetworkBufferSize < 1 || *fc.Server.NetworkBufferSize > MaxNetworkBufferSize {
-			errs = append(errs, ValidationError{
-				Field:   "server.networkBufferSize",
-				Message: fmt.Sprintf("must be between 1 and %d (got %d)", MaxNetworkBufferSize, *fc.Server.NetworkBufferSize),
-			})
-		}
-	}
-	if fc.Server.RetainNetworkBodyMaxBytes != nil {
-		if *fc.Server.RetainNetworkBodyMaxBytes < 0 || *fc.Server.RetainNetworkBodyMaxBytes > MaxRetainNetworkBodyMaxBytes {
-			errs = append(errs, ValidationError{
-				Field:   "server.retainNetworkBodyMaxBytes",
-				Message: fmt.Sprintf("must be between 0 and %d (got %d)", MaxRetainNetworkBodyMaxBytes, *fc.Server.RetainNetworkBodyMaxBytes),
-			})
-		}
-	}
-
-	if fc.Server.Engine != "" {
+	errs = appendIntPtrRule(errs, "server.networkBufferSize", srv.NetworkBufferSize)
+	errs = appendIntPtrRule(errs, "server.retainNetworkBodyMaxBytes", srv.RetainNetworkBodyMaxBytes)
+	if srv.Engine != "" {
 		errs = append(errs, fmt.Errorf("server.engine is no longer supported; use browsers.default instead"))
 	}
+	return errs
+}
+
+func validateBrowserSection(fc *FileConfig) []error {
+	var errs []error
 	if fc.Browser.Provider != "" {
 		errs = append(errs, fmt.Errorf("browser.provider is no longer supported; use browsers.default instead (e.g. \"browsers\": {\"default\": %q})", fc.Browser.Provider))
 	}
@@ -119,78 +124,58 @@ func ValidateFileConfig(fc *FileConfig) []error {
 	errs = append(errs, ValidateBrowserProxy("browser.proxy", fc.Browser.Proxy)...)
 	errs = append(errs, ValidateBrowserTargets(fc.Browser)...)
 	errs = append(errs, validateBrowsersBlock(*fc)...)
+	return errs
+}
 
-	if fc.MultiInstance.InstancePortStart != nil && fc.MultiInstance.InstancePortEnd != nil {
-		if *fc.MultiInstance.InstancePortStart > *fc.MultiInstance.InstancePortEnd {
-			errs = append(errs, ValidationError{
-				Field:   "multiInstance.instancePortStart/End",
-				Message: fmt.Sprintf("start port (%d) must be <= end port (%d)", *fc.MultiInstance.InstancePortStart, *fc.MultiInstance.InstancePortEnd),
-			})
-		}
-	}
-	if fc.MultiInstance.Restart.MaxRestarts != nil {
-		if *fc.MultiInstance.Restart.MaxRestarts < -1 {
-			errs = append(errs, ValidationError{
-				Field:   "multiInstance.restart.maxRestarts",
-				Message: fmt.Sprintf("must be >= 0 or -1 for unlimited (got %d)", *fc.MultiInstance.Restart.MaxRestarts),
-			})
-		}
-	}
-	if fc.MultiInstance.Restart.InitBackoffSec != nil && *fc.MultiInstance.Restart.InitBackoffSec < 1 {
+func validateMultiInstanceRestart(mi MultiInstanceConfig) []error {
+	var errs []error
+	if mi.InstancePortStart != nil && mi.InstancePortEnd != nil && *mi.InstancePortStart > *mi.InstancePortEnd {
 		errs = append(errs, ValidationError{
-			Field:   "multiInstance.restart.initBackoffSec",
-			Message: fmt.Sprintf("must be >= 1 (got %d)", *fc.MultiInstance.Restart.InitBackoffSec),
+			Field:   "multiInstance.instancePortStart/End",
+			Message: fmt.Sprintf("start port (%d) must be <= end port (%d)", *mi.InstancePortStart, *mi.InstancePortEnd),
 		})
 	}
-	if fc.MultiInstance.Restart.MaxBackoffSec != nil && *fc.MultiInstance.Restart.MaxBackoffSec < 1 {
-		errs = append(errs, ValidationError{
-			Field:   "multiInstance.restart.maxBackoffSec",
-			Message: fmt.Sprintf("must be >= 1 (got %d)", *fc.MultiInstance.Restart.MaxBackoffSec),
-		})
-	}
-	if fc.MultiInstance.Restart.StableAfterSec != nil && *fc.MultiInstance.Restart.StableAfterSec < 1 {
-		errs = append(errs, ValidationError{
-			Field:   "multiInstance.restart.stableAfterSec",
-			Message: fmt.Sprintf("must be >= 1 (got %d)", *fc.MultiInstance.Restart.StableAfterSec),
-		})
-	}
-	if fc.MultiInstance.Restart.InitBackoffSec != nil && fc.MultiInstance.Restart.MaxBackoffSec != nil &&
-		*fc.MultiInstance.Restart.InitBackoffSec > *fc.MultiInstance.Restart.MaxBackoffSec {
+	r := mi.Restart
+	errs = appendIntPtrRule(errs, "multiInstance.restart.maxRestarts", r.MaxRestarts)
+	errs = appendIntPtrRule(errs, "multiInstance.restart.initBackoffSec", r.InitBackoffSec)
+	errs = appendIntPtrRule(errs, "multiInstance.restart.maxBackoffSec", r.MaxBackoffSec)
+	errs = appendIntPtrRule(errs, "multiInstance.restart.stableAfterSec", r.StableAfterSec)
+	if r.InitBackoffSec != nil && r.MaxBackoffSec != nil && *r.InitBackoffSec > *r.MaxBackoffSec {
 		errs = append(errs, ValidationError{
 			Field:   "multiInstance.restart.initBackoffSec/maxBackoffSec",
-			Message: fmt.Sprintf("init backoff (%d) must be <= max backoff (%d)", *fc.MultiInstance.Restart.InitBackoffSec, *fc.MultiInstance.Restart.MaxBackoffSec),
+			Message: fmt.Sprintf("init backoff (%d) must be <= max backoff (%d)", *r.InitBackoffSec, *r.MaxBackoffSec),
 		})
 	}
+	return errs
+}
 
-	if fc.InstanceDefaults.Headless != nil && fc.InstanceDefaults.Mode != "" {
+func validateInstanceDefaults(d InstanceDefaultsConfig) []error {
+	var errs []error
+	if d.Headless != nil && d.Mode != "" {
 		errs = append(errs, ValidationError{
 			Field:   "instanceDefaults.headless",
-			Message: fmt.Sprintf("both headless and mode are set; mode %q takes precedence", fc.InstanceDefaults.Mode),
+			Message: fmt.Sprintf("both headless and mode are set; mode %q takes precedence", d.Mode),
 		})
 	}
-	if fc.InstanceDefaults.Mode != "" && fc.InstanceDefaults.Mode != "headless" && fc.InstanceDefaults.Mode != "headed" {
+	if d.Mode != "" && d.Mode != "headless" && d.Mode != "headed" {
 		errs = append(errs, ValidationError{
 			Field:   "instanceDefaults.mode",
-			Message: fmt.Sprintf("invalid value %q (must be headless or headed)", fc.InstanceDefaults.Mode),
+			Message: fmt.Sprintf("invalid value %q (must be headless or headed)", d.Mode),
 		})
 	}
-	if fc.InstanceDefaults.StealthLevel != "" {
-		if !isValidStealthLevel(fc.InstanceDefaults.StealthLevel) {
-			errs = append(errs, ValidationError{
-				Field:   "instanceDefaults.stealthLevel",
-				Message: fmt.Sprintf("invalid value %q (must be light, medium, or full)", fc.InstanceDefaults.StealthLevel),
-			})
-		}
+	if d.StealthLevel != "" && !isValidStealthLevel(d.StealthLevel) {
+		errs = append(errs, ValidationError{
+			Field:   "instanceDefaults.stealthLevel",
+			Message: fmt.Sprintf("invalid value %q (must be light, medium, or full)", d.StealthLevel),
+		})
 	}
-	if fc.InstanceDefaults.TabEvictionPolicy != "" {
-		if !isValidEvictionPolicy(fc.InstanceDefaults.TabEvictionPolicy) {
-			errs = append(errs, ValidationError{
-				Field:   "instanceDefaults.tabEvictionPolicy",
-				Message: fmt.Sprintf("invalid value %q (must be reject, close_oldest, or close_lru)", fc.InstanceDefaults.TabEvictionPolicy),
-			})
-		}
+	if d.TabEvictionPolicy != "" && !isValidEvictionPolicy(d.TabEvictionPolicy) {
+		errs = append(errs, ValidationError{
+			Field:   "instanceDefaults.tabEvictionPolicy",
+			Message: fmt.Sprintf("invalid value %q (must be reject, close_oldest, or close_lru)", d.TabEvictionPolicy),
+		})
 	}
-	if tp := fc.InstanceDefaults.TabPolicy; tp != nil {
+	if tp := d.TabPolicy; tp != nil {
 		if tp.Eviction != "" && !isValidEvictionPolicy(tp.Eviction) {
 			errs = append(errs, ValidationError{
 				Field:   "instanceDefaults.tabPolicy.eviction",
@@ -203,44 +188,33 @@ func ValidateFileConfig(fc *FileConfig) []error {
 				Message: fmt.Sprintf("invalid value %q (must be keep, close_idle, or freeze_idle)", tp.Lifecycle),
 			})
 		}
-		if tp.CloseDelaySec != nil && *tp.CloseDelaySec < 0 {
-			errs = append(errs, ValidationError{
-				Field:   "instanceDefaults.tabPolicy.closeDelaySec",
-				Message: fmt.Sprintf("must be >= 0 (got %d)", *tp.CloseDelaySec),
-			})
-		}
+		errs = appendIntPtrRule(errs, "instanceDefaults.tabPolicy.closeDelaySec", tp.CloseDelaySec)
 	}
-	if fc.InstanceDefaults.MaxTabs != nil && *fc.InstanceDefaults.MaxTabs < 1 {
+	errs = appendIntPtrRule(errs, "instanceDefaults.maxTabs", d.MaxTabs)
+	errs = appendIntPtrRule(errs, "instanceDefaults.maxParallelTabs", d.MaxParallelTabs)
+	return errs
+}
+
+func validateMultiInstancePolicy(mi MultiInstanceConfig) []error {
+	var errs []error
+	if mi.Strategy != "" && !isValidStrategy(mi.Strategy) {
 		errs = append(errs, ValidationError{
-			Field:   "instanceDefaults.maxTabs",
-			Message: fmt.Sprintf("must be >= 1 (got %d)", *fc.InstanceDefaults.MaxTabs),
+			Field:   "multiInstance.strategy",
+			Message: fmt.Sprintf("invalid value %q (must be simple, explicit, simple-autorestart, or always-on)", mi.Strategy),
 		})
 	}
-	if fc.InstanceDefaults.MaxParallelTabs != nil && *fc.InstanceDefaults.MaxParallelTabs < 0 {
+	if mi.AllocationPolicy != "" && !isValidAllocationPolicy(mi.AllocationPolicy) {
 		errs = append(errs, ValidationError{
-			Field:   "instanceDefaults.maxParallelTabs",
-			Message: fmt.Sprintf("must be >= 0 (got %d)", *fc.InstanceDefaults.MaxParallelTabs),
+			Field:   "multiInstance.allocationPolicy",
+			Message: fmt.Sprintf("invalid value %q (must be fcfs, round_robin, or random)", mi.AllocationPolicy),
 		})
 	}
+	return errs
+}
 
-	if fc.MultiInstance.Strategy != "" {
-		if !isValidStrategy(fc.MultiInstance.Strategy) {
-			errs = append(errs, ValidationError{
-				Field:   "multiInstance.strategy",
-				Message: fmt.Sprintf("invalid value %q (must be simple, explicit, simple-autorestart, or always-on)", fc.MultiInstance.Strategy),
-			})
-		}
-	}
-	if fc.MultiInstance.AllocationPolicy != "" {
-		if !isValidAllocationPolicy(fc.MultiInstance.AllocationPolicy) {
-			errs = append(errs, ValidationError{
-				Field:   "multiInstance.allocationPolicy",
-				Message: fmt.Sprintf("invalid value %q (must be fcfs, round_robin, or random)", fc.MultiInstance.AllocationPolicy),
-			})
-		}
-	}
-
-	for _, scheme := range fc.Security.Attach.AllowSchemes {
+func validateSecurity(sec SecurityConfig, browserExtraFlags string) []error {
+	var errs []error
+	for _, scheme := range sec.Attach.AllowSchemes {
 		if !isValidAttachScheme(scheme) {
 			errs = append(errs, ValidationError{
 				Field:   "security.attach.allowSchemes",
@@ -248,86 +222,51 @@ func ValidateFileConfig(fc *FileConfig) []error {
 			})
 		}
 	}
-
-	if fc.Browser.BrowserExtraFlags != "" {
-		errs = append(errs, validateBrowserExtraFlags(fc.Browser.BrowserExtraFlags)...)
+	if browserExtraFlags != "" {
+		errs = append(errs, validateBrowserExtraFlags(browserExtraFlags)...)
 	}
-
-	errs = append(errs, validateIDPIConfig(fc.Security.EffectiveIDPI(), effectiveSecurityAllowedDomains(fc.Security))...)
-	errs = append(errs, validateAllowedDomainList("security.downloadAllowedDomains", fc.Security.DownloadAllowedDomains)...)
-	errs = append(errs, validateTrustedCIDRList("security.trustedProxyCIDRs", fc.Security.TrustedProxyCIDRs)...)
-	errs = append(errs, validateTrustedCIDRList("security.trustedResolveCIDRs", fc.Security.TrustedResolveCIDRs)...)
-	errs = append(errs, validatePositiveIntLimit("security.downloadMaxBytes", fc.Security.DownloadMaxBytes, MaxDownloadMaxBytes)...)
-	errs = append(errs, validatePositiveIntLimit("security.memorySnapshotMaxBytes", fc.Security.MemorySnapshotMaxBytes, MaxMemorySnapshotMaxBytes)...)
-	errs = append(errs, validatePositiveIntLimit("security.uploadMaxRequestBytes", fc.Security.UploadMaxRequestBytes, MaxUploadMaxRequestBytes)...)
-	errs = append(errs, validatePositiveIntLimit("security.uploadMaxFiles", fc.Security.UploadMaxFiles, MaxUploadMaxFiles)...)
-	errs = append(errs, validatePositiveIntLimit("security.uploadMaxFileBytes", fc.Security.UploadMaxFileBytes, MaxUploadMaxFileBytes)...)
-	errs = append(errs, validatePositiveIntLimit("security.uploadMaxTotalBytes", fc.Security.UploadMaxTotalBytes, MaxUploadMaxTotalBytes)...)
-	if fc.Security.UploadMaxFileBytes != nil && fc.Security.UploadMaxTotalBytes != nil &&
-		*fc.Security.UploadMaxFileBytes > *fc.Security.UploadMaxTotalBytes {
+	errs = append(errs, validateIDPIConfig(sec.EffectiveIDPI(), effectiveSecurityAllowedDomains(sec))...)
+	errs = append(errs, validateAllowedDomainList("security.downloadAllowedDomains", sec.DownloadAllowedDomains)...)
+	errs = append(errs, validateTrustedCIDRList("security.trustedProxyCIDRs", sec.TrustedProxyCIDRs)...)
+	errs = append(errs, validateTrustedCIDRList("security.trustedResolveCIDRs", sec.TrustedResolveCIDRs)...)
+	errs = appendIntPtrRule(errs, "security.downloadMaxBytes", sec.DownloadMaxBytes)
+	errs = appendIntPtrRule(errs, "security.memorySnapshotMaxBytes", sec.MemorySnapshotMaxBytes)
+	errs = appendIntPtrRule(errs, "security.uploadMaxRequestBytes", sec.UploadMaxRequestBytes)
+	errs = appendIntPtrRule(errs, "security.uploadMaxFiles", sec.UploadMaxFiles)
+	errs = appendIntPtrRule(errs, "security.uploadMaxFileBytes", sec.UploadMaxFileBytes)
+	errs = appendIntPtrRule(errs, "security.uploadMaxTotalBytes", sec.UploadMaxTotalBytes)
+	if sec.UploadMaxFileBytes != nil && sec.UploadMaxTotalBytes != nil && *sec.UploadMaxFileBytes > *sec.UploadMaxTotalBytes {
 		errs = append(errs, ValidationError{
 			Field:   "security.uploadMaxFileBytes/uploadMaxTotalBytes",
-			Message: fmt.Sprintf("uploadMaxFileBytes (%d) must be <= uploadMaxTotalBytes (%d)", *fc.Security.UploadMaxFileBytes, *fc.Security.UploadMaxTotalBytes),
+			Message: fmt.Sprintf("uploadMaxFileBytes (%d) must be <= uploadMaxTotalBytes (%d)", *sec.UploadMaxFileBytes, *sec.UploadMaxTotalBytes),
 		})
 	}
+	errs = appendIntRule(errs, "security.idpi.shieldThreshold", sec.EffectiveIDPI().ShieldThreshold)
+	return errs
+}
 
-	if fc.Timeouts.ActionSec < 0 {
-		errs = append(errs, ValidationError{
-			Field:   "timeouts.actionSec",
-			Message: fmt.Sprintf("must be >= 0 (got %d)", fc.Timeouts.ActionSec),
-		})
-	}
-	if fc.Timeouts.NavigateSec < 0 {
-		errs = append(errs, ValidationError{
-			Field:   "timeouts.navigateSec",
-			Message: fmt.Sprintf("must be >= 0 (got %d)", fc.Timeouts.NavigateSec),
-		})
-	}
-	if fc.Timeouts.ShutdownSec < 0 {
-		errs = append(errs, ValidationError{
-			Field:   "timeouts.shutdownSec",
-			Message: fmt.Sprintf("must be >= 0 (got %d)", fc.Timeouts.ShutdownSec),
-		})
-	}
-	if fc.Timeouts.WaitNavMs < 0 {
-		errs = append(errs, ValidationError{
-			Field:   "timeouts.waitNavMs",
-			Message: fmt.Sprintf("must be >= 0 (got %d)", fc.Timeouts.WaitNavMs),
-		})
-	}
+func validateTimeouts(t TimeoutsConfig) []error {
+	var errs []error
+	errs = appendIntRule(errs, "timeouts.actionSec", t.ActionSec)
+	errs = appendIntRule(errs, "timeouts.navigateSec", t.NavigateSec)
+	errs = appendIntRule(errs, "timeouts.shutdownSec", t.ShutdownSec)
+	errs = appendIntRule(errs, "timeouts.waitNavMs", t.WaitNavMs)
+	return errs
+}
 
-	if fc.AutoSolver.MaxAttempts != nil && *fc.AutoSolver.MaxAttempts < 1 {
-		errs = append(errs, ValidationError{
-			Field:   "autoSolver.maxAttempts",
-			Message: fmt.Sprintf("must be >= 1 (got %d)", *fc.AutoSolver.MaxAttempts),
-		})
-	}
-	if fc.AutoSolver.SolverTimeoutSec != nil && *fc.AutoSolver.SolverTimeoutSec <= 0 {
-		errs = append(errs, ValidationError{
-			Field:   "autoSolver.solverTimeoutSec",
-			Message: fmt.Sprintf("must be > 0 (got %d)", *fc.AutoSolver.SolverTimeoutSec),
-		})
-	}
-	if fc.AutoSolver.RetryBaseDelayMs != nil && *fc.AutoSolver.RetryBaseDelayMs < 0 {
-		errs = append(errs, ValidationError{
-			Field:   "autoSolver.retryBaseDelayMs",
-			Message: fmt.Sprintf("must be >= 0 (got %d)", *fc.AutoSolver.RetryBaseDelayMs),
-		})
-	}
-	if fc.AutoSolver.RetryMaxDelayMs != nil && *fc.AutoSolver.RetryMaxDelayMs < 0 {
-		errs = append(errs, ValidationError{
-			Field:   "autoSolver.retryMaxDelayMs",
-			Message: fmt.Sprintf("must be >= 0 (got %d)", *fc.AutoSolver.RetryMaxDelayMs),
-		})
-	}
-	if fc.AutoSolver.RetryBaseDelayMs != nil && fc.AutoSolver.RetryMaxDelayMs != nil &&
-		*fc.AutoSolver.RetryBaseDelayMs > *fc.AutoSolver.RetryMaxDelayMs {
+func validateAutoSolver(a AutoSolverFileConfig) []error {
+	var errs []error
+	errs = appendIntPtrRule(errs, "autoSolver.maxAttempts", a.MaxAttempts)
+	errs = appendIntPtrRule(errs, "autoSolver.solverTimeoutSec", a.SolverTimeoutSec)
+	errs = appendIntPtrRule(errs, "autoSolver.retryBaseDelayMs", a.RetryBaseDelayMs)
+	errs = appendIntPtrRule(errs, "autoSolver.retryMaxDelayMs", a.RetryMaxDelayMs)
+	if a.RetryBaseDelayMs != nil && a.RetryMaxDelayMs != nil && *a.RetryBaseDelayMs > *a.RetryMaxDelayMs {
 		errs = append(errs, ValidationError{
 			Field:   "autoSolver.retryBaseDelayMs/retryMaxDelayMs",
-			Message: fmt.Sprintf("retry base delay (%d) must be <= retry max delay (%d)", *fc.AutoSolver.RetryBaseDelayMs, *fc.AutoSolver.RetryMaxDelayMs),
+			Message: fmt.Sprintf("retry base delay (%d) must be <= retry max delay (%d)", *a.RetryBaseDelayMs, *a.RetryMaxDelayMs),
 		})
 	}
-	for _, solverName := range fc.AutoSolver.Solvers {
+	for _, solverName := range a.Solvers {
 		if strings.TrimSpace(solverName) == "" {
 			errs = append(errs, ValidationError{
 				Field:   "autoSolver.solvers",
@@ -339,7 +278,7 @@ func ValidateFileConfig(fc *FileConfig) []error {
 	// An unmatched name does not fail at run time, it changes which solvers run:
 	// one typo alongside good names silently drops that solver, and a list of
 	// only typos silently runs every solver instead.
-	for i, solverName := range fc.AutoSolver.Solvers {
+	for i, solverName := range a.Solvers {
 		name := strings.TrimSpace(solverName)
 		if name == "" || catalog.IsKnown(name) {
 			continue
@@ -349,46 +288,28 @@ func ValidateFileConfig(fc *FileConfig) []error {
 			Message: fmt.Sprintf("unknown solver %q (known: %v)", name, catalog.Names()),
 		})
 	}
+	return errs
+}
 
-	if fc.Observability.Activity.SessionIdleSec != nil && *fc.Observability.Activity.SessionIdleSec < 0 {
-		errs = append(errs, ValidationError{
-			Field:   "observability.activity.sessionIdleSec",
-			Message: fmt.Sprintf("must be >= 0 (got %d)", *fc.Observability.Activity.SessionIdleSec),
-		})
-	}
-	if fc.Observability.Activity.RetentionDays != nil && *fc.Observability.Activity.RetentionDays <= 0 {
-		errs = append(errs, ValidationError{
-			Field:   "observability.activity.retentionDays",
-			Message: fmt.Sprintf("must be > 0 (got %d)", *fc.Observability.Activity.RetentionDays),
-		})
-	}
-	errs = append(errs, validateAgentSessionMode(fc.Sessions.Agent.Mode)...)
-	if fc.Sessions.Dashboard.IdleTimeoutSec != nil && *fc.Sessions.Dashboard.IdleTimeoutSec <= 0 {
-		errs = append(errs, ValidationError{
-			Field:   "sessions.dashboard.idleTimeoutSec",
-			Message: fmt.Sprintf("must be > 0 (got %d)", *fc.Sessions.Dashboard.IdleTimeoutSec),
-		})
-	}
-	if fc.Sessions.Dashboard.MaxLifetimeSec != nil && *fc.Sessions.Dashboard.MaxLifetimeSec <= 0 {
-		errs = append(errs, ValidationError{
-			Field:   "sessions.dashboard.maxLifetimeSec",
-			Message: fmt.Sprintf("must be > 0 (got %d)", *fc.Sessions.Dashboard.MaxLifetimeSec),
-		})
-	}
-	if fc.Sessions.Dashboard.ElevationWindowSec != nil && *fc.Sessions.Dashboard.ElevationWindowSec <= 0 {
-		errs = append(errs, ValidationError{
-			Field:   "sessions.dashboard.elevationWindowSec",
-			Message: fmt.Sprintf("must be > 0 (got %d)", *fc.Sessions.Dashboard.ElevationWindowSec),
-		})
-	}
-	if fc.Sessions.Dashboard.IdleTimeoutSec != nil && fc.Sessions.Dashboard.MaxLifetimeSec != nil &&
-		*fc.Sessions.Dashboard.IdleTimeoutSec > *fc.Sessions.Dashboard.MaxLifetimeSec {
+func validateObservability(o ObservabilityFileConfig) []error {
+	var errs []error
+	errs = appendIntPtrRule(errs, "observability.activity.sessionIdleSec", o.Activity.SessionIdleSec)
+	errs = appendIntPtrRule(errs, "observability.activity.retentionDays", o.Activity.RetentionDays)
+	return errs
+}
+
+func validateSessions(s SessionsFileConfig) []error {
+	errs := validateAgentSessionMode(s.Agent.Mode)
+	d := s.Dashboard
+	errs = appendIntPtrRule(errs, "sessions.dashboard.idleTimeoutSec", d.IdleTimeoutSec)
+	errs = appendIntPtrRule(errs, "sessions.dashboard.maxLifetimeSec", d.MaxLifetimeSec)
+	errs = appendIntPtrRule(errs, "sessions.dashboard.elevationWindowSec", d.ElevationWindowSec)
+	if d.IdleTimeoutSec != nil && d.MaxLifetimeSec != nil && *d.IdleTimeoutSec > *d.MaxLifetimeSec {
 		errs = append(errs, ValidationError{
 			Field:   "sessions.dashboard.idleTimeoutSec/maxLifetimeSec",
-			Message: fmt.Sprintf("idle timeout (%d) must be <= max lifetime (%d)", *fc.Sessions.Dashboard.IdleTimeoutSec, *fc.Sessions.Dashboard.MaxLifetimeSec),
+			Message: fmt.Sprintf("idle timeout (%d) must be <= max lifetime (%d)", *d.IdleTimeoutSec, *d.MaxLifetimeSec),
 		})
 	}
-
 	return errs
 }
 
@@ -628,19 +549,6 @@ func validateTrustedCIDRList(field string, items []string) []error {
 		}
 	}
 	return errs
-}
-
-func validatePositiveIntLimit(field string, value *int, max int) []error {
-	if value == nil {
-		return nil
-	}
-	if *value < 1 || *value > max {
-		return []error{ValidationError{
-			Field:   field,
-			Message: fmt.Sprintf("must be between 1 and %d (got %d)", max, *value),
-		}}
-	}
-	return nil
 }
 
 func ValidAllocationPolicies() []string {

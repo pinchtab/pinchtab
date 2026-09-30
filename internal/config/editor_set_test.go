@@ -471,6 +471,7 @@ func TestFieldTablesRoundTripEveryRow(t *testing.T) {
 	pathProbes := map[string]string{
 		"browsers.default":               "chrome",
 		"browser.targets.probe.provider": "chrome",
+		"security.uploadMaxFiles":        "8",
 	}
 	sections := map[string]bool{}
 	for _, row := range allFieldTableRows() {

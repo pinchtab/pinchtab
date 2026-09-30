@@ -176,16 +176,12 @@ func stringPtrField[T any](key string, slot func(*T) **string) fieldSpec[T] {
 }
 
 func intField[T any](key string, slot func(*T) *int) fieldSpec[T] {
-	return checkedIntField(key, slot, nil)
-}
-
-func checkedIntField[T any](key string, slot func(*T) *int, check func(path string, n int) error) fieldSpec[T] {
 	return fieldSpec[T]{
 		key:  key,
 		kind: fieldInt,
 		get:  func(t *T) string { return strconv.Itoa(*slot(t)) },
 		set: func(t *T, path, value string) error {
-			n, err := parseIntValue(path, value, check)
+			n, err := parseIntValue(path, value)
 			if err != nil {
 				return err
 			}
@@ -196,16 +192,12 @@ func checkedIntField[T any](key string, slot func(*T) *int, check func(path stri
 }
 
 func intPtrField[T any](key string, slot func(*T) **int) fieldSpec[T] {
-	return checkedIntPtrField(key, slot, nil)
-}
-
-func checkedIntPtrField[T any](key string, slot func(*T) **int, check func(path string, n int) error) fieldSpec[T] {
 	return fieldSpec[T]{
 		key:  key,
 		kind: fieldInt,
 		get:  func(t *T) string { return formatIntPtr(*slot(t)) },
 		set: func(t *T, path, value string) error {
-			n, err := parseIntValue(path, value, check)
+			n, err := parseIntValue(path, value)
 			if err != nil {
 				return err
 			}
@@ -282,15 +274,13 @@ func retiredField[T any](key string, refusal error) fieldSpec[T] {
 	}
 }
 
-func parseIntValue(path, value string, check func(path string, n int) error) (int, error) {
+func parseIntValue(path, value string) (int, error) {
 	n, err := strconv.Atoi(value)
 	if err != nil {
 		return 0, fmt.Errorf("%s must be a number: %w", path, err)
 	}
-	if check != nil {
-		if err := check(path, n); err != nil {
-			return 0, err
-		}
+	if err := checkIntRule(path, n); err != nil {
+		return 0, err
 	}
 	return n, nil
 }
@@ -365,12 +355,7 @@ var idpiFields = fieldTable[IDPIConfig]{
 		boolField("wrapContent", func(i *IDPIConfig) *bool { return &i.WrapContent }),
 		listField("customPatterns", func(i *IDPIConfig) *[]string { return &i.CustomPatterns }, nil),
 		intField("scanTimeoutSec", func(i *IDPIConfig) *int { return &i.ScanTimeoutSec }),
-		checkedIntField("shieldThreshold", func(i *IDPIConfig) *int { return &i.ShieldThreshold }, func(path string, n int) error {
-			if n < 0 || n > 100 {
-				return fmt.Errorf("%s must be between 0 and 100", path)
-			}
-			return nil
-		}),
+		intField("shieldThreshold", func(i *IDPIConfig) *int { return &i.ShieldThreshold }),
 	},
 }
 
@@ -523,12 +508,7 @@ var profilesFields = fieldTable[ProfilesConfig]{
 	fields: []fieldSpec[ProfilesConfig]{
 		stringField("baseDir", func(p *ProfilesConfig) *string { return &p.BaseDir }),
 		stringField("defaultProfile", func(p *ProfilesConfig) *string { return &p.DefaultProfile }),
-		checkedIntPtrField("quarantineKeep", func(p *ProfilesConfig) **int { return &p.QuarantineKeep }, func(path string, n int) error {
-			if n < 0 {
-				return fmt.Errorf("%s must be >= 0 (0 keeps every quarantined profile)", path)
-			}
-			return nil
-		}),
+		intPtrField("quarantineKeep", func(p *ProfilesConfig) **int { return &p.QuarantineKeep }),
 	},
 }
 
