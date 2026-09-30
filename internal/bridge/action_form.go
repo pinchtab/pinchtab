@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/pinchtab/pinchtab/internal/readiness"
 	"time"
 
 	"github.com/chromedp/chromedp"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 )
 
 const checkableStateJS = `function() {
@@ -112,25 +113,7 @@ func checkUncheck(ctx context.Context, req ActionRequest, wantChecked bool) (map
 		return nil, NewInvalidActionRequestError("need selector, ref, or nodeId")
 	}
 
-	var objectID string
-	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		var result json.RawMessage
-		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
-			"backendNodeId": nodeID,
-		}, &result); err != nil {
-			return err
-		}
-		var resolved struct {
-			Object struct {
-				ObjectID string `json:"objectId"`
-			} `json:"object"`
-		}
-		if err := json.Unmarshal(result, &resolved); err != nil {
-			return err
-		}
-		objectID = resolved.Object.ObjectID
-		return nil
-	}))
+	objectID, err := bridgecdpops.ResolveNodeObjectID(ctx, nodeID)
 	if err != nil {
 		return nil, err
 	}

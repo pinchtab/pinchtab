@@ -181,7 +181,6 @@ const moduleGoFileFloor = 400
 // knew only the string literal would read as a whole-module guard while every
 // typed call site went unchecked.
 var mainWorldResolvers = map[string]string{
-	"internal/bridge/action_form.go":      "form fill operates on an already-chosen field",
 	"internal/bridge/action_pointer.go":   "flyout-item click acts on an already-chosen node",
 	"internal/bridge/cdpops/frame_dom.go": "ResolveNodeObjectID serves cdpops element and pointer ops on an already-chosen node",
 }
