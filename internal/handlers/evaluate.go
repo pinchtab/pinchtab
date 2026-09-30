@@ -40,9 +40,8 @@ func (h *Handlers) HandleEvaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
+	tCtx, tCancel := httpx.WithClientTimeout(r.Context(), ctx, h.Config.ActionTimeout)
 	defer tCancel()
-	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
 	slog.Warn("evaluate",
 		"tabId", req.TabID,

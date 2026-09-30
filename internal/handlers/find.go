@@ -74,9 +74,8 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 	// Bound the snapshot/match work with the shared action timeout + client
 	// disconnect cancel, matching the other read handlers (this path previously
 	// ran the matcher on the raw request context with no ActionTimeout).
-	tCtx, cancel := context.WithTimeout(ctxTab, h.Config.ActionTimeout)
+	tCtx, cancel := httpx.WithClientTimeout(r.Context(), ctxTab, h.Config.ActionTimeout)
 	defer cancel()
-	go httpx.CancelOnClientDone(r.Context(), cancel)
 
 	nodes, serr := h.acquireFindNodes(tCtx, resolvedTabID)
 	if serr != nil {

@@ -156,9 +156,8 @@ func (h *Handlers) auditPage(clientCtx context.Context, url string, opts audit.P
 	// Paint metrics only fire on visible pages.
 	_ = h.Bridge.FocusTab(tabID)
 
-	cCtx, cCancel := context.WithTimeout(tabCtx, auditCollectTimeout)
+	cCtx, cCancel := httpx.WithClientTimeout(clientCtx, tabCtx, auditCollectTimeout)
 	defer cCancel()
-	go httpx.CancelOnClientDone(clientCtx, cCancel)
 
 	// Let late subresources (async fetches, images) land before collecting.
 	_, _ = observe.WaitForQuietWindow(cCtx, 500*time.Millisecond, 5*time.Second)

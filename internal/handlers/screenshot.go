@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -65,19 +66,22 @@ func parseScreenshotRequest(r *http.Request) screenshotRequest {
 
 // @Endpoint GET /screenshot
 func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
-	if !h.ensureBrowserOrRespond(w, h.Config) {
+	req := parseScreenshotRequest(r)
+	effectiveCfg, _, ok := h.resolveReadRouting(w, r, req.tabID, "screenshot", browsers.ShapeVisual)
+	if !ok {
+		return
+	}
+	if !h.ensureBrowserOrRespond(w, effectiveCfg) {
 		return
 	}
 
-	req := parseScreenshotRequest(r)
-
-	resolvedTabID, tCtx, cancel, ok := h.resolveBinaryReadContext(w, r, req.tabID, h.Config.ActionTimeout)
+	resolvedTabID, tCtx, cancel, ok := h.resolveBinaryReadContext(w, r, req.tabID, effectiveCfg.ActionTimeout)
 	if !ok {
 		return
 	}
 	defer cancel()
 
-	if req.noAnimations && !h.Config.NoAnimations {
+	if req.noAnimations && !effectiveCfg.NoAnimations {
 		if err := bridge.DisableAnimationsOnce(tCtx); err != nil {
 			httpx.Error(w, 500, fmt.Errorf("disable animations: %w", err))
 			return

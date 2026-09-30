@@ -60,9 +60,8 @@ func (h *Handlers) handleDialogAction(w http.ResponseWriter, r *http.Request, ct
 		return
 	}
 
-	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
+	tCtx, tCancel := httpx.WithClientTimeout(r.Context(), ctx, h.Config.ActionTimeout)
 	defer tCancel()
-	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
 	result, err := bridge.HandlePendingDialog(tCtx, tabID, dm, accept, promptText)
 	if err != nil {

@@ -174,9 +174,8 @@ func (h *Handlers) renderPageHTML(clientCtx context.Context, url string, cfg *co
 		return "", h.documentNetError(tabID, url)
 	}
 
-	cCtx, cCancel := context.WithTimeout(tabCtx, scrapeRenderTimeout)
+	cCtx, cCancel := httpx.WithClientTimeout(clientCtx, tabCtx, scrapeRenderTimeout)
 	defer cCancel()
-	go httpx.CancelOnClientDone(clientCtx, cCancel)
 
 	// Let JS rendering and late subresources land before reading the DOM.
 	_, _ = observe.WaitForQuietWindow(cCtx, 500*time.Millisecond, 5*time.Second)

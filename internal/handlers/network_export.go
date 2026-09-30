@@ -113,9 +113,8 @@ func (h *Handlers) HandleNetworkExport(w http.ResponseWriter, r *http.Request) {
 	redactHeaders := r.URL.Query().Get("redact") != "false"
 	output := r.URL.Query().Get("output")
 
-	fetchCtx, fetchCancel := context.WithTimeout(ec.tabCtx, h.Config.ActionTimeout)
+	fetchCtx, fetchCancel := httpx.WithClientTimeout(r.Context(), ec.tabCtx, h.Config.ActionTimeout)
 	defer fetchCancel()
-	go httpx.CancelOnClientDone(r.Context(), fetchCancel)
 
 	enc := ec.factory("PinchTab", h.version())
 

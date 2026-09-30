@@ -47,8 +47,7 @@ func (h *Handlers) resolveReadContext(w http.ResponseWriter, r *http.Request, ta
 		return "", nil, nil, false
 	}
 
-	tCtx, tCancel := context.WithTimeout(ctx, actionTimeout)
-	go httpx.CancelOnClientDone(r.Context(), tCancel)
+	tCtx, tCancel := httpx.WithClientTimeout(r.Context(), ctx, actionTimeout)
 	return resolvedTabID, tCtx, tCancel, true
 }
 
@@ -61,8 +60,7 @@ func (h *Handlers) resolveBinaryReadContext(w http.ResponseWriter, r *http.Reque
 		return "", nil, nil, false
 	}
 
-	tCtx, tCancel := context.WithTimeout(ctx, actionTimeout)
-	go httpx.CancelOnClientDone(r.Context(), tCancel)
+	tCtx, tCancel := httpx.WithClientTimeout(r.Context(), ctx, actionTimeout)
 	return resolvedTabID, tCtx, tCancel, true
 }
 

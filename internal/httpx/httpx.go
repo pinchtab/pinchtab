@@ -274,10 +274,16 @@ func SanitizeErrorMessage(message string) string {
 	return message
 }
 
-// CancelOnClientDone cancels the given cancel func when the HTTP client disconnects.
-func CancelOnClientDone(reqCtx context.Context, cancel context.CancelFunc) {
-	<-reqCtx.Done()
-	cancel()
+// WithClientTimeout derives a context from parent that ends after d or when
+// client (the request context) ends, whichever comes first. The returned cancel
+// also detaches the client watch, so no goroutine outlives the handler.
+func WithClientTimeout(client, parent context.Context, d time.Duration) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(parent, d)
+	stop := context.AfterFunc(client, cancel)
+	return ctx, func() {
+		stop()
+		cancel()
+	}
 }
 
 // ExtendWriteDeadline pushes the connection's write deadline d into the

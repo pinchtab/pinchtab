@@ -98,9 +98,8 @@ func (h *Handlers) inspectElement(w http.ResponseWriter, r *http.Request, tabID 
 	}
 	defer h.armIdleLifecycle(resolvedTabID)
 
-	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
+	tCtx, tCancel := httpx.WithClientTimeout(r.Context(), ctx, h.Config.ActionTimeout)
 	defer tCancel()
-	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
 	vocabBefore := h.tabVocab(resolvedTabID)
 	result, err := fn(tCtx, resolvedTabID)

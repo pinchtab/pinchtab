@@ -72,9 +72,8 @@ func (h *Handlers) HandleExtract(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tCtx, cancel := context.WithTimeout(ctxTab, h.Config.ActionTimeout)
+	tCtx, cancel := httpx.WithClientTimeout(r.Context(), ctxTab, h.Config.ActionTimeout)
 	defer cancel()
-	go httpx.CancelOnClientDone(r.Context(), cancel)
 
 	nodes, vocab, serr := h.acquireExtractNodes(w, tCtx, resolvedTabID)
 	if serr != nil {

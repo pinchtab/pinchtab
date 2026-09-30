@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -107,9 +106,8 @@ func (h *Handlers) HandleSolve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tCtx, tCancel := context.WithTimeout(ctx, timeout)
+	tCtx, tCancel := httpx.WithClientTimeout(r.Context(), ctx, timeout)
 	defer tCancel()
-	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
 	result, err := as.Solve(tCtx, page, executor)
 	if err != nil {

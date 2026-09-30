@@ -441,9 +441,8 @@ func (h *Handlers) executeNavigate(w http.ResponseWriter, r *http.Request, req n
 	// timer; the next read/action will re-arm.
 	h.cancelIdleLifecycle(resolvedTabID)
 
-	tCtx, tCancel := context.WithTimeout(ctx, navTimeout)
+	tCtx, tCancel := httpx.WithClientTimeout(r.Context(), ctx, navTimeout)
 	defer tCancel()
-	go httpx.CancelOnClientDone(r.Context(), tCancel)
 	h.runNavigate(w, r, navExec{
 		tabID:          resolvedTabID,
 		ctx:            tCtx,
@@ -716,9 +715,8 @@ func (h *Handlers) navigateNewTabBrowser(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	tCtx, tCancel := context.WithTimeout(newCtx, opts.NavTimeout)
+	tCtx, tCancel := httpx.WithClientTimeout(r.Context(), newCtx, opts.NavTimeout)
 	defer tCancel()
-	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
 	h.runNavigate(w, r, navExec{
 		tabID:          newTabID,

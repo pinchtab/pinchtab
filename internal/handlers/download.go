@@ -65,9 +65,8 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tCtx, tCancel := context.WithTimeout(r.Context(), 30*time.Second)
+	tCtx, tCancel := httpx.WithClientTimeout(r.Context(), r.Context(), 30*time.Second)
 	defer tCancel()
-	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
 	requestGuard := newDownloadRequestGuard(validator, h.Config.MaxRedirects)
 	browserCtx := h.Bridge.BrowserContext()

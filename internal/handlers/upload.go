@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -193,9 +192,8 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tCtx, tCancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
+	tCtx, tCancel := httpx.WithClientTimeout(r.Context(), ctx, h.Config.ActionTimeout)
 	defer tCancel()
-	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
 	nodeID, err := h.Bridge.ResolveSelectorToNodeID(tCtx, req.Selector, h.Bridge.GetRefCache(resolvedTabID), h.selectorFrameID(resolvedTabID))
 	if err != nil {

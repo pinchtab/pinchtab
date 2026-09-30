@@ -427,9 +427,8 @@ func (h *Handlers) HandleFrame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tCtx, cancel := context.WithTimeout(ctx, h.Config.ActionTimeout)
+	tCtx, cancel := httpx.WithClientTimeout(r.Context(), ctx, h.Config.ActionTimeout)
 	defer cancel()
-	go httpx.CancelOnClientDone(r.Context(), cancel)
 
 	vocabBefore := h.tabVocab(resolvedTabID)
 	scope, resetToMain, err := h.resolveFrameScope(tCtx, resolvedTabID, req.Target)

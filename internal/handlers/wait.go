@@ -180,9 +180,8 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 	}
 
 	timeout := req.resolvedTimeout()
-	tCtx, tCancel := context.WithTimeout(ctx, timeout)
+	tCtx, tCancel := httpx.WithClientTimeout(r.Context(), ctx, timeout)
 	defer tCancel()
-	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
 	var js string
 	var matchLabel string

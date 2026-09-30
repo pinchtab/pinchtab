@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -51,15 +52,17 @@ func (h *Handlers) HandlePDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.ensureBrowserOrRespond(w, h.Config) {
+	tabID := r.URL.Query().Get("tabId")
+	output := r.URL.Query().Get("output")
+	effectiveCfg, _, ok := h.resolveReadRouting(w, r, tabID, "pdf", browsers.ShapeVisual)
+	if !ok {
+		return
+	}
+	if !h.ensureBrowserOrRespond(w, effectiveCfg) {
 		return
 	}
 
-	tabID := r.URL.Query().Get("tabId")
-	output := r.URL.Query().Get("output")
-	h.recordReadRequest(r, "pdf", tabID)
-
-	_, tCtx, cancel, ok := h.resolveBinaryReadContext(w, r, tabID, h.Config.ActionTimeout)
+	_, tCtx, cancel, ok := h.resolveBinaryReadContext(w, r, tabID, effectiveCfg.ActionTimeout)
 	if !ok {
 		return
 	}

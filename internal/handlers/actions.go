@@ -566,9 +566,8 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tCtx, tCancel := context.WithTimeout(ctx, actionTimeout)
+	tCtx, tCancel := httpx.WithClientTimeout(r.Context(), ctx, actionTimeout)
 	defer tCancel()
-	go httpx.CancelOnClientDone(r.Context(), tCancel)
 
 	if req.DismissKnownInterstitials {
 		if _, err := h.dismissKnownInterstitials(tCtx, resolvedTabID); err != nil {
@@ -649,8 +648,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 
 		// tCtx may be expired here. Keep the live tab context as the parent and
 		// give post-state observation its own bounded, client-cancelable child.
-		postCtx, postCancel := context.WithTimeout(ctx, postSubmitPollTimeout)
-		go httpx.CancelOnClientDone(r.Context(), postCancel)
+		postCtx, postCancel := httpx.WithClientTimeout(r.Context(), ctx, postSubmitPollTimeout)
 		postState, postErr := h.pollSubmitPostState(postCtx, resolvedTabID, submitBefore, dispatch, actionTimedOut)
 		postCancel()
 		if postErr != nil {
