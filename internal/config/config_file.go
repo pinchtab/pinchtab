@@ -109,179 +109,47 @@ func compareSemver(a, b [3]int) int {
 
 // DefaultFileConfig returns a FileConfig with sensible defaults (nested format).
 func DefaultFileConfig() FileConfig {
-	start := 9868
-	end := 9968
-	quarantineKeep := DefaultProfileQuarantineKeep
-	restartMaxRestarts := 20
-	restartInitBackoffSec := 2
-	restartMaxBackoffSec := 60
-	restartStableAfterSec := 300
-	maxTabs := 20
-	captureAllowActivation := true
-	allowEvaluate := false
-	allowMacro := false
-	allowScreencast := false
-	allowDownload := false
-	allowCookies := false
-	allowNetworkIntercept := false
-	allowMemory := false
-	downloadMaxBytes := DefaultDownloadMaxBytes
-	memorySnapshotMaxBytes := DefaultMemorySnapshotMaxBytes
-	allowUpload := false
-	allowClipboard := false
-	allowStateExport := false
-	uploadMaxRequestBytes := DefaultUploadMaxRequestBytes
-	uploadMaxFiles := DefaultUploadMaxFiles
-	uploadMaxFileBytes := DefaultUploadMaxFileBytes
-	uploadMaxTotalBytes := DefaultUploadMaxTotalBytes
-	maxRedirects := -1
-	trustLoopbackProxy := false
-	attachEnabled := false
-	attachForwardProxyAuth := false
-	activityEnabled := true
-	activitySessionIdleSec := 1800
-	activityRetentionDays := 30
-	activityDashboardEvents := false
-	activityServerEvents := false
-	activityBridgeEvents := false
-	activityOrchestratorEvents := false
-	activitySchedulerEvents := false
-	activityMCPEvents := false
-	activityOtherEvents := false
-	dashboardSessionPersist := true
-	dashboardSessionIdleSec := 7 * 24 * 60 * 60
-	dashboardSessionMaxLifetimeSec := 7 * 24 * 60 * 60
-	dashboardSessionElevationWindowSec := 15 * 60
-	dashboardSessionPersistElevationAcrossRestart := false
-	dashboardSessionRequireElevation := false
-	// Locals only so the shared defaults can be pointer-wrapped; the values come
-	// from defaultAutoSolverConfig, not from a second transcription of them.
-	autoSolver := defaultAutoSolverConfig()
-	return FileConfig{
-		Schema:        CurrentConfigSchemaURL(),
-		ConfigVersion: CurrentConfigVersion,
-		Server: ServerConfig{
-			Port:     defaultPort,
-			Bind:     "127.0.0.1",
-			StateDir: userConfigDir(),
-		},
-		Browser: BrowserConfig{
-			// BrowserVersion is left unset so the persona probes the launched binary
-			// for its real version; a default here would pin it and the probe would
-			// never fire. TestTheConfigDefaultsLeaveBrowserVersionUnset guards this.
-			ExtensionPaths: []string{defaultExtensionsDir(userConfigDir())},
-		},
-		Browsers: BrowsersConfig{
-			Default: DefaultBrowserForSystem(),
-		},
-		InstanceDefaults: InstanceDefaultsConfig{
-			Mode:                   "headless",
-			MaxTabs:                &maxTabs,
-			CaptureAllowActivation: &captureAllowActivation,
-			StealthLevel:           "light",
-			TabEvictionPolicy:      "close_lru",
-		},
-		Security: SecurityConfig{
-			AllowEvaluate:          &allowEvaluate,
-			AllowMacro:             &allowMacro,
-			AllowScreencast:        &allowScreencast,
-			AllowDownload:          &allowDownload,
-			AllowCookies:           &allowCookies,
-			AllowNetworkIntercept:  &allowNetworkIntercept,
-			AllowMemory:            &allowMemory,
-			DownloadAllowedDomains: []string{},
-			DownloadMaxBytes:       &downloadMaxBytes,
-			MemorySnapshotMaxBytes: &memorySnapshotMaxBytes,
-			AllowUpload:            &allowUpload,
-			AllowClipboard:         &allowClipboard,
-			AllowStateExport:       &allowStateExport,
-			UploadMaxRequestBytes:  &uploadMaxRequestBytes,
-			UploadMaxFiles:         &uploadMaxFiles,
-			UploadMaxFileBytes:     &uploadMaxFileBytes,
-			UploadMaxTotalBytes:    &uploadMaxTotalBytes,
-			MaxRedirects:           &maxRedirects,
-			TrustLoopbackProxy:     &trustLoopbackProxy,
-			Attach: AttachConfig{
-				Enabled:          &attachEnabled,
-				AllowHosts:       []string{"127.0.0.1", "localhost", "::1"},
-				AllowSchemes:     []string{"ws", "wss", "http", "https"},
-				ForwardProxyAuth: &attachForwardProxyAuth,
-			},
-			IDPI: &IDPIConfig{
-				Enabled:        true,
-				StrictMode:     true,
-				ScanContent:    true,
-				WrapContent:    true,
-				ScanTimeoutSec: 5,
-			},
-		},
-		// BaseDir is deliberately empty. Pre-filling it with an absolute
-		// userConfigDir() path did two things: it baked a host home directory into any
-		// config that got written, and it made finalizeProfileConfig's
-		// filepath.Join(StateDir, "profiles") fallback unreachable, so server.stateDir
-		// could never relocate profiles. Left empty, the fallback is the live path and
-		// resolves to the same place for a default install, because StateDir itself
-		// defaults to userConfigDir().
-		Profiles: ProfilesConfig{
-			DefaultProfile: "default",
-			QuarantineKeep: &quarantineKeep,
-		},
-		MultiInstance: MultiInstanceConfig{
-			Strategy:          "always-on",
-			AllocationPolicy:  "fcfs",
-			InstancePortStart: &start,
-			InstancePortEnd:   &end,
-			Restart: MultiInstanceRestartConfig{
-				MaxRestarts:    &restartMaxRestarts,
-				InitBackoffSec: &restartInitBackoffSec,
-				MaxBackoffSec:  &restartMaxBackoffSec,
-				StableAfterSec: &restartStableAfterSec,
-			},
-		},
-		Timeouts: TimeoutsConfig{
-			ActionSec:   30,
-			NavigateSec: 60,
-			ShutdownSec: 10,
-			WaitNavMs:   1000,
-		},
-		Observability: ObservabilityFileConfig{
-			Activity: ActivityFileConfig{
-				Enabled:        &activityEnabled,
-				SessionIdleSec: &activitySessionIdleSec,
-				RetentionDays:  &activityRetentionDays,
-				StateDir:       "",
-				Events: ActivityEventsFileConfig{
-					Dashboard:    &activityDashboardEvents,
-					Server:       &activityServerEvents,
-					Bridge:       &activityBridgeEvents,
-					Orchestrator: &activityOrchestratorEvents,
-					Scheduler:    &activitySchedulerEvents,
-					MCP:          &activityMCPEvents,
-					Other:        &activityOtherEvents,
-				},
-			},
-		},
-		Sessions: SessionsFileConfig{
-			Dashboard: DashboardSessionFileConfig{
-				Persist:                       &dashboardSessionPersist,
-				IdleTimeoutSec:                &dashboardSessionIdleSec,
-				MaxLifetimeSec:                &dashboardSessionMaxLifetimeSec,
-				ElevationWindowSec:            &dashboardSessionElevationWindowSec,
-				PersistElevationAcrossRestart: &dashboardSessionPersistElevationAcrossRestart,
-				RequireElevation:              &dashboardSessionRequireElevation,
-			},
-		},
-		AutoSolver: AutoSolverFileConfig{
-			Enabled:           &autoSolver.Enabled,
-			AutoTrigger:       &autoSolver.AutoTrigger,
-			TriggerOnNavigate: &autoSolver.TriggerOnNavigate,
-			TriggerOnAction:   &autoSolver.TriggerOnAction,
-			MaxAttempts:       &autoSolver.MaxAttempts,
-			SolverTimeoutSec:  &autoSolver.SolverTimeoutSec,
-			RetryBaseDelayMs:  &autoSolver.RetryBaseDelayMs,
-			RetryMaxDelayMs:   &autoSolver.RetryMaxDelayMs,
-			Solvers:           autoSolver.Solvers,
-			LLMFallback:       &autoSolver.LLMFallback,
-		},
+	return starterFileConfig(FileConfigFromRuntime(defaultRuntimeConfig()))
+}
+
+// starterFileConfig shapes a projection of the runtime defaults into the file
+// `config init` writes. Knobs the starter file leaves unset stay nil so they keep
+// following the built-in default, and IDPI is stated explicitly even though a file
+// that omits it boots with IDPI off.
+func starterFileConfig(fc FileConfig) FileConfig {
+	fc.ConfigVersion = CurrentConfigVersion
+
+	fc.Server.RetainNetworkBodies = nil
+	fc.Server.RetainNetworkBodyMaxBytes = nil
+	fc.Server.TrustProxyHeaders = nil
+
+	fc.InstanceDefaults.NoRestore = nil
+	fc.InstanceDefaults.BlockImages = nil
+	fc.InstanceDefaults.BlockMedia = nil
+	fc.InstanceDefaults.BlockAds = nil
+	fc.InstanceDefaults.MaxParallelTabs = nil
+	fc.InstanceDefaults.NoAnimations = nil
+	fc.InstanceDefaults.Humanize = nil
+	fc.InstanceDefaults.DialogAutoAccept = nil
+
+	fc.Security.AllowFileScheme = nil
+	fc.Security.IDPI = &IDPIConfig{
+		Enabled:        true,
+		StrictMode:     true,
+		ScanContent:    true,
+		WrapContent:    true,
+		ScanTimeoutSec: 5,
 	}
+
+	// BaseDir is deliberately empty. Pre-filling it with an absolute
+	// userConfigDir() path did two things: it baked a host home directory into any
+	// config that got written, and it made finalizeProfileConfig's
+	// filepath.Join(StateDir, "profiles") fallback unreachable, so server.stateDir
+	// could never relocate profiles. Left empty, the fallback is the live path and
+	// resolves to the same place for a default install, because StateDir itself
+	// defaults to userConfigDir().
+	fc.Profiles.BaseDir = ""
+
+	fc.Sessions.Agent = AgentSessionFileConfig{}
+	return fc
 }

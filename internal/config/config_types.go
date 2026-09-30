@@ -14,8 +14,8 @@ const defaultPort = "9867"
 type RuntimeConfig struct {
 	Bind              string
 	Port              string
-	InstancePortStart int // Starting port for instances (default 9868)
-	InstancePortEnd   int // Ending port for instances (default 9968)
+	InstancePortStart int
+	InstancePortEnd   int
 	Token             string
 	StateDir          string
 	TrustProxyHeaders bool   // Only trust X-Forwarded-*/Forwarded headers when behind a trusted reverse proxy

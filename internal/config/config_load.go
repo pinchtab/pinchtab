@@ -177,13 +177,28 @@ func defaultAutoSolverConfig() AutoSolverConfig {
 	}
 }
 
-func LoadConfig() (*RuntimeConfig, []LoadDiagnostic, error) {
-	cfg := &RuntimeConfig{
+const (
+	DefaultInstancePortStart  = 9868
+	DefaultInstancePortEnd    = 9968
+	DefaultMaxTabs            = 20
+	DefaultStrategy           = "always-on"
+	DefaultAllocationPolicy   = "fcfs"
+	DefaultRestartMaxRestarts = 20
+	DefaultRestartInitBackoff = 2 * time.Second
+	DefaultRestartMaxBackoff  = 60 * time.Second
+	DefaultRestartStableAfter = 5 * time.Minute
+	DefaultActionTimeout      = 30 * time.Second
+	DefaultNavigateTimeout    = 60 * time.Second
+	DefaultShutdownTimeout    = 10 * time.Second
+	DefaultWaitNavDelay       = 1 * time.Second
+)
+
+func defaultRuntimeConfig() *RuntimeConfig {
+	return &RuntimeConfig{
 		Bind:              "127.0.0.1",
 		Port:              defaultPort,
-		InstancePortStart: 9868,
-		InstancePortEnd:   9968,
-		Token:             os.Getenv("PINCHTAB_TOKEN"),
+		InstancePortStart: DefaultInstancePortStart,
+		InstancePortEnd:   DefaultInstancePortEnd,
 		StateDir:          userConfigDir(),
 		CookieSecure:      nil,
 
@@ -196,7 +211,7 @@ func LoadConfig() (*RuntimeConfig, []LoadDiagnostic, error) {
 		AllowMemory:               false,
 		AllowFileScheme:           false,
 		RetainNetworkBodies:       false,
-		RetainNetworkBodyMaxBytes: 256 * 1024,
+		RetainNetworkBodyMaxBytes: DefaultRetainNetworkBodyMaxBytes,
 		AllowedDomains:            nil,
 		DownloadAllowedDomains:    nil,
 		DownloadMaxBytes:          DefaultDownloadMaxBytes,
@@ -221,7 +236,7 @@ func LoadConfig() (*RuntimeConfig, []LoadDiagnostic, error) {
 		BlockImages:            false,
 		BlockMedia:             false,
 		BlockAds:               false,
-		MaxTabs:                20,
+		MaxTabs:                DefaultMaxTabs,
 		MaxParallelTabs:        0,
 		DefaultBrowser:         DefaultBrowserForSystem(),
 		BrowserBinary:          "", // Set via config.json only
@@ -238,17 +253,17 @@ func LoadConfig() (*RuntimeConfig, []LoadDiagnostic, error) {
 		TabCloseDelay:          5 * time.Minute,
 		TabRestore:             false,
 
-		ActionTimeout:   30 * time.Second,
-		NavigateTimeout: 60 * time.Second,
-		ShutdownTimeout: 10 * time.Second,
-		WaitNavDelay:    1 * time.Second,
+		ActionTimeout:   DefaultActionTimeout,
+		NavigateTimeout: DefaultNavigateTimeout,
+		ShutdownTimeout: DefaultShutdownTimeout,
+		WaitNavDelay:    DefaultWaitNavDelay,
 
-		Strategy:           "always-on",
-		AllocationPolicy:   "fcfs",
-		RestartMaxRestarts: 20,
-		RestartInitBackoff: 2 * time.Second,
-		RestartMaxBackoff:  60 * time.Second,
-		RestartStableAfter: 5 * time.Minute,
+		Strategy:           DefaultStrategy,
+		AllocationPolicy:   DefaultAllocationPolicy,
+		RestartMaxRestarts: DefaultRestartMaxRestarts,
+		RestartInitBackoff: DefaultRestartInitBackoff,
+		RestartMaxBackoff:  DefaultRestartMaxBackoff,
+		RestartStableAfter: DefaultRestartStableAfter,
 
 		AttachEnabled:      false,
 		AttachAllowHosts:   []string{"127.0.0.1", "localhost", "::1"},
@@ -282,6 +297,11 @@ func LoadConfig() (*RuntimeConfig, []LoadDiagnostic, error) {
 
 		AutoSolver: defaultAutoSolverConfig(),
 	}
+}
+
+func LoadConfig() (*RuntimeConfig, []LoadDiagnostic, error) {
+	cfg := defaultRuntimeConfig()
+	cfg.Token = os.Getenv("PINCHTAB_TOKEN")
 
 	// Deferred, not called here, because the profile paths are DERIVED from
 	// server.stateDir and the file that carries stateDir has not been read yet.

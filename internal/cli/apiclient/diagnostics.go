@@ -27,7 +27,7 @@ func CheckServerAndGuide(client *http.Client, base, token string) bool {
 			fmt.Fprintln(os.Stderr, "To start the server")
 			fmt.Fprintln(os.Stderr, "  pinchtab # Run in foreground (recommended for beginners)")
 			fmt.Fprintln(os.Stderr, "  pinchtab & # Run in background")
-			fmt.Fprintln(os.Stderr, "  pinchtab server --port 9868 # Use different port")
+			fmt.Fprintln(os.Stderr, "  pinchtab server --port <port> # Use a different port")
 			fmt.Fprintln(os.Stderr)
 			fmt.Fprintln(os.Stderr, "Then try your command again")
 			fmt.Fprintf(os.Stderr, "  %s\n", strings.Join(os.Args, " "))

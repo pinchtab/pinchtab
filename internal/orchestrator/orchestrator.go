@@ -176,7 +176,7 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 		internalToken: generateInternalToken(),
 		bindings:      NewBindings(nil),
 		tabsCache:     NewTabsCache(0, nil),
-		portAllocator: NewPortAllocator(9868, 9968),
+		portAllocator: NewPortAllocator(config.DefaultInstancePortStart, config.DefaultInstancePortEnd),
 		idMgr:         ids.NewManager(),
 		shutdownCh:    make(chan struct{}),
 	}

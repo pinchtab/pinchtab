@@ -1,19 +1,20 @@
 package config
 
 const (
-	DefaultDownloadMaxBytes       = 20 << 20
-	MaxDownloadMaxBytes           = 100 << 20
-	MaxRetainNetworkBodyMaxBytes  = 10 << 20
-	DefaultUploadMaxRequestBytes  = 10 << 20
-	MaxUploadMaxRequestBytes      = 100 << 20
-	DefaultUploadMaxFiles         = 8
-	MaxUploadMaxFiles             = 32
-	DefaultUploadMaxFileBytes     = 5 << 20
-	MaxUploadMaxFileBytes         = 25 << 20
-	DefaultUploadMaxTotalBytes    = 10 << 20
-	MaxUploadMaxTotalBytes        = 100 << 20
-	DefaultMemorySnapshotMaxBytes = 512 << 20
-	MaxMemorySnapshotMaxBytes     = 4 << 30
+	DefaultDownloadMaxBytes          = 20 << 20
+	MaxDownloadMaxBytes              = 100 << 20
+	DefaultRetainNetworkBodyMaxBytes = 256 << 10
+	MaxRetainNetworkBodyMaxBytes     = 10 << 20
+	DefaultUploadMaxRequestBytes     = 10 << 20
+	MaxUploadMaxRequestBytes         = 100 << 20
+	DefaultUploadMaxFiles            = 8
+	MaxUploadMaxFiles                = 32
+	DefaultUploadMaxFileBytes        = 5 << 20
+	MaxUploadMaxFileBytes            = 25 << 20
+	DefaultUploadMaxTotalBytes       = 10 << 20
+	MaxUploadMaxTotalBytes           = 100 << 20
+	DefaultMemorySnapshotMaxBytes    = 512 << 20
+	MaxMemorySnapshotMaxBytes        = 4 << 30
 )
 
 func clampPositiveLimit(value, fallback, max int) int {

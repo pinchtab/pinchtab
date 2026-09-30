@@ -244,3 +244,22 @@ func TestNoSolverNameLiteralsInThisPackage(t *testing.T) {
 		t.Errorf("solver names must come from internal/autosolver's constants: %v", offenders)
 	}
 }
+
+func TestLoadedDefaultsProjectOntoTheStarterFileConfig(t *testing.T) {
+	clearConfigEnvVars(t)
+	t.Setenv("PINCHTAB_TOKEN", "")
+	t.Setenv("PINCHTAB_CONFIG", filepath.Join(t.TempDir(), "missing.json"))
+	cfg, _, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig with no file: %v", err)
+	}
+
+	loaded := reflect.ValueOf(starterFileConfig(FileConfigFromRuntime(cfg)))
+	starter := reflect.ValueOf(DefaultFileConfig())
+	for i := 0; i < loaded.NumField(); i++ {
+		section := loaded.Type().Field(i).Name
+		if got, want := loaded.Field(i).Interface(), starter.Field(i).Interface(); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: loaded defaults project to %+v, DefaultFileConfig has %+v", section, got, want)
+		}
+	}
+}

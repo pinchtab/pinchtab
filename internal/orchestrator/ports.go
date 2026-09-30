@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 var portAvailableFunc = isPortAvailableInt
@@ -22,8 +24,8 @@ type PortAllocator struct {
 func NewPortAllocator(start, end int) *PortAllocator {
 	if start < 1 || end < 1 || start > end {
 		slog.Error("invalid port range", "start", start, "end", end)
-		start = 9868
-		end = 9968
+		start = config.DefaultInstancePortStart
+		end = config.DefaultInstancePortEnd
 	}
 
 	return &PortAllocator{
