@@ -33,7 +33,7 @@ if [ -n "$SECURE_WIDE_INST_ID" ] && wait_for_orchestrator_instance_status "${E2E
 
   secure_post "/instances/${SECURE_WIDE_INST_ID}/tabs/open" "{\"url\":\"${PIVOT_URL}\"}"
   assert_ok "widened instance can open pivot-target"
-  WIDE_TAB_ID=$(echo "$RESULT" | jq -r '.tabId // empty')
+  WIDE_TAB_ID=$(get_tab_id)
   if [ -n "$WIDE_TAB_ID" ]; then
     secure_get "/tabs/${WIDE_TAB_ID}/text"
     assert_ok "widened instance text works on pivot-target"

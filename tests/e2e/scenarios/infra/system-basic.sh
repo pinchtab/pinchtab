@@ -158,7 +158,7 @@ fi
 
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "navigate"
-EXTENSION_TAB_ID=$(echo "$RESULT" | jq -r '.tabId // empty')
+EXTENSION_TAB_ID=$(get_tab_id)
 pt_post "/tabs/${EXTENSION_TAB_ID}/evaluate" '{"expression":"document.documentElement.getAttribute(\"data-pinchtab-test-extension\")"}'
 assert_ok "evaluate extension marker"
 assert_result_eq ".result" "loaded" "configured extension executed on the default instance"

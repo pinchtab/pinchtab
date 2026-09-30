@@ -19,7 +19,7 @@ actions_navigate() {
   assert_ok "navigate"
 
   local tab_id
-  tab_id=$(echo "$RESULT" | jq -r '.tabId // empty')
+  tab_id=$(get_tab_id)
   if [ -n "$tab_id" ] && [ "$tab_id" != "null" ]; then
     ACTIONS_TAB_ID="$tab_id"
   fi

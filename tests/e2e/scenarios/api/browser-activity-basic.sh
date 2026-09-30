@@ -107,7 +107,7 @@ assert_ok "navigate with browser=${EXPECTED_BROWSER}"
 NAV_ROUTE=$(echo "$RESULT" | jq -c '.route')
 assert_requested_provider "$NAV_ROUTE" "navigate response"
 assert_route_metadata "$NAV_ROUTE" "navigate response"
-NAV_TAB=$(echo "$RESULT" | jq -r '.tabId // empty')
+NAV_TAB=$(get_tab_id)
 
 if wait_until "activity_event_landed /navigate '$BEFORE_TS'" "$ACTIVITY_TIMEOUT"; then
   assert_json_eq "$ACTIVITY_EVENT" '.method' "POST" "activity event method=POST"
@@ -124,7 +124,7 @@ start_test "activity metadata: text request records browser in activity"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/form.html\"}"
 assert_ok "navigate to form"
-TEXT_TAB=$(echo "$RESULT" | jq -r '.tabId // empty')
+TEXT_TAB=$(get_tab_id)
 
 BEFORE_TS=$(newest_activity_event /text | jq -r '.timestamp // empty')
 

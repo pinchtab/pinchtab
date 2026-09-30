@@ -68,7 +68,7 @@ start_test "stealth-cli: new navigation keeps stealth capability contract"
 
 pt_ok nav "${FIXTURES_URL}/bot-detect.html" --new-tab --json
 assert_output_json "nav --new-tab returns JSON"
-TAB_ID=$(echo "$PT_OUT" | jq -r '.tabId // empty')
+TAB_ID=$(get_tab_id "$PT_OUT")
 
 if [ -n "$TAB_ID" ]; then
   echo -e "  ${GREEN}✓${NC} created tab returned id"

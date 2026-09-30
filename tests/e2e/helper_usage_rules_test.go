@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-var inlineTabIDParse = regexp.MustCompile(`jq\s+-r\s+['"]\.tabId['"]`)
+var inlineTabIDParse = regexp.MustCompile(`jq\s+-r\s+['"]\.tabId\b`)
 
 func TestScenariosReadTabIDThroughTheHelper(t *testing.T) {
 	var offenders []string

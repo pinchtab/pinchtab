@@ -43,7 +43,7 @@ TAB_A=$(echo "$PT_OUT" | tr -d '[:space:]')
 NAV_B=$(e2e_curl -s -X POST "${E2E_SERVER}/navigate" \
   -H "Content-Type: application/json" \
   -d "{\"url\":\"${FIXTURES_URL}/drag-drop.html?label=B\",\"newTab\":true}")
-TAB_B=$(echo "$NAV_B" | jq -r '.tabId // empty')
+TAB_B=$(get_tab_id "$NAV_B")
 
 if [ -n "$TAB_A" ] && [ -n "$TAB_B" ] && [ "$TAB_A" != "$TAB_B" ]; then
   pass_assert "two distinct tabs (A=$TAB_A B=$TAB_B)"

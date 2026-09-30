@@ -208,7 +208,7 @@ run_stealth_level_matrix() {
   base_status=""
   pt_post /navigate "{\"url\":\"${FIXTURES_URL}/stealth-capabilities.html\"}"
   assert_ok "navigate baseline capability tab"
-  base_tab_id=$(echo "$RESULT" | jq -r '.tabId // empty')
+  base_tab_id=$(get_tab_id)
   if [ -n "$base_tab_id" ]; then
     pt_get "/stealth/status?tabId=${base_tab_id}"
     base_status="$RESULT"
@@ -227,7 +227,7 @@ run_stealth_level_matrix() {
 
   pt_post /navigate "{\"url\":\"${FIXTURES_URL}/stealth-capabilities.html\",\"newTab\":true}"
   assert_ok "navigate created capability tab"
-  created_tab_id=$(echo "$RESULT" | jq -r '.tabId // empty')
+  created_tab_id=$(get_tab_id)
   if [ -n "$created_tab_id" ] && [ -n "$base_status" ]; then
     pt_get "/stealth/status?tabId=${created_tab_id}"
     created_status="$RESULT"
@@ -565,7 +565,7 @@ full_stealth_checks() {
   pt_post /navigate "{\"url\":\"${FIXTURES_URL}/bot-detect.html\"}"
   assert_ok "navigate to bot-detect fixture (full stealth)"
 
-  TAB_ID=$(echo "$RESULT" | jq -r '.tabId // empty')
+  TAB_ID=$(get_tab_id)
   if [ -n "$TAB_ID" ]; then
     echo -e "  ${GREEN}✓${NC} Got tabId: $TAB_ID"
     ((ASSERTIONS_PASSED++)) || true

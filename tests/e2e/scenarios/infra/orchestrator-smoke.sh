@@ -130,8 +130,8 @@ read_resp "$TAB_OUT2" TAB_RESP2 TAB_CODE2
 rm -f "$TAB_OUT1" "$TAB_OUT2"
 record_assertion "$TAB_CODE1" "open tab on second instance"
 record_assertion "$TAB_CODE2" "open tab on reused instance"
-TAB1=$(echo "$TAB_RESP1" | jq -r '.tabId // .id // empty')
-TAB2=$(echo "$TAB_RESP2" | jq -r '.tabId // .id // empty')
+TAB1=$(get_tab_id "$TAB_RESP1")
+TAB2=$(get_tab_id "$TAB_RESP2")
 
 pt_get /instances/tabs
 assert_ok "aggregate tabs"

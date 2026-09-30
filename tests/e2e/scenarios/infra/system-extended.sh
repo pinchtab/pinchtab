@@ -673,7 +673,7 @@ end_test
 start_test "ghost-chrome: navigate returns tabId"
 ghostchrome_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "ghost-chrome navigate"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId // empty')
+TAB_ID=$(get_tab_id)
 if [ -n "$TAB_ID" ]; then
   echo -e "  ${GREEN}✓${NC} navigate returned tabId=$TAB_ID"
   ((ASSERTIONS_PASSED++)) || true
@@ -715,7 +715,7 @@ start_test "ghost-chrome: click action"
 
 ghostchrome_post /navigate "{\"url\":\"${FIXTURES_URL}/lite-test.html\"}"
 assert_ok "navigate to test page"
-ACTION_TAB=$(echo "$RESULT" | jq -r '.tabId // empty')
+ACTION_TAB=$(get_tab_id)
 
 ghostchrome_get "/snapshot?tabId=${ACTION_TAB}&filter=interactive"
 BUTTON_REF=$(echo "$RESULT" | jq -r '[.nodes[] | select(.role == "button")] | first // empty | .ref // empty')
@@ -768,11 +768,11 @@ start_test "ghost-chrome: multi-tab isolation"
 
 ghostchrome_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "navigate page 1"
-TAB_A=$(echo "$RESULT" | jq -r '.tabId // empty')
+TAB_A=$(get_tab_id)
 
 ghostchrome_post /navigate "{\"url\":\"${FIXTURES_URL}/form.html\"}"
 assert_ok "navigate page 2"
-TAB_B=$(echo "$RESULT" | jq -r '.tabId // empty')
+TAB_B=$(get_tab_id)
 
 if [ "$TAB_A" != "$TAB_B" ]; then
   echo -e "  ${GREEN}✓${NC} different tab IDs: $TAB_A vs $TAB_B"

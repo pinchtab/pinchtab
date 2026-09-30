@@ -41,9 +41,11 @@ check_instance_navigate() {
   landed=$(navigate_landed_url "$url")
 
   local baseline_tab
-  baseline_tab=$(e2e_curl -s -X POST "${E2E_SERVER}/instances/${inst}/tabs/open" \
+  local baseline_resp
+  baseline_resp=$(e2e_curl -s -X POST "${E2E_SERVER}/instances/${inst}/tabs/open" \
     -H "Content-Type: application/json" \
-    -d "{\"url\":\"${FIXTURES_URL}/index.html\"}" | jq -r '.tabId // empty')
+    -d "{\"url\":\"${FIXTURES_URL}/index.html\"}")
+  baseline_tab=$(get_tab_id "$baseline_resp")
   if [ -z "$baseline_tab" ]; then
     fail_assert "open a baseline tab on ${inst}"
     return 0
@@ -58,7 +60,7 @@ check_instance_navigate() {
   pt_ok instance navigate "$inst" "$url"
   assert_output_json "instance navigate prints JSON"
   local tab
-  tab=$(jq -r '.tabId // empty' <<< "$PT_OUT")
+  tab=$(get_tab_id "$PT_OUT")
   if [ -n "$tab" ]; then
     pass_assert "output names the tab: ${tab:0:12}..."
   else

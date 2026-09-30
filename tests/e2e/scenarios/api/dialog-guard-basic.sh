@@ -51,7 +51,7 @@ start_test "dialog guard: a batch whose click opens an alert stops with a dialog
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
 assert_ok "navigate to buttons fixture"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId // .id')
+TAB_ID=$(get_tab_id)
 
 # stopOnError is off, so only the dialog stop can end the run before the
 # third step.

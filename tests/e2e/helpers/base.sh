@@ -44,7 +44,11 @@ ASSERTIONS_SKIPPED="${ASSERTIONS_SKIPPED:-0}"
 TEST_START_TIME="${TEST_START_TIME:-0}"
 
 get_tab_id() {
-  jq -r '.tabId' <<<"${1:-$RESULT}"
+  if [ $# -gt 0 ]; then
+    jq -r '.tabId // empty' <<<"$1"
+  else
+    jq -r '.tabId // empty' <<<"$RESULT"
+  fi
 }
 
 get_time_ms() {

@@ -65,13 +65,13 @@ start_test "Focus tab by ID"
 
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "navigate to index.html"
-TAB_ID_A=$(echo "$RESULT" | jq -r '.tabId // empty')
+TAB_ID_A=$(get_tab_id)
 assert_tab_id "tab A"
 show_tab "TAB_ID_A" "$TAB_ID_A"
 
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/form.html\"}"
 assert_ok "navigate to form.html"
-TAB_ID_B=$(echo "$RESULT" | jq -r '.tabId // empty')
+TAB_ID_B=$(get_tab_id)
 assert_tab_id "tab B"
 show_tab "TAB_ID_B" "$TAB_ID_B"
 
@@ -133,7 +133,7 @@ start_test "Navigate back to previous page"
 
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "navigate to index.html"
-TAB_ID=$(echo "$RESULT" | jq -r '.tabId // empty')
+TAB_ID=$(get_tab_id)
 assert_tab_id "get tab ID"
 show_tab "TAB_ID" "$TAB_ID"
 URL_A=$(echo "$RESULT" | jq -r '.url // empty')
@@ -208,7 +208,7 @@ start_test "Back with no history stays on same page"
 
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
 assert_ok "navigate to buttons.html"
-NEW_TAB_ID=$(echo "$RESULT" | jq -r '.tabId // empty')
+NEW_TAB_ID=$(get_tab_id)
 URL_SINGLE=$(echo "$RESULT" | jq -r '.url // empty')
 show_tab "NEW_TAB_ID" "$NEW_TAB_ID"
 

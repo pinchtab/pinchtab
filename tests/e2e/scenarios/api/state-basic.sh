@@ -8,7 +8,7 @@ start_test "tab state: complete page reports state"
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/state-loading.html\"}"
 assert_ok "open state fixture tab"
 TAB_JSON="$RESULT"
-TAB_ID=$(echo "$TAB_JSON" | jq -r '.tabId // .id')
+TAB_ID=$(get_tab_id "$TAB_JSON")
 STATE=$(e2e_curl -s "${E2E_SERVER}/tabs/${TAB_ID}/state")
 
 echo "$STATE" | jq -e '.tabId == "'"$TAB_ID"'"' >/dev/null 2>&1
@@ -47,7 +47,7 @@ start_test "tab state: dialog blocks actionability"
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
 assert_ok "open dialog fixture tab"
 TAB_JSON="$RESULT"
-TAB_ID=$(echo "$TAB_JSON" | jq -r '.tabId // .id')
+TAB_ID=$(get_tab_id "$TAB_JSON")
 pt_get "/snapshot?tabId=${TAB_ID}"
 assert_ok "snapshot dialog fixture tab"
 ALERT_REF=$(echo "$RESULT" | jq -r '[.nodes[] | select(.name == "Trigger Alert")][0].ref // empty')

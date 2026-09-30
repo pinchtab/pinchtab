@@ -24,7 +24,7 @@ sc_navigate() {
   pt_post /navigate -d "$body"
   assert_ok "navigate"
   local tab_id
-  tab_id=$(echo "$RESULT" | jq -r '.tabId // empty')
+  tab_id=$(get_tab_id)
   [ -n "$tab_id" ] && [ "$tab_id" != "null" ] && SC_TAB_ID="$tab_id"
 }
 
