@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"sync"
 	"testing"
 
 	"github.com/chromedp/cdproto/cdp"
@@ -245,4 +246,20 @@ func TestHoverElement_PropagatesBoxModelFailure(t *testing.T) {
 	if err := HoverElement(context.Background(), 99); err == nil {
 		t.Fatal("expected an error for a short box model")
 	}
+}
+
+func TestHumanRand_ParallelMouseMoveAndTypeAreRaceFree(t *testing.T) {
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			SetHumanRandSeed(int64(i))
+			_ = MouseMove(context.Background(), 0, 0, float64(100+i), 100)
+			if actions := Type("parallel", true); len(actions) < len("parallel") {
+				t.Errorf("Type returned %d actions, want at least %d", len(actions), len("parallel"))
+			}
+		}(i)
+	}
+	wg.Wait()
 }

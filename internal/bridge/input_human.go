@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/chromedp/cdproto/cdp"
@@ -36,10 +37,29 @@ func dispatchMouseMovedBounded(ctx context.Context, x, y float64) error {
 	)
 }
 
-var humanRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+type lockedSource struct {
+	mu  sync.Mutex
+	src rand.Source
+}
+
+func (s *lockedSource) Int63() int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.src.Int63()
+}
+
+func (s *lockedSource) Seed(seed int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.src.Seed(seed)
+}
+
+var humanRandSource = &lockedSource{src: rand.NewSource(time.Now().UnixNano())}
+
+var humanRand = rand.New(humanRandSource)
 
 func SetHumanRandSeed(seed int64) {
-	humanRand = rand.New(rand.NewSource(seed))
+	humanRandSource.Seed(seed)
 }
 
 type Config struct {
