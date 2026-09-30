@@ -18,7 +18,7 @@ linters:
         - pattern: ^time\.Sleep$
           msg: wait on a context, ticker or readiness helper instead of sleeping
         - pattern: ^os\.(Getenv|LookupEnv)$
-          msg: read PINCHTAB_* settings through internal/config
+          msg: server packages read PINCHTAB_* settings through internal/config; client, CLI, browser and tooling env reads are excluded by path
   exclusions:
     rules:
       - path: _test\.go
@@ -27,7 +27,7 @@ linters:
           - forbidigo
           - gocognit
           - unparam
-      - path: ^internal/(config/|server/bridge\.go$)
+      - path: ^(cmd/|docs/|tests/|internal/(config/|server/bridge\.go$|cli/|browsers/|browserprobe/|daemon/|dashboard/|testbrowser/))
         linters:
           - forbidigo
         text: os\.(Getenv|LookupEnv)
