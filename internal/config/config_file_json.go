@@ -13,8 +13,8 @@ type fileConfigJSON struct {
 	Timeouts         timeoutsConfigJSON          `json:"timeouts"`
 	Scheduler        schedulerFileConfigJSON     `json:"scheduler"`
 	Observability    observabilityFileConfigJSON `json:"observability"`
-	Sessions         sessionsFileConfigJSON      `json:"sessions"`
-	AutoSolver       autoSolverFileConfigJSON    `json:"autoSolver,omitempty"`
+	Sessions         SessionsFileConfig          `json:"sessions"`
+	AutoSolver       AutoSolverFileConfig        `json:"autoSolver"`
 }
 
 type serverConfigJSON struct {
@@ -127,18 +127,11 @@ type idpiConfigJSON struct {
 }
 
 type multiInstanceConfigJSON struct {
-	Strategy          string                   `json:"strategy"`
-	AllocationPolicy  string                   `json:"allocationPolicy"`
-	InstancePortStart *int                     `json:"instancePortStart,omitempty"`
-	InstancePortEnd   *int                     `json:"instancePortEnd,omitempty"`
-	Restart           multiInstanceRestartJSON `json:"restart"`
-}
-
-type multiInstanceRestartJSON struct {
-	MaxRestarts    *int `json:"maxRestarts,omitempty"`
-	InitBackoffSec *int `json:"initBackoffSec,omitempty"`
-	MaxBackoffSec  *int `json:"maxBackoffSec,omitempty"`
-	StableAfterSec *int `json:"stableAfterSec,omitempty"`
+	Strategy          string                     `json:"strategy"`
+	AllocationPolicy  string                     `json:"allocationPolicy"`
+	InstancePortStart *int                       `json:"instancePortStart,omitempty"`
+	InstancePortEnd   *int                       `json:"instancePortEnd,omitempty"`
+	Restart           MultiInstanceRestartConfig `json:"restart"`
 }
 
 type timeoutsConfigJSON struct {
@@ -180,69 +173,4 @@ type activityEventsConfigJSON struct {
 	Scheduler    *bool `json:"scheduler,omitempty"`
 	MCP          *bool `json:"mcp,omitempty"`
 	Other        *bool `json:"other,omitempty"`
-}
-
-type sessionsFileConfigJSON struct {
-	Dashboard dashboardSessionConfigJSON `json:"dashboard"`
-	Agent     agentSessionConfigJSON     `json:"agent,omitempty"`
-}
-
-type agentSessionConfigJSON struct {
-	Enabled        *bool  `json:"enabled,omitempty"`
-	Mode           string `json:"mode,omitempty"`
-	IdleTimeoutSec *int   `json:"idleTimeoutSec,omitempty"`
-	MaxLifetimeSec *int   `json:"maxLifetimeSec,omitempty"`
-}
-
-type dashboardSessionConfigJSON struct {
-	Persist                       *bool `json:"persist,omitempty"`
-	IdleTimeoutSec                *int  `json:"idleTimeoutSec,omitempty"`
-	MaxLifetimeSec                *int  `json:"maxLifetimeSec,omitempty"`
-	ElevationWindowSec            *int  `json:"elevationWindowSec,omitempty"`
-	PersistElevationAcrossRestart *bool `json:"persistElevationAcrossRestart,omitempty"`
-	RequireElevation              *bool `json:"requireElevation,omitempty"`
-}
-
-type autoSolverFileConfigJSON struct {
-	Enabled           *bool                           `json:"enabled,omitempty"`
-	AutoTrigger       *bool                           `json:"autoTrigger,omitempty"`
-	TriggerOnNavigate *bool                           `json:"triggerOnNavigate,omitempty"`
-	TriggerOnAction   *bool                           `json:"triggerOnAction,omitempty"`
-	MaxAttempts       *int                            `json:"maxAttempts,omitempty"`
-	SolverTimeoutSec  *int                            `json:"solverTimeoutSec,omitempty"`
-	RetryBaseDelayMs  *int                            `json:"retryBaseDelayMs,omitempty"`
-	RetryMaxDelayMs   *int                            `json:"retryMaxDelayMs,omitempty"`
-	Solvers           []string                        `json:"solvers,omitempty"`
-	LLMProvider       string                          `json:"llmProvider,omitempty"`
-	LLMFallback       *bool                           `json:"llmFallback,omitempty"`
-	External          autoSolverExtConfigJSON         `json:"external,omitempty"`
-	Credentials       autoSolverCredentialsConfigJSON `json:"credentials,omitempty"`
-}
-
-type autoSolverExtConfigJSON struct {
-	CapsolverKey  string `json:"capsolverKey,omitempty"`
-	TwoCaptchaKey string `json:"twoCaptchaKey,omitempty"`
-}
-
-type autoSolverCredentialsConfigJSON struct {
-	Login  autoSolverLoginConfigJSON  `json:"login,omitempty"`
-	Signup autoSolverSignupConfigJSON `json:"signup,omitempty"`
-	Form   autoSolverFormConfigJSON   `json:"form,omitempty"`
-}
-
-type autoSolverLoginConfigJSON struct {
-	User     string `json:"user,omitempty"`
-	Password string `json:"password,omitempty"`
-}
-
-type autoSolverSignupConfigJSON struct {
-	Name     string `json:"name,omitempty"`
-	Email    string `json:"email,omitempty"`
-	Password string `json:"password,omitempty"`
-}
-
-type autoSolverFormConfigJSON struct {
-	Field1 string `json:"field1,omitempty"`
-	Field2 string `json:"field2,omitempty"`
-	Email  string `json:"email,omitempty"`
 }

@@ -225,12 +225,7 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			AllocationPolicy:  fc.MultiInstance.AllocationPolicy,
 			InstancePortStart: fc.MultiInstance.InstancePortStart,
 			InstancePortEnd:   fc.MultiInstance.InstancePortEnd,
-			Restart: multiInstanceRestartJSON{
-				MaxRestarts:    fc.MultiInstance.Restart.MaxRestarts,
-				InitBackoffSec: fc.MultiInstance.Restart.InitBackoffSec,
-				MaxBackoffSec:  fc.MultiInstance.Restart.MaxBackoffSec,
-				StableAfterSec: fc.MultiInstance.Restart.StableAfterSec,
-			},
+			Restart:           fc.MultiInstance.Restart,
 		},
 		Timeouts: timeoutsConfigJSON{
 			ActionSec:   fc.Timeouts.ActionSec,
@@ -266,55 +261,8 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 				},
 			},
 		},
-		Sessions: sessionsFileConfigJSON{
-			Dashboard: dashboardSessionConfigJSON{
-				Persist:                       fc.Sessions.Dashboard.Persist,
-				IdleTimeoutSec:                fc.Sessions.Dashboard.IdleTimeoutSec,
-				MaxLifetimeSec:                fc.Sessions.Dashboard.MaxLifetimeSec,
-				ElevationWindowSec:            fc.Sessions.Dashboard.ElevationWindowSec,
-				PersistElevationAcrossRestart: fc.Sessions.Dashboard.PersistElevationAcrossRestart,
-				RequireElevation:              fc.Sessions.Dashboard.RequireElevation,
-			},
-			Agent: agentSessionConfigJSON{
-				Enabled:        fc.Sessions.Agent.Enabled,
-				Mode:           fc.Sessions.Agent.Mode,
-				IdleTimeoutSec: fc.Sessions.Agent.IdleTimeoutSec,
-				MaxLifetimeSec: fc.Sessions.Agent.MaxLifetimeSec,
-			},
-		},
-		AutoSolver: autoSolverFileConfigJSON{
-			Enabled:           fc.AutoSolver.Enabled,
-			AutoTrigger:       fc.AutoSolver.AutoTrigger,
-			TriggerOnNavigate: fc.AutoSolver.TriggerOnNavigate,
-			TriggerOnAction:   fc.AutoSolver.TriggerOnAction,
-			MaxAttempts:       fc.AutoSolver.MaxAttempts,
-			SolverTimeoutSec:  fc.AutoSolver.SolverTimeoutSec,
-			RetryBaseDelayMs:  fc.AutoSolver.RetryBaseDelayMs,
-			RetryMaxDelayMs:   fc.AutoSolver.RetryMaxDelayMs,
-			Solvers:           copyStringSlice(fc.AutoSolver.Solvers),
-			LLMProvider:       fc.AutoSolver.LLMProvider,
-			LLMFallback:       fc.AutoSolver.LLMFallback,
-			External: autoSolverExtConfigJSON{
-				CapsolverKey:  fc.AutoSolver.External.CapsolverKey,
-				TwoCaptchaKey: fc.AutoSolver.External.TwoCaptchaKey,
-			},
-			Credentials: autoSolverCredentialsConfigJSON{
-				Login: autoSolverLoginConfigJSON{
-					User:     fc.AutoSolver.Credentials.Login.User,
-					Password: fc.AutoSolver.Credentials.Login.Password,
-				},
-				Signup: autoSolverSignupConfigJSON{
-					Name:     fc.AutoSolver.Credentials.Signup.Name,
-					Email:    fc.AutoSolver.Credentials.Signup.Email,
-					Password: fc.AutoSolver.Credentials.Signup.Password,
-				},
-				Form: autoSolverFormConfigJSON{
-					Field1: fc.AutoSolver.Credentials.Form.Field1,
-					Field2: fc.AutoSolver.Credentials.Form.Field2,
-					Email:  fc.AutoSolver.Credentials.Form.Email,
-				},
-			},
-		},
+		Sessions:   fc.Sessions,
+		AutoSolver: fc.AutoSolver,
 	})
 }
 
