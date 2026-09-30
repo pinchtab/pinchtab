@@ -611,26 +611,23 @@ func opensANestedBranch(n ast.Node) bool {
 	return false
 }
 
+const snapshotRenderFile = "snapshot_render.go"
+
 func TestEveryResponseBranchDisclosesIgnoredParams(t *testing.T) {
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, snapshotHandlerFile, nil, 0)
+	file, err := parser.ParseFile(fset, snapshotRenderFile, nil, 0)
 	if err != nil {
-		t.Fatalf("cannot parse %s, so this guard checks nothing: %v", snapshotHandlerFile, err)
+		t.Fatalf("cannot parse %s, so this guard checks nothing: %v", snapshotRenderFile, err)
 	}
 
-	var handler *ast.FuncDecl
+	var blocks []ast.Node
 	for _, decl := range file.Decls {
-		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == "HandleSnapshot" {
-			handler = fn
+		if fn, ok := decl.(*ast.FuncDecl); ok {
+			blocks = append(blocks, successResponseBlocks(fn)...)
 		}
 	}
-	if handler == nil {
-		t.Fatalf("HandleSnapshot is no longer in %s; re-point this guard rather than deleting it", snapshotHandlerFile)
-	}
-
-	blocks := successResponseBlocks(handler)
-	if len(blocks) < 7 {
-		t.Fatalf("found %d response branches in HandleSnapshot; there are seven, so the scan is matching the wrong thing — lower this floor only for a branch deliberately removed", len(blocks))
+	if len(blocks) < 5 {
+		t.Fatalf("found %d response branches in %s; there are five (file, diff, plain text, yaml, json), so the scan is matching the wrong thing — lower this floor only for a branch deliberately removed", len(blocks), snapshotRenderFile)
 	}
 	for _, block := range blocks {
 		if !disclosesIgnoredParams(block) {

@@ -234,7 +234,7 @@ func TestEveryRefPublishSiteRoutesThroughTheEpochRefBook(t *testing.T) {
 	if !fileCallsAnyIdent(t, "snapshot.go", "publishVocab") {
 		t.Error("snapshot.go does not emit the token in a response header, so a client reading a compact/text snapshot cannot obtain it")
 	}
-	if !fileMentionsString(t, "snapshot.go", "vocabularyToken") {
+	if !fileMentionsString(t, "snapshot_render.go", "vocabularyToken") {
 		t.Error("snapshot.go does not carry the token in its JSON body, so a JSON snapshot consumer cannot echo it")
 	}
 	if !fileCallsAnyIdent(t, "capture.go", "publishVocab") {
