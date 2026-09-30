@@ -134,9 +134,6 @@ jobs:
         with:
           bun-version-file: .bun-version
 
-      - name: Install tygo
-        run: go install github.com/gzuidhof/tygo@latest
-
       - name: Install dashboard dependencies
         working-directory: dashboard
         run: bun install --frozen-lockfile

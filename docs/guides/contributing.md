@@ -116,13 +116,9 @@ Verify:
 golangci-lint --version
 ```
 
-### Install gotestsum (Recommended)
+### Go dev tools
 
-Recommended for the cleaner local unit test output used by `./dev test unit`:
-
-```bash
-go install gotest.tools/gotestsum@latest
-```
+tygo, gotestsum and gosec are pinned in `tools/go.mod` and run through `go tool -modfile=tools/go.mod <tool>`; the `./dev` scripts do this for you, so there is nothing to install.
 
 ### Install Chrome/Chromium
 

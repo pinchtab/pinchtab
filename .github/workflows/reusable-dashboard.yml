@@ -27,15 +27,12 @@ jobs:
         with:
           bun-version-file: .bun-version
 
-      - name: Install tygo
-        run: go install github.com/gzuidhof/tygo@latest
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
       - name: Generate dashboard types
         run: |
-          $HOME/go/bin/tygo generate
+          go tool -modfile=../tools/go.mod tygo generate
           bun run types:format
           git diff --exit-code -- src/generated/types.ts
 
@@ -68,15 +65,12 @@ jobs:
         with:
           bun-version-file: .bun-version
 
-      - name: Install tygo
-        run: go install github.com/gzuidhof/tygo@latest
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
       - name: Generate dashboard types
         run: |
-          $HOME/go/bin/tygo generate
+          go tool -modfile=../tools/go.mod tygo generate
           bun run types:format
 
       - name: Build

@@ -6,16 +6,6 @@ cd "$(dirname "$0")/.."
 
 BUN_MIN_VERSION="1.2.0"
 
-confirm() {
-  if [ ! -t 0 ]; then
-    return 1
-  fi
-
-  echo -n "$1 [y/N] "
-  read -r answer
-  [[ "$answer" =~ ^[Yy]$ ]]
-}
-
 version_ge() {
   local current="${1#v}"
   local minimum="${2#v}"
@@ -64,38 +54,8 @@ cd dashboard
 echo "📥 Syncing dashboard dependencies..."
 bun install --frozen-lockfile
 
-# Generate TypeScript types from Go structs (ensures types are in sync)
-TYGO="${GOPATH:-$HOME/go}/bin/tygo"
-if [ -x "$TYGO" ]; then
-  echo "🔄 Generating TypeScript types..."
-  "$TYGO" generate
-elif command -v tygo &> /dev/null; then
-  echo "🔄 Generating TypeScript types..."
-  tygo generate
-else
-  if command -v go &> /dev/null && confirm "Install tygo via go install?"; then
-    go install github.com/gzuidhof/tygo@latest
-    TYGO="${GOPATH:-$HOME/go}/bin/tygo"
-    if [ -x "$TYGO" ]; then
-      echo "🔄 Generating TypeScript types..."
-      "$TYGO" generate
-    elif command -v tygo &> /dev/null; then
-      echo "🔄 Generating TypeScript types..."
-      tygo generate
-    else
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      echo "⚠️  WARNING: tygo install completed but binary was not found on PATH"
-      echo "   Restart your shell or ensure \$GOPATH/bin is on PATH."
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    fi
-  else
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "⚠️  WARNING: tygo not found — skipping TypeScript type generation"
-    echo "   Types in the dashboard might fall out of sync with Go structs."
-    echo "   Install it with: go install github.com/gzuidhof/tygo@latest"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  fi
-fi
+echo "🔄 Generating TypeScript types..."
+go tool -modfile=../tools/go.mod tygo generate
 
 # Normalize tygo output with prettier so generation doesn't dirty git
 if [ -f "src/generated/types.ts" ]; then

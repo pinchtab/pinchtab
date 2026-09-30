@@ -2,14 +2,7 @@
 # Run gosec security scan locally with the same config as CI
 set -e
 
-# Ensure ~/go/bin is in PATH
-export PATH="$HOME/go/bin:$PATH"
-
-# Check if gosec is installed
-if ! command -v gosec &> /dev/null; then
-    echo "Installing gosec..."
-    go install github.com/securego/gosec/v2/cmd/gosec@latest
-fi
+cd "$(dirname "$0")/.."
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Running gosec security scan..."
@@ -23,7 +16,7 @@ START_TIME=$(date +%s)
 
 # Run gosec with the same config as CI
 # Note: This scans all Go code, same as the CI does
-gosec -exclude=G301,G302,G304,G306,G404,G107,G115,G703,G704,G705,G706 \
+go tool -modfile=tools/go.mod gosec -exclude=G301,G302,G304,G306,G404,G107,G115,G703,G704,G705,G706 \
   -fmt=json \
   -out=gosec-results.json \
   ./... 2>&1 | grep -E "Checking (file|package)" | tail -10 || true

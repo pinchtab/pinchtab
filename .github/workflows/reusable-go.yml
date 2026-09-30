@@ -86,9 +86,6 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
 
-      - name: Install gotestsum
-        run: go install gotest.tools/gotestsum@latest
-
       # No --hide-summary. The output section carries file:line and expected-vs-actual
       # under each failing test name, plus the reason under each skip, and in CI the log
       # is the only artifact. skipped is not hidden either: scripts/test.sh hides it only
@@ -96,7 +93,7 @@ jobs:
       # has no equivalent. TestNoGotestsumInvocationHidesTheOutputSummary enforces the
       # output half repo-wide.
       - name: Test with coverage
-        run: gotestsum --format=pkgname -- -p 1 -count=1 -coverprofile=coverage.out -covermode=atomic ./...
+        run: go tool -modfile=tools/go.mod gotestsum --format=pkgname -- -p 1 -count=1 -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Coverage summary
         run: |
@@ -121,9 +118,6 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
-
-      - name: Install tygo
-        run: go install github.com/gzuidhof/tygo@latest
 
       - name: Build dashboard
         run: |
@@ -157,7 +151,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Install gosec
-        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+        run: go install -modfile=tools/go.mod github.com/securego/gosec/v2/cmd/gosec
 
       - name: Run gosec
         env:

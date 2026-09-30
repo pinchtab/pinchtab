@@ -69,30 +69,24 @@ if [ ! -d "node_modules" ]; then
   $RUN install 2>&1 | tail -1
 fi
 
-# Check tygo types are in sync (if tygo is installed)
-TYGO="${GOPATH:-$HOME/go}/bin/tygo"
-if [ -x "$TYGO" ] || command -v tygo &>/dev/null; then
-  section "Types (tygo)"
-  TYGO_CMD="${TYGO:-tygo}"
-  GENERATED_TYPES="src/generated/types.ts"
-  if [ -x "$TYGO" ]; then TYGO_CMD="$TYGO"; fi
-  BEFORE_FIX="$(mktemp)"
-  cp "$GENERATED_TYPES" "$BEFORE_FIX"
-  $TYGO_CMD generate 2>/dev/null
-  $RUN run types:format
-  if cmp -s "$BEFORE_FIX" "$GENERATED_TYPES"; then
-    ok "Types in sync"
+section "Types (tygo)"
+GENERATED_TYPES="src/generated/types.ts"
+BEFORE_FIX="$(mktemp)"
+cp "$GENERATED_TYPES" "$BEFORE_FIX"
+go tool -modfile=../tools/go.mod tygo generate
+$RUN run types:format
+if cmp -s "$BEFORE_FIX" "$GENERATED_TYPES"; then
+  ok "Types in sync"
+else
+  fail "Types out of sync" "Run: cd dashboard && go tool -modfile=../tools/go.mod tygo generate && $RUN run types:format"
+  if confirm "Fix generated types now?"; then
+    ok "Types fixed"
   else
-    fail "Types out of sync" "Run: cd dashboard && tygo generate && $RUN run types:format"
-    if confirm "Fix generated types now?"; then
-      ok "Types fixed"
-    else
-      rm -f "$BEFORE_FIX"
-      exit 1
-    fi
+    rm -f "$BEFORE_FIX"
+    exit 1
   fi
-  rm -f "$BEFORE_FIX"
 fi
+rm -f "$BEFORE_FIX"
 
 section "TypeScript"
 if $RUN run typecheck 2>&1; then

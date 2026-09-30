@@ -16,7 +16,6 @@ CRITICAL=0
 WARNINGS=0
 BUN_MIN_VERSION="1.2.0"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-TOOLS_BIN="$ROOT_DIR/.tools/bin"
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -130,32 +129,10 @@ fi
 
 # ── gotestsum ────────────────────────────────────────────────────────
 
-mkdir -p "$TOOLS_BIN"
-
-GOTESTSUM=""
-if command -v gotestsum &>/dev/null; then
-  GOTESTSUM="gotestsum"
-elif [ -x "$TOOLS_BIN/gotestsum" ]; then
-  GOTESTSUM="$TOOLS_BIN/gotestsum"
-elif [ -x "${GOPATH:-$HOME/go}/bin/gotestsum" ]; then
-  GOTESTSUM="${GOPATH:-$HOME/go}/bin/gotestsum"
-fi
-
-if [ -n "$GOTESTSUM" ]; then
-  GOTESTSUM_VERSION=$($GOTESTSUM --version 2>/dev/null | head -1)
-  if [ -n "$GOTESTSUM_VERSION" ]; then
-    ok "$GOTESTSUM_VERSION"
-  else
-    ok "gotestsum"
-  fi
+if GOTESTSUM_VERSION=$(cd "$ROOT_DIR" && go tool -modfile=tools/go.mod gotestsum --version 2>/dev/null | head -1) && [ -n "$GOTESTSUM_VERSION" ]; then
+  ok "$GOTESTSUM_VERSION"
 else
-  warn "gotestsum not found" "Recommended — used by ./dev test unit for cleaner package-oriented output."
-  if command -v go &>/dev/null && confirm "Install gotestsum via go install?"; then
-    GOBIN="$TOOLS_BIN" go install gotest.tools/gotestsum@latest && ok "gotestsum installed in .tools/bin" && WARNINGS=$((WARNINGS - 1))
-  else
-    hint "GOBIN=\"$TOOLS_BIN\" go install gotest.tools/gotestsum@latest"
-    hint "go install gotest.tools/gotestsum@latest"
-  fi
+  warn "gotestsum unavailable" "Pinned in tools/go.mod; run: go tool -modfile=tools/go.mod gotestsum --version"
 fi
 
 # ── Git hooks ────────────────────────────────────────────────────────
@@ -241,20 +218,6 @@ if [ -d "dashboard" ]; then
       curl -fsSL https://bun.sh/install | bash && ok "Bun installed (restart shell to use)" && WARNINGS=$((WARNINGS - 1)) && HAS_SUPPORTED_BUN=true
     else
       hint "curl -fsSL https://bun.sh/install | bash"
-    fi
-  fi
-
-  # ── tygo ───────────────────────────────────────────────────────
-
-  TYGO="${GOPATH:-$HOME/go}/bin/tygo"
-  if [ -x "$TYGO" ] || command -v tygo &>/dev/null; then
-    ok "tygo"
-  else
-    warn "tygo not found" "Types in the dashboard might fall out of sync with Go structs."
-    if command -v go &>/dev/null && confirm "Install tygo via go install?"; then
-      go install github.com/gzuidhof/tygo@latest && ok "tygo installed" && WARNINGS=$((WARNINGS - 1))
-    else
-      hint "go install github.com/gzuidhof/tygo@latest"
     fi
   fi
 
