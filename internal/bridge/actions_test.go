@@ -1341,7 +1341,7 @@ func TestHoverAction_HumanizedStillRequiresATarget(t *testing.T) {
 	}
 }
 
-// Browser-backed: the selector form resolves through firstNodeBySelector, which
+// Browser-backed: the selector form resolves through ResolveCSSToNodeID, which
 // has no browserless seam, so this is where selector routing and the real
 // trail landing on the target are pinned.
 func TestHoverAction_HumanizedSelectorLandsOnTheTarget(t *testing.T) {
@@ -1384,5 +1384,61 @@ func TestHoverAction_HumanizedSelectorLandsOnTheTarget(t *testing.T) {
 	}
 	if !hovered {
 		t.Fatal("humanized hover did not fire mouseover on the selector target")
+	}
+}
+
+func newSelectorActionTab(t *testing.T, html string) context.Context {
+	t.Helper()
+	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
+		chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.ExecPath(testbrowser.Path(t)),
+		chromedp.Flag("headless", true),
+		chromedp.Flag("no-sandbox", true),
+	)...)
+	ctx, cancel := chromedp.NewContext(alloc)
+	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
+	t.Cleanup(func() {
+		cancelTimeout()
+		cancel()
+		cancelAlloc()
+	})
+	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(html))
+	if err := chromedp.Run(ctx, chromedp.Navigate(dataURL)); err != nil {
+		t.Fatal(err)
+	}
+	return ctx
+}
+
+func TestSelectorActions_MissingSelectorIsErrSelectorNoMatch(t *testing.T) {
+	ctx := newSelectorActionTab(t, `<button id="present">x</button><input type="checkbox" id="box">`)
+	b := New(context.Background(), nil, &config.RuntimeConfig{})
+
+	for _, kind := range []string{ActionClick, ActionDoubleClick, ActionHover, ActionScroll, ActionCheck, ActionSelect} {
+		req := ActionRequest{Selector: "#missing", Value: "v"}
+		if _, err := b.ExecuteAction(ctx, kind, req); !errors.Is(err, ErrSelectorNoMatch) {
+			t.Errorf("%s on a missing selector: err = %v, want ErrSelectorNoMatch", kind, err)
+		}
+	}
+}
+
+func TestSelectorActions_ClickReachesAShadowDOMTarget(t *testing.T) {
+	ctx := newSelectorActionTab(t, `<div id="host"></div>
+	<script>
+		window.shadowClicks = 0;
+		const root = document.getElementById("host").attachShadow({mode: "open"});
+		root.innerHTML = '<button id="inner" style="width:120px;height:40px">inner</button>';
+		root.getElementById("inner").addEventListener("click", () => window.shadowClicks++);
+	</script>`)
+	b := New(context.Background(), nil, &config.RuntimeConfig{})
+
+	if _, err := b.ExecuteAction(ctx, ActionClick, ActionRequest{Selector: "#inner"}); err != nil {
+		t.Fatalf("click on a shadow-DOM selector: %v", err)
+	}
+	var clicks int
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`window.shadowClicks`, &clicks)); err != nil {
+		t.Fatal(err)
+	}
+	if clicks != 1 {
+		t.Fatalf("shadow button clicks = %d, want 1", clicks)
 	}
 }

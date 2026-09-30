@@ -46,12 +46,12 @@ func TestClickPreservesFloatingFlyoutWithoutScroll(t *testing.T) {
 	if err := chromedp.Run(ctx, chromedp.Navigate(dataURL)); err != nil {
 		t.Fatal(err)
 	}
-	node, err := firstNodeBySelector(ctx, "#item")
+	nodeID, err := ResolveCSSToNodeID(ctx, "#item")
 	if err != nil {
 		t.Fatal(err)
 	}
 	b := New(context.Background(), nil, &config.RuntimeConfig{})
-	if _, err := b.Actions[ActionClick](ctx, ActionRequest{NodeID: int64(node.BackendNodeID)}); err != nil {
+	if _, err := b.Actions[ActionClick](ctx, ActionRequest{NodeID: nodeID}); err != nil {
 		t.Fatalf("click floating menu item: %v", err)
 	}
 

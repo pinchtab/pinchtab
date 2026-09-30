@@ -82,17 +82,14 @@ func (b *Bridge) actionSelect(ctx context.Context, req ActionRequest) (map[strin
 	// Both paths route through SelectByNodeID so they share its
 	// value-then-text match fallback. This lets callers pass either the
 	// `<option value="...">` attribute or the option's visible text.
-	if req.NodeID > 0 {
-		return map[string]any{"selected": val}, SelectByNodeID(ctx, req.NodeID, val)
+	nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
+	if err != nil {
+		return nil, err
 	}
-	if req.Selector != "" {
-		node, err := firstNodeBySelector(ctx, req.Selector)
-		if err != nil {
-			return nil, err
-		}
-		return map[string]any{"selected": val}, SelectByNodeID(ctx, int64(node.BackendNodeID), val)
+	if nodeID <= 0 {
+		return nil, NewInvalidActionRequestError("need selector or ref")
 	}
-	return nil, NewInvalidActionRequestError("need selector or ref")
+	return map[string]any{"selected": val}, SelectByNodeID(ctx, nodeID, val)
 }
 
 func (b *Bridge) actionCheck(ctx context.Context, req ActionRequest) (map[string]any, error) {
@@ -107,58 +104,31 @@ func (b *Bridge) actionUncheck(ctx context.Context, req ActionRequest) (map[stri
 // If wantChecked is true, it ensures the element is checked; if false, unchecked.
 // It only clicks if the current state differs from the desired state.
 func checkUncheck(ctx context.Context, req ActionRequest, wantChecked bool) (map[string]any, error) {
-	// Resolve the element to an objectId via backendNodeId or CSS selector.
-	var resolveJS string
-	if req.NodeID > 0 {
-		// Resolve via backendNodeId using DOM.resolveNode (done below).
-	} else if req.Selector != "" {
-		resolveJS = req.Selector
-	} else {
+	nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
+	if err != nil {
+		return nil, err
+	}
+	if nodeID <= 0 {
 		return nil, NewInvalidActionRequestError("need selector, ref, or nodeId")
 	}
 
 	var objectID string
-	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		if req.NodeID > 0 {
-			var result json.RawMessage
-			if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
-				"backendNodeId": req.NodeID,
-			}, &result); err != nil {
-				return err
-			}
-			var resolved struct {
-				Object struct {
-					ObjectID string `json:"objectId"`
-				} `json:"object"`
-			}
-			if err := json.Unmarshal(result, &resolved); err != nil {
-				return err
-			}
-			objectID = resolved.Object.ObjectID
-			return nil
-		}
-		// CSS selector path
-		var evalResult json.RawMessage
-		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.evaluate", map[string]any{
-			"expression":    fmt.Sprintf(`document.querySelector(%q)`, resolveJS),
-			"returnByValue": false,
-		}, &evalResult); err != nil {
+	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		var result json.RawMessage
+		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
+			"backendNodeId": nodeID,
+		}, &result); err != nil {
 			return err
 		}
-		var er struct {
-			Result struct {
+		var resolved struct {
+			Object struct {
 				ObjectID string `json:"objectId"`
-				Type     string `json:"type"`
-				Subtype  string `json:"subtype"`
-			} `json:"result"`
+			} `json:"object"`
 		}
-		if err := json.Unmarshal(evalResult, &er); err != nil {
+		if err := json.Unmarshal(result, &resolved); err != nil {
 			return err
 		}
-		if er.Result.ObjectID == "" || er.Result.Subtype == "null" {
-			return fmt.Errorf("element not found: %s", resolveJS)
-		}
-		objectID = er.Result.ObjectID
+		objectID = resolved.Object.ObjectID
 		return nil
 	}))
 	if err != nil {
@@ -177,18 +147,8 @@ func checkUncheck(ctx context.Context, req ActionRequest, wantChecked bool) (map
 	// Click only if state needs to change. Use the JS-dispatch path so the
 	// toggle isn't gated on the headless=new CDP renderer ack chain.
 	if state.State != desired {
-		if req.NodeID > 0 {
-			if err := JSClickByBackendNode(ctx, req.NodeID); err != nil {
-				return nil, err
-			}
-		} else {
-			node, err := firstNodeBySelector(ctx, req.Selector)
-			if err != nil {
-				return nil, err
-			}
-			if err := JSClickByBackendNode(ctx, int64(node.BackendNodeID)); err != nil {
-				return nil, err
-			}
+		if err := JSClickByBackendNode(ctx, nodeID); err != nil {
+			return nil, err
 		}
 	}
 

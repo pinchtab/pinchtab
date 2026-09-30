@@ -121,7 +121,8 @@ func PointerPointForNode(ctx context.Context, backendNodeID int64, requireTopMos
 		let occluded = false;
 		let topTag = '';
 		if (localX >= 0 && localY >= 0 && localX <= view.innerWidth && localY <= view.innerHeight) {
-			const top = doc.elementFromPoint(localX, localY);
+			const root = this.getRootNode();
+			const top = (typeof root.elementFromPoint === 'function' ? root : doc).elementFromPoint(localX, localY);
 			if (top) {
 				topTag = String(top.tagName || '').toLowerCase();
 				const related = top === this || this.contains(top) || top.contains(this);

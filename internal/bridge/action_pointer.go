@@ -297,14 +297,10 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 			auto.prepareWindowOpenCapture(clickCtx)
 		}
 		if req.Submit {
-			nodeID := req.NodeID
-			if nodeID == 0 && req.Selector != "" {
-				node, nodeErr := firstNodeBySelector(clickCtx, req.Selector)
-				if nodeErr != nil {
-					resultCh <- clickResult{err: nodeErr}
-					return
-				}
-				nodeID = int64(node.BackendNodeID)
+			nodeID, nodeErr := targetNodeID(clickCtx, req.NodeID, req.Selector)
+			if nodeErr != nil {
+				resultCh <- clickResult{err: nodeErr}
+				return
 			}
 			if nodeID <= 0 {
 				resultCh <- clickResult{err: fmt.Errorf("click submit requires a selector, ref, or nodeId")}
@@ -317,15 +313,15 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 			// timeout fallback: its second dispatch can double-submit a slow SPA.
 			err = jsClickByBackendNodeAction(clickCtx, nodeID)
 		} else if req.Selector != "" {
-			node, nodeErr := firstNodeBySelector(clickCtx, req.Selector)
+			nodeID, nodeErr := ResolveCSSToNodeID(clickCtx, req.Selector)
 			if nodeErr != nil {
 				resultCh <- clickResult{err: nodeErr}
 				return
 			}
 			if auto != nil {
-				auto.prepareNode(clickCtx, int64(node.BackendNodeID))
+				auto.prepareNode(clickCtx, nodeID)
 			}
-			err = clickByNodeIDWithMode(clickCtx, int64(node.BackendNodeID), req.Mode)
+			err = clickByNodeIDWithMode(clickCtx, nodeID, req.Mode)
 		} else if req.NodeID > 0 {
 			if auto != nil {
 				auto.prepareNode(clickCtx, req.NodeID)
@@ -400,14 +396,14 @@ func (b *Bridge) actionDoubleClick(ctx context.Context, req ActionRequest) (resu
 	auto := b.beginAutoSwitch(req)
 	defer func() { result = auto.settle(ctx, result, err) }()
 	if req.Selector != "" {
-		node, nodeErr := firstNodeBySelector(ctx, req.Selector)
+		nodeID, nodeErr := ResolveCSSToNodeID(ctx, req.Selector)
 		if nodeErr != nil {
 			return nil, nodeErr
 		}
 		if auto != nil {
-			auto.prepareNode(ctx, int64(node.BackendNodeID))
+			auto.prepareNode(ctx, nodeID)
 		}
-		err = doubleClickByNodeIDWithJSFallback(ctx, int64(node.BackendNodeID))
+		err = doubleClickByNodeIDWithJSFallback(ctx, nodeID)
 	} else if req.NodeID > 0 {
 		if auto != nil {
 			auto.prepareNode(ctx, req.NodeID)
@@ -431,15 +427,12 @@ func (b *Bridge) actionHover(ctx context.Context, req ActionRequest) (map[string
 	if b.effectiveHumanize(req) {
 		return b.actionHumanizedHover(ctx, req)
 	}
-	if req.NodeID > 0 {
-		return map[string]any{"hovered": true}, HoverByNodeID(ctx, req.NodeID)
+	nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
+	if err != nil {
+		return nil, err
 	}
-	if req.Selector != "" {
-		node, err := firstNodeBySelector(ctx, req.Selector)
-		if err != nil {
-			return nil, err
-		}
-		return map[string]any{"hovered": true}, HoverByNodeID(ctx, int64(node.BackendNodeID))
+	if nodeID > 0 {
+		return map[string]any{"hovered": true}, HoverByNodeID(ctx, nodeID)
 	}
 	if req.HasXY {
 		return map[string]any{"hovered": true}, HoverByCoordinate(ctx, req.X, req.Y)
@@ -448,16 +441,13 @@ func (b *Bridge) actionHover(ctx context.Context, req ActionRequest) (map[string
 }
 
 func (b *Bridge) actionHumanizedHover(ctx context.Context, req ActionRequest) (map[string]any, error) {
-	var err error
+	nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
+	if err != nil {
+		return nil, err
+	}
 	switch {
-	case req.NodeID > 0:
-		err = hoverElementAction(ctx, cdp.BackendNodeID(req.NodeID))
-	case req.Selector != "":
-		node, nodeErr := firstNodeBySelector(ctx, req.Selector)
-		if nodeErr != nil {
-			return nil, nodeErr
-		}
-		err = hoverElementAction(ctx, node.BackendNodeID)
+	case nodeID > 0:
+		err = hoverElementAction(ctx, cdp.BackendNodeID(nodeID))
 	case req.HasXY:
 		err = hoverCoordinateAction(ctx, req.X, req.Y)
 	default:
@@ -502,15 +492,12 @@ func (b *Bridge) pointerCoordinatesFromRequest(ctx context.Context, req ActionRe
 	if req.HasXY {
 		return req.X, req.Y, nil
 	}
-	if req.NodeID > 0 {
-		return PointerPointForNode(ctx, req.NodeID, false)
+	nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
+	if err != nil {
+		return 0, 0, err
 	}
-	if req.Selector != "" {
-		node, err := firstNodeBySelector(ctx, req.Selector)
-		if err != nil {
-			return 0, 0, err
-		}
-		return PointerPointForNode(ctx, int64(node.BackendNodeID), false)
+	if nodeID > 0 {
+		return PointerPointForNode(ctx, nodeID, false)
 	}
 	if allowCurrent {
 		if x, y, ok := b.currentPointerPosition(req.TabID); ok {
@@ -617,15 +604,12 @@ func scrollDelta(req ActionRequest) (int, int, error) {
 
 func (b *Bridge) actionScroll(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	scaleScreencastCoords(ctx, &req)
-	if req.NodeID > 0 {
-		return map[string]any{"scrolled": true}, ScrollByNodeID(ctx, req.NodeID)
+	nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
+	if err != nil {
+		return nil, err
 	}
-	if req.Selector != "" {
-		node, err := firstNodeBySelector(ctx, req.Selector)
-		if err != nil {
-			return nil, err
-		}
-		return map[string]any{"scrolled": true}, ScrollByNodeID(ctx, int64(node.BackendNodeID))
+	if nodeID > 0 {
+		return map[string]any{"scrolled": true}, ScrollByNodeID(ctx, nodeID)
 	}
 
 	scrollX, scrollY, err := scrollDelta(req)
@@ -665,25 +649,17 @@ func (b *Bridge) actionDrag(ctx context.Context, req ActionRequest) (map[string]
 	if req.DragX == 0 && req.DragY == 0 {
 		return nil, NewInvalidActionRequestError("dragX or dragY required for drag")
 	}
-	if req.NodeID > 0 {
-		err := DragByNodeID(ctx, req.NodeID, req.DragX, req.DragY, req.Button)
-		if err != nil {
-			return nil, err
-		}
-		return map[string]any{"dragged": true, "dragX": req.DragX, "dragY": req.DragY}, nil
+	nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
+	if err != nil {
+		return nil, err
 	}
-	if req.Selector != "" {
-		node, err := firstNodeBySelector(ctx, req.Selector)
-		if err != nil {
-			return nil, err
-		}
-		err = DragByNodeID(ctx, int64(node.BackendNodeID), req.DragX, req.DragY, req.Button)
-		if err != nil {
-			return nil, err
-		}
-		return map[string]any{"dragged": true, "dragX": req.DragX, "dragY": req.DragY}, nil
+	if nodeID <= 0 {
+		return nil, NewInvalidActionRequestError("need selector, ref, or nodeId")
 	}
-	return nil, NewInvalidActionRequestError("need selector, ref, or nodeId")
+	if err := DragByNodeID(ctx, nodeID, req.DragX, req.DragY, req.Button); err != nil {
+		return nil, err
+	}
+	return map[string]any{"dragged": true, "dragX": req.DragX, "dragY": req.DragY}, nil
 }
 
 func (b *Bridge) dragToDestination(ctx context.Context, req ActionRequest) (map[string]any, error) {
@@ -715,15 +691,13 @@ type dragEnd struct {
 }
 
 func dragPointFor(ctx context.Context, end dragEnd) (float64, float64, error) {
+	nodeID, err := targetNodeID(ctx, end.nodeID, end.selector)
+	if err != nil {
+		return 0, 0, err
+	}
 	switch {
-	case end.nodeID > 0:
-		return PointerPointForNode(ctx, end.nodeID, true)
-	case end.selector != "":
-		node, err := firstNodeBySelector(ctx, end.selector)
-		if err != nil {
-			return 0, 0, err
-		}
-		return PointerPointForNode(ctx, int64(node.BackendNodeID), true)
+	case nodeID > 0:
+		return PointerPointForNode(ctx, nodeID, true)
 	case end.hasPoint:
 		return end.x, end.y, nil
 	}
@@ -737,22 +711,17 @@ func (r ActionRequest) hasDragDestination() bool {
 func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (result map[string]any, err error) {
 	auto := b.beginAutoSwitch(req)
 	defer func() { result = auto.settle(ctx, result, err) }()
+	nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
+	if err != nil {
+		return nil, err
+	}
 	var click func(context.Context) error
 	switch {
-	case req.NodeID > 0:
+	case nodeID > 0:
 		if auto != nil {
-			auto.prepareNode(ctx, req.NodeID)
+			auto.prepareNode(ctx, nodeID)
 		}
-		click = humanClickNode(cdp.BackendNodeID(req.NodeID))
-	case req.Selector != "":
-		node, err := firstNodeBySelector(ctx, req.Selector)
-		if err != nil {
-			return nil, err
-		}
-		if auto != nil {
-			auto.prepareNode(ctx, int64(node.BackendNodeID))
-		}
-		click = humanClickNode(node.BackendNodeID)
+		click = humanClickNode(cdp.BackendNodeID(nodeID))
 	case req.HasXY:
 		x, y := req.X, req.Y
 		click = func(ctx context.Context) error { return humanClickCoordinateAction(ctx, x, y) }
