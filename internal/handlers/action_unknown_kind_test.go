@@ -139,7 +139,7 @@ func TestEachStepTimeoutContextIsCancelledExactlyOnce(t *testing.T) {
 	checked := 0
 	for _, decl := range f.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || (fn.Name.Name != "handleActionsBatch" && fn.Name.Name != "HandleMacro" && fn.Name.Name != "runBatchStep" && fn.Name.Name != "runMultiStepActionTail") {
+		if !ok || (fn.Name.Name != "handleActionsBatch" && fn.Name.Name != "HandleMacro" && fn.Name.Name != "runMultiStep" && fn.Name.Name != "runMultiStepAction") {
 			continue
 		}
 		checked++
@@ -175,14 +175,14 @@ func TestEachStepTimeoutContextIsCancelledExactlyOnce(t *testing.T) {
 				t.Errorf("%s calls %s %d times, want exactly one cancellation path per step context", fn.Name.Name, name, count)
 			}
 		}
-		if fn.Name.Name == "runBatchStep" || fn.Name.Name == "runMultiStepActionTail" {
+		if fn.Name.Name == "runMultiStepAction" {
 			if len(cancels) != 0 {
 				t.Errorf("%s creates its own timeout context; the caller owns the step budget", fn.Name.Name)
 			}
 		}
 	}
 	if checked != 4 {
-		t.Fatalf("checked %d functions, want the two loops and the two step helpers", checked)
+		t.Fatalf("checked %d functions, want the two handlers, the shared loop and its step helper", checked)
 	}
 }
 

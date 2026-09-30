@@ -819,37 +819,18 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 		return
 	}
 
-	run := newMultiStepRun(len(req.Actions), req.StopOnError)
-	for i := 0; i < len(req.Actions) && !run.stopped; i++ {
-		action := req.Actions[i]
-		if action.TabID == "" {
-			action.TabID = resolvedTabID
-		} else if action.TabID != resolvedTabID {
-			stepCtx, stepTabID, err := h.stepTabContext(r, action.TabID, req.Owner)
-			if err != nil {
-				run.record(actionResult{Index: i, Success: false, Error: err.Error()})
-				continue
-			}
-			ctx, resolvedTabID = stepCtx, stepTabID
-		}
-		run.enterTab(resolvedTabID, h.tabVocab(resolvedTabID))
-		if _, ok := h.applyTabGuards(w, r, ctx, resolvedTabID, guardDomainPolicy); !ok {
-			return
-		}
-		if dialog := pendingTabDialog(h.Bridge, resolvedTabID); dialog != nil {
-			run.stop(dialogBlockedActionResult(i, resolvedTabID, dialog))
-			continue
-		}
-		if err := h.enforceTabNotPausedForHandoff(resolvedTabID); err != nil {
-			run.record(h.handoffPausedActionResult(i, resolvedTabID, err))
-			continue
-		}
-
-		tCtx, tCancel := context.WithTimeout(ctx, effectiveCfg.ActionTimeout)
-		var result actionResult
-		result, ctx, resolvedTabID = h.runBatchStep(ctx, tCtx, r, w, &action, effectiveCfg, resolvedTabID, i)
-		tCancel()
-		run.record(result)
+	run, ctx, resolvedTabID, ok := h.runMultiStep(w, r, ctx, resolvedTabID, multiStepPlan{
+		steps:       req.Actions,
+		owner:       req.Owner,
+		stopOnError: req.StopOnError,
+		stepTimeout: effectiveCfg.ActionTimeout,
+		cfg:         effectiveCfg,
+		errFmt: func(kind string, err error) string {
+			return fmt.Sprintf("action %s: %v", kind, err)
+		},
+	})
+	if !ok {
+		return
 	}
 
 	batchRoute := routeMetadataFor(routing)
@@ -857,21 +838,75 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 	h.writeMultiStepActionResult(w, r, ctx, resolvedTabID, run.results, len(req.Actions), batchRoute, nil)
 }
 
-func (h *Handlers) runBatchStep(
+type multiStepPlan struct {
+	steps       []bridge.ActionRequest
+	owner       string
+	stopOnError bool
+	stepTimeout time.Duration
+	cfg         *config.RuntimeConfig
+	errFmt      func(kind string, err error) string
+}
+
+// runMultiStep is the one step loop behind /actions and /macro. A step naming
+// another tab switches the run to it; ok=false means a guard already answered.
+func (h *Handlers) runMultiStep(w http.ResponseWriter, r *http.Request, ctx context.Context, tabID string, plan multiStepPlan) (*multiStepRun, context.Context, string, bool) {
+	run := newMultiStepRun(len(plan.steps), plan.stopOnError)
+	for i := 0; i < len(plan.steps) && !run.stopped; i++ {
+		step := plan.steps[i]
+		if step.TabID == "" {
+			step.TabID = tabID
+		} else if step.TabID != tabID {
+			stepCtx, stepTabID, err := h.stepTabContext(r, step.TabID, plan.owner)
+			if err != nil {
+				run.record(actionResult{Index: i, Success: false, Error: err.Error()})
+				continue
+			}
+			ctx, tabID = stepCtx, stepTabID
+		}
+		run.enterTab(tabID, h.tabVocab(tabID))
+		if _, ok := h.applyTabGuards(w, r, ctx, tabID, guardDomainPolicy); !ok {
+			return nil, ctx, tabID, false
+		}
+		if dialog := pendingTabDialog(h.Bridge, tabID); dialog != nil {
+			run.stop(dialogBlockedActionResult(i, tabID, dialog))
+			continue
+		}
+		if err := h.enforceTabNotPausedForHandoff(tabID); err != nil {
+			run.record(h.handoffPausedActionResult(i, tabID, err))
+			continue
+		}
+
+		tCtx, cancel := context.WithTimeout(ctx, plan.stepTimeout)
+		var result actionResult
+		result, ctx, tabID = h.runMultiStepAction(ctx, tCtx, r, w, &step, plan, tabID, i)
+		cancel()
+		run.record(result)
+	}
+	return run, ctx, tabID, true
+}
+
+func (h *Handlers) runMultiStepAction(
 	ctx, tCtx context.Context,
 	r *http.Request, w http.ResponseWriter,
-	action *bridge.ActionRequest, cfg *config.RuntimeConfig,
-	resolvedTabID string, index int,
+	step *bridge.ActionRequest, plan multiStepPlan,
+	tabID string, index int,
 ) (actionResult, context.Context, string) {
-	selectorResolution, resolveErr := h.resolveActionRequestSelector(tCtx, resolvedTabID, action)
+	selectorResolution, resolveErr := h.resolveActionRequestSelector(tCtx, tabID, step)
 	if resolveErr != nil {
-		return h.failedStep(index, action.Kind, resolvedTabID, resolveErr, resolveErr.Error()), ctx, resolvedTabID
+		return h.failedStep(index, step.Kind, tabID, resolveErr, resolveErr.Error()), ctx, tabID
 	}
-	if action.Kind == "" {
-		return actionResult{Index: index, Success: false, Error: "missing required field 'kind'"}, ctx, resolvedTabID
+	if step.Kind == "" {
+		return actionResult{Index: index, Success: false, Error: "missing required field 'kind'"}, ctx, tabID
 	}
-	return h.runMultiStepActionTail(ctx, tCtx, r, w, action, cfg, resolvedTabID, index, selectorResolution.refMissing, func(err error) string {
-		return fmt.Sprintf("action %s: %v", action.Kind, err)
+	refMissing := selectorResolution.refMissing
+	if step.Ref != "" && h.Recovery != nil && !refMissing {
+		h.cacheActionIntent(tabID, *step)
+	}
+	if refMissing && h.Recovery == nil {
+		return actionResult{Index: index, Success: false, Error: refNotFound(step.Ref).Error()}, ctx, tabID
+	}
+	return h.runResolvedActionStep(ctx, tCtx, r, w, step, plan.cfg, tabID, index, refMissing, func(err error) string {
+		return plan.errFmt(step.Kind, err)
 	})
 }
 
@@ -908,22 +943,6 @@ func (m *multiStepRun) record(result actionResult) {
 func (m *multiStepRun) stop(result actionResult) {
 	m.results = append(m.results, result)
 	m.stopped = true
-}
-
-func (h *Handlers) runMultiStepActionTail(
-	ctx, tCtx context.Context,
-	r *http.Request, w http.ResponseWriter,
-	step *bridge.ActionRequest, cfg *config.RuntimeConfig,
-	resolvedTabID string, index int, refMissing bool,
-	errFmt func(error) string,
-) (actionResult, context.Context, string) {
-	if step.Ref != "" && h.Recovery != nil && !refMissing {
-		h.cacheActionIntent(resolvedTabID, *step)
-	}
-	if refMissing && h.Recovery == nil {
-		return actionResult{Index: index, Success: false, Error: refNotFound(step.Ref).Error()}, ctx, resolvedTabID
-	}
-	return h.runResolvedActionStep(ctx, tCtx, r, w, step, cfg, resolvedTabID, index, refMissing, errFmt)
 }
 
 // writeMultiStepActionResult finalizes a multi-step run shared by the /actions
@@ -1049,39 +1068,18 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	run := newMultiStepRun(len(req.Steps), req.StopOnError)
-	for i := 0; i < len(req.Steps) && !run.stopped; i++ {
-		step := req.Steps[i]
-		if step.TabID == "" {
-			step.TabID = resolvedTabID
-		}
-		run.enterTab(resolvedTabID, h.tabVocab(resolvedTabID))
-		if _, ok := h.applyTabGuards(w, r, ctx, resolvedTabID, guardDomainPolicy); !ok {
-			return
-		}
-		if dialog := pendingTabDialog(h.Bridge, resolvedTabID); dialog != nil {
-			run.stop(dialogBlockedActionResult(i, resolvedTabID, dialog))
-			continue
-		}
-		if err := h.enforceTabNotPausedForHandoff(resolvedTabID); err != nil {
-			run.record(h.handoffPausedActionResult(i, resolvedTabID, err))
-			continue
-		}
-		selectorCtx, selectorCancel := context.WithTimeout(ctx, stepTimeout)
-		selectorResolution, resolveErr := h.resolveActionRequestSelector(selectorCtx, resolvedTabID, &step)
-		selectorCancel()
-		if resolveErr != nil {
-			run.record(h.failedStep(i, step.Kind, resolvedTabID, resolveErr, resolveErr.Error()))
-			continue
-		}
-
-		tCtx, cancel := context.WithTimeout(ctx, stepTimeout)
-		var result actionResult
-		result, ctx, resolvedTabID = h.runMultiStepActionTail(ctx, tCtx, r, w, &step, routing.EffectiveCfg, resolvedTabID, i, selectorResolution.refMissing, func(err error) string {
+	run, ctx, resolvedTabID, ok := h.runMultiStep(w, r, ctx, resolvedTabID, multiStepPlan{
+		steps:       req.Steps,
+		owner:       req.Owner,
+		stopOnError: req.StopOnError,
+		stepTimeout: stepTimeout,
+		cfg:         routing.EffectiveCfg,
+		errFmt: func(_ string, err error) string {
 			return err.Error()
-		})
-		cancel()
-		run.record(result)
+		},
+	})
+	if !ok {
+		return
 	}
 
 	h.publishMultiStepVocab(w, run, resolvedTabID)
