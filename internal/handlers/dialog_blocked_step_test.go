@@ -127,8 +127,8 @@ func TestErrDialogBlockingCarriesNoRemedy(t *testing.T) {
 func TestDialogActionRemedyLiteralHasOneOwnerBesideTheFlagHelp(t *testing.T) {
 	const literal = "dialog-action accept"
 	allowed := map[string]bool{
-		"internal/handlers/dialog_blocked.go": true,
-		"cmd/pinchtab/cmd_cli_register.go":    true,
+		"internal/handlers/dialog_blocked.go":     true,
+		"cmd/pinchtab/cmd_cli_browser_actions.go": true,
 	}
 	found := map[string]bool{}
 	for _, source := range srccensus.Tree(t, filepath.Join("..", ".."), 200) {
