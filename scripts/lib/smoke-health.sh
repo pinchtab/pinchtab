@@ -3,6 +3,9 @@
 #   wait_for_health <host_port> <token> [tries=90]
 #   wait_for_instance_running <host_port> <token> [tries=120]
 #     — aborts early if /autorestart/status reports status=crashed.
+#   wait_for_exec_health <container> <token> [timeout_seconds=60]
+#     — polls /health from inside the container (curl, else wget), for
+#       containers that publish no host port.
 
 wait_for_health() {
   local host_port="$1"
@@ -37,4 +40,20 @@ wait_for_instance_running() {
     sleep 1
   done
   fail "managed browser instance did not become running: instances=$instances_body autorestart=$autorestart_body"
+}
+
+wait_for_exec_health() {
+  local name="$1"
+  local token="$2"
+  local timeout="${3:-60}"
+  local url="http://127.0.0.1:9867/health"
+  local probe="if command -v curl >/dev/null 2>&1; then curl -sf -H 'Authorization: Bearer ${token}' ${url}; else wget -qO- --header='Authorization: Bearer ${token}' ${url}; fi"
+  local deadline=$((SECONDS + timeout))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if docker exec "$name" sh -c "$probe" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  fail "health check did not pass within ${timeout}s"
 }

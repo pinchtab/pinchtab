@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/smoke-container.sh
+. "$SCRIPT_DIR/lib/smoke-container.sh"
+
 # Docker MCP Smoke Test
 # Verifies that the MCP stdio server works correctly inside a Docker container.
 # Tests both the Go binary directly and the npm wrapper (if Node.js is available).
@@ -16,19 +20,9 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 pass() { echo -e "  ${GREEN}✓${NC} $1"; }
-fail() { echo -e "  ${RED}✗${NC} $1"; FAILED=1; }
+check_failed() { echo -e "  ${RED}✗${NC} $1"; FAILED=1; }
 
-cleanup() {
-  if docker ps -a --format '{{.Names}}' | grep -Fxq "$NAME"; then
-    if [ "$FAILED" -ne 0 ]; then
-      echo ""
-      echo "Container logs:"
-      docker logs "$NAME" 2>&1 | tail -20 || true
-    fi
-    docker rm -f "$NAME" >/dev/null 2>&1 || true
-  fi
-}
-trap cleanup EXIT
+smoke_container_trap "$NAME"
 
 echo -e "${BOLD}Docker MCP Smoke Test${NC}"
 echo "Image: $IMAGE"
@@ -51,14 +45,14 @@ RESPONSE=$(echo "$INIT_MSG" | docker exec -i -e PINCHTAB_TOKEN="$SMOKE_TOKEN" "$
 if echo "$RESPONSE" | grep -q '"serverInfo"'; then
   pass "JSON-RPC initialize returns valid response"
 else
-  fail "JSON-RPC initialize failed: $RESPONSE"
+  check_failed "JSON-RPC initialize failed: $RESPONSE"
 fi
 
 # Verify server name
 if echo "$RESPONSE" | grep -q '"name":"PinchTab"'; then
   pass "Server identifies as PinchTab"
 else
-  fail "Unexpected server name in: $RESPONSE"
+  check_failed "Unexpected server name in: $RESPONSE"
 fi
 
 # Test 2: tools/list returns tools
@@ -72,10 +66,10 @@ if echo "$TOOLS_RESPONSE" | grep -q '"tools"'; then
   if [ "$TOOL_COUNT" -gt 0 ]; then
     pass "tools/list returns $TOOL_COUNT tools"
   else
-    fail "tools/list returned 0 tools"
+    check_failed "tools/list returned 0 tools"
   fi
 else
-  fail "tools/list failed: $TOOLS_RESPONSE"
+  check_failed "tools/list failed: $TOOLS_RESPONSE"
 fi
 
 # Test 3: health tool call
@@ -91,7 +85,7 @@ else
   if echo "$HEALTH_RESPONSE" | grep -q '"jsonrpc"'; then
     pass "pinchtab_health tool call returns valid JSON-RPC (server not running, expected)"
   else
-    fail "pinchtab_health tool call failed: $HEALTH_RESPONSE"
+    check_failed "pinchtab_health tool call failed: $HEALTH_RESPONSE"
   fi
 fi
 
@@ -103,17 +97,7 @@ echo ""
 echo "Testing MCP auto-start + navigation..."
 
 NAME2="pinchtab-mcp-autostart-${RANDOM}${RANDOM}"
-cleanup2() {
-  if docker ps -a --format '{{.Names}}' | grep -Fxq "$NAME2"; then
-    if [ "$FAILED" -ne 0 ]; then
-      echo ""
-      echo "Auto-start container logs:"
-      docker logs "$NAME2" 2>&1 | tail -30 || true
-    fi
-    docker rm -f "$NAME2" >/dev/null 2>&1 || true
-  fi
-}
-trap 'cleanup; cleanup2' EXIT
+smoke_container_trap "$NAME2"
 
 # Start container with sleep (no server running)
 docker run -d --name "$NAME2" \
@@ -142,10 +126,10 @@ if echo "$AUTOSTART_RESPONSE" | grep -q '"jsonrpc"'; then
     # An error response is still valid JSON-RPC — server started but tool may have failed
     pass "MCP auto-started server (tool returned error, but server is running)"
   else
-    fail "MCP auto-start: unexpected response: $AUTOSTART_RESPONSE"
+    check_failed "MCP auto-start: unexpected response: $AUTOSTART_RESPONSE"
   fi
 else
-  fail "MCP auto-start failed: no JSON-RPC response: $AUTOSTART_RESPONSE"
+  check_failed "MCP auto-start failed: no JSON-RPC response: $AUTOSTART_RESPONSE"
 fi
 
 # Test 5: Verify the server is actually running after auto-start
@@ -161,7 +145,7 @@ else
   if [ -n "$HEALTH_HTTP" ]; then
     pass "Server is running after MCP auto-start (confirmed via HTTP)"
   else
-    fail "Server not running after MCP auto-start: $HEALTH_CHECK"
+    check_failed "Server not running after MCP auto-start: $HEALTH_CHECK"
   fi
 fi
 

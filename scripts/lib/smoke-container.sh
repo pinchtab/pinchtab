@@ -3,6 +3,9 @@
 #   start_provider_container <name> <image> <config_path> <fixtures_host> <fixtures_port> <root>
 #   resolve_host_port <name>     — echoes host port mapped to container :9867
 #   teardown_container <name>    — idempotent force-remove
+#   smoke_container_trap <name>… — on EXIT remove the containers, dumping their
+#                                  logs and processes first when the run failed
+#   ensure_cft_image <image>     — build the Chrome for Testing smoke image unless present
 #
 # Env: PROFILE_VOLUME=<name> swaps /data from tmpfs to a persistent Docker
 # named volume (used by the profile-persistence leg).
@@ -57,4 +60,49 @@ teardown_container() {
   if docker ps -a --format '{{.Names}}' | grep -Fxq "$name"; then
     docker rm -f "$name" >/dev/null 2>&1 || true
   fi
+}
+
+SMOKE_TRAP_CONTAINERS=()
+
+smoke_container_trap() {
+  SMOKE_TRAP_CONTAINERS+=("$@")
+  trap 'smoke_container_teardown $?' EXIT
+}
+
+smoke_container_teardown() {
+  local rc="$1"
+  local name
+  if [ "$rc" -ne 0 ]; then
+    FAILED=1
+  fi
+  for name in ${SMOKE_TRAP_CONTAINERS[@]+"${SMOKE_TRAP_CONTAINERS[@]}"}; do
+    if ! docker ps -a --format '{{.Names}}' | grep -Fxq "$name"; then
+      continue
+    fi
+    if [ "${FAILED:-0}" -ne 0 ]; then
+      echo ""
+      echo "Container logs ($name):"
+      docker logs --tail "${SMOKE_LOG_LINES:-100}" "$name" 2>&1 || true
+      echo ""
+      echo "Container processes ($name):"
+      docker exec "$name" ps -eo pid,args 2>&1 || true
+    fi
+    teardown_container "$name"
+  done
+}
+
+ensure_cft_image() {
+  local image="$1"
+  local root
+  root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+  if docker image inspect "$image" >/dev/null 2>&1; then
+    echo "Using existing Ubuntu + Chrome for Testing smoke image: $image"
+    return
+  fi
+  echo "Building Ubuntu + Chrome for Testing smoke image..."
+  docker build \
+    --platform linux/amd64 \
+    -f "$root/tests/tools/docker/chrome-cft-smoke.Dockerfile" \
+    -t "$image" \
+    "$root"
 }

@@ -28,6 +28,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=lib/smoke-common.sh
+. "$SCRIPT_DIR/lib/smoke-common.sh"
 
 LEG="${1:-all}"
 
@@ -54,7 +56,7 @@ ATTACHED_INSTANCE_ID=""
 CDP_ATTACH_URL=""
 CDP_ATTACH_HOST=""
 
-cleanup() {
+teardown_attach_stack() {
   set +e
   docker rm -f "${PINCHTAB_CONTAINER}" >/dev/null 2>&1 || true
   docker rm -f "${CHROME_CONTAINER}" >/dev/null 2>&1 || true
@@ -69,22 +71,7 @@ cleanup() {
     rm -rf "${TMP_DIR}"
   fi
 }
-trap cleanup EXIT
-
-fail() {
-  FAILED=1
-  echo "FAIL: $*" >&2
-  exit 1
-}
-
-skip() {
-  echo "SKIP: $*"
-  exit 77
-}
-
-require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || fail "$1 not found in PATH"
-}
+trap teardown_attach_stack EXIT
 
 require_cmd docker
 require_cmd curl

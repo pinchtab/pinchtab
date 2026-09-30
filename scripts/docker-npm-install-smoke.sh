@@ -37,6 +37,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=lib/smoke-common.sh
+. "$SCRIPT_DIR/lib/smoke-common.sh"
 
 NODE_IMAGE="${PINCHTAB_NPM_SMOKE_NODE_IMAGE:-node:22-bookworm}"
 GITHUB_REPO="pinchtab/pinchtab"
@@ -45,28 +47,14 @@ CONTAINER="pinchtab-npm-smoke-${RANDOM}${RANDOM}"
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pinchtab-npm-smoke.XXXXXX")"
 CONTAINER_STARTED=0
 
-cleanup() {
+teardown_npm_container() {
   set +e
   if [ "${CONTAINER_STARTED}" -eq 1 ]; then
     docker rm -f "${CONTAINER}" >/dev/null 2>&1 || true
   fi
   rm -rf "${TMP_DIR}"
 }
-trap cleanup EXIT
-
-skip() {
-  echo "SKIP: $*"
-  exit 77
-}
-
-fail() {
-  echo "FAIL: $*" >&2
-  exit 1
-}
-
-require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || fail "$1 not found in PATH"
-}
+trap teardown_npm_container EXIT
 
 require_cmd git
 require_cmd tar
