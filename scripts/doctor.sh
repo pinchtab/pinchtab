@@ -4,62 +4,23 @@ set -euo pipefail
 # doctor.sh — Verify and setup development environment for pinchtab
 # Interactive: asks before installing anything
 
-BOLD='\033[1m'
-ACCENT='\033[38;2;251;191;36m'      # yellow #fbbf24
-INFO='\033[38;2;136;146;176m'       # muted #8892b0
-SUCCESS='\033[38;2;0;229;204m'      # cyan #00e5cc
-ERROR='\033[38;2;230;57;70m'        # red #e63946
-MUTED='\033[38;2;90;100;128m'       # text-muted #5a6480
-NC='\033[0m'
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+source "$ROOT_DIR/scripts/lib/term.sh"
+source "$ROOT_DIR/scripts/lib/version.sh"
 
 CRITICAL=0
 WARNINGS=0
 BUN_MIN_VERSION="1.2.0"
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
-ok()      { echo -e "  ${SUCCESS}✓${NC} $1"; }
 fail()    { echo -e "  ${ERROR}✗${NC} $1"; [ -n "${2:-}" ] && echo -e "    ${MUTED}$2${NC}"; CRITICAL=$((CRITICAL + 1)); }
 warn()    { echo -e "  ${ACCENT}·${NC} $1"; [ -n "${2:-}" ] && echo -e "    ${MUTED}$2${NC}"; WARNINGS=$((WARNINGS + 1)); }
-hint()    { echo -e "    ${MUTED}$1${NC}"; }
 
 confirm() {
   echo -ne "    ${BOLD}$1 [y/N]${NC} "
   read -r answer
   [[ "$answer" =~ ^[Yy]$ ]]
-}
-
-section() {
-  echo ""
-  echo -e "${ACCENT}${BOLD}$1${NC}"
-}
-
-version_ge() {
-  local current="${1#v}"
-  local minimum="${2#v}"
-  local current_major current_minor current_patch
-  local minimum_major minimum_minor minimum_patch
-
-  IFS='.' read -r current_major current_minor current_patch <<< "${current}"
-  IFS='.' read -r minimum_major minimum_minor minimum_patch <<< "${minimum}"
-
-  current_minor=${current_minor:-0}
-  current_patch=${current_patch:-0}
-  minimum_minor=${minimum_minor:-0}
-  minimum_patch=${minimum_patch:-0}
-
-  if [ "$current_major" -ne "$minimum_major" ]; then
-    [ "$current_major" -gt "$minimum_major" ]
-    return
-  fi
-
-  if [ "$current_minor" -ne "$minimum_minor" ]; then
-    [ "$current_minor" -gt "$minimum_minor" ]
-    return
-  fi
-
-  [ "$current_patch" -ge "$minimum_patch" ]
 }
 
 # ── Detect package manager ───────────────────────────────────────────

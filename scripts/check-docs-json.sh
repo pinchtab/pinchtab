@@ -3,35 +3,32 @@
 
 set -euo pipefail
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+source "$(dirname "$0")/lib/term.sh"
 
 DOCS_DIR="docs"
 DOCS_JSON="$DOCS_DIR/index.json"
 
 # Check if docs.json exists
 if [ ! -f "$DOCS_JSON" ]; then
-    echo -e "${YELLOW}⚠️  $DOCS_JSON not found - skipping validation${NC}"
+    echo -e "${ACCENT}⚠️  $DOCS_JSON not found - skipping validation${NC}"
     exit 0
 fi
 
 # Validate JSON syntax
 if command -v jq &> /dev/null; then
     if ! jq empty "$DOCS_JSON" 2>/dev/null; then
-        echo -e "${RED}✗ Invalid JSON syntax in $DOCS_JSON${NC}"
+        echo -e "${ERROR}✗ Invalid JSON syntax in $DOCS_JSON${NC}"
         jq empty "$DOCS_JSON"  # Show error
         exit 1
     fi
 elif command -v python3 &> /dev/null; then
     if ! python3 -m json.tool "$DOCS_JSON" > /dev/null 2>&1; then
-        echo -e "${RED}✗ Invalid JSON syntax in $DOCS_JSON${NC}"
+        echo -e "${ERROR}✗ Invalid JSON syntax in $DOCS_JSON${NC}"
         python3 -m json.tool "$DOCS_JSON"  # Show error
         exit 1
     fi
 else
-    echo -e "${YELLOW}⚠️  jq or python3 not found - skipping JSON syntax check${NC}"
+    echo -e "${ACCENT}⚠️  jq or python3 not found - skipping JSON syntax check${NC}"
 fi
 
 # Extract all file paths from docs.json
@@ -39,7 +36,7 @@ fi
 files=$(grep -oE '"[a-zA-Z0-9/_.-]+\.md"' "$DOCS_JSON" | tr -d '"' | sort -u || true)
 
 if [ -z "$files" ]; then
-    echo -e "${YELLOW}⚠️  No markdown files found in $DOCS_JSON${NC}"
+    echo -e "${ACCENT}⚠️  No markdown files found in $DOCS_JSON${NC}"
     exit 0
 fi
 
@@ -57,14 +54,14 @@ done
 # Report results
 if [ ${#missing_files[@]} -eq 0 ]; then
     count=$(echo "$files" | wc -l)
-    echo -e "${GREEN}✓ Documentation index valid${NC} ($count files)"
+    echo -e "${SUCCESS}✓ Documentation index valid${NC} ($count files)"
     exit 0
 else
-    echo -e "${RED}✗ Missing documentation files referenced in docs.json:${NC}"
+    echo -e "${ERROR}✗ Missing documentation files referenced in docs.json:${NC}"
     for file in "${missing_files[@]}"; do
-        echo -e "${RED}  - $DOCS_DIR/$file${NC}"
+        echo -e "${ERROR}  - $DOCS_DIR/$file${NC}"
     done
     echo ""
-    echo -e "${YELLOW}Fix: Create missing files or update docs/docs.json${NC}"
+    echo -e "${ACCENT}Fix: Create missing files or update docs/docs.json${NC}"
     exit 1
 fi
