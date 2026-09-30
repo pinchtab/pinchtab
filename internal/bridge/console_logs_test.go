@@ -123,9 +123,9 @@ func TestConsoleLogStore_GetWithLimit_ClampsToMaxLines(t *testing.T) {
 }
 
 func TestConsoleLogStore_ClampsConfiguredMaxLines(t *testing.T) {
-	store := NewConsoleLogStore(maxConsoleLogStoreLines + 500)
-	if store.maxLines != maxConsoleLogStoreLines {
-		t.Fatalf("maxLines = %d, want %d", store.maxLines, maxConsoleLogStoreLines)
+	store := NewConsoleLogStore(maxConsoleLogLines + 500)
+	if store.maxLines != maxConsoleLogLines {
+		t.Fatalf("maxLines = %d, want %d", store.maxLines, maxConsoleLogLines)
 	}
 }
 

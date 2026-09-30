@@ -8,155 +8,124 @@ import (
 )
 
 const (
-	defaultConsoleLogMaxLines = 1000
-	maxConsoleLogStoreLines   = 1000
-	maxConsoleLevelBytes      = 32
-	maxConsoleMessageBytes    = 4 * 1024
-	maxConsoleSourceBytes     = 512
-	maxErrorMessageBytes      = 4 * 1024
-	maxErrorTypeBytes         = 128
-	maxErrorURLBytes          = 2 * 1024
-	maxErrorStackBytes        = 8 * 1024
+	maxConsoleLogLines     = 1000
+	maxConsoleLevelBytes   = 32
+	maxConsoleMessageBytes = 4 * 1024
+	maxConsoleSourceBytes  = 512
+	maxErrorMessageBytes   = 4 * 1024
+	maxErrorTypeBytes      = 128
+	maxErrorURLBytes       = 2 * 1024
+	maxErrorStackBytes     = 8 * 1024
 )
 
-// TabLogs holds console and error logs for a single tab.
-type TabLogs struct {
-	Console []types.ConsoleLogEntry
-	Errors  []types.ErrorLogEntry
-	mu      sync.RWMutex
+type logBuffer[T any] struct {
+	mu       sync.RWMutex
+	entries  []T
+	maxLines int
 }
 
-// ConsoleLogStore manages console/error logs across all tabs.
+func (b *logBuffer[T]) add(entry T) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.entries = append(b.entries, entry)
+	if len(b.entries) > b.maxLines {
+		b.entries = b.entries[len(b.entries)-b.maxLines:]
+	}
+}
+
+func (b *logBuffer[T]) tail(limit int) []T {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	count := len(b.entries)
+	if limit <= 0 || limit > count {
+		limit = count
+	}
+	result := make([]T, limit)
+	copy(result, b.entries[count-limit:])
+	return result
+}
+
+func (b *logBuffer[T]) clear() {
+	b.mu.Lock()
+	b.entries = b.entries[:0]
+	b.mu.Unlock()
+}
+
+type tabLogs struct {
+	console logBuffer[types.ConsoleLogEntry]
+	errors  logBuffer[types.ErrorLogEntry]
+}
+
 type ConsoleLogStore struct {
-	tabs     map[string]*TabLogs
+	tabs     map[string]*tabLogs
 	maxLines int
 	mu       sync.RWMutex
 }
 
-// NewConsoleLogStore creates a new log store with the given max lines per tab.
 func NewConsoleLogStore(maxLines int) *ConsoleLogStore {
-	if maxLines <= 0 {
-		maxLines = defaultConsoleLogMaxLines
-	} else if maxLines > maxConsoleLogStoreLines {
-		maxLines = maxConsoleLogStoreLines
+	if maxLines <= 0 || maxLines > maxConsoleLogLines {
+		maxLines = maxConsoleLogLines
 	}
 	return &ConsoleLogStore{
-		tabs:     make(map[string]*TabLogs),
+		tabs:     make(map[string]*tabLogs),
 		maxLines: maxLines,
 	}
 }
 
-func (s *ConsoleLogStore) getOrCreateTab(tabID string) *TabLogs {
+func (s *ConsoleLogStore) getOrCreateTab(tabID string) *tabLogs {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if t, ok := s.tabs[tabID]; ok {
 		return t
 	}
-	t := &TabLogs{
-		Console: make([]types.ConsoleLogEntry, 0),
-		Errors:  make([]types.ErrorLogEntry, 0),
-	}
+	t := &tabLogs{}
+	t.console.maxLines = s.maxLines
+	t.errors.maxLines = s.maxLines
 	s.tabs[tabID] = t
 	return t
 }
 
-// AddConsoleLog adds a console log entry for a tab.
+func (s *ConsoleLogStore) tab(tabID string) (*tabLogs, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	t, ok := s.tabs[tabID]
+	return t, ok
+}
+
 func (s *ConsoleLogStore) AddConsoleLog(tabID string, entry types.ConsoleLogEntry) {
-	t := s.getOrCreateTab(tabID)
-	entry = normalizeConsoleLogEntry(entry)
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.Console = append(t.Console, entry)
-	if len(t.Console) > s.maxLines {
-		t.Console = t.Console[len(t.Console)-s.maxLines:]
-	}
+	s.getOrCreateTab(tabID).console.add(normalizeConsoleLogEntry(entry))
 }
 
-// AddErrorLog adds an error log entry for a tab.
 func (s *ConsoleLogStore) AddErrorLog(tabID string, entry types.ErrorLogEntry) {
-	t := s.getOrCreateTab(tabID)
-	entry = normalizeErrorLogEntry(entry)
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.Errors = append(t.Errors, entry)
-	if len(t.Errors) > s.maxLines {
-		t.Errors = t.Errors[len(t.Errors)-s.maxLines:]
-	}
+	s.getOrCreateTab(tabID).errors.add(normalizeErrorLogEntry(entry))
 }
 
-// GetConsoleLogs returns console logs for a tab. If limit > 0, returns at most limit entries.
 func (s *ConsoleLogStore) GetConsoleLogs(tabID string, limit int) []types.ConsoleLogEntry {
-	s.mu.RLock()
-	t, ok := s.tabs[tabID]
-	s.mu.RUnlock()
-	if !ok {
-		return nil
+	if t, ok := s.tab(tabID); ok {
+		return t.console.tail(limit)
 	}
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	count := len(t.Console)
-	if limit <= 0 || limit > count {
-		limit = count
-	}
-	if limit > s.maxLines {
-		limit = s.maxLines
-	}
-	start := count - limit
-	result := make([]types.ConsoleLogEntry, limit)
-	copy(result, t.Console[start:])
-	return result
+	return nil
 }
 
-// GetErrorLogs returns error logs for a tab. If limit > 0, returns at most limit entries.
 func (s *ConsoleLogStore) GetErrorLogs(tabID string, limit int) []types.ErrorLogEntry {
-	s.mu.RLock()
-	t, ok := s.tabs[tabID]
-	s.mu.RUnlock()
-	if !ok {
-		return nil
+	if t, ok := s.tab(tabID); ok {
+		return t.errors.tail(limit)
 	}
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	count := len(t.Errors)
-	if limit <= 0 || limit > count {
-		limit = count
-	}
-	if limit > s.maxLines {
-		limit = s.maxLines
-	}
-	start := count - limit
-	result := make([]types.ErrorLogEntry, limit)
-	copy(result, t.Errors[start:])
-	return result
+	return nil
 }
 
-// ClearConsoleLogs clears console logs for a tab.
 func (s *ConsoleLogStore) ClearConsoleLogs(tabID string) {
-	s.mu.RLock()
-	t, ok := s.tabs[tabID]
-	s.mu.RUnlock()
-	if !ok {
-		return
+	if t, ok := s.tab(tabID); ok {
+		t.console.clear()
 	}
-	t.mu.Lock()
-	t.Console = t.Console[:0]
-	t.mu.Unlock()
 }
 
-// ClearErrorLogs clears error logs for a tab.
 func (s *ConsoleLogStore) ClearErrorLogs(tabID string) {
-	s.mu.RLock()
-	t, ok := s.tabs[tabID]
-	s.mu.RUnlock()
-	if !ok {
-		return
+	if t, ok := s.tab(tabID); ok {
+		t.errors.clear()
 	}
-	t.mu.Lock()
-	t.Errors = t.Errors[:0]
-	t.mu.Unlock()
 }
 
-// RemoveTab removes all logs for a tab (call on tab close).
 func (s *ConsoleLogStore) RemoveTab(tabID string) {
 	s.mu.Lock()
 	delete(s.tabs, tabID)
