@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useAsyncResource } from "../hooks/useAsyncResource";
 import * as api from "../services/api";
 
 interface Props {
@@ -12,45 +13,32 @@ export default function InstanceLogsPanel({
   instanceId,
   emptyMessage = "No instance logs available.",
 }: Props) {
-  const [logs, setLogs] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [instanceLogs, setLogs] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const streamVersionRef = useRef(0);
 
-  useEffect(() => {
-    if (!instanceId) {
-      setLogs("");
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    const fetchStartedAtVersion = streamVersionRef.current;
-    setLoading(true);
-
-    api
-      .fetchInstanceLogs(instanceId)
-      .then((nextLogs) => {
-        if (!cancelled && streamVersionRef.current === fetchStartedAtVersion) {
-          setLogs(nextLogs);
+  const { loading } = useAsyncResource(
+    instanceId
+      ? async (signal) => {
+          const fetchStartedAtVersion = streamVersionRef.current;
+          try {
+            const nextLogs = await api.fetchInstanceLogs(instanceId);
+            if (
+              !signal.aborted &&
+              streamVersionRef.current === fetchStartedAtVersion
+            ) {
+              setLogs(nextLogs);
+            }
+          } catch (error) {
+            console.error("Failed to load instance logs", error);
+            if (!signal.aborted) setLogs("");
+          }
         }
-      })
-      .catch((error) => {
-        console.error("Failed to load instance logs", error);
-        if (!cancelled) {
-          setLogs("");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [instanceId]);
+      : null,
+    [instanceId],
+    { initial: undefined },
+  );
+  const logs = instanceId ? instanceLogs : "";
 
   useEffect(() => {
     if (!instanceId) {

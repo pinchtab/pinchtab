@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import * as api from "../../services/api";
 import type { ActivityEvent, Agent, Instance, InstanceTab } from "../../types";
 import { computeHandoffTabs, deriveHandoffIndex } from "../handoffState";
@@ -175,23 +176,18 @@ export function useActivityDerivation({
       .join(",");
   }, [derivedSessions, agentSessions]);
 
-  useEffect(() => {
-    if (!unlabeledPtsKey) return;
-
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      void api
-        .fetchSessions()
-        .then((sessions) => {
-          if (!cancelled) setAgentSessions(sessions);
-        })
-        .catch(() => {});
-    }, 500);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [unlabeledPtsKey, setAgentSessions]);
+  useAsyncResource(
+    unlabeledPtsKey
+      ? async (signal) => {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          if (signal.aborted) return;
+          const sessions = await api.fetchSessions();
+          if (!signal.aborted) setAgentSessions(sessions);
+        }
+      : null,
+    [unlabeledPtsKey],
+    { initial: undefined },
+  );
 
   const derivedAgents = useMemo<Agent[]>(
     () => deriveAgents(agentCatalogEvents),

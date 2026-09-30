@@ -1,10 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { useAppStore } from "../../stores/useAppStore";
 import * as api from "../../services/api";
 
 const AUTO_INSTANCE_STRATEGIES = new Set(["always-on", "simple-autorestart"]);
 const STARTUP_REFRESH_DELAYS_MS = [500, 1000, 1500, 2500, 4000] as const;
+const DEFAULT_LAUNCH_CONFIG: {
+  strategy: string;
+  defaultProfileId: string;
+  defaultLaunchMode: "headed" | undefined;
+} = {
+  strategy: "always-on",
+  defaultProfileId: "default",
+  defaultLaunchMode: undefined,
+};
 
 export function useMonitoringController() {
   const {
@@ -27,11 +37,6 @@ export function useMonitoringController() {
   const navigate = useNavigate();
   const selectedId = selectedMonitoringInstanceId;
   const setSelectedId = setSelectedMonitoringInstanceId;
-  const [strategy, setStrategy] = useState<string>("always-on");
-  const [defaultProfileId, setDefaultProfileId] = useState("default");
-  const [defaultLaunchMode, setDefaultLaunchMode] = useState<
-    "headed" | undefined
-  >(undefined);
   const [startupRetryCount, setStartupRetryCount] = useState(0);
   const [startingDefaultInstance, setStartingDefaultInstance] = useState(false);
   const [startingDefaultMode, setStartingDefaultMode] = useState<
@@ -41,31 +46,23 @@ export function useMonitoringController() {
   const [launchError, setLaunchError] = useState("");
   const memoryEnabled = settings.monitoring?.memoryMetrics ?? false;
 
-  // Fetch backend strategy once
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        const cfg = await api.fetchBackendConfig();
-        if (cancelled) {
-          return;
-        }
-        setStrategy(cfg.config.multiInstance.strategy);
-        setDefaultProfileId(cfg.config.profiles.defaultProfile || "default");
-        setDefaultLaunchMode(
-          cfg.config.instanceDefaults.mode === "headed" ? "headed" : undefined,
-        );
-      } catch {
-        // ignore — default to always-on
-      }
-    };
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const {
+    data: { strategy, defaultProfileId, defaultLaunchMode },
+  } = useAsyncResource(
+    async () => {
+      const cfg = await api.fetchBackendConfig();
+      return {
+        strategy: cfg.config.multiInstance.strategy,
+        defaultProfileId: cfg.config.profiles.defaultProfile || "default",
+        defaultLaunchMode:
+          cfg.config.instanceDefaults.mode === "headed"
+            ? ("headed" as const)
+            : undefined,
+      };
+    },
+    [],
+    { initial: DEFAULT_LAUNCH_CONFIG },
+  );
 
   const refreshInstances = useCallback(async () => {
     const updated = await api.fetchInstances();
@@ -112,20 +109,12 @@ export function useMonitoringController() {
       return;
     }
 
-    let cancelled = false;
     const timer = window.setTimeout(() => {
       setStartupRetryCount((count) => count + 1);
-      void refreshInstances().catch(() => {
-        if (!cancelled) {
-          // Ignore transient startup fetch failures; the retry window remains active.
-        }
-      });
+      void refreshInstances().catch(() => {});
     }, STARTUP_REFRESH_DELAYS_MS[startupRetryCount]);
 
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
+    return () => window.clearTimeout(timer);
   }, [
     expectsAutoInstance,
     hasAvailableInstance,

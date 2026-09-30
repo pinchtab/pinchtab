@@ -5,6 +5,7 @@ import {
   AUTH_STATE_CHANGED_EVENT,
   SERVER_UNREACHABLE_EVENT,
 } from "../services/auth";
+import { useAsyncResource } from "./useAsyncResource";
 import { useAppStore } from "../stores/useAppStore";
 
 export type AuthMode = "probing" | "required" | "open" | "unreachable";
@@ -69,36 +70,29 @@ export function useBackendAuth() {
     initialBackendAuthState,
   );
 
-  useEffect(() => {
-    if (state.mode !== "probing") {
-      return;
-    }
-    let cancelled = false;
-    api
-      .probeBackendAuth()
-      .then((result) => {
-        if (cancelled) {
-          return;
+  useAsyncResource(
+    state.mode === "probing"
+      ? async (signal) => {
+          try {
+            const result = await api.probeBackendAuth();
+            if (signal.aborted) return;
+            dispatch({
+              type: "probeSucceeded",
+              mode: result.mode === "required" ? "required" : "open",
+            });
+            if (result.health) {
+              setServerInfo(result.health);
+            }
+          } catch (error) {
+            if (signal.aborted) return;
+            console.error("Failed to probe backend auth", error);
+            dispatch({ type: "probeFailed" });
+          }
         }
-        dispatch({
-          type: "probeSucceeded",
-          mode: result.mode === "required" ? "required" : "open",
-        });
-        if (result.health) {
-          setServerInfo(result.health);
-        }
-      })
-      .catch((error) => {
-        if (cancelled) {
-          return;
-        }
-        console.error("Failed to probe backend auth", error);
-        dispatch({ type: "probeFailed" });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [state.mode, setServerInfo]);
+      : null,
+    [state.mode],
+    { initial: undefined },
+  );
 
   const retryDelay =
     state.mode === "unreachable" ? nextRetryDelayMs(state.retryCount) : null;
