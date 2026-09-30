@@ -64,6 +64,7 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 	selectorParam := r.URL.Query().Get("selector")
 	refParam := r.URL.Query().Get("ref")
 	ghostRoute := textRoute != nil && textRoute.UsedBrowser == config.BrowserGhostChrome
+	vocabBefore := h.tabVocab(resolvedTabID)
 	for attempt := 0; attempt < 2; attempt++ {
 		var modalNodeID int64
 		var modalOpen bool
@@ -79,10 +80,10 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		var text string
 		var extraction textExtraction
 		if selectorParam != "" || refParam != "" {
-			text, err = h.extractElementText(tCtx, resolvedTabID, selectorParam, refParam, modalNodeID)
+			text, err = h.extractElementText(tCtx, resolvedTabID, targetFrameID, selectorParam, refParam, modalNodeID)
+			h.publishVocabIfReepoched(w, resolvedTabID, vocabBefore)
 		} else if modalOpen {
-			err = h.Bridge.CallFunctionOnNode(tCtx, modalNodeID,
-				`function() { return this.innerText || this.textContent || ''; }`, nil, &text)
+			err = h.Bridge.CallFunctionOnNode(tCtx, modalNodeID, elementInnerTextJS, nil, &text)
 			extraction = textExtraction{Text: text, Mode: extractionRaw, RawLength: utf8.RuneCountInString(text), RawKnown: true}
 		} else {
 			extraction, err = h.extractDocumentText(tCtx, mode, targetFrameID)
@@ -501,70 +502,32 @@ func (h *Handlers) evalTextInFrame(ctx context.Context, script, frameID string) 
 	return text, nil
 }
 
-func (h *Handlers) extractElementText(ctx context.Context, tabID, selectorValue, ref string, scopeBackendNodeID int64) (string, error) {
-	var text string
-	if scopeBackendNodeID != 0 {
-		var sel selector.Selector
-		if ref != "" {
-			sel = selector.Parse("ref:" + ref)
-		} else {
-			sel = selector.Parse(selectorValue)
-		}
-		nodeID, err := bridge.ResolveUnifiedSelectorWithinNode(ctx, sel, h.Bridge.GetRefCache(tabID), scopeBackendNodeID)
-		if err != nil {
-			return "", err
-		}
-		if err := h.Bridge.CallFunctionOnNode(ctx, nodeID,
-			`function() { return this.innerText || this.textContent || ''; }`, nil, &text); err != nil {
-			return "", err
-		}
-		return text, nil
-	}
+const elementInnerTextJS = `function() { return this.innerText || this.textContent || ''; }`
 
+func (h *Handlers) extractElementText(ctx context.Context, tabID, frameID, selectorValue, ref string, scopeBackendNodeID int64) (string, error) {
+	raw := selectorValue
 	if ref != "" {
-		cache := h.Bridge.GetRefCache(tabID)
-		if cache == nil {
-			return "", fmt.Errorf("ref not found: %s (no snapshot cache): %w", ref, bridge.ErrSelectorNoMatch)
-		}
-		target, ok := cache.Lookup(ref)
-		if !ok {
-			return "", fmt.Errorf("ref not found: %s: %w", ref, bridge.ErrSelectorNoMatch)
-		}
-		nodeID := target.BackendNodeID
-
-		err := h.Bridge.CallFunctionOnNode(ctx, nodeID,
-			`function() { return this.innerText || this.textContent || ''; }`,
-			nil, &text)
-		if err != nil {
-			return "", err
-		}
-		return text, nil
+		raw = "ref:" + ref
 	}
-
-	var script string
-	switch {
-	case strings.HasPrefix(selectorValue, "xpath:"):
-		xpath := selectorValue[len("xpath:"):]
-		script = fmt.Sprintf(`(function(){var r=document.evaluate(%q,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);var n=r.singleNodeValue;return n?(n.innerText||n.textContent||''):null})()`, xpath)
-	case strings.HasPrefix(selectorValue, "//") || strings.HasPrefix(selectorValue, "(//"):
-		script = fmt.Sprintf(`(function(){var r=document.evaluate(%q,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);var n=r.singleNodeValue;return n?(n.innerText||n.textContent||''):null})()`, selectorValue)
-	case strings.HasPrefix(selectorValue, "text:"):
-		textVal := selectorValue[len("text:"):]
-		script = fmt.Sprintf(`(function(){var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);while(w.nextNode()){if(w.currentNode.textContent.includes(%q))return w.currentNode.parentElement.innerText||w.currentNode.parentElement.textContent||''}return null})()`, textVal)
-	case strings.HasPrefix(selectorValue, "css:"):
-		css := selectorValue[len("css:"):]
-		script = fmt.Sprintf(`(function(){var n=document.querySelector(%q);return n?(n.innerText||n.textContent||''):null})()`, css)
-	default:
-		script = fmt.Sprintf(`(function(){var n=document.querySelector(%q);return n?(n.innerText||n.textContent||''):null})()`, selectorValue)
-	}
-
-	if err := h.Bridge.Evaluate(ctx, script, &text, bridge.EvalOpts{}); err != nil {
+	nodeID, err := h.resolveTextTargetNodeID(ctx, tabID, frameID, raw, scopeBackendNodeID)
+	if err != nil {
 		return "", err
 	}
-	if text == "" {
-		return "", fmt.Errorf("no element matches selector %q: %w", selectorValue, bridge.ErrSelectorNoMatch)
+	if nodeID == 0 {
+		return "", fmt.Errorf("no element matches selector %q: %w", raw, bridge.ErrSelectorNoMatch)
+	}
+	var text string
+	if err := h.Bridge.CallFunctionOnNode(ctx, nodeID, elementInnerTextJS, nil, &text); err != nil {
+		return "", err
 	}
 	return text, nil
+}
+
+func (h *Handlers) resolveTextTargetNodeID(ctx context.Context, tabID, frameID, raw string, scopeBackendNodeID int64) (int64, error) {
+	if scopeBackendNodeID != 0 {
+		return bridge.ResolveUnifiedSelectorWithinNode(ctx, selector.Parse(raw), h.Bridge.GetRefCache(tabID), scopeBackendNodeID)
+	}
+	return h.resolveSelectorNodeIDInFrame(ctx, tabID, raw, frameID)
 }
 
 func (h *Handlers) waitForReadyState(ctx context.Context) {

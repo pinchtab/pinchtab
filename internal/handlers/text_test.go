@@ -8,10 +8,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/config"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 func TestHandleText_NoTab(t *testing.T) {
@@ -668,5 +672,57 @@ func TestWriteTextResponse_MarkdownReusesTheTextGuard(t *testing.T) {
 		if !strings.Contains(text, "untrusted_web_content") {
 			t.Errorf("mode %q: body is not wrapped as untrusted content:\n%s", mode, text)
 		}
+	}
+}
+
+func textFrameResponse(t *testing.T, f frameFixture, query string) (int, map[string]any) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/text?tabId=tab-frame&"+query, nil)
+	w := httptest.NewRecorder()
+	f.handlers.HandleText(w, req)
+	var body map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &body)
+	return w.Code, body
+}
+
+func TestHandleText_SelectorReadsInsideTheScopedFrame(t *testing.T) {
+	f := newFrameFixture(t)
+	tree, err := page.GetFrameTree().Do(cdp.WithExecutor(f.ctx, chromedp.FromContext(f.ctx).Target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tree.ChildFrames) == 0 {
+		t.Fatal("fixture has no child frame")
+	}
+
+	code, body := textFrameResponse(t, f, "selector=button")
+	if code != http.StatusOK || body["text"] != "Alert" {
+		t.Fatalf("top-level read = %d %v, want 200 Alert", code, body)
+	}
+
+	f.handlers.frameScopes().SetFrameScope("tab-frame", bridge.FrameScope{FrameID: string(tree.ChildFrames[0].Frame.ID)})
+	code, body = textFrameResponse(t, f, "selector=button")
+	if code != http.StatusOK || body["text"] != "frame button" {
+		t.Fatalf("frame-scoped read = %d %v, want 200 %q", code, body, "frame button")
+	}
+}
+
+func TestHandleText_EmptyElementIsAMatchNotA404(t *testing.T) {
+	f := newFrameFixture(t)
+
+	code, body := textFrameResponse(t, f, "selector=%23f")
+	if code != http.StatusOK {
+		t.Fatalf("status = %d %v, want 200", code, body)
+	}
+	if text, ok := body["text"].(string); !ok || text != "" {
+		t.Fatalf("text = %#v, want empty string", body["text"])
+	}
+}
+
+func TestHandleText_UnmatchedSelectorIs404(t *testing.T) {
+	f := newFrameFixture(t)
+
+	if code, body := textFrameResponse(t, f, "selector=%23missing"); code != http.StatusNotFound {
+		t.Fatalf("status = %d %v, want 404", code, body)
 	}
 }
