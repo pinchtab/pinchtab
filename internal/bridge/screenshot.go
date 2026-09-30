@@ -42,29 +42,14 @@ func ClampScale(scale float64) float64 {
 	return scale
 }
 
-// fetchViewportSize returns window.innerWidth/innerHeight via one
-// Runtime.evaluate round trip. Falls back to (0, 0) on any failure so the
-// caller can decide whether to bail or skip the rescale.
+// fetchViewportSize falls back to (0, 0) on any failure so the caller can
+// decide whether to bail or skip the rescale.
 func fetchViewportSize(ctx context.Context) (float64, float64) {
-	const expression = `JSON.stringify([window.innerWidth, window.innerHeight])`
-	var result struct {
-		Result struct {
-			Value string `json:"value"`
-		} `json:"result"`
-	}
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.evaluate", map[string]any{
-			"expression":    expression,
-			"returnByValue": true,
-		}, &result)
-	})); err != nil {
+	l, err := cdptk.Layout(ctx)
+	if err != nil {
 		return 0, 0
 	}
-	var dims [2]float64
-	if err := json.Unmarshal([]byte(result.Result.Value), &dims); err != nil {
-		return 0, 0
-	}
-	return dims[0], dims[1]
+	return l.Width, l.Height
 }
 
 // fetchDocumentSize returns the scrollable document dimensions in CSS pixels.

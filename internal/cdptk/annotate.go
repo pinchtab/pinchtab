@@ -209,12 +209,10 @@ func RemoveAnnotationOverlay(ctx context.Context) error {
 	return chromedp.Run(ctx, chromedp.Evaluate(script, nil))
 }
 
-// ViewportRect reports the current CSS-pixel viewport size. Used to filter
-// out annotations that fall entirely outside the visible window.
-// evaluateValue runs expression in the page with returnByValue and decodes the
+// EvaluateValue runs expression in the page with returnByValue and decodes the
 // result into T. A JS exception is reported as an error rather than decoding to
 // a zero value, which would otherwise read as a legitimate measurement.
-func evaluateValue[T any](ctx context.Context, expression string) (T, error) {
+func EvaluateValue[T any](ctx context.Context, expression string) (T, error) {
 	var zero T
 	var raw json.RawMessage
 	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
@@ -242,27 +240,48 @@ func evaluateValue[T any](ctx context.Context, expression string) (T, error) {
 	return resp.Result.Value, nil
 }
 
-type scrollOffsets struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-}
-
 type documentDimensions struct {
 	W float64 `json:"w"`
 	H float64 `json:"h"`
 }
 
+// LayoutMetrics is the CSS-pixel viewport size, document scroll offset and
+// device pixel ratio of the page, read in one Runtime.evaluate round trip.
+type LayoutMetrics struct {
+	Width            float64 `json:"w"`
+	Height           float64 `json:"h"`
+	ScrollX          float64 `json:"sx"`
+	ScrollY          float64 `json:"sy"`
+	DevicePixelRatio float64 `json:"dpr"`
+}
+
+func Layout(ctx context.Context) (LayoutMetrics, error) {
+	return EvaluateValue[LayoutMetrics](ctx, `(() => ({
+		w: window.innerWidth,
+		h: window.innerHeight,
+		sx: window.scrollX || window.pageXOffset || 0,
+		sy: window.scrollY || window.pageYOffset || 0,
+		dpr: window.devicePixelRatio || 1
+	}))()`)
+}
+
+// ViewportRect reports the current CSS-pixel viewport size. Used to filter
+// out annotations that fall entirely outside the visible window.
 func ViewportRect(ctx context.Context) (AnnotationRect, error) {
-	return evaluateValue[AnnotationRect](ctx, `(() => ({ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight }))()`)
+	l, err := Layout(ctx)
+	if err != nil {
+		return AnnotationRect{}, err
+	}
+	return AnnotationRect{W: l.Width, H: l.Height}, nil
 }
 
 // PageScroll returns the document's current scroll offsets in CSS pixels.
 func PageScroll(ctx context.Context) (float64, float64, error) {
-	v, err := evaluateValue[scrollOffsets](ctx, `(() => ({ x: window.scrollX || window.pageXOffset || 0, y: window.scrollY || window.pageYOffset || 0 }))()`)
+	l, err := Layout(ctx)
 	if err != nil {
 		return 0, 0, err
 	}
-	return v.X, v.Y, nil
+	return l.ScrollX, l.ScrollY, nil
 }
 
 // DocumentSize returns the CSS-pixel scrollable size of the document. Used to
@@ -270,7 +289,7 @@ func PageScroll(ctx context.Context) (float64, float64, error) {
 // Puppeteer/Playwright measure for fullPage screenshots — max of
 // documentElement and body across scrollWidth/scrollHeight.
 func DocumentSize(ctx context.Context) (float64, float64, error) {
-	v, err := evaluateValue[documentDimensions](ctx, `(() => {
+	v, err := EvaluateValue[documentDimensions](ctx, `(() => {
 		const d = document;
 		const de = d.documentElement;
 		const b = d.body || de;

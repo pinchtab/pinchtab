@@ -5,56 +5,13 @@ import (
 	"encoding/json"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/cdptk"
 )
 
-type ViewportInfo struct {
-	Width            float64
-	Height           float64
-	ScrollX          float64
-	ScrollY          float64
-	DevicePixelRatio float64
-}
+type ViewportInfo = cdptk.LayoutMetrics
 
-// One CDP round trip via Runtime.evaluate so this composes inside PairedCapture
-// without an extra Page.getLayoutMetrics call.
 func FetchLayout(ctx context.Context) (ViewportInfo, error) {
-	var out ViewportInfo
-	const expression = `JSON.stringify({
-		w: window.innerWidth,
-		h: window.innerHeight,
-		sx: window.scrollX || window.pageXOffset || 0,
-		sy: window.scrollY || window.pageYOffset || 0,
-		dpr: window.devicePixelRatio || 1
-	})`
-	var result struct {
-		Result struct {
-			Value string `json:"value"`
-		} `json:"result"`
-	}
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.evaluate", map[string]any{
-			"expression":    expression,
-			"returnByValue": true,
-		}, &result)
-	})); err != nil {
-		return out, err
-	}
-	var parsed struct {
-		W   float64 `json:"w"`
-		H   float64 `json:"h"`
-		SX  float64 `json:"sx"`
-		SY  float64 `json:"sy"`
-		DPR float64 `json:"dpr"`
-	}
-	if err := json.Unmarshal([]byte(result.Result.Value), &parsed); err != nil {
-		return out, err
-	}
-	out.Width = parsed.W
-	out.Height = parsed.H
-	out.ScrollX = parsed.SX
-	out.ScrollY = parsed.SY
-	out.DevicePixelRatio = parsed.DPR
-	return out, nil
+	return cdptk.Layout(ctx)
 }
 
 // Each node costs one DOM.getBoxModel round trip; for the typical

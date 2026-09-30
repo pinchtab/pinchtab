@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/pinchtab/pinchtab/internal/readiness"
+	"math"
 	"strings"
 	"time"
 
@@ -12,6 +12,9 @@ import (
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
+
+	"github.com/pinchtab/pinchtab/internal/cdptk"
+	"github.com/pinchtab/pinchtab/internal/readiness"
 )
 
 var scrollByCoordinateAction = ScrollByCoordinate
@@ -180,17 +183,11 @@ type pointerState struct {
 }
 
 var scrollViewportCenter = func(ctx context.Context) (float64, float64, error) {
-	var viewport struct {
-		X float64 `json:"x"`
-		Y float64 `json:"y"`
-	}
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`({
-		x: Math.max(1, Math.floor(window.innerWidth / 2)),
-		y: Math.max(1, Math.floor(window.innerHeight / 2))
-	})`, &viewport)); err != nil {
+	l, err := cdptk.Layout(ctx)
+	if err != nil {
 		return 0, 0, err
 	}
-	return viewport.X, viewport.Y, nil
+	return max(1, math.Floor(l.Width/2)), max(1, math.Floor(l.Height/2)), nil
 }
 
 // settle finalizes the popup auto-switch from a deferred call in the click
