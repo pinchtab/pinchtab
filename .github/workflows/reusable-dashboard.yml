@@ -23,7 +23,7 @@ jobs:
         run: |
           go tool -modfile=../tools/go.mod tygo generate
           bun run types:format
-          git diff --exit-code -- src/generated/types.ts
+          git diff --exit-code -- src/generated
 
       - name: TypeScript check
         run: bun run typecheck
