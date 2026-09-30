@@ -41,9 +41,9 @@ func (s *sessionServer) close() { s.server.Close() }
 
 func (s *sessionServer) rt() cliRuntime {
 	return cliRuntime{
-		client: &http.Client{},
-		base:   s.server.URL,
-		token:  "test-token",
+		Client: &http.Client{},
+		Base:   s.server.URL,
+		Token:  "test-token",
 	}
 }
 
@@ -56,7 +56,7 @@ func TestSessionCLI_Create_SendsCorrectRequest(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		rt := srv.rt()
-		apiclient.DoPost(rt.client, rt.base, rt.token, "/sessions", map[string]any{"agentId": "agent-1", "label": "ci"})
+		apiclient.DoPost(rt.Client, rt.Base, rt.Token, "/sessions", map[string]any{"agentId": "agent-1", "label": "ci"})
 	})
 
 	if srv.lastMethod != "POST" {
@@ -89,7 +89,7 @@ func TestSessionCLI_Create_NoLabel_OmitsField(t *testing.T) {
 
 	captureStdout(t, func() {
 		rt := srv.rt()
-		apiclient.DoPost(rt.client, rt.base, rt.token, "/sessions", map[string]any{"agentId": "agent-1"})
+		apiclient.DoPost(rt.Client, rt.Base, rt.Token, "/sessions", map[string]any{"agentId": "agent-1"})
 	})
 
 	var sent map[string]any
@@ -107,7 +107,7 @@ func TestSessionCLI_List_SendsCorrectRequest(t *testing.T) {
 
 	captureStdout(t, func() {
 		rt := srv.rt()
-		apiclient.DoGet(rt.client, rt.base, rt.token, "/sessions", nil)
+		apiclient.DoGet(rt.Client, rt.Base, rt.Token, "/sessions", nil)
 	})
 
 	if srv.lastMethod != "GET" {
@@ -124,7 +124,7 @@ func TestSessionCLI_Info_SendsCorrectRequest(t *testing.T) {
 
 	captureStdout(t, func() {
 		rt := srv.rt()
-		apiclient.DoGet(rt.client, rt.base, rt.token, "/sessions/me", nil)
+		apiclient.DoGet(rt.Client, rt.Base, rt.Token, "/sessions/me", nil)
 	})
 
 	if srv.lastMethod != "GET" {
@@ -143,7 +143,7 @@ func TestSessionCLI_Revoke_SendsCorrectRequest(t *testing.T) {
 
 	captureStdout(t, func() {
 		rt := srv.rt()
-		apiclient.DoPost(rt.client, rt.base, rt.token, "/sessions/"+sessionID+"/revoke", nil)
+		apiclient.DoPost(rt.Client, rt.Base, rt.Token, "/sessions/"+sessionID+"/revoke", nil)
 	})
 
 	if srv.lastMethod != "POST" {
@@ -169,11 +169,11 @@ func TestSessionCLI_Info_SendsSessionAuthHeader(t *testing.T) {
 	const sessionToken = "ses_mytoken"
 	captureStdout(t, func() {
 		rt := cliRuntime{
-			client: &http.Client{},
-			base:   srv.server.URL,
-			token:  sessionToken,
+			Client: &http.Client{},
+			Base:   srv.server.URL,
+			Token:  sessionToken,
 		}
-		apiclient.DoGet(rt.client, rt.base, rt.token, "/sessions/me", nil)
+		apiclient.DoGet(rt.Client, rt.Base, rt.Token, "/sessions/me", nil)
 	})
 
 	if gotAuth != "Session "+sessionToken {

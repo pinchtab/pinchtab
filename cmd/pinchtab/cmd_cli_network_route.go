@@ -19,7 +19,7 @@ Use 'pinchtab network unroute' to remove a rule.`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.NetworkRoute(rt.client, rt.base, rt.token, cmd, args[0])
+			browseractions.NetworkRoute(rt.Client, rt.Base, rt.Token, cmd, args[0])
 		})
 	},
 }
@@ -34,7 +34,7 @@ var networkUnrouteCmd = &cobra.Command{
 			pattern = args[0]
 		}
 		runCLI(func(rt cliRuntime) {
-			browseractions.NetworkUnroute(rt.client, rt.base, rt.token, cmd, pattern)
+			browseractions.NetworkUnroute(rt.Client, rt.Base, rt.Token, cmd, pattern)
 		})
 	},
 }
@@ -49,7 +49,7 @@ set up can be mocking or blocking traffic; an empty list means it does neither.`
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.NetworkRules(rt.client, rt.base, rt.token, cmd)
+			browseractions.NetworkRules(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }

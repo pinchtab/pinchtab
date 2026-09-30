@@ -21,7 +21,7 @@ var storageGetCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		key := operandOrFlag(cmd, args, "key")
 		runCLI(func(rt cliRuntime) {
-			browseractions.StorageGet(rt.client, rt.base, rt.token, cmd, key)
+			browseractions.StorageGet(rt.Client, rt.Base, rt.Token, cmd, key)
 		})
 	},
 }
@@ -33,7 +33,7 @@ var storageSetCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.StorageSet(rt.client, rt.base, rt.token, cmd, args[0], args[1])
+			browseractions.StorageSet(rt.Client, rt.Base, rt.Token, cmd, args[0], args[1])
 		})
 	},
 }
@@ -46,7 +46,7 @@ var storageDeleteCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		key := operandOrFlag(cmd, args, "key")
 		runCLI(func(rt cliRuntime) {
-			browseractions.StorageDelete(rt.client, rt.base, rt.token, cmd, key)
+			browseractions.StorageDelete(rt.Client, rt.Base, rt.Token, cmd, key)
 		})
 	},
 }
@@ -57,7 +57,7 @@ var storageClearCmd = &cobra.Command{
 	Long:  "Clear localStorage, sessionStorage, or both. Use --type local|session to clear one, or --all to clear both in a single call.",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.StorageClear(rt.client, rt.base, rt.token, cmd)
+			browseractions.StorageClear(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }

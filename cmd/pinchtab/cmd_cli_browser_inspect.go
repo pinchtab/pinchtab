@@ -18,7 +18,7 @@ var snapCmd = &cobra.Command{
 			selector = args[0]
 		}
 		runCLI(func(rt cliRuntime) {
-			browseractions.Snapshot(rt.client, rt.base, rt.token, cmd, selector)
+			browseractions.Snapshot(rt.Client, rt.Base, rt.Token, cmd, selector)
 		})
 	},
 }
@@ -29,7 +29,7 @@ var frameCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Frame(rt.client, rt.base, rt.token, args, cmd)
+			browseractions.Frame(rt.Client, rt.Base, rt.Token, args, cmd)
 		})
 	},
 }
@@ -39,7 +39,7 @@ var screenshotCmd = &cobra.Command{
 	Short: "Take a screenshot",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Screenshot(rt.client, rt.base, rt.token, cmd)
+			browseractions.Screenshot(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -49,7 +49,7 @@ var annotateCmd = &cobra.Command{
 	Short: "Inject a persistent, clickable annotation overlay on the live page (--clear to remove)",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Annotate(rt.client, rt.base, rt.token, cmd)
+			browseractions.Annotate(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -60,7 +60,7 @@ var captureCmd = &cobra.Command{
 	Short:   "Paired screenshot + accessibility snapshot from the same DOM epoch",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Capture(rt.client, rt.base, rt.token, cmd)
+			browseractions.Capture(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -71,7 +71,7 @@ var evalCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Evaluate(rt.client, rt.base, rt.token, args, cmd)
+			browseractions.Evaluate(rt.Client, rt.Base, rt.Token, args, cmd)
 		})
 	},
 }
@@ -81,7 +81,7 @@ var pdfCmd = &cobra.Command{
 	Short: "Export the current page as PDF",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.PDF(rt.client, rt.base, rt.token, cmd)
+			browseractions.PDF(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -92,7 +92,7 @@ var textCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Text(rt.client, rt.base, rt.token, cmd, args)
+			browseractions.Text(rt.Client, rt.Base, rt.Token, cmd, args)
 		})
 	},
 }
@@ -102,7 +102,7 @@ var titleCmd = &cobra.Command{
 	Short: "Get the current tab title",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Title(rt.client, rt.base, rt.token, cmd)
+			browseractions.Title(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -112,7 +112,7 @@ var urlCmd = &cobra.Command{
 	Short: "Get the current tab URL",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.URL(rt.client, rt.base, rt.token, cmd)
+			browseractions.URL(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -123,7 +123,7 @@ var htmlCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.HTML(rt.client, rt.base, rt.token, cmd, args)
+			browseractions.HTML(rt.Client, rt.Base, rt.Token, cmd, args)
 		})
 	},
 }
@@ -134,7 +134,7 @@ var stylesCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Styles(rt.client, rt.base, rt.token, cmd, args)
+			browseractions.Styles(rt.Client, rt.Base, rt.Token, cmd, args)
 		})
 	},
 }
@@ -145,7 +145,7 @@ var valueCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Value(rt.client, rt.base, rt.token, cmd, args)
+			browseractions.Value(rt.Client, rt.Base, rt.Token, cmd, args)
 		})
 	},
 }
@@ -156,7 +156,7 @@ var attrCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Attr(rt.client, rt.base, rt.token, cmd, args)
+			browseractions.Attr(rt.Client, rt.Base, rt.Token, cmd, args)
 		})
 	},
 }
@@ -167,7 +167,7 @@ var boxCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Box(rt.client, rt.base, rt.token, cmd, args)
+			browseractions.Box(rt.Client, rt.Base, rt.Token, cmd, args)
 		})
 	},
 }
@@ -182,7 +182,7 @@ answer that the capture snapshot's per-node visible field publishes.`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Visible(rt.client, rt.base, rt.token, cmd, args)
+			browseractions.Visible(rt.Client, rt.Base, rt.Token, cmd, args)
 		})
 	},
 }
@@ -193,7 +193,7 @@ var enabledCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Enabled(rt.client, rt.base, rt.token, cmd, args)
+			browseractions.Enabled(rt.Client, rt.Base, rt.Token, cmd, args)
 		})
 	},
 }
@@ -204,7 +204,7 @@ var checkedCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Checked(rt.client, rt.base, rt.token, cmd, args)
+			browseractions.Checked(rt.Client, rt.Base, rt.Token, cmd, args)
 		})
 	},
 }
@@ -215,7 +215,7 @@ var countCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Count(rt.client, rt.base, rt.token, cmd, args)
+			browseractions.Count(rt.Client, rt.Base, rt.Token, cmd, args)
 		})
 	},
 }
@@ -227,7 +227,7 @@ var downloadCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		args[0] = urls.Normalize(args[0])
 		runCLI(func(rt cliRuntime) {
-			browseractions.Download(rt.client, rt.base, rt.token, args, stringFlag(cmd, "output"), stringFlag(cmd, "tab"))
+			browseractions.Download(rt.Client, rt.Base, rt.Token, args, stringFlag(cmd, "output"), stringFlag(cmd, "tab"))
 		})
 	},
 }
@@ -238,7 +238,7 @@ var uploadCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Upload(rt.client, rt.base, rt.token, args, stringFlag(cmd, "selector"), stringFlag(cmd, "tab"))
+			browseractions.Upload(rt.Client, rt.Base, rt.Token, args, stringFlag(cmd, "selector"), stringFlag(cmd, "tab"))
 		})
 	},
 }
@@ -249,7 +249,7 @@ var findCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Find(rt.client, rt.base, rt.token, args[0], cmd)
+			browseractions.Find(rt.Client, rt.Base, rt.Token, args[0], cmd)
 		})
 	},
 }
@@ -260,7 +260,7 @@ var extractCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Extract(rt.client, rt.base, rt.token, cmd)
+			browseractions.Extract(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -271,7 +271,7 @@ var waitCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Wait(rt.client, rt.base, rt.token, args, cmd)
+			browseractions.Wait(rt.Client, rt.Base, rt.Token, args, cmd)
 		})
 	},
 }
@@ -282,7 +282,7 @@ var networkCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Network(rt.client, rt.base, rt.token, cmd, args)
+			browseractions.Network(rt.Client, rt.Base, rt.Token, cmd, args)
 		})
 	},
 }

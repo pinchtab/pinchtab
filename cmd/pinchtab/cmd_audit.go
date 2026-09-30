@@ -35,7 +35,7 @@ the failing page's report entry carries an "error" field.`,
 			target = args[0]
 		}
 		return runCLIWithError(func(rt cliRuntime) error {
-			return browseractions.Audit(rt.client, rt.base, rt.token, cmd, target)
+			return browseractions.Audit(rt.Client, rt.Base, rt.Token, cmd, target)
 		})
 	},
 }

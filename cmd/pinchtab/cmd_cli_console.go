@@ -11,7 +11,7 @@ var consoleCmd = &cobra.Command{
 	Long:  "View browser console.log/warn/error/info messages from the current or specified tab.",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Console(rt.client, rt.base, rt.token, cmd)
+			browseractions.Console(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -22,7 +22,7 @@ var errorsCmd = &cobra.Command{
 	Long:  "View uncaught JavaScript exceptions from the current or specified tab.",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Errors(rt.client, rt.base, rt.token, cmd)
+			browseractions.Errors(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }

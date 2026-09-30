@@ -28,7 +28,7 @@ rule-id allowlist).`,
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.A11yAudit(rt.client, rt.base, rt.token, cmd)
+			browseractions.A11yAudit(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }

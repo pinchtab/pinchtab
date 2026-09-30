@@ -32,7 +32,7 @@ exits 0 and the failing page's report entry carries an "error" field.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runCLIWithError(func(rt cliRuntime) error {
-			return browseractions.Scrape(rt.client, rt.base, rt.token, cmd, args[0])
+			return browseractions.Scrape(rt.Client, rt.Base, rt.Token, cmd, args[0])
 		})
 	},
 }

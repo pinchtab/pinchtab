@@ -19,11 +19,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type cliRuntime struct {
-	client *http.Client
-	base   string
-	token  string
-}
+type cliRuntime = apiclient.Conn
 
 func runCLI(fn func(cliRuntime)) {
 	runCLIWith(loadConfig(), fn)
@@ -49,7 +45,7 @@ func runCLIEnsuringServer(command string, fn func(cliRuntime)) {
 func runCLIEnsuringServerNoBrowser(command string, fn func(cliRuntime)) {
 	cfg := loadConfig()
 	rt := newCLIRuntime(cfg)
-	if err := ensureServerForCLI(cfg, rt.base, rt.token, command); err != nil {
+	if err := ensureServerForCLI(cfg, rt.Base, rt.Token, command); err != nil {
 		fmt.Fprintf(os.Stderr, "pinchtab: %v\n", err)
 		os.Exit(1)
 	}
@@ -60,13 +56,13 @@ func runCLIWithServerCheck(cfg *config.RuntimeConfig, command string, fn func(cl
 	rt := newCLIRuntime(cfg)
 	// Only preflight when this command would auto-start the local server. For a
 	// remote --server the browser lives on that host, so local discovery is moot.
-	if canAutoStartServerForCLI(cfg, rt.base) {
+	if canAutoStartServerForCLI(cfg, rt.Base) {
 		if err := preflightBrowserBinary(cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "pinchtab: %v\n", err)
 			os.Exit(1)
 		}
 	}
-	if err := ensureServerForCLI(cfg, rt.base, rt.token, command); err != nil {
+	if err := ensureServerForCLI(cfg, rt.Base, rt.Token, command); err != nil {
 		fmt.Fprintf(os.Stderr, "pinchtab: %v\n", err)
 		os.Exit(1)
 	}
@@ -107,9 +103,9 @@ func preflightBrowserBinary(cfg *config.RuntimeConfig) error {
 func newCLIRuntime(cfg *config.RuntimeConfig) cliRuntime {
 	base := resolveCLIBase(cfg)
 	return cliRuntime{
-		client: newCLIHTTPClient(resolveCLIAgentID()),
-		base:   base,
-		token:  tokenForBaseOrExit(cfg, base),
+		Client: newCLIHTTPClient(resolveCLIAgentID()),
+		Base:   base,
+		Token:  tokenForBaseOrExit(cfg, base),
 	}
 }
 

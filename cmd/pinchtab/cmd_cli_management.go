@@ -10,7 +10,7 @@ import (
 
 func listInstances(cmd *cobra.Command) {
 	runCLI(func(rt cliRuntime) {
-		browseractions.Instances(rt.client, rt.base, rt.token, cmd)
+		browseractions.Instances(rt.Client, rt.Base, rt.Token, cmd)
 	})
 }
 
@@ -42,7 +42,7 @@ var healthCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		emitDefaultConfigHint()
 		runCLI(func(rt cliRuntime) {
-			browseractions.Health(rt.client, rt.base, rt.token, cmd)
+			browseractions.Health(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -52,7 +52,7 @@ var profilesCmd = &cobra.Command{
 	Short: "List browser profiles",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Profiles(rt.client, rt.base, rt.token, cmd)
+			browseractions.Profiles(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -62,7 +62,7 @@ var profilesPruneCmd = &cobra.Command{
 	Short: "Reclaim disk from quarantined profiles (lists only unless --confirm)",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.ProfilesPrune(rt.client, rt.base, rt.token, cmd)
+			browseractions.ProfilesPrune(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -73,7 +73,7 @@ var profilesCreateCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.ProfilesCreate(rt.client, rt.base, rt.token, args[0])
+			browseractions.ProfilesCreate(rt.Client, rt.Base, rt.Token, args[0])
 		})
 	},
 }
@@ -83,7 +83,7 @@ var activityCmd = &cobra.Command{
 	Short: "List recorded activity events",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Activity(rt.client, rt.base, rt.token, cmd)
+			browseractions.Activity(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -94,7 +94,7 @@ var activityTabCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.ActivityTab(rt.client, rt.base, rt.token, args[0], cmd)
+			browseractions.ActivityTab(rt.Client, rt.Base, rt.Token, args[0], cmd)
 		})
 	},
 }
@@ -129,7 +129,7 @@ var startInstanceCmd = &cobra.Command{
 	Short: "Start a browser instance",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.InstanceStart(rt.client, rt.base, rt.token, cmd)
+			browseractions.InstanceStart(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -141,7 +141,7 @@ var instanceNavigateCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		args[1] = urls.Normalize(args[1])
 		runCLI(func(rt cliRuntime) {
-			browseractions.InstanceNavigate(rt.client, rt.base, rt.token, args)
+			browseractions.InstanceNavigate(rt.Client, rt.Base, rt.Token, args)
 		})
 	},
 }
@@ -152,7 +152,7 @@ var instanceStopCmd = &cobra.Command{
 	Args:  instanceIDArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.InstanceStop(rt.client, rt.base, rt.token, args)
+			browseractions.InstanceStop(rt.Client, rt.Base, rt.Token, args)
 		})
 	},
 }
@@ -163,7 +163,7 @@ var instanceRestartCmd = &cobra.Command{
 	Args:  instanceIDArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.InstanceRestart(rt.client, rt.base, rt.token, args)
+			browseractions.InstanceRestart(rt.Client, rt.Base, rt.Token, args)
 		})
 	},
 }
@@ -174,7 +174,7 @@ var instanceLogsCmd = &cobra.Command{
 	Args:  instanceIDArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.InstanceLogs(rt.client, rt.base, rt.token, args)
+			browseractions.InstanceLogs(rt.Client, rt.Base, rt.Token, args)
 		})
 	},
 }

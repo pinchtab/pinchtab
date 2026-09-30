@@ -63,7 +63,7 @@ func init() {
 				os.Exit(1)
 			}
 			runCLI(func(rt cliRuntime) {
-				apiclient.DoGet(rt.client, rt.base, rt.token, "/sessions/me", nil)
+				apiclient.DoGet(rt.Client, rt.Base, rt.Token, "/sessions/me", nil)
 			})
 		},
 	}
@@ -73,7 +73,7 @@ func init() {
 		Short: "List all agent sessions",
 		Run: func(cmd *cobra.Command, args []string) {
 			runCLI(func(rt cliRuntime) {
-				apiclient.DoGet(rt.client, rt.base, rt.token, "/sessions", nil)
+				apiclient.DoGet(rt.Client, rt.Base, rt.Token, "/sessions", nil)
 			})
 		},
 	}
@@ -118,10 +118,10 @@ func init() {
 			// machine (only browser commands start the server).
 			runCLIEnsuringServerNoBrowser("session create", func(rt cliRuntime) {
 				if jsonOutput {
-					apiclient.DoPost(rt.client, rt.base, rt.token, "/sessions", body)
+					apiclient.DoPost(rt.Client, rt.Base, rt.Token, "/sessions", body)
 					return
 				}
-				statusCode, rawBody, _ := apiclient.DoPostQuietWithStatus(rt.client, rt.base, rt.token, "/sessions", body)
+				statusCode, rawBody, _ := apiclient.DoPostQuietWithStatus(rt.Client, rt.Base, rt.Token, "/sessions", body)
 				if statusCode >= 400 {
 					exitSessionUnavailable(rawBody)
 					apiclient.ExitWithAPIError(statusCode, rawBody)
@@ -152,7 +152,7 @@ func init() {
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			runCLI(func(rt cliRuntime) {
-				apiclient.DoPost(rt.client, rt.base, rt.token, "/sessions/"+args[0]+"/revoke", nil)
+				apiclient.DoPost(rt.Client, rt.Base, rt.Token, "/sessions/"+args[0]+"/revoke", nil)
 			})
 		},
 	}

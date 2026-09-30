@@ -17,7 +17,7 @@ var quickCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		args[0] = urls.Normalize(args[0])
 		runCLI(func(rt cliRuntime) {
-			browseractions.Quick(rt.client, rt.base, rt.token, args)
+			browseractions.Quick(rt.Client, rt.Base, rt.Token, args)
 		})
 	},
 }
@@ -30,7 +30,7 @@ var navCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		url := urls.Normalize(args[0])
 		runCLIEnsuringServer("nav", func(rt cliRuntime) {
-			tabID := browseractions.Navigate(rt.client, rt.base, rt.token, url, cmd)
+			tabID := browseractions.Navigate(rt.Client, rt.Base, rt.Token, url, cmd)
 			WriteTabStateFile(tabID)
 		})
 	},
@@ -41,7 +41,7 @@ var backCmd = &cobra.Command{
 	Short: "Go back in browser history",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Back(rt.client, rt.base, rt.token, cmd)
+			browseractions.Back(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -51,7 +51,7 @@ var forwardCmd = &cobra.Command{
 	Short: "Go forward in browser history",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Forward(rt.client, rt.base, rt.token, cmd)
+			browseractions.Forward(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -61,7 +61,7 @@ var reloadCmd = &cobra.Command{
 	Short: "Reload current page",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Reload(rt.client, rt.base, rt.token, cmd)
+			browseractions.Reload(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -74,10 +74,10 @@ var tabsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
 			if len(args) == 0 {
-				browseractions.TabList(rt.client, rt.base, rt.token, cmd)
+				browseractions.TabList(rt.Client, rt.Base, rt.Token, cmd)
 				return
 			}
-			tabID := browseractions.TabFocus(rt.client, rt.base, rt.token, args[0], cmd)
+			tabID := browseractions.TabFocus(rt.Client, rt.Base, rt.Token, args[0], cmd)
 			WriteTabStateFile(tabID)
 		})
 	},
@@ -99,7 +99,7 @@ func newTabCloseCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			runCLI(func(rt cliRuntime) {
-				browseractions.TabClose(rt.client, rt.base, rt.token, args[0], cmd)
+				browseractions.TabClose(rt.Client, rt.Base, rt.Token, args[0], cmd)
 				ClearTabStateFileIfCurrent(args[0])
 			})
 		},
@@ -134,7 +134,7 @@ func newTabHandoffCmd() *cobra.Command {
 				return err
 			}
 			runCLI(func(rt cliRuntime) {
-				browseractions.TabHandoff(rt.client, rt.base, rt.token, tabID, reason, timeoutMS, cmd)
+				browseractions.TabHandoff(rt.Client, rt.Base, rt.Token, tabID, reason, timeoutMS, cmd)
 			})
 			return nil
 		},
@@ -156,7 +156,7 @@ func newTabResumeCmd() *cobra.Command {
 				return err
 			}
 			runCLI(func(rt cliRuntime) {
-				browseractions.TabResume(rt.client, rt.base, rt.token, tabID, status, cmd)
+				browseractions.TabResume(rt.Client, rt.Base, rt.Token, tabID, status, cmd)
 			})
 			return nil
 		},
@@ -177,7 +177,7 @@ func newTabHandoffStatusCmd() *cobra.Command {
 				return err
 			}
 			runCLI(func(rt cliRuntime) {
-				browseractions.TabHandoffStatus(rt.client, rt.base, rt.token, tabID, cmd)
+				browseractions.TabHandoffStatus(rt.Client, rt.Base, rt.Token, tabID, cmd)
 			})
 			return nil
 		},

@@ -17,7 +17,7 @@ var cacheClearCmd = &cobra.Command{
 	Long:  "Clear the browser's HTTP disk cache. This affects all origins and ensures fresh resources are fetched on subsequent navigations.",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.CacheClear(rt.client, rt.base, rt.token, cmd)
+			browseractions.CacheClear(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -28,7 +28,7 @@ var cacheStatusCmd = &cobra.Command{
 	Long:  "Check if the browser cache can be cleared.",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.CacheStatus(rt.client, rt.base, rt.token, cmd)
+			browseractions.CacheStatus(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }

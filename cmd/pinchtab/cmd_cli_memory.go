@@ -17,7 +17,7 @@ between two snapshots. All three need security.allowMemory,
 because a heap snapshot holds every string on the page, tokens included.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.Memory(rt.client, rt.base, rt.token, cmd)
+			browseractions.Memory(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -32,7 +32,7 @@ shares this machine's filesystem. The file loads in Chrome DevTools (Memory pane
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.MemorySnapshot(rt.client, rt.base, rt.token, cmd)
+			browseractions.MemorySnapshot(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -44,7 +44,7 @@ var memorySummaryCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.MemorySummary(rt.client, rt.base, rt.token, cmd, args[0])
+			browseractions.MemorySummary(rt.Client, rt.Base, rt.Token, cmd, args[0])
 		})
 	},
 }
@@ -60,7 +60,7 @@ and time proportional to the snapshot's edges.`,
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.MemoryCompare(rt.client, rt.base, rt.token, cmd, args[0], args[1])
+			browseractions.MemoryCompare(rt.Client, rt.Base, rt.Token, cmd, args[0], args[1])
 		})
 	},
 }

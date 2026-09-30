@@ -28,7 +28,7 @@ exists (CI gate).`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runCLIWithError(func(rt cliRuntime) error {
-			return browseractions.Compare(rt.client, rt.base, rt.token, cmd, args[0], args[1])
+			return browseractions.Compare(rt.Client, rt.Base, rt.Token, cmd, args[0], args[1])
 		})
 	},
 }

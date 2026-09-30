@@ -17,7 +17,7 @@ var cookiesGetCmd = &cobra.Command{
 	Long:  "Read the cookies visible to a tab's current URL, with values. Use --name for one cookie, --url to read another origin.",
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.CookiesGet(rt.client, rt.base, rt.token, cmd)
+			browseractions.CookiesGet(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
@@ -32,7 +32,7 @@ cookie without deleting it.`,
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.CookiesSet(rt.client, rt.base, rt.token, cmd, args[0], args[1])
+			browseractions.CookiesSet(rt.Client, rt.Base, rt.Token, cmd, args[0], args[1])
 		})
 	},
 }
@@ -46,7 +46,7 @@ the CLI restores them; re-set what you need with cookies set, or reload a saved
 state with state load.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
-			browseractions.CookiesClear(rt.client, rt.base, rt.token, cmd)
+			browseractions.CookiesClear(rt.Client, rt.Base, rt.Token, cmd)
 		})
 	},
 }
