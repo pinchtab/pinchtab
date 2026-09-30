@@ -8,9 +8,19 @@ import (
 // configSection binds a settable top-level section of FileConfig to the pair of
 // accessors that reach into it.
 type configSection struct {
-	name string
-	set  func(fc *FileConfig, field, value string) error
-	get  func(fc *FileConfig, field string) (string, error)
+	name   string
+	set    func(fc *FileConfig, field, value string) error
+	get    func(fc *FileConfig, field string) (string, error)
+	leaves func() []fieldLeaf
+}
+
+func tableSection[T any](name string, tbl *fieldTable[T], slot func(*FileConfig) *T) configSection {
+	return configSection{
+		name:   name,
+		set:    func(fc *FileConfig, field, value string) error { return tbl.set(slot(fc), name, field, value) },
+		get:    func(fc *FileConfig, field string) (string, error) { return tbl.get(slot(fc), name, field) },
+		leaves: func() []fieldLeaf { return tbl.leaves(name) },
+	}
 }
 
 // configSections is the ONE place the section vocabulary is written down. It used to
@@ -28,68 +38,18 @@ type configSection struct {
 // than configuration, and the schema walk in editor_sections_test.go excludes them by
 // name so neither can be added to satisfy that test nor dropped as an oversight.
 var configSections = []configSection{
-	{
-		name: "server",
-		set:  func(fc *FileConfig, f, v string) error { return serverFields.setField(&fc.Server, f, v) },
-		get:  func(fc *FileConfig, f string) (string, error) { return serverFields.getField(&fc.Server, f) },
-	},
-	{
-		name: "browser",
-		set:  func(fc *FileConfig, f, v string) error { return setBrowserField(&fc.Browser, f, v) },
-		get:  func(fc *FileConfig, f string) (string, error) { return getBrowserField(&fc.Browser, f) },
-	},
-	{
-		name: "browsers",
-		set:  func(fc *FileConfig, f, v string) error { return setBrowsersField(&fc.Browsers, f, v) },
-		get:  func(fc *FileConfig, f string) (string, error) { return getBrowsersField(&fc.Browsers, f) },
-	},
-	{
-		name: "instanceDefaults",
-		set:  func(fc *FileConfig, f, v string) error { return setInstanceDefaultsField(&fc.InstanceDefaults, f, v) },
-		get: func(fc *FileConfig, f string) (string, error) {
-			return getInstanceDefaultsField(&fc.InstanceDefaults, f)
-		},
-	},
-	{
-		name: "security",
-		set:  func(fc *FileConfig, f, v string) error { return setSecurityField(&fc.Security, f, v) },
-		get:  func(fc *FileConfig, f string) (string, error) { return getSecurityField(&fc.Security, f) },
-	},
-	{
-		name: "profiles",
-		set:  func(fc *FileConfig, f, v string) error { return setProfilesField(&fc.Profiles, f, v) },
-		get:  func(fc *FileConfig, f string) (string, error) { return getProfilesField(&fc.Profiles, f) },
-	},
-	{
-		name: "multiInstance",
-		set:  func(fc *FileConfig, f, v string) error { return setMultiInstanceField(&fc.MultiInstance, f, v) },
-		get:  func(fc *FileConfig, f string) (string, error) { return getMultiInstanceField(&fc.MultiInstance, f) },
-	},
-	{
-		name: "timeouts",
-		set:  func(fc *FileConfig, f, v string) error { return setTimeoutsField(&fc.Timeouts, f, v) },
-		get:  func(fc *FileConfig, f string) (string, error) { return getTimeoutsField(&fc.Timeouts, f) },
-	},
-	{
-		name: "scheduler",
-		set:  func(fc *FileConfig, f, v string) error { return setSchedulerField(&fc.Scheduler, f, v) },
-		get:  func(fc *FileConfig, f string) (string, error) { return getSchedulerField(&fc.Scheduler, f) },
-	},
-	{
-		name: "observability",
-		set:  func(fc *FileConfig, f, v string) error { return setObservabilityField(&fc.Observability, f, v) },
-		get:  func(fc *FileConfig, f string) (string, error) { return getObservabilityField(&fc.Observability, f) },
-	},
-	{
-		name: "sessions",
-		set:  func(fc *FileConfig, f, v string) error { return setSessionsField(&fc.Sessions, f, v) },
-		get:  func(fc *FileConfig, f string) (string, error) { return getSessionsField(&fc.Sessions, f) },
-	},
-	{
-		name: "autoSolver",
-		set:  func(fc *FileConfig, f, v string) error { return setAutoSolverField(&fc.AutoSolver, f, v) },
-		get:  func(fc *FileConfig, f string) (string, error) { return getAutoSolverField(&fc.AutoSolver, f) },
-	},
+	tableSection("server", &serverFields, func(fc *FileConfig) *ServerConfig { return &fc.Server }),
+	tableSection("browser", &browserFields, func(fc *FileConfig) *BrowserConfig { return &fc.Browser }),
+	tableSection("browsers", &browsersFields, func(fc *FileConfig) *BrowsersConfig { return &fc.Browsers }),
+	tableSection("instanceDefaults", &instanceDefaultsFields, func(fc *FileConfig) *InstanceDefaultsConfig { return &fc.InstanceDefaults }),
+	tableSection("security", &securityFields, func(fc *FileConfig) *SecurityConfig { return &fc.Security }),
+	tableSection("profiles", &profilesFields, func(fc *FileConfig) *ProfilesConfig { return &fc.Profiles }),
+	tableSection("multiInstance", &multiInstanceFields, func(fc *FileConfig) *MultiInstanceConfig { return &fc.MultiInstance }),
+	tableSection("timeouts", &timeoutsFields, func(fc *FileConfig) *TimeoutsConfig { return &fc.Timeouts }),
+	tableSection("scheduler", &schedulerFields, func(fc *FileConfig) *SchedulerFileConfig { return &fc.Scheduler }),
+	tableSection("observability", &observabilityFields, func(fc *FileConfig) *ObservabilityFileConfig { return &fc.Observability }),
+	tableSection("sessions", &sessionsFields, func(fc *FileConfig) *SessionsFileConfig { return &fc.Sessions }),
+	tableSection("autoSolver", &autoSolverFields, func(fc *FileConfig) *AutoSolverFileConfig { return &fc.AutoSolver }),
 }
 
 // lookupConfigSection splits a dotted path and returns the section that owns it.

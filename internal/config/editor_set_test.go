@@ -453,21 +453,12 @@ func TestSetActivityStateDirIsRefusedRatherThanSilentlyIgnored(t *testing.T) {
 	}
 }
 
-type fieldTableRow struct {
-	path string
-	kind fieldKind
-}
-
-func fieldTableRows[T any](tbl fieldTable[T]) []fieldTableRow {
-	rows := make([]fieldTableRow, 0, len(tbl.fields))
-	for _, spec := range tbl.fields {
-		rows = append(rows, fieldTableRow{path: tbl.section + "." + spec.key, kind: spec.kind})
+func allFieldTableRows() []fieldLeaf {
+	var rows []fieldLeaf
+	for _, section := range configSections {
+		rows = append(rows, section.leaves()...)
 	}
-	return rows
-}
-
-func allFieldTableRows() []fieldTableRow {
-	return append(fieldTableRows(serverFields), fieldTableRows(securityFields)...)
+	return append(rows, browserTargetFields.leaves("browser.targets.probe")...)
 }
 
 func TestFieldTablesRoundTripEveryRow(t *testing.T) {
@@ -477,9 +468,22 @@ func TestFieldTablesRoundTripEveryRow(t *testing.T) {
 		fieldBool:   "true",
 		fieldList:   "a.example.com,b.example.com",
 	}
+	pathProbes := map[string]string{
+		"browsers.default":               "chrome",
+		"browser.targets.probe.provider": "chrome",
+	}
+	sections := map[string]bool{}
 	for _, row := range allFieldTableRows() {
+		probe, ok := probes[row.kind]
+		if !ok {
+			continue
+		}
+		if override, ok := pathProbes[row.path]; ok {
+			probe = override
+		}
+		section, _, _ := strings.Cut(row.path, ".")
+		sections[section] = true
 		t.Run(row.path, func(t *testing.T) {
-			probe := probes[row.kind]
 			fc := &FileConfig{}
 			if err := SetConfigValue(fc, row.path, probe); err != nil {
 				t.Fatalf("set %s = %q: %v", row.path, probe, err)
@@ -492,6 +496,11 @@ func TestFieldTablesRoundTripEveryRow(t *testing.T) {
 				t.Errorf("%s round-tripped to %q, want %q", row.path, got, probe)
 			}
 		})
+	}
+	for _, section := range configSections {
+		if !sections[section.name] {
+			t.Errorf("section %s has no round-tripped row", section.name)
+		}
 	}
 }
 

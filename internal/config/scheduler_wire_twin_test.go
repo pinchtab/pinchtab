@@ -34,7 +34,7 @@ func TestEverySchedulerKeySurvivesTheWireTwin(t *testing.T) {
 			t.Errorf("%q has type %s, which this guard cannot drive — extend it rather than skipping the field", key, field.Type)
 			continue
 		}
-		if err := setSchedulerField(&file, key, value); err != nil {
+		if err := schedulerFields.set(&file, "scheduler", key, value); err != nil {
 			t.Errorf("config set scheduler.%s: %v", key, err)
 			continue
 		}
