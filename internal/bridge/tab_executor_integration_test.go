@@ -208,7 +208,7 @@ func TestTabManager_ExecutorAccessor(t *testing.T) {
 		executor:  te,
 	}
 	if tm.Executor() != te {
-		t.Error("Executor() should return the configured TabExecutor")
+		t.Error("Executor() should return the configured bridgetabs.TabExecutor")
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"math"
 	"strings"
 	"time"
@@ -229,7 +230,7 @@ func (s *autoSwitchSession) settle(ctx context.Context, result map[string]any, e
 	return result
 }
 
-func (b *Bridge) armDialogAutoHandler(req ActionRequest) (*DialogManager, bool) {
+func (b *Bridge) armDialogAutoHandler(req ActionRequest) (*bridgetabs.DialogManager, bool) {
 	dm := b.GetDialogManager()
 	if req.DialogAction != "" && req.TabID != "" && dm != nil {
 		dm.ArmAutoHandler(req.TabID, req.DialogAction, req.DialogText)
@@ -238,7 +239,7 @@ func (b *Bridge) armDialogAutoHandler(req ActionRequest) (*DialogManager, bool) 
 	return dm, false
 }
 
-func dialogBlocking(dm *DialogManager, tabID string) error {
+func dialogBlocking(dm *bridgetabs.DialogManager, tabID string) error {
 	pending := dm.GetPending(tabID)
 	if pending == nil {
 		return nil
@@ -369,7 +370,7 @@ func (b *Bridge) waitNavIfRequested(ctx context.Context, req ActionRequest) {
 	}
 }
 
-func waitForArmedDialogSettle(ctx context.Context, dm *DialogManager, tabID string) {
+func waitForArmedDialogSettle(ctx context.Context, dm *bridgetabs.DialogManager, tabID string) {
 	if dm == nil || strings.TrimSpace(tabID) == "" {
 		return
 	}

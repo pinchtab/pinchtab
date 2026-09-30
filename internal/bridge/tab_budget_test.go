@@ -1,13 +1,14 @@
 package bridge
 
 import (
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	"testing"
 
 	"github.com/chromedp/cdproto/target"
 )
 
 func pageTarget(id string) *target.Info {
-	return &target.Info{TargetID: target.ID(id), Type: TargetTypePage}
+	return &target.Info{TargetID: target.ID(id), Type: bridgecdpops.TargetTypePage}
 }
 
 func TestSelectOrphanTargets_PicksUntrackedOldestFirst(t *testing.T) {

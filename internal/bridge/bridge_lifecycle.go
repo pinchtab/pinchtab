@@ -391,7 +391,7 @@ func (b *Bridge) RestartBrowser(cfg *config.RuntimeConfig) error {
 	b.stealthLaunchMode = stealth.LaunchModeUninitialized
 
 	b.LogStore = NewConsoleLogStore(1000)
-	b.netMonitor = bridgeobserve.NewNetworkMonitor(DefaultNetworkBufferSize)
+	b.netMonitor = bridgeobserve.NewNetworkMonitor(bridgeobserve.DefaultNetworkBufferSize)
 	if cfg.NetworkBufferSize > 0 {
 		b.netMonitor = bridgeobserve.NewNetworkMonitor(cfg.NetworkBufferSize)
 	}

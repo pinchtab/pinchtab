@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"net/http"
 	"time"
 
@@ -63,7 +64,7 @@ type BridgeAPI interface {
 	// GetAggregatedMemoryMetrics measures the whole browser process tree. There is
 	// no per-tab reading behind it, so it takes no tab identifier: /tabs/{id}/metrics
 	// uses the id to select the owning instance, never the measurement.
-	GetAggregatedMemoryMetrics() (*MemoryMetrics, error)
+	GetAggregatedMemoryMetrics() (*bridgeobserve.MemoryMetrics, error)
 
 	GetCrashLogs() []string
 
@@ -73,7 +74,7 @@ type BridgeAPI interface {
 	RemoveRouteRule(tabID, pattern string) (int, error)
 	ListRouteRules(tabID string) ([]RouteRule, error)
 
-	GetDialogManager() *DialogManager
+	GetDialogManager() *bridgetabs.DialogManager
 
 	GetConsoleLogs(tabID string, limit int) []types.ConsoleLogEntry
 	ClearConsoleLogs(tabID string)

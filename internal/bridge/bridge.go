@@ -28,8 +28,8 @@ type Bridge struct {
 	StealthBundle *stealth.Bundle
 	Actions       map[string]ActionFunc
 	pointerOps    *pointerOps
-	Locks         *LockManager
-	Dialogs       *DialogManager
+	Locks         *bridgetabs.LockManager
+	Dialogs       *bridgetabs.DialogManager
 	LogStore      *ConsoleLogStore
 
 	netMonitor *NetworkMonitor
@@ -76,7 +76,7 @@ type Bridge struct {
 }
 
 func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridge {
-	netBufSize := DefaultNetworkBufferSize
+	netBufSize := bridgeobserve.DefaultNetworkBufferSize
 	if cfg != nil && cfg.NetworkBufferSize > 0 {
 		netBufSize = cfg.NetworkBufferSize
 	}
@@ -557,6 +557,6 @@ func (b *Bridge) ListRouteRules(tabID string) ([]RouteRule, error) {
 	return b.routeMgr.List(resolvedID), nil
 }
 
-func (b *Bridge) GetDialogManager() *DialogManager {
+func (b *Bridge) GetDialogManager() *bridgetabs.DialogManager {
 	return b.Dialogs
 }

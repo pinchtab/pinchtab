@@ -45,7 +45,7 @@ type guardProbeBridge struct {
 	mockBridge
 	paused     bool
 	currentURL string
-	dialogs    *bridge.DialogManager
+	dialogs    *bridgetabs.DialogManager
 	lockOwner  string
 }
 
@@ -61,7 +61,7 @@ func (b *guardProbeBridge) TabLockInfo(string) *bridge.LockInfo {
 // pausedAt in each body and make the envelope comparison below untestable.
 var probePausedAt = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 
-func pendingDialogManager() *bridge.DialogManager {
+func pendingDialogManager() *bridgetabs.DialogManager {
 	dm := bridgetabs.NewDialogManager()
 	dm.SetPending("tab1", &bridge.DialogState{Type: "confirm", Message: "probe"})
 	return dm
@@ -89,7 +89,7 @@ func (b *guardProbeBridge) CurrentURL(context.Context) (string, error) { return 
 // guardDialogBlocked resolves to "no dialog" without CDP work: it runs first in
 // the chain, and a probe that fails inside it would never reach the guard under
 // test.
-func (b *guardProbeBridge) GetDialogManager() *bridge.DialogManager { return b.dialogs }
+func (b *guardProbeBridge) GetDialogManager() *bridgetabs.DialogManager { return b.dialogs }
 
 // guardProbe carries what a route needs to reach its guards. Guards run after
 // each handler's own validation, so a route that rejects {} never gets far
@@ -681,10 +681,10 @@ func TestEveryBindingIsPlacedForTheDialogGuard(t *testing.T) {
 
 type dialogMidBatchBridge struct {
 	mockBridge
-	dialogs *bridge.DialogManager
+	dialogs *bridgetabs.DialogManager
 }
 
-func (b *dialogMidBatchBridge) GetDialogManager() *bridge.DialogManager { return b.dialogs }
+func (b *dialogMidBatchBridge) GetDialogManager() *bridgetabs.DialogManager { return b.dialogs }
 
 func (b *dialogMidBatchBridge) ExecuteAction(context.Context, string, bridge.ActionRequest) (map[string]any, error) {
 	b.dialogs.SetPending("tab1", &bridge.DialogState{Type: "alert", Message: "opened by step 1"})

@@ -119,8 +119,8 @@ func TestPointerPointWalksNestedFrameOffsets(t *testing.T) {
 
 func deepFrameNode(t *testing.T, ctx context.Context) int64 {
 	t.Helper()
-	var walk func(tree RawFrameTree) []string
-	walk = func(tree RawFrameTree) []string {
+	var walk func(tree bridgeobserve.RawFrameTree) []string
+	walk = func(tree bridgeobserve.RawFrameTree) []string {
 		ids := []string{tree.Frame.ID}
 		for _, child := range tree.ChildFrames {
 			ids = append(ids, walk(child)...)

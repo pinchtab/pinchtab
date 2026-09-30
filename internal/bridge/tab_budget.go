@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"context"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	"log/slog"
 	"time"
 
@@ -28,7 +29,7 @@ func selectOrphanTargets(tracked map[string]bool, pages []*target.Info, limit in
 	orphans := make([]target.ID, 0)
 	for i := len(pages) - 1; i >= 0; i-- {
 		t := pages[i]
-		if t == nil || t.Type != TargetTypePage {
+		if t == nil || t.Type != bridgecdpops.TargetTypePage {
 			continue
 		}
 		if tracked[string(t.TargetID)] {

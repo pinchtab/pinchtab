@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -36,7 +37,7 @@ func newScopedCurrentTabBridge() *scopedCurrentTabBridge {
 	}
 }
 
-func (b *scopedCurrentTabBridge) GetDialogManager() *bridge.DialogManager { return nil }
+func (b *scopedCurrentTabBridge) GetDialogManager() *bridgetabs.DialogManager { return nil }
 
 func (b *scopedCurrentTabBridge) TabContext(tabID string) (*bridge.TabHandle, string, error) {
 	if tabID == "" {

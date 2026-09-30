@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -31,7 +32,7 @@ type mockBridge struct {
 	ensureBrowserErr  error
 	ensureBrowserCall int
 	ensureBrowserCfg  *config.RuntimeConfig
-	dialogManager     *bridge.DialogManager
+	dialogManager     *bridgetabs.DialogManager
 	executeActionErr  error
 	closeTabErr       error
 	actionResult      map[string]any
@@ -182,8 +183,8 @@ func (m *mockBridge) Text(_ context.Context, _ string, _ bridge.ContentParams) (
 
 func (m *mockBridge) TabLockInfo(tabID string) *bridge.LockInfo { return nil }
 
-func (m *mockBridge) GetAggregatedMemoryMetrics() (*bridge.MemoryMetrics, error) {
-	return &bridge.MemoryMetrics{MemoryMB: 50, Renderers: 3}, nil
+func (m *mockBridge) GetAggregatedMemoryMetrics() (*bridgeobserve.MemoryMetrics, error) {
+	return &bridgeobserve.MemoryMetrics{MemoryMB: 50, Renderers: 3}, nil
 }
 
 func (m *mockBridge) GetCrashLogs() []string {
@@ -194,7 +195,7 @@ func (m *mockBridge) NetworkMonitor() *bridge.NetworkMonitor {
 	return m.networkMonitor
 }
 
-func (m *mockBridge) GetDialogManager() *bridge.DialogManager {
+func (m *mockBridge) GetDialogManager() *bridgetabs.DialogManager {
 	if m.dialogManager == nil {
 		m.dialogManager = bridgetabs.NewDialogManager()
 	}

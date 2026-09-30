@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 	"fmt"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	"log/slog"
 	"time"
 
@@ -200,7 +201,7 @@ func (tm *TabManager) ListTargets() ([]*target.Info, error) {
 
 	pages := make([]*target.Info, 0, len(targets))
 	for _, t := range targets {
-		if t.Type == TargetTypePage {
+		if t.Type == bridgecdpops.TargetTypePage {
 			pages = append(pages, t)
 		}
 	}
@@ -239,7 +240,7 @@ func (tm *TabManager) ListTargetsWithContext(ctx context.Context) ([]*target.Inf
 
 	pages := make([]*target.Info, 0, len(targets))
 	for _, t := range targets {
-		if t.Type == TargetTypePage {
+		if t.Type == bridgecdpops.TargetTypePage {
 			pages = append(pages, t)
 		}
 	}

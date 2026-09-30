@@ -197,28 +197,28 @@ func TestDiffSnapshot_Empty(t *testing.T) {
 }
 
 func TestRawAXValue_String_Normal(t *testing.T) {
-	v := &RawAXValue{Type: "string", Value: json.RawMessage(`"hello"`)}
+	v := &bridgeobserve.RawAXValue{Type: "string", Value: json.RawMessage(`"hello"`)}
 	if got := v.String(); got != "hello" {
 		t.Errorf("expected hello, got %q", got)
 	}
 }
 
 func TestRawAXValue_String_Nil(t *testing.T) {
-	var v *RawAXValue
+	var v *bridgeobserve.RawAXValue
 	if got := v.String(); got != "" {
 		t.Errorf("expected empty, got %q", got)
 	}
 }
 
 func TestRawAXValue_String_NilValue(t *testing.T) {
-	v := &RawAXValue{Type: "string"}
+	v := &bridgeobserve.RawAXValue{Type: "string"}
 	if got := v.String(); got != "" {
 		t.Errorf("expected empty, got %q", got)
 	}
 }
 
 func TestRawAXValue_String_NonString(t *testing.T) {
-	v := &RawAXValue{Type: "number", Value: json.RawMessage(`42`)}
+	v := &bridgeobserve.RawAXValue{Type: "number", Value: json.RawMessage(`42`)}
 	if got := v.String(); got != "42" {
 		t.Errorf("expected 42, got %q", got)
 	}
@@ -238,13 +238,13 @@ func searchString(s, substr string) bool {
 }
 
 func TestFrameIDs_Recursive(t *testing.T) {
-	tree := rawFrameTree{}
+	tree := bridgeobserve.RawFrameTree{}
 	tree.Frame.ID = "root"
-	tree.ChildFrames = []rawFrameTree{
+	tree.ChildFrames = []bridgeobserve.RawFrameTree{
 		{Frame: RawFrame{ID: "child-1"}},
 		{
 			Frame:       RawFrame{ID: "child-2"},
-			ChildFrames: []rawFrameTree{{Frame: RawFrame{ID: "grandchild"}}},
+			ChildFrames: []bridgeobserve.RawFrameTree{{Frame: RawFrame{ID: "grandchild"}}},
 		},
 	}
 	got := bridgeobserve.FrameIDs(tree)
@@ -260,9 +260,9 @@ func TestFrameIDs_Recursive(t *testing.T) {
 }
 
 func TestFrameMap_Recursive(t *testing.T) {
-	tree := rawFrameTree{
+	tree := bridgeobserve.RawFrameTree{
 		Frame: RawFrame{ID: "root", URL: "https://example.com", Name: "main"},
-		ChildFrames: []rawFrameTree{
+		ChildFrames: []bridgeobserve.RawFrameTree{
 			{Frame: RawFrame{ID: "child-1", URL: "https://example.com/embed", Name: "embed"}},
 		},
 	}

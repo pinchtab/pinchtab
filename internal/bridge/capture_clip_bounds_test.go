@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 	"encoding/base64"
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"testing"
 	"time"
 
@@ -66,7 +67,7 @@ func newClipScrollFixture(t *testing.T) (context.Context, int64) {
 	return nil, 0
 }
 
-func boundsForNode(t *testing.T, res *PairedResult, nodeID int64) BoundingBox {
+func boundsForNode(t *testing.T, res *PairedResult, nodeID int64) bridgeobserve.BoundingBox {
 	t.Helper()
 	for _, n := range res.Nodes {
 		if n.NodeID == nodeID && n.BoundingBox != nil {
@@ -74,7 +75,7 @@ func boundsForNode(t *testing.T, res *PairedResult, nodeID int64) BoundingBox {
 		}
 	}
 	t.Fatalf("capture produced no bounding box for node %d (%d nodes)", nodeID, len(res.Nodes))
-	return BoundingBox{}
+	return bridgeobserve.BoundingBox{}
 }
 
 func clientRectOfTarget(t *testing.T, ctx context.Context) (x, y float64) {

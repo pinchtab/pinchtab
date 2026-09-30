@@ -391,8 +391,8 @@ func TestNewNetworkBuffer_CustomSize(t *testing.T) {
 
 func TestNewNetworkBuffer_ZeroDefaultsTo100(t *testing.T) {
 	buf := bridgeobserve.NewNetworkBuffer(0)
-	if buf.MaxSizeForTest() != DefaultNetworkBufferSize {
-		t.Errorf("expected maxSize %d, got %d", DefaultNetworkBufferSize, buf.MaxSizeForTest())
+	if buf.MaxSizeForTest() != bridgeobserve.DefaultNetworkBufferSize {
+		t.Errorf("expected maxSize %d, got %d", bridgeobserve.DefaultNetworkBufferSize, buf.MaxSizeForTest())
 	}
 }
 

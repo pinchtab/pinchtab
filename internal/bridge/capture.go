@@ -56,7 +56,7 @@ type PairedResult struct {
 	// "viewport" by default, "document" when ImageOpts.BeyondViewport is true,
 	// and "clip" for selector-clipped captures. Bounding boxes are expressed in
 	// the named space.
-	Viewport        ViewportInfo
+	Viewport        bridgeobserve.ViewportInfo
 	CoordinateSpace string
 	Clip            *page.Viewport
 
@@ -180,7 +180,7 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 // reports. The clip is added to the SCREENSHOT options alone: the response metadata is
 // derived from what the caller asked for, so a synthesized clip must not turn the
 // reported coordinateSpace into "clip".
-func captureImageOpts(image ScreenshotOpts, vp ViewportInfo) ScreenshotOpts {
+func captureImageOpts(image ScreenshotOpts, vp bridgeobserve.ViewportInfo) ScreenshotOpts {
 	if image.Clip != nil || image.BeyondViewport {
 		return image
 	}

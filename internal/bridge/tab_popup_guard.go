@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 	"fmt"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	"log/slog"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 )
 
 func shouldBlockPopupTarget(info *target.Info) bool {
-	return info != nil && info.Type == TargetTypePage && info.OpenerID != ""
+	return info != nil && info.Type == bridgecdpops.TargetTypePage && info.OpenerID != ""
 }
 
 func (tm *TabManager) StartBrowserGuards() {

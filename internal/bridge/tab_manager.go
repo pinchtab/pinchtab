@@ -39,14 +39,14 @@ type TabManager struct {
 	frameScope        map[string]FrameScope
 	onTabSetup        TabSetupFunc
 	onAfterClose      func() // optional: invoked after any successful CloseTab
-	dialogMgr         *DialogManager
+	dialogMgr         *bridgetabs.DialogManager
 	logStore          *ConsoleLogStore
 	routeMgr          *RouteManager
 	onTabRemovedHooks []func(tabID string)
 	netMonitor        *NetworkMonitor
 	currentTab        string // ID of the most recently used tab
 	lastStaleSweep    time.Time
-	executor          *TabExecutor
+	executor          *bridgetabs.TabExecutor
 	guardOnce         sync.Once
 	guardActive       bool
 	mu                sync.RWMutex
@@ -78,7 +78,7 @@ func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, logSto
 	}
 }
 
-func (tm *TabManager) SetDialogManager(dm *DialogManager) {
+func (tm *TabManager) SetDialogManager(dm *bridgetabs.DialogManager) {
 	tm.dialogMgr = dm
 }
 
@@ -391,6 +391,6 @@ func (tm *TabManager) Execute(ctx context.Context, tabID string, task func(ctx c
 }
 
 // Executor returns the underlying TabExecutor (may be nil).
-func (tm *TabManager) Executor() *TabExecutor {
+func (tm *TabManager) Executor() *bridgetabs.TabExecutor {
 	return tm.executor
 }

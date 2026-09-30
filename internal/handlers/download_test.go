@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -23,7 +24,7 @@ type downloadPolicyBridge struct {
 	hasState bool
 }
 
-func (b *downloadPolicyBridge) GetDialogManager() *bridge.DialogManager { return nil }
+func (b *downloadPolicyBridge) GetDialogManager() *bridgetabs.DialogManager { return nil }
 
 func (m *downloadPolicyBridge) BrowserContext() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())

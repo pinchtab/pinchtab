@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 	"errors"
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"reflect"
 	"testing"
 
@@ -108,7 +109,7 @@ func TestProjectBoundsToClip(t *testing.T) {
 	nodes := []A11yNode{
 		{
 			Ref:         "e1",
-			BoundingBox: &BoundingBox{X: 125, Y: 240, W: 30, H: 20},
+			BoundingBox: &bridgeobserve.BoundingBox{X: 125, Y: 240, W: 30, H: 20},
 		},
 		{Ref: "e2"},
 	}

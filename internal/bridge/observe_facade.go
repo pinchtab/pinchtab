@@ -6,50 +6,32 @@ import (
 	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 )
 
-const (
-	DefaultNetworkBufferSize = bridgeobserve.DefaultNetworkBufferSize
-	FilterInteractive        = bridgeobserve.FilterInteractive
-)
-
-var (
-	InteractiveRoles = bridgeobserve.InteractiveRoles
-	ContextRoles     = bridgeobserve.ContextRoles
-)
+const FilterInteractive = bridgeobserve.FilterInteractive
 
 type A11yNode = bridgeobserve.A11yNode
 type RawAXNode = bridgeobserve.RawAXNode
-type RawAXValue = bridgeobserve.RawAXValue
-type RawAXProp = bridgeobserve.RawAXProp
 type RawFrame = bridgeobserve.RawFrame
-type RawFrameTree = bridgeobserve.RawFrameTree
-type rawFrameTree = bridgeobserve.RawFrameTree
 
 type NetworkEntry = bridgeobserve.NetworkEntry
 type NetworkBuffer = bridgeobserve.NetworkBuffer
 type NetworkFilter = bridgeobserve.NetworkFilter
 type NetworkMonitor = bridgeobserve.NetworkMonitor
-type MemoryMetrics = bridgeobserve.MemoryMetrics
 
 type PageMetrics = bridgeobserve.PageMetrics
 
-type FrameContext = bridgeobserve.FrameContext
-
-func FetchFrameContext(ctx context.Context) (FrameContext, error) {
+func FetchFrameContext(ctx context.Context) (bridgeobserve.FrameContext, error) {
 	return bridgeobserve.FetchFrameContext(ctx)
 }
 
-type BoundingBox = bridgeobserve.BoundingBox
-type ViewportInfo = bridgeobserve.ViewportInfo
-
-func FetchLayout(ctx context.Context) (ViewportInfo, error) {
+func FetchLayout(ctx context.Context) (bridgeobserve.ViewportInfo, error) {
 	return bridgeobserve.FetchLayout(ctx)
 }
 
-func ElementBorderBox(ctx context.Context, backendNodeID int64) (BoundingBox, bool) {
+func ElementBorderBox(ctx context.Context, backendNodeID int64) (bridgeobserve.BoundingBox, bool) {
 	return bridgeobserve.ElementBorderBox(ctx, backendNodeID)
 }
 
-func IsOnScreen(box BoundingBox, vp ViewportInfo) bool {
+func IsOnScreen(box bridgeobserve.BoundingBox, vp bridgeobserve.ViewportInfo) bool {
 	return bridgeobserve.IsOnScreen(box, vp)
 }
 
@@ -89,7 +71,7 @@ func GetResponseBody(ctx context.Context, requestID string) (string, bool, error
 	return bridgeobserve.GetResponseBody(ctx, requestID)
 }
 
-func (b *Bridge) GetAggregatedMemoryMetrics() (*MemoryMetrics, error) {
+func (b *Bridge) GetAggregatedMemoryMetrics() (*bridgeobserve.MemoryMetrics, error) {
 	var targets map[string]context.Context
 	if tm, err := b.tabManager(); err == nil {
 		targets = tm.LiveTabContexts()

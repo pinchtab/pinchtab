@@ -9,8 +9,6 @@ import (
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 )
 
-const TargetTypePage = bridgecdpops.TargetTypePage
-
 var (
 	ImageBlockPatterns  = bridgecdpops.ImageBlockPatterns
 	MediaBlockPatterns  = bridgecdpops.MediaBlockPatterns

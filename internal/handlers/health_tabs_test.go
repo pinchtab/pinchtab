@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -481,8 +482,8 @@ func (m *healthTabsBridge) StealthStatus() *stealth.Status {
 	}
 }
 
-func (m *healthTabsBridge) GetAggregatedMemoryMetrics() (*bridge.MemoryMetrics, error) {
-	return &bridge.MemoryMetrics{MemoryMB: 50, Renderers: 3}, nil
+func (m *healthTabsBridge) GetAggregatedMemoryMetrics() (*bridgeobserve.MemoryMetrics, error) {
+	return &bridgeobserve.MemoryMetrics{MemoryMB: 50, Renderers: 3}, nil
 }
 
 func (m *healthTabsBridge) GetCrashLogs() []string {
@@ -499,7 +500,7 @@ func (m *healthTabsBridge) RemoveRouteRule(tabID, pattern string) (int, error) {
 
 func (m *healthTabsBridge) ListRouteRules(tabID string) ([]bridge.RouteRule, error) { return nil, nil }
 
-func (m *healthTabsBridge) GetDialogManager() *bridge.DialogManager {
+func (m *healthTabsBridge) GetDialogManager() *bridgetabs.DialogManager {
 	return bridgetabs.NewDialogManager()
 }
 

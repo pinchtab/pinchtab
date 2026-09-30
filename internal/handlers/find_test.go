@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -24,7 +26,7 @@ type findMockBridge struct {
 	refCache *bridge.RefCache
 }
 
-func (m *findMockBridge) GetDialogManager() *bridge.DialogManager        { return nil }
+func (m *findMockBridge) GetDialogManager() *bridgetabs.DialogManager    { return nil }
 func (m *findMockBridge) EnsureBrowser(cfg *config.RuntimeConfig) error  { return nil }
 func (m *findMockBridge) RestartBrowser(cfg *config.RuntimeConfig) error { return nil }
 
@@ -53,8 +55,8 @@ func (m *findMockBridge) NetworkMonitor() *bridge.NetworkMonitor           { ret
 func (m *findMockBridge) ExecuteAction(ctx context.Context, kind string, req bridge.ActionRequest) (map[string]any, error) {
 	return nil, nil
 }
-func (m *findMockBridge) GetAggregatedMemoryMetrics() (*bridge.MemoryMetrics, error) {
-	return &bridge.MemoryMetrics{}, nil
+func (m *findMockBridge) GetAggregatedMemoryMetrics() (*bridgeobserve.MemoryMetrics, error) {
+	return &bridgeobserve.MemoryMetrics{}, nil
 }
 func (m *findMockBridge) Evaluate(ctx context.Context, expression string, result any, opts bridge.EvalOpts) error {
 	return nil

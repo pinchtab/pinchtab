@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"context"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	"strings"
 	"sync"
 	"testing"
@@ -317,9 +318,9 @@ func TestShouldBlockPopupTarget(t *testing.T) {
 		want bool
 	}{
 		{name: "nil target", info: nil, want: false},
-		{name: "top level page", info: &target.Info{Type: TargetTypePage}, want: false},
+		{name: "top level page", info: &target.Info{Type: bridgecdpops.TargetTypePage}, want: false},
 		{name: "non-page target with opener", info: &target.Info{Type: "service_worker", OpenerID: target.ID("opener")}, want: false},
-		{name: "page popup", info: &target.Info{Type: TargetTypePage, OpenerID: target.ID("opener")}, want: true},
+		{name: "page popup", info: &target.Info{Type: bridgecdpops.TargetTypePage, OpenerID: target.ID("opener")}, want: true},
 	}
 
 	for _, tc := range tests {
