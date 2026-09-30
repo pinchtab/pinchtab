@@ -206,30 +206,3 @@ export function ActivityFilterActions({
     </SidebarPanelFooterActions>
   );
 }
-
-export default function ActivityFilterMenu(props: Props) {
-  return (
-    <>
-      <div className="min-h-0 flex-1 overflow-auto">
-        <ActivityFilterFields
-          filters={props.filters}
-          profileOptions={props.profileOptions}
-          instanceOptions={props.instanceOptions}
-          tabOptions={props.tabOptions}
-          agentOptions={props.agentOptions}
-          showAgentFilter={props.showAgentFilter}
-          onFilterChange={props.onFilterChange}
-          onProfileChange={props.onProfileChange}
-          onInstanceChange={props.onInstanceChange}
-        />
-      </div>
-      <div className="border-t border-border-subtle">
-        <ActivityFilterActions
-          loading={props.loading}
-          onClear={props.onClear}
-          onRefresh={props.onRefresh}
-        />
-      </div>
-    </>
-  );
-}

@@ -93,32 +93,6 @@ export function sameActivityFilters(
   );
 }
 
-export function formatActivityTimestamp(timestamp: string): string {
-  return new Date(timestamp).toLocaleString("en-GB", {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-export function activityMethodVariant(
-  method: string,
-): "default" | "info" | "success" | "warning" {
-  switch (method.toUpperCase()) {
-    case "GET":
-      return "info";
-    case "POST":
-      return "success";
-    case "DELETE":
-      return "warning";
-    default:
-      return "default";
-  }
-}
-
 export function activityStatusVariant(
   status: number,
 ): "default" | "success" | "warning" | "danger" {

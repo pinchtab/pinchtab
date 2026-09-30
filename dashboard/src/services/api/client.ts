@@ -53,7 +53,7 @@ function handleUnauthorized(meta?: RequestMeta, reason?: string): void {
   dispatchAuthRequired(reason || "unauthorized");
 }
 
-export async function fetchOk(
+async function fetchOk(
   url: string,
   options?: RequestInit,
   meta?: RequestMeta,
@@ -102,7 +102,7 @@ export async function requestBlob(
   return (await fetchOk(url, options, meta)).blob();
 }
 
-export function withDashboardSource(options?: RequestInit): RequestInit {
+function withDashboardSource(options?: RequestInit): RequestInit {
   const headers = new Headers(options?.headers);
   headers.set(DASHBOARD_SOURCE_HEADER, DASHBOARD_SOURCE);
   return {

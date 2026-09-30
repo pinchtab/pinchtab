@@ -1,15 +1,11 @@
 import type {
   Agent,
   ActivityEvent,
-  BrowserSettings,
-  CreateProfileRequest,
   DashboardHealth,
   Instance,
   InstanceMetrics,
   InstanceTab,
-  LaunchInstanceRequest,
   Profile,
-  ScreencastSettings,
   Settings,
 } from "../generated/types";
 import type { FileConfig } from "../generated/config";
@@ -18,15 +14,9 @@ export type {
   Profile,
   Instance,
   InstanceTab,
-  InstanceMetrics,
   Agent,
   ActivityEvent,
-  Settings,
-  ScreencastSettings,
-  BrowserSettings,
-  CreateProfileRequest,
   DashboardHealth,
-  LaunchInstanceRequest,
 };
 
 export interface MonitoringServerMetrics {
@@ -119,8 +109,4 @@ export function normalizeMonitoringSnapshot(
   };
 }
 
-export type {
-  Settings as LocalDashboardSettings,
-  ScreencastSettings as LocalScreencastSettings,
-  BrowserSettings as LocalBrowserSettings,
-};
+export type { Settings as LocalDashboardSettings };

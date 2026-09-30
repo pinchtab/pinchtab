@@ -10,7 +10,7 @@ export function isHandoffEvent(event: DashboardActivityEvent): boolean {
 }
 
 // Returns true for POST {tab}/resume events (the unpause action).
-export function isResumeEvent(event: DashboardActivityEvent): boolean {
+function isResumeEvent(event: DashboardActivityEvent): boolean {
   return (
     event.method === "POST" &&
     event.path.endsWith("/resume") &&

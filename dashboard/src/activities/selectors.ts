@@ -62,7 +62,7 @@ export function normalizeDashboardActivityEvent(
   };
 }
 
-export function eventIdentity(event: DashboardActivityEvent): string {
+function eventIdentity(event: DashboardActivityEvent): string {
   const agentId = (event.agentId || "").trim();
   if (agentId) {
     return agentId;
@@ -70,7 +70,7 @@ export function eventIdentity(event: DashboardActivityEvent): string {
   return "";
 }
 
-export function matchesVisibleEvent(
+function matchesVisibleEvent(
   event: DashboardActivityEvent,
   filters: ActivityFilters,
   hiddenSources: string[],

@@ -1,7 +1,7 @@
 import React from "react";
 import SidebarPanel from "./SidebarPanel";
 
-export interface TabItem<T extends string> {
+interface TabItem<T extends string> {
   id: T;
   label: string;
   badge?: string | number;

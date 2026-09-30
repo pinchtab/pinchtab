@@ -2,7 +2,7 @@ import type { Agent } from "../generated/types";
 import type { HandoffNotification } from "../stores/useAppStore";
 import type { SystemEvent } from "./api";
 
-export function sortAgents(agents: Agent[]): Agent[] {
+function sortAgents(agents: Agent[]): Agent[] {
   return [...agents].sort(
     (left, right) =>
       new Date(right.lastActivity || right.connectedAt).getTime() -

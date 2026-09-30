@@ -43,5 +43,3 @@ export async function drawFrameToCanvas(
   canvas.height = image.height;
   ctx.drawImage(image, 0, 0);
 }
-
-export { loadImageElement };

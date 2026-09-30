@@ -8,7 +8,7 @@ import {
 import { useAsyncResource } from "./useAsyncResource";
 import { useAppStore } from "../stores/useAppStore";
 
-export type AuthMode = "probing" | "required" | "open" | "unreachable";
+type AuthMode = "probing" | "required" | "open" | "unreachable";
 
 export const AUTH_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 15000] as const;
 

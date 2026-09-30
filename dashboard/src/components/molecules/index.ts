@@ -6,8 +6,6 @@ export { default as EmptyView } from "./EmptyView";
 export { default as NavBar } from "./NavBar";
 export { default as CreateProfileModal } from "./CreateProfileModal";
 export { default as StartInstanceModal } from "./StartInstanceModal";
-export { default as ScreencastTile } from "../screencast/ScreencastTile";
 export { default as AgentItem } from "./AgentItem";
 export { default as TabsChart } from "./TabsChart";
-export { default as ServerSummary } from "./ServerSummary";
 export { default as HandoffNotifications } from "./HandoffNotifications";

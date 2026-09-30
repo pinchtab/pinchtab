@@ -120,33 +120,6 @@ export const IconMessageCircle = icon(
   "IconMessageCircle",
 );
 
-export const IconBrain = icon(
-  [
-    "M15.5 13a3.5 3.5 0 0 0 -3.5 3.5v1a3.5 3.5 0 0 0 7 0v-1.8",
-    "M8.5 13a3.5 3.5 0 0 1 3.5 3.5v1a3.5 3.5 0 0 1 -7 0v-1.8",
-    "M17.5 16a3.5 3.5 0 0 0 0 -7h-.5",
-    "M19 9.3v-2.8a3.5 3.5 0 0 0 -7 0",
-    "M6.5 16a3.5 3.5 0 0 1 0 -7h.5",
-    "M5 9.3v-2.8a3.5 3.5 0 0 1 7 0v10",
-  ],
-  "IconBrain",
-);
-
-export const IconSearch = icon(
-  ["M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0", "M21 21l-6 -6"],
-  "IconSearch",
-);
-
-export const IconPhoto = icon(
-  [
-    "M15 8h.01",
-    "M3 6a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v12a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-12",
-    "M3 16l5 -5c.928 -.893 2.072 -.893 3 0l5 5",
-    "M14 14l1 -1c.928 -.893 2.072 -.893 3 0l3 3",
-  ],
-  "IconPhoto",
-);
-
 export const IconScreenShare = icon(
   [
     "M21 12v3a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1v-10a1 1 0 0 1 1 -1h9",

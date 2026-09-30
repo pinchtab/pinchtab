@@ -11,7 +11,7 @@ import type {
 import { deepEqual } from "./deepEqual";
 import { backendSaveNotice, type UpdateBackendSection } from "./settingsShared";
 
-export type PendingElevatedAction = "save" | null;
+type PendingElevatedAction = "save" | null;
 
 export interface UseSettingsControllerResult {
   serverInfo: DashboardHealth | null;
