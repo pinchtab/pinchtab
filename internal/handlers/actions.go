@@ -494,27 +494,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 
 	req.Browser = resolvedBrowser
 
-	if req.Kind == "" {
-		httpx.Error(w, 400, fmt.Errorf("missing required field 'kind'"))
-		return
-	}
-	if req.DialogAction != "" && req.DialogAction != "accept" && req.DialogAction != "dismiss" {
-		httpx.Error(w, 400, fmt.Errorf("dialogAction must be 'accept' or 'dismiss'"))
-		return
-	}
-	if err := bridge.ValidateSubmitAction(req.Kind, req); err != nil {
-		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_submit_action", err.Error(), false, nil)
-		return
-	}
-	// Here rather than only inside the bridge action: the ghost-chrome proxy answers
-	// fill from its static browser before the Chrome action runs, so a check living in
-	// actionFill alone would be bypassed for one provider.
-	if err := bridge.ValidateFillAction(req.Kind, req); err != nil {
-		httpx.ErrorCode(w, http.StatusBadRequest, "missing_fill_text", err.Error(), false, nil)
-		return
-	}
-	if err := bridge.ValidateButtonAction(req.Kind, req); err != nil {
-		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_mouse_button", err.Error(), false, nil)
+	if !validateActionRequestFields(w, req) {
 		return
 	}
 	h.recordActionRequest(r, req)
@@ -555,18 +535,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 
 	vocabBefore := h.tabVocab(resolvedTabID)
 
-	actionTimeout := effectiveCfg.ActionTimeout
-	if r.Method == http.MethodGet {
-		if v := r.URL.Query().Get("timeout"); v != "" {
-			if n, err := strconv.ParseFloat(v, 64); err == nil {
-				if n > 0 && n <= 60 {
-					actionTimeout = time.Duration(n * float64(time.Second))
-				}
-			}
-		}
-	}
-
-	tCtx, tCancel := httpx.WithClientTimeout(r.Context(), ctx, actionTimeout)
+	tCtx, tCancel := httpx.WithClientTimeout(r.Context(), ctx, actionTimeoutFor(r, effectiveCfg.ActionTimeout))
 	defer tCancel()
 
 	if req.DismissKnownInterstitials {
@@ -581,38 +550,12 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		h.errorWithCrashContext(w, selectorResolution.httpStatus(), err)
 		return
 	}
-	destinationResolution, err := h.resolveActionRequestDestination(tCtx, resolvedTabID, &req)
-	if err != nil {
-		h.errorWithCrashContext(w, destinationResolution.httpStatus(), err)
+	if !h.resolveActionDestination(w, tCtx, resolvedTabID, &req) {
 		return
-	}
-	// Both ends of a drag come from one snapshot, so a stale destination gets the
-	// same refresh-and-recover the source does instead of an unconditional 404;
-	// only a destination that still cannot be found refuses, naming the
-	// destination. A destination that resolved is intent-cached like the source,
-	// so a later recovery refresh can descriptor-match it rather than trusting a
-	// positional ref against a new snapshot.
-	if destinationResolution.refMissing {
-		h.refreshRefCache(tCtx, resolvedTabID)
-		if err := h.refreshActionSecondaryTargets(tCtx, resolvedTabID, &req); err != nil {
-			writeTargetNotFound(w, err, nil)
-			return
-		}
-	} else if req.ToSelector != "" && req.ToNodeID != 0 && h.Recovery != nil {
-		if toSel := selector.Parse(req.ToSelector); toSel.Kind == selector.KindRef {
-			h.cacheActionIntent(resolvedTabID, bridge.ActionRequest{Ref: toSel.Value})
-		}
 	}
 	refMissing := selectorResolution.refMissing
 	submitClick := bridge.IsSubmitClick(req.Kind, req)
-	if submitClick && refMissing {
-		httpx.ErrorCode(w, http.StatusNotFound, "submit_target_not_found", refNotFound(req.Ref).Error(), false, staleSubmitTargetDetails())
-		return
-	}
-	if submitClick && req.NodeID <= 0 {
-		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_submit_target", "click submit requires a selector, ref, or nodeId", false, map[string]any{
-			"dispatched": false,
-		})
+	if submitClick && !validateSubmitTarget(w, req, refMissing) {
 		return
 	}
 
@@ -638,76 +581,170 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 
 	result, actionBackend, recoveryResult, actionErr := h.executeActionResilient(tCtx, &req, effectiveCfg, resolvedTabID, refMissing)
 	h.publishVocabIfReepoched(w, resolvedTabID, vocabBefore)
-	submitTimeoutWithDialog := submitClick && isTimeoutWithPendingDialog(actionErr, resolvedTabID, h.Bridge)
-	if submitClick && !submitTimeoutWithDialog && (actionErr == nil || errors.Is(actionErr, context.DeadlineExceeded)) {
-		actionTimedOut := errors.Is(actionErr, context.DeadlineExceeded)
-		dispatch := "acknowledged"
-		if actionTimedOut {
-			dispatch = "unconfirmed"
-		}
-
-		// tCtx may be expired here. Keep the live tab context as the parent and
-		// give post-state observation its own bounded, client-cancelable child.
-		postCtx, postCancel := httpx.WithClientTimeout(r.Context(), ctx, postSubmitPollTimeout)
-		postState, postErr := h.pollSubmitPostState(postCtx, resolvedTabID, submitBefore, dispatch, actionTimedOut)
-		postCancel()
-		if postErr != nil {
-			httpx.ErrorCode(w, http.StatusInternalServerError, "submit_post_state_failed", postErr.Error(), false, map[string]any{
-				"dispatch":       dispatch,
-				"actionTimedOut": actionTimedOut,
-				"doNotRetry":     true,
-			})
+	if submitClick && !isTimeoutWithPendingDialog(actionErr, resolvedTabID, h.Bridge) && (actionErr == nil || errors.Is(actionErr, context.DeadlineExceeded)) {
+		if result, ok = h.runSubmitClick(w, r, ctx, resolvedTabID, submitBefore, result, actionErr); !ok {
 			return
 		}
-		if result == nil {
-			result = make(map[string]any)
-		}
-		result["postState"] = postState
 		actionErr = nil
 	}
 	if actionErr != nil {
-		if errors.Is(actionErr, bridge.ErrUnknownAction) {
-			h.writeUnknownActionKind(w, req.Kind)
-			return
-		}
-		if errors.Is(actionErr, bridge.ErrInvalidActionRequest) {
-			httpx.ErrorCode(w, http.StatusBadRequest, "invalid_action_request", fmt.Sprintf("action %s: %v", req.Kind, actionErr), false, nil)
-			return
-		}
-		if errors.Is(actionErr, ErrStaleSubmitTarget) {
-			httpx.ErrorCode(w, http.StatusNotFound, "submit_target_not_found",
-				refNotFound(req.Ref).Error(), false, staleSubmitTargetDetails())
-			return
-		}
-		if browserops.IsIDPIBlocked(actionErr) {
-			httpx.ErrorCode(w, http.StatusForbidden, "idpi_blocked", actionErr.Error(), false, nil)
-			return
-		}
-		if message, dialog, ok := h.mapDialogBlockingError(actionErr, req.Kind, resolvedTabID); ok {
-			writeDialogBlocked(w, resolvedTabID, dialog, message)
-			return
-		}
-		if errors.Is(actionErr, ErrTargetNotFound) {
-			writeTargetNotFound(w, actionErr, recoveryResult)
-			return
-		}
-		var noOption *bridgecdpops.NoOptionMatchError
-		if errors.As(actionErr, &noOption) {
-			writeNoOptionMatch(w, req.Kind, actionErr, noOption)
-			return
-		}
-		dispatchMayHaveLanded := submitClick
-		var details map[string]any
-		if dispatchMayHaveLanded {
-			details = map[string]any{
-				"dispatch":   "unconfirmed",
-				"doNotRetry": true,
-			}
-		}
-		h.errorCodeWithCrashContext(w, 500, "action_failed", fmt.Sprintf("action %s: %v", req.Kind, actionErr), actionFailureIsRetryable(actionErr, dispatchMayHaveLanded), details)
+		h.writeActionError(w, actionErr, req, resolvedTabID, recoveryResult, submitClick)
 		return
 	}
+	h.writeActionSuccess(w, r, tCtx, req, routing, resolvedTabID, result, actionBackend, recoveryResult)
+}
 
+func validateActionRequestFields(w http.ResponseWriter, req bridge.ActionRequest) bool {
+	if req.Kind == "" {
+		httpx.Error(w, 400, fmt.Errorf("missing required field 'kind'"))
+		return false
+	}
+	if req.DialogAction != "" && req.DialogAction != "accept" && req.DialogAction != "dismiss" {
+		httpx.Error(w, 400, fmt.Errorf("dialogAction must be 'accept' or 'dismiss'"))
+		return false
+	}
+	if err := bridge.ValidateSubmitAction(req.Kind, req); err != nil {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_submit_action", err.Error(), false, nil)
+		return false
+	}
+	// Here rather than only inside the bridge action: the ghost-chrome proxy answers
+	// fill from its static browser before the Chrome action runs, so a check living in
+	// actionFill alone would be bypassed for one provider.
+	if err := bridge.ValidateFillAction(req.Kind, req); err != nil {
+		httpx.ErrorCode(w, http.StatusBadRequest, "missing_fill_text", err.Error(), false, nil)
+		return false
+	}
+	if err := bridge.ValidateButtonAction(req.Kind, req); err != nil {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_mouse_button", err.Error(), false, nil)
+		return false
+	}
+	return true
+}
+
+func actionTimeoutFor(r *http.Request, configured time.Duration) time.Duration {
+	if r.Method != http.MethodGet {
+		return configured
+	}
+	v := r.URL.Query().Get("timeout")
+	if v == "" {
+		return configured
+	}
+	if n, err := strconv.ParseFloat(v, 64); err == nil && n > 0 && n <= 60 {
+		return time.Duration(n * float64(time.Second))
+	}
+	return configured
+}
+
+// Both ends of a drag come from one snapshot, so a stale destination gets the
+// same refresh-and-recover the source does instead of an unconditional 404;
+// only a destination that still cannot be found refuses, naming the
+// destination. A destination that resolved is intent-cached like the source,
+// so a later recovery refresh can descriptor-match it rather than trusting a
+// positional ref against a new snapshot.
+func (h *Handlers) resolveActionDestination(w http.ResponseWriter, ctx context.Context, tabID string, req *bridge.ActionRequest) bool {
+	destinationResolution, err := h.resolveActionRequestDestination(ctx, tabID, req)
+	if err != nil {
+		h.errorWithCrashContext(w, destinationResolution.httpStatus(), err)
+		return false
+	}
+	if destinationResolution.refMissing {
+		h.refreshRefCache(ctx, tabID)
+		if err := h.refreshActionSecondaryTargets(ctx, tabID, req); err != nil {
+			writeTargetNotFound(w, err, nil)
+			return false
+		}
+	} else if req.ToSelector != "" && req.ToNodeID != 0 && h.Recovery != nil {
+		if toSel := selector.Parse(req.ToSelector); toSel.Kind == selector.KindRef {
+			h.cacheActionIntent(tabID, bridge.ActionRequest{Ref: toSel.Value})
+		}
+	}
+	return true
+}
+
+func validateSubmitTarget(w http.ResponseWriter, req bridge.ActionRequest, refMissing bool) bool {
+	if refMissing {
+		httpx.ErrorCode(w, http.StatusNotFound, "submit_target_not_found", refNotFound(req.Ref).Error(), false, staleSubmitTargetDetails())
+		return false
+	}
+	if req.NodeID <= 0 {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_submit_target", "click submit requires a selector, ref, or nodeId", false, map[string]any{
+			"dispatched": false,
+		})
+		return false
+	}
+	return true
+}
+
+func (h *Handlers) runSubmitClick(w http.ResponseWriter, r *http.Request, tabCtx context.Context, tabID string, before submitStateSnapshot, result map[string]any, actionErr error) (map[string]any, bool) {
+	actionTimedOut := errors.Is(actionErr, context.DeadlineExceeded)
+	dispatch := "acknowledged"
+	if actionTimedOut {
+		dispatch = "unconfirmed"
+	}
+
+	// The action's context may be expired here. Keep the live tab context as the parent
+	// and give post-state observation its own bounded, client-cancelable child.
+	postCtx, postCancel := httpx.WithClientTimeout(r.Context(), tabCtx, postSubmitPollTimeout)
+	postState, postErr := h.pollSubmitPostState(postCtx, tabID, before, dispatch, actionTimedOut)
+	postCancel()
+	if postErr != nil {
+		httpx.ErrorCode(w, http.StatusInternalServerError, "submit_post_state_failed", postErr.Error(), false, map[string]any{
+			"dispatch":       dispatch,
+			"actionTimedOut": actionTimedOut,
+			"doNotRetry":     true,
+		})
+		return nil, false
+	}
+	if result == nil {
+		result = make(map[string]any)
+	}
+	result["postState"] = postState
+	return result, true
+}
+
+func (h *Handlers) writeActionError(w http.ResponseWriter, actionErr error, req bridge.ActionRequest, resolvedTabID string, recoveryResult *recovery.RecoveryResult, submitClick bool) {
+	if errors.Is(actionErr, bridge.ErrUnknownAction) {
+		h.writeUnknownActionKind(w, req.Kind)
+		return
+	}
+	if errors.Is(actionErr, bridge.ErrInvalidActionRequest) {
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_action_request", fmt.Sprintf("action %s: %v", req.Kind, actionErr), false, nil)
+		return
+	}
+	if errors.Is(actionErr, ErrStaleSubmitTarget) {
+		httpx.ErrorCode(w, http.StatusNotFound, "submit_target_not_found",
+			refNotFound(req.Ref).Error(), false, staleSubmitTargetDetails())
+		return
+	}
+	if browserops.IsIDPIBlocked(actionErr) {
+		httpx.ErrorCode(w, http.StatusForbidden, "idpi_blocked", actionErr.Error(), false, nil)
+		return
+	}
+	if message, dialog, ok := h.mapDialogBlockingError(actionErr, req.Kind, resolvedTabID); ok {
+		writeDialogBlocked(w, resolvedTabID, dialog, message)
+		return
+	}
+	if errors.Is(actionErr, ErrTargetNotFound) {
+		writeTargetNotFound(w, actionErr, recoveryResult)
+		return
+	}
+	var noOption *bridgecdpops.NoOptionMatchError
+	if errors.As(actionErr, &noOption) {
+		writeNoOptionMatch(w, req.Kind, actionErr, noOption)
+		return
+	}
+	dispatchMayHaveLanded := submitClick
+	var details map[string]any
+	if dispatchMayHaveLanded {
+		details = map[string]any{
+			"dispatch":   "unconfirmed",
+			"doNotRetry": true,
+		}
+	}
+	h.errorCodeWithCrashContext(w, 500, "action_failed", fmt.Sprintf("action %s: %v", req.Kind, actionErr), actionFailureIsRetryable(actionErr, dispatchMayHaveLanded), details)
+}
+
+func (h *Handlers) writeActionSuccess(w http.ResponseWriter, r *http.Request, tCtx context.Context, req bridge.ActionRequest, routing browserRouting, resolvedTabID string, result map[string]any, actionBackend string, recoveryResult *recovery.RecoveryResult) {
 	if actionBackend == "" {
 		actionBackend = "chrome"
 	}
