@@ -20,80 +20,55 @@ import (
 )
 
 func Action(client *http.Client, base, token, kind, selectorArg string, cmd *cobra.Command) {
-	body := map[string]any{"kind": kind}
+	req := bridge.ActionRequest{Kind: kind}
 
 	css, _ := cmd.Flags().GetString("css")
-	hasX := cmd.Flags().Changed("x")
-	hasY := cmd.Flags().Changed("y")
-	x, _ := cmd.Flags().GetFloat64("x")
-	y, _ := cmd.Flags().GetFloat64("y")
-	hasXY := hasX || hasY
+	hasXY := cmd.Flags().Changed("x") || cmd.Flags().Changed("y")
 	if hasXY {
-		body["x"] = x
-		body["y"] = y
+		x, _ := cmd.Flags().GetFloat64("x")
+		y, _ := cmd.Flags().GetFloat64("y")
+		setPoint(&req, x, y)
 	}
 
-	if button, _ := cmd.Flags().GetString("button"); button != "" {
-		body["button"] = button
-	}
+	req.Button, _ = cmd.Flags().GetString("button")
 	if css != "" {
-		body["selector"] = css
+		req.Selector = css
 	} else if selectorArg != "" {
-		setSelectorBody(body, selectorArg)
+		setSelector(&req, selectorArg)
 	} else if !hasXY {
 		cli.Fatal("Usage: pinchtab %s <selector> or pinchtab %s --css <selector> or pinchtab %s --x <num> --y <num>", kind, kind, kind)
 	}
 
+	readHumanizeFlag(&req, cmd)
 	if kind == "click" {
-		if submit, _ := cmd.Flags().GetBool("submit"); submit {
-			body["submit"] = true
-		}
-		if dismiss, _ := cmd.Flags().GetBool("dismiss-known-interstitials"); dismiss {
-			body["dismissKnownInterstitials"] = true
-		}
-		waitNav, _ := cmd.Flags().GetBool("wait-nav")
-		if waitNav {
-			body["waitNav"] = true
-		}
-		mode, _ := cmd.Flags().GetString("mode")
-		if mode != "" {
-			body["mode"] = mode
-		}
-		if mode != "" && cmd.Flags().Changed("humanize") {
-			if humanize, _ := cmd.Flags().GetBool("humanize"); humanize {
-				cli.Fatal("Error: mode and humanize are mutually exclusive")
-			}
-		}
-		// --dismiss-banners only fires when --wait-nav is set; without nav,
-		// banners haven't changed and the dismissal pass would be wasted.
-		if waitNav {
-			if v, _ := cmd.Flags().GetBool("dismiss-banners"); v {
-				body["dismissBanners"] = true
-			}
-		}
-		// --dialog-action arms a one-shot JS dialog handler before the click.
-		// Mirrors the HTTP action body field {"dialogAction":"accept"|"dismiss"}.
-		// Without this, a click that opens an alert/confirm hangs until
-		// /dialog is called from a separate request.
-		if v, _ := cmd.Flags().GetString("dialog-action"); v != "" {
-			body["dialogAction"] = v
-		}
-		if v, _ := cmd.Flags().GetString("dialog-text"); v != "" {
-			body["dialogText"] = v
-		}
+		applyClickFlags(&req, cmd)
 	}
 
-	// --humanize lets the caller opt into the bezier+jitter input path on
-	// any pointer/typing action. Honours the same precedence as the API
-	// flag (per-request override > instance config > built-in default).
-	// Only set the body field when the flag was explicitly provided so
-	// nil/null is preserved when omitted.
+	postAction(client, base, token, cmd, req)
+}
+
+func applyClickFlags(req *bridge.ActionRequest, cmd *cobra.Command) {
+	req.Submit, _ = cmd.Flags().GetBool("submit")
+	req.DismissKnownInterstitials, _ = cmd.Flags().GetBool("dismiss-known-interstitials")
+	req.WaitNav, _ = cmd.Flags().GetBool("wait-nav")
+	req.Mode, _ = cmd.Flags().GetString("mode")
+	if req.Mode != "" && req.Humanize != nil && *req.Humanize {
+		cli.Fatal("Error: mode and humanize are mutually exclusive")
+	}
+	if req.WaitNav {
+		req.DismissBanners, _ = cmd.Flags().GetBool("dismiss-banners")
+	}
+	req.DialogAction, _ = cmd.Flags().GetString("dialog-action")
+	req.DialogText, _ = cmd.Flags().GetString("dialog-text")
+}
+
+// readHumanizeFlag forwards --humanize only when given, so an omitted flag inherits the
+// instance default instead of overriding it.
+func readHumanizeFlag(req *bridge.ActionRequest, cmd *cobra.Command) {
 	if cmd.Flags().Changed("humanize") {
-		v, _ := cmd.Flags().GetBool("humanize")
-		body["humanize"] = v
+		humanize, _ := cmd.Flags().GetBool("humanize")
+		req.Humanize = &humanize
 	}
-
-	postAction(client, base, token, cmd, body)
 }
 
 // setSelectorBody parses a unified selector string and sets the appropriate
@@ -102,43 +77,41 @@ func Action(client *http.Client, base, token, kind, selectorArg string, cmd *cob
 // `xpath://button`, `semantic:accept button`) so the server can re-parse
 // them correctly. For auto-detected CSS (no prefix on input), the raw
 // input is forwarded verbatim.
-func setSelectorBody(body map[string]any, s string) {
+func setSelector(req *bridge.ActionRequest, s string) {
 	sel := selector.Parse(s)
 	switch sel.Kind {
 	case selector.KindRef:
-		body["ref"] = sel.Value
+		req.Ref = sel.Value
 	case selector.KindCSS:
-		body["selector"] = sel.Value
+		req.Selector = sel.Value
 	default:
-		body["selector"] = s
+		req.Selector = s
 	}
 }
 
-func postAction(client *http.Client, base, token string, cmd *cobra.Command, body map[string]any) {
-	postActionWithHeaders(client, base, token, cmd, body, nil)
+func postAction(client *http.Client, base, token string, cmd *cobra.Command, req bridge.ActionRequest) {
+	postActionWithHeaders(client, base, token, cmd, req, nil)
 }
 
-func postActionWithHeaders(client *http.Client, base, token string, cmd *cobra.Command, body map[string]any, headers map[string]string) {
+func postActionWithHeaders(client *http.Client, base, token string, cmd *cobra.Command, req bridge.ActionRequest, headers map[string]string) {
 	tabID, _ := cmd.Flags().GetString("tab")
 	path := apiclient.TabPath(tabID, "action")
 
-	if _, ok := body["vocab"]; !ok {
+	if req.Vocab == "" {
 		if vocabTab, tok := apiclient.VocabForAction(base, tabID); tok != "" {
-			body["vocab"] = tok
-			body["vocabTab"] = vocabTab
+			req.Vocab, req.VocabTab = tok, vocabTab
 		}
 	}
 
-	opts := []apiclient.RequestOption{apiclient.WithHeaders(headers), apiclient.CaptureVocab(namedNoTab(cmd))}
+	opts := []apiclient.RequestOption{apiclient.WithJSONBody(req), apiclient.WithHeaders(headers), apiclient.CaptureVocab(namedNoTab(cmd))}
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoPost(client, base, token, path, body, opts...)
+		apiclient.DoPost(client, base, token, path, nil, opts...)
 		return
 	}
 
-	result := apiclient.DoPostQuiet(client, base, token, path, body, opts...)
-	kind, _ := body["kind"].(string)
-	printActionResult(kind, result)
+	result := apiclient.DoPostQuiet(client, base, token, path, nil, opts...)
+	printActionResult(req.Kind, result)
 
 	snap, _ := cmd.Flags().GetBool("snap")
 	snapDiff, _ := cmd.Flags().GetBool("snap-diff")
@@ -261,15 +234,23 @@ func printStaleRefsHint() {
 	output.Hint("every ref from your last snapshot is dead — run `pinchtab snap -i` before the next action")
 }
 
-func setPointBody(body map[string]any, x, y float64) {
-	body["x"] = x
-	body["y"] = y
+func setPoint(req *bridge.ActionRequest, x, y float64) {
+	req.X, req.Y, req.HasXY = x, y, true
+}
+
+func setScroll(req *bridge.ActionRequest, axis string, delta int) {
+	if axis == "scrollX" {
+		req.ScrollX = delta
+	} else {
+		req.ScrollY = delta
+	}
+	req.HasScroll = true
 }
 
 // applyScrollTarget fills a scroll body from the single positional — integer pixels, then
 // direction keyword, then unified selector — or from --dy/--dx when there is no positional.
 // Pixels and directions would otherwise parse as CSS tag selectors ("up", "down"), so they
-// are intercepted before setSelectorBody.
+// are intercepted before setSelector.
 //
 // A negative count is only reachable through the flags: cobra reads a leading minus on a
 // positional as bundled shorthand flags.
@@ -279,25 +260,25 @@ func setPointBody(body map[string]any, x, y float64) {
 // axis and a positional axis that no caller asked for. The CLI refuses that combination
 // before it gets here, but this is exported and callable without cobra's Args hook, so the
 // rule lives here rather than on loan from another package.
-func applyScrollTarget(body map[string]any, args []string, cmd *cobra.Command) {
+func applyScrollTarget(req *bridge.ActionRequest, args []string, cmd *cobra.Command) {
 	if len(args) == 0 {
 		if deltaY, ok := readIntFlag(cmd, "dy"); ok {
-			body["scrollY"] = deltaY
+			setScroll(req, "scrollY", deltaY)
 		}
 		if deltaX, ok := readIntFlag(cmd, "dx"); ok {
-			body["scrollX"] = deltaX
+			setScroll(req, "scrollX", deltaX)
 		}
 		return
 	}
 	if px, err := strconv.Atoi(args[0]); err == nil {
-		body["scrollY"] = px
+		setScroll(req, "scrollY", px)
 		return
 	}
 	if direction, ok := scroll.DirectionFor(strings.ToLower(args[0])); ok {
-		body[direction.Axis] = direction.Delta
+		setScroll(req, direction.Axis, direction.Delta)
 		return
 	}
-	setSelectorBody(body, args[0])
+	setSelector(req, args[0])
 }
 
 func readIntFlag(cmd *cobra.Command, primary string) (int, bool) {
@@ -321,33 +302,28 @@ func parseCoordinateArgs(xArg, yArg string) (float64, float64, error) {
 	return x, y, nil
 }
 
-func applyMouseTarget(body map[string]any, selectorArg string, cmd *cobra.Command) bool {
+func applyMouseTarget(req *bridge.ActionRequest, selectorArg string, cmd *cobra.Command) bool {
 	css, _ := cmd.Flags().GetString("css")
-	hasX := cmd.Flags().Changed("x")
-	hasY := cmd.Flags().Changed("y")
-	if hasX || hasY {
+	if cmd.Flags().Changed("x") || cmd.Flags().Changed("y") {
 		x, _ := cmd.Flags().GetFloat64("x")
 		y, _ := cmd.Flags().GetFloat64("y")
-		setPointBody(body, x, y)
+		setPoint(req, x, y)
 		return true
 	}
 	if css != "" {
-		body["selector"] = css
+		req.Selector = css
 		return true
 	}
 	if selectorArg != "" {
-		setSelectorBody(body, selectorArg)
+		setSelector(req, selectorArg)
 		return true
 	}
 	return false
 }
 
 func MouseAction(client *http.Client, base, token, kind string, args []string, cmd *cobra.Command) {
-	body := map[string]any{"kind": kind}
-
-	if button, _ := cmd.Flags().GetString("button"); button != "" {
-		body["button"] = button
-	}
+	req := bridge.ActionRequest{Kind: kind}
+	req.Button, _ = cmd.Flags().GetString("button")
 
 	switch kind {
 	case bridge.ActionMouseMove:
@@ -359,44 +335,43 @@ func MouseAction(client *http.Client, base, token, kind string, args []string, c
 			if err != nil {
 				cli.Fatal("Usage: pinchtab mouse move <x> <y>")
 			}
-			setPointBody(body, x, y)
+			setPoint(&req, x, y)
 		} else if len(args) == 1 {
 			if cmd.Flags().Changed("x") || cmd.Flags().Changed("y") || cmd.Flags().Changed("css") {
 				cli.Fatal("Usage: pinchtab mouse move <x> <y> or pinchtab mouse move <selector> or pinchtab mouse move --x <num> --y <num>")
 			}
-			setSelectorBody(body, args[0])
-		} else if !applyMouseTarget(body, "", cmd) {
+			setSelector(&req, args[0])
+		} else if !applyMouseTarget(&req, "", cmd) {
 			cli.Fatal("Usage: pinchtab mouse move <x> <y> or pinchtab mouse move <selector> or pinchtab mouse move --x <num> --y <num>")
 		}
 	case bridge.ActionMouseDown, bridge.ActionMouseUp:
 		if len(args) > 1 {
 			cli.Fatal("Usage: pinchtab mouse %s [selector]", strings.TrimPrefix(kind, "mouse-"))
 		}
-		_ = applyMouseTarget(body, optionalMouseArg(args), cmd)
+		_ = applyMouseTarget(&req, optionalMouseArg(args), cmd)
 	case bridge.ActionMouseWheel:
 		if len(args) > 1 {
 			cli.Fatal("Usage: pinchtab mouse wheel <dy> [--dx <n>] or pinchtab mouse wheel [selector]")
 		}
+		deltaYFromArg := false
 		if len(args) == 1 {
 			if dy, err := strconv.Atoi(args[0]); err == nil {
-				body["deltaY"] = dy
+				req.DeltaY, req.HasDelta, deltaYFromArg = dy, true, true
 			} else {
-				setSelectorBody(body, args[0])
+				setSelector(&req, args[0])
 			}
 		}
 		if deltaX, ok := readIntFlag(cmd, "dx"); ok {
-			body["deltaX"] = deltaX
+			req.DeltaX, req.HasDelta = deltaX, true
 		}
 		if deltaY, ok := readIntFlag(cmd, "dy"); ok {
-			if _, fromArg := body["deltaY"]; fromArg {
+			if deltaYFromArg {
 				cli.Fatal("Usage: pinchtab mouse wheel <dy> [--dx <n>] or pinchtab mouse wheel [selector]")
 			}
-			body["deltaY"] = deltaY
+			req.DeltaY, req.HasDelta = deltaY, true
 		}
-		if _, hasTarget := body["selector"]; !hasTarget {
-			if _, hasRef := body["ref"]; !hasRef {
-				_ = applyMouseTarget(body, "", cmd)
-			}
+		if req.Selector == "" && req.Ref == "" {
+			_ = applyMouseTarget(&req, "", cmd)
 		} else if cmd.Flags().Changed("x") || cmd.Flags().Changed("y") || cmd.Flags().Changed("css") {
 			cli.Fatal("Usage: pinchtab mouse wheel <dy> [--dx <n>] or pinchtab mouse wheel [selector]")
 		}
@@ -404,12 +379,8 @@ func MouseAction(client *http.Client, base, token, kind string, args []string, c
 		cli.Fatal("unsupported mouse action: %s", kind)
 	}
 
-	if cmd.Flags().Changed("humanize") {
-		v, _ := cmd.Flags().GetBool("humanize")
-		body["humanize"] = v
-	}
-
-	postAction(client, base, token, cmd, body)
+	readHumanizeFlag(&req, cmd)
+	postAction(client, base, token, cmd, req)
 }
 
 type dragTarget struct {
@@ -438,14 +409,14 @@ func parseDragTarget(raw string) dragTarget {
 	return dragTarget{selector: raw}
 }
 
-func actionBodyForTarget(kind string, target dragTarget) map[string]any {
-	body := map[string]any{"kind": kind}
+func actionRequestForTarget(kind string, target dragTarget) bridge.ActionRequest {
+	req := bridge.ActionRequest{Kind: kind}
 	if target.hasXY {
-		setPointBody(body, target.x, target.y)
-		return body
+		setPoint(&req, target.x, target.y)
+		return req
 	}
-	setSelectorBody(body, target.selector)
-	return body
+	setSelector(&req, target.selector)
+	return req
 }
 
 func Drag(client *http.Client, base, token string, args []string, cmd *cobra.Command) {
@@ -456,16 +427,12 @@ func Drag(client *http.Client, base, token string, args []string, cmd *cobra.Com
 		if len(args) != 1 {
 			cli.Fatal("Usage: pinchtab drag <selector> --drag-x <n> --drag-y <n>")
 		}
-		body := map[string]any{"kind": bridge.ActionDrag}
-		setSelectorBody(body, args[0])
-		dx, _ := cmd.Flags().GetInt("drag-x")
-		dy, _ := cmd.Flags().GetInt("drag-y")
-		body["dragX"] = dx
-		body["dragY"] = dy
-		if button, _ := cmd.Flags().GetString("button"); button != "" {
-			body["button"] = button
-		}
-		postAction(client, base, token, cmd, body)
+		req := bridge.ActionRequest{Kind: bridge.ActionDrag}
+		setSelector(&req, args[0])
+		req.DragX, _ = cmd.Flags().GetInt("drag-x")
+		req.DragY, _ = cmd.Flags().GetInt("drag-y")
+		req.Button, _ = cmd.Flags().GetString("button")
+		postAction(client, base, token, cmd, req)
 		return
 	}
 
@@ -473,62 +440,53 @@ func Drag(client *http.Client, base, token string, args []string, cmd *cobra.Com
 		cli.Fatal("Usage: pinchtab drag <from> <to>  or  pinchtab drag <selector> --drag-x <n> --drag-y <n>")
 	}
 
-	body := actionBodyForTarget(bridge.ActionDrag, parseDragTarget(args[0]))
-	setDragDestinationBody(body, parseDragTarget(args[1]))
-	if button, _ := cmd.Flags().GetString("button"); button != "" {
-		body["button"] = button
-	}
-	postAction(client, base, token, cmd, body)
+	req := actionRequestForTarget(bridge.ActionDrag, parseDragTarget(args[0]))
+	setDragDestination(&req, parseDragTarget(args[1]))
+	req.Button, _ = cmd.Flags().GetString("button")
+	postAction(client, base, token, cmd, req)
 }
 
-func setDragDestinationBody(body map[string]any, target dragTarget) {
+func setDragDestination(req *bridge.ActionRequest, target dragTarget) {
 	if target.hasXY {
-		body["toX"] = target.x
-		body["toY"] = target.y
+		req.ToX, req.ToY, req.HasToXY = target.x, target.y, true
 		return
 	}
-	body["toSelector"] = target.selector
+	req.ToSelector = target.selector
 }
 
 func ActionSimple(client *http.Client, base, token, kind string, args []string, cmd *cobra.Command) {
-	body := map[string]any{"kind": kind}
+	req := bridge.ActionRequest{Kind: kind}
 
 	switch kind {
 	case "type":
-		setSelectorBody(body, args[0])
-		body["text"] = strings.Join(args[1:], " ")
+		setSelector(&req, args[0])
+		setText(&req, strings.Join(args[1:], " "))
 	case "fill":
-		setSelectorBody(body, args[0])
-		body["text"] = strings.Join(args[1:], " ")
-		if submit, _ := cmd.Flags().GetBool("submit"); submit {
-			body["submit"] = true
-		}
+		setSelector(&req, args[0])
+		setText(&req, strings.Join(args[1:], " "))
+		req.Submit, _ = cmd.Flags().GetBool("submit")
 	case "press":
 		if len(args) >= 2 {
-			setSelectorBody(body, args[0])
-			body["key"] = args[1]
+			setSelector(&req, args[0])
+			req.Key = args[1]
 		} else {
-			body["key"] = args[0]
+			req.Key = args[0]
 		}
 	case "scroll":
-		applyScrollTarget(body, args, cmd)
+		applyScrollTarget(&req, args, cmd)
 	case "select":
-		setSelectorBody(body, args[0])
-		body["value"] = args[1]
-	case "keyboard-type":
-		body["text"] = strings.Join(args, " ")
-	case "keyboard-inserttext":
-		body["text"] = strings.Join(args, " ")
-	case "keydown":
-		body["key"] = args[0]
-	case "keyup":
-		body["key"] = args[0]
+		setSelector(&req, args[0])
+		req.Value, req.HasText = args[1], true
+	case "keyboard-type", "keyboard-inserttext":
+		setText(&req, strings.Join(args, " "))
+	case "keydown", "keyup":
+		req.Key = args[0]
 	}
 
-	if cmd.Flags().Changed("humanize") {
-		v, _ := cmd.Flags().GetBool("humanize")
-		body["humanize"] = v
-	}
+	readHumanizeFlag(&req, cmd)
+	postAction(client, base, token, cmd, req)
+}
 
-	postAction(client, base, token, cmd, body)
+func setText(req *bridge.ActionRequest, text string) {
+	req.Text, req.HasText = text, true
 }

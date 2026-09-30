@@ -58,244 +58,231 @@ func wrongTypeRefusal(verb, arg, gotType, emptyMeans string) *mcp.CallToolResult
 
 func handleAction(c *Client, kind string) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		payload := map[string]any{"kind": kind}
-
-		if tabID := optString(r, "tabId"); tabID != "" {
-			payload["tabId"] = tabID
-		}
-
-		x, y, hasXY := 0.0, 0.0, false
+		req := bridge.ActionRequest{Kind: kind, TabID: optString(r, "tabId")}
 		if xyAction[kind] {
-			x, y, hasXY = resolveXY(r)
+			req.X, req.Y, req.HasXY = resolveXY(r)
 		}
-		if hasXY {
-			payload["x"] = x
-			payload["y"] = y
-			payload["hasXY"] = true
-		}
-
-		hasNodeID := false
 		if nodeID, ok := optInt(r, "nodeId"); ok && nodeID > 0 {
-			hasNodeID = true
-			payload["nodeId"] = nodeID
+			req.NodeID = int64(nodeID)
+		}
+		if humanizeAction[kind] {
+			readHumanize(&req, r)
 		}
 
-		resolveSelector := func(required bool) (bool, *mcp.CallToolResult) {
-			sel, wrongKey, wrongType := actionSelectorArg(r)
-			if wrongType != "" {
-				// Refused even when a selector is not required: acting on nodeId or
-				// query while silently discarding a mistyped ref the caller sent is
-				// the wrong-target hazard, not a convenience.
-				return false, wrongTypeRefusal(kind, wrongKey, wrongType, "")
-			}
-			if sel != "" {
-				payload["selector"] = sel
-				return true, nil
-			}
-			if required {
-				return false, mcp.NewToolResultError("required parameter 'selector' is missing")
-			}
-			return false, nil
-		}
-
+		var refusal *mcp.CallToolResult
 		switch kind {
-		case "click", "hover", "focus":
-			requiresSelector := !hasNodeID
-			if kind == "click" || kind == "hover" {
-				requiresSelector = requiresSelector && !hasXY
-			}
-			if _, refusal := resolveSelector(requiresSelector); refusal != nil {
-				return refusal, nil
-			}
-			// Forwarded only when the caller actually sent it, so an omitted
-			// humanize inherits the instance default instead of overriding it for
-			// every request. An explicit false is a real opt-out and travels: the
-			// wire field is a per-request override, not a flag.
-			humanize, humanizeSet := false, false
-			if humanizeAction[kind] {
-				humanize, humanizeSet = optBool(r, "humanize")
-				if humanizeSet {
-					payload["humanize"] = humanize
-				}
-			}
-			if kind == "click" {
-				if waitNav, ok := optBool(r, "waitNav"); ok && waitNav {
-					payload["waitNav"] = true
-				}
-				if rawMode := optTrimmedString(r, "mode"); rawMode != "" {
-					mode, err := bridge.ParseClickMode(rawMode)
-					if err != nil {
-						return mcp.NewToolResultError(err.Error()), nil
-					}
-					if humanizeSet && humanize {
-						return mcp.NewToolResultError("mode and humanize are mutually exclusive"), nil
-					}
-					payload["mode"] = mode
-				}
-				if rawDialogAction := firstNonEmptyString(r, "dialogAction", "onDialog"); rawDialogAction != "" {
-					dialogAction, err := bridge.ParseDialogAction("dialogAction", rawDialogAction)
-					if err != nil {
-						return mcp.NewToolResultError(err.Error()), nil
-					}
-					payload["dialogAction"] = dialogAction
-					if dialogText := firstNonEmptyString(r, "dialogText", "promptText"); dialogText != "" {
-						payload["dialogText"] = dialogText
-					}
-				}
-			}
-
+		case "click":
+			refusal = buildClick(&req, r)
+		case "hover":
+			refusal = requirePointerTarget(&req, r)
+		case "focus":
+			refusal = requireSelector(&req, r)
 		case "type":
-			if _, refusal := resolveSelector(!hasNodeID); refusal != nil {
-				return refusal, nil
-			}
-			// Typing nothing is meaningless, so type keeps collapsing empty with absent —
-			// but only after a wrong-typed argument has been named as one, rather than
-			// reported as an argument the caller never sent.
-			text, refusal := suppliedStringArg(r, "type", "text", "", "text", "value")
-			if refusal != nil {
-				return refusal, nil
-			}
-			if strings.TrimSpace(text) == "" {
-				return mcp.NewToolResultError("type needs a non-empty 'text' argument"), nil
-			}
-			payload["text"] = text
-
+			refusal = buildType(&req, r)
 		case "select":
-			if _, refusal := resolveSelector(!hasNodeID); refusal != nil {
-				return refusal, nil
-			}
-			// `<option value="">` is the standard placeholder, so an empty value is a real
-			// selection — the one that resets a dropdown — and the bridge tells it apart
-			// from an absent one by key presence.
-			value, refusal := suppliedStringArg(r, "select", "value", `send "" to select an empty-valued option`, "value", "option")
-			if refusal != nil {
-				return refusal, nil
-			}
-			payload["value"] = value
-
+			refusal = buildSelect(&req, r)
 		case "scroll":
-			hasSelector, refusal := resolveSelector(false)
-			if refusal != nil {
-				return refusal, nil
-			}
-			pixels, hasPixels := optInt(r, "pixels")
-			deltaX, hasDeltaX := optInt(r, "deltaX")
-			deltaY, hasDeltaY := optInt(r, "deltaY")
-
-			direction := strings.ToLower(optTrimmedString(r, "direction"))
-			steps, hasSteps := optInt(r, "steps")
-			if !hasSteps || steps < 1 {
-				steps = 1
-			}
-
-			// A direction keyword is an INTENT, so it reads its vocabulary and its
-			// magnitude from the one owner both surfaces share and routes to the same
-			// `scroll` action the CLI's keyword does. It used to carry its own switch
-			// (down and up only, no horizontal) and its own bare 120 — a wheel notch,
-			// which is a device unit: "down" moved a sixth of what the CLI moved, took
-			// six round trips to bring the next content into view, and said so nowhere.
-			if direction != "" {
-				resolved, ok := scroll.DirectionFor(direction)
-				if !ok {
-					return mcp.NewToolResultError(fmt.Sprintf("direction must be one of %s", strings.Join(scroll.DirectionKeywords(), ", "))), nil
-				}
-				// Two magnitudes and no rule that picks between them. The keyword used to be
-				// dropped here without a word, which is the silent reinterpretation this tool
-				// is being fixed to stop — so it is refused instead, naming both spellings.
-				if hasDeltaX || hasDeltaY {
-					return mcp.NewToolResultError(fmt.Sprintf(
-						"direction and deltaX/deltaY each set a scroll magnitude; send one — direction for a %s step, or an explicit delta for a precise wheel move",
-						scrollStepDescription)), nil
-				}
-				// Presence, not truthiness. hasPixels already says the caller supplied a
-				// magnitude, and re-testing it for non-zero threw that away: a computed
-				// pixels:0 fell through to the keyword step and scrolled a full step in the
-				// direction the caller named, from a caller asking for no movement. Honouring
-				// the zero routes it into the shared zero-delta resolver, which already
-				// refuses it for every other spelling — so the rule keeps one owner and this
-				// caller stops being the one that never reaches it.
-				distance := resolved.Delta * steps
-				if hasPixels {
-					magnitude := pixels
-					if magnitude < 0 {
-						magnitude = -magnitude
-					}
-					distance = magnitude * steps
-					if resolved.Delta < 0 {
-						distance = -distance
-					}
-				}
-				// An element target means the caller is aiming the keyword INSIDE something —
-				// an inner scrollable container — so it rides the wheel at that element, the
-				// same routing an explicit magnitude gets. Posting it as a page scroll instead
-				// reaches actionScroll, which short-circuits on a target into scroll-into-view
-				// and discards the direction, the distance and the sign while still answering
-				// scrolled:true. A coordinate target needs no such move: actionScroll honours
-				// x/y and the delta together.
-				if hasSelector || hasNodeID {
-					payload["kind"] = "mouse-wheel"
-				}
-				// scrollX/scrollY is the wheel's legacy spelling, so the axis mapping stays
-				// owned by the direction table on both routes.
-				payload[resolved.Axis] = distance
-				break
-			}
-
-			useWheel := hasXY || hasDeltaX || hasDeltaY || (hasSelector && hasPixels)
-			if useWheel {
-				payload["kind"] = "mouse-wheel"
-				if hasDeltaX {
-					payload["deltaX"] = deltaX
-				}
-				if hasDeltaY {
-					payload["deltaY"] = deltaY
-				} else if hasPixels {
-					payload["deltaY"] = pixels
-				}
-			} else if hasPixels {
-				payload["scrollY"] = pixels
-			}
-
+			refusal = buildScroll(&req, r)
 		case "scrollintoview":
-			if _, refusal := resolveSelector(!hasNodeID); refusal != nil {
-				return refusal, nil
-			}
-
+			refusal = requireSelector(&req, r)
 		case "fill":
-			if _, refusal := resolveSelector(!hasNodeID); refusal != nil {
-				return refusal, nil
-			}
-			// Presence, not emptiness: an empty value is how a caller clears a field,
-			// so refusing it made the one documented clear idiom inexpressible here
-			// while the raw API accepted it — and the old message claimed a parameter
-			// the caller had supplied was missing.
-			value, refusal := suppliedStringArg(r, "fill", "value", `send "" to clear the field`, "value", "text")
-			if refusal != nil {
-				return refusal, nil
-			}
-			// "text" is the field actionFill reads. Posting the same string under "value"
-			// reached a real ActionRequest field that fill ignores, so the write was empty
-			// and the tool still answered filled:true.
-			payload["text"] = value
+			refusal = buildFill(&req, r)
+		}
+		if refusal != nil {
+			return refusal, nil
 		}
 
-		if tok := c.VocabToken(optString(r, "tabId")); tok != "" {
-			payload["vocab"] = tok
-		}
-
-		body, code, err := c.Post(ctx, routedPathWithBody(r, "/action", payload), payload)
+		req.Vocab = c.VocabToken(req.TabID)
+		req.Browser = routingBrowser(r)
+		body, code, err := c.Post(ctx, routedPath(r, "/action"), req)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		if code >= 400 {
-			return resultFromBytes(body, code)
-		}
-
-		if snapSupportedKinds[kind] {
-			return withOptionalSnapshot(ctx, c, r, optString(r, "tabId"), body, code)
+		if code < 400 && snapSupportedKinds[kind] {
+			return withOptionalSnapshot(ctx, c, r, req.TabID, body, code)
 		}
 		return resultFromBytes(body, code)
 	}
+}
+
+// resolveSelector refuses a mistyped selector even when none is required: acting on nodeId
+// or query while silently discarding a ref the caller sent is the wrong-target hazard.
+func resolveSelector(req *bridge.ActionRequest, r mcp.CallToolRequest, required bool) *mcp.CallToolResult {
+	sel, wrongKey, wrongType := actionSelectorArg(r)
+	if wrongType != "" {
+		return wrongTypeRefusal(req.Kind, wrongKey, wrongType, "")
+	}
+	if sel != "" {
+		req.Selector = sel
+		return nil
+	}
+	if required {
+		return mcp.NewToolResultError("required parameter 'selector' is missing")
+	}
+	return nil
+}
+
+func requireSelector(req *bridge.ActionRequest, r mcp.CallToolRequest) *mcp.CallToolResult {
+	return resolveSelector(req, r, req.NodeID == 0)
+}
+
+func requirePointerTarget(req *bridge.ActionRequest, r mcp.CallToolRequest) *mcp.CallToolResult {
+	return resolveSelector(req, r, req.NodeID == 0 && !req.HasXY)
+}
+
+// readHumanize forwards humanize only when sent, so an omitted one inherits the instance
+// default; an explicit false is a real per-request opt-out.
+func readHumanize(req *bridge.ActionRequest, r mcp.CallToolRequest) {
+	if humanize, ok := optBool(r, "humanize"); ok {
+		req.Humanize = &humanize
+	}
+}
+
+// buildClick exposes the click fields an agent can act on. button is deliberately absent:
+// the click action never reads it, so declaring it would advertise an inert argument.
+func buildClick(req *bridge.ActionRequest, r mcp.CallToolRequest) *mcp.CallToolResult {
+	if refusal := requirePointerTarget(req, r); refusal != nil {
+		return refusal
+	}
+	req.WaitNav, _ = optBool(r, "waitNav")
+	req.Submit, _ = optBool(r, "submit")
+	req.DismissKnownInterstitials, _ = optBool(r, "dismissKnownInterstitials")
+	req.DismissBanners, _ = optBool(r, "dismissBanners")
+	if rawMode := optTrimmedString(r, "mode"); rawMode != "" {
+		mode, err := bridge.ParseClickMode(rawMode)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error())
+		}
+		if req.Humanize != nil && *req.Humanize {
+			return mcp.NewToolResultError("mode and humanize are mutually exclusive")
+		}
+		req.Mode = mode
+	}
+	if rawDialogAction := firstNonEmptyString(r, "dialogAction", "onDialog"); rawDialogAction != "" {
+		dialogAction, err := bridge.ParseDialogAction("dialogAction", rawDialogAction)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error())
+		}
+		req.DialogAction = dialogAction
+		req.DialogText = firstNonEmptyString(r, "dialogText", "promptText")
+	}
+	return nil
+}
+
+// buildType keeps collapsing empty with absent, since typing nothing is meaningless, but
+// only after a wrong-typed argument has been named as one.
+func buildType(req *bridge.ActionRequest, r mcp.CallToolRequest) *mcp.CallToolResult {
+	if refusal := requireSelector(req, r); refusal != nil {
+		return refusal
+	}
+	text, refusal := suppliedStringArg(r, "type", "text", "", "text", "value")
+	if refusal != nil {
+		return refusal
+	}
+	if strings.TrimSpace(text) == "" {
+		return mcp.NewToolResultError("type needs a non-empty 'text' argument")
+	}
+	req.Text = text
+	return nil
+}
+
+// buildSelect treats an empty value as the `<option value="">` placeholder, a real
+// selection the bridge tells apart from an absent one through HasText.
+func buildSelect(req *bridge.ActionRequest, r mcp.CallToolRequest) *mcp.CallToolResult {
+	if refusal := requireSelector(req, r); refusal != nil {
+		return refusal
+	}
+	value, refusal := suppliedStringArg(r, "select", "value", `send "" to select an empty-valued option`, "value", "option")
+	if refusal != nil {
+		return refusal
+	}
+	req.Value, req.HasText = value, true
+	return nil
+}
+
+// buildFill posts under Text, the field fill reads, and keeps an empty value because that
+// is how a caller clears a field.
+func buildFill(req *bridge.ActionRequest, r mcp.CallToolRequest) *mcp.CallToolResult {
+	if refusal := requireSelector(req, r); refusal != nil {
+		return refusal
+	}
+	value, refusal := suppliedStringArg(r, "fill", "value", `send "" to clear the field`, "value", "text")
+	if refusal != nil {
+		return refusal
+	}
+	req.Text, req.HasText = value, true
+	return nil
+}
+
+func buildScroll(req *bridge.ActionRequest, r mcp.CallToolRequest) *mcp.CallToolResult {
+	if refusal := resolveSelector(req, r, false); refusal != nil {
+		return refusal
+	}
+	if direction := strings.ToLower(optTrimmedString(r, "direction")); direction != "" {
+		return buildDirectionScroll(req, r, direction)
+	}
+	pixels, hasPixels := optInt(r, "pixels")
+	deltaX, hasDeltaX := optInt(r, "deltaX")
+	deltaY, hasDeltaY := optInt(r, "deltaY")
+	if req.HasXY || hasDeltaX || hasDeltaY || (req.Selector != "" && hasPixels) {
+		req.Kind = "mouse-wheel"
+		if !hasDeltaY && hasPixels {
+			deltaY, hasDeltaY = pixels, true
+		}
+		req.DeltaX, req.DeltaY, req.HasDelta = deltaX, deltaY, hasDeltaX || hasDeltaY
+		return nil
+	}
+	if hasPixels {
+		req.ScrollY, req.HasScroll = pixels, true
+	}
+	return nil
+}
+
+// buildDirectionScroll reads the keyword's vocabulary and step from the table the CLI shares.
+// It refuses an explicit delta alongside the keyword rather than silently picking one, honours
+// a supplied pixels:0 so the shared zero-delta resolver refuses it, and routes an element
+// target through the wheel: a page scroll with a target short-circuits into scroll-into-view
+// and discards the direction.
+func buildDirectionScroll(req *bridge.ActionRequest, r mcp.CallToolRequest, direction string) *mcp.CallToolResult {
+	resolved, ok := scroll.DirectionFor(direction)
+	if !ok {
+		return mcp.NewToolResultError(fmt.Sprintf("direction must be one of %s", strings.Join(scroll.DirectionKeywords(), ", ")))
+	}
+	_, hasDeltaX := optInt(r, "deltaX")
+	_, hasDeltaY := optInt(r, "deltaY")
+	if hasDeltaX || hasDeltaY {
+		return mcp.NewToolResultError(fmt.Sprintf(
+			"direction and deltaX/deltaY each set a scroll magnitude; send one — direction for a %s step, or an explicit delta for a precise wheel move",
+			scrollStepDescription))
+	}
+	steps, hasSteps := optInt(r, "steps")
+	if !hasSteps || steps < 1 {
+		steps = 1
+	}
+	distance := resolved.Delta * steps
+	if pixels, hasPixels := optInt(r, "pixels"); hasPixels {
+		distance = abs(pixels) * steps
+		if resolved.Delta < 0 {
+			distance = -distance
+		}
+	}
+	if req.Selector != "" || req.NodeID > 0 {
+		req.Kind = "mouse-wheel"
+	}
+	if resolved.Axis == "scrollX" {
+		req.ScrollX = distance
+	} else {
+		req.ScrollY = distance
+	}
+	req.HasScroll = true
+	return nil
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }
 
 type keyboardAction struct {

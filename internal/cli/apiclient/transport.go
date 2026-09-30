@@ -20,7 +20,7 @@ type request struct {
 	method  string
 	url     string
 	query   url.Values
-	body    map[string]any
+	body    any
 	headers map[string]string
 	base    string
 	quiet   bool
@@ -48,6 +48,15 @@ func WithQuery(params url.Values) RequestOption {
 }
 
 func WithBody(body map[string]any) RequestOption {
+	return func(r *request) {
+		if body != nil {
+			r.body = body
+		}
+	}
+}
+
+// WithJSONBody sends a typed request body, for a caller whose wire shape is a struct.
+func WithJSONBody(body any) RequestOption {
 	return func(r *request) { r.body = body }
 }
 

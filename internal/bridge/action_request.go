@@ -33,7 +33,7 @@ type ActionFunc func(ctx context.Context, req ActionRequest) (map[string]any, er
 // are still accepted. Call NormalizeSelector() to merge them into the
 // unified Selector field.
 type ActionRequest struct {
-	TabID    string `json:"tabId"`
+	TabID    string `json:"tabId,omitempty"`
 	Kind     string `json:"kind"`
 	Ref      string `json:"ref,omitempty"`
 	Selector string `json:"selector,omitempty"`
@@ -51,8 +51,8 @@ type ActionRequest struct {
 	Value   string `json:"value,omitempty"`
 	HasText bool   `json:"hasText,omitempty"`
 
-	Key    string `json:"key"`
-	NodeID int64  `json:"nodeId"`
+	Key    string `json:"key,omitempty"`
+	NodeID int64  `json:"nodeId,omitempty"`
 
 	// X/Y use omitempty so that re-marshaling an ActionRequest without
 	// explicit coordinates (e.g. when the tab-scoped handler forwards to
@@ -95,8 +95,8 @@ type ActionRequest struct {
 	DeltaX   int  `json:"deltaX,omitempty"`
 	DeltaY   int  `json:"deltaY,omitempty"`
 	HasDelta bool `json:"hasDelta,omitempty"`
-	DragX    int  `json:"dragX"`
-	DragY    int  `json:"dragY"`
+	DragX    int  `json:"dragX,omitempty"`
+	DragY    int  `json:"dragY,omitempty"`
 
 	// A drag's destination. ToSelector takes the same unified selector vocabulary as
 	// Selector and the handler resolves it to ToNodeID; HasToXY separates an absent
@@ -107,9 +107,9 @@ type ActionRequest struct {
 	ToY        float64 `json:"toY,omitempty"`
 	HasToXY    bool    `json:"hasToXY,omitempty"`
 
-	WaitNav bool   `json:"waitNav"`
-	Fast    bool   `json:"fast"`
-	Owner   string `json:"owner"`
+	WaitNav bool   `json:"waitNav,omitempty"`
+	Fast    bool   `json:"fast,omitempty"`
+	Owner   string `json:"owner,omitempty"`
 	// Submit is an explicit opt-in to a terminal action. Fill dispatches Enter
 	// after filling; click uses one DOM click and lets the handler observe a
 	// bounded post-submit state. Ordinary clicks retain their normal delivery.

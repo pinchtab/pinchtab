@@ -15,17 +15,20 @@ import (
 	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
-// consumedElsewhere records the payload keys the bridge ACTION never reads because another
-// layer owns them, with that owner. They are the reason this census can be strict about the
-// rest: everything not listed here has to be read by the action it is sent to.
+// consumedElsewhere records the ActionRequest fields the bridge ACTION never reads because
+// another layer owns them, with that owner. They are the reason this census can be strict
+// about the rest: every other field a tool writes has to be read by the action it is sent to.
 var consumedElsewhere = map[string]string{
-	"tabId":        "resolved into a tab context by the handler before dispatch",
-	"nodeId":       "resolved from selector/ref by the handler; the action reads NodeID it sets",
-	"selector":     "normalised and resolved to a node by the handler",
-	"waitNav":      "the handler waits for navigation around the action",
-	"dialogAction": "the handler arms the dialog watcher around the action",
-	"dialogText":   "the handler arms the dialog watcher around the action",
-	"vocab":        "the handler's vocabulary-supersession gate reads it before dispatch; no action reads it",
+	"TabID":                     "resolved into a tab context by the handler before dispatch",
+	"NodeID":                    "resolved from selector/ref by the handler; the action reads NodeID it sets",
+	"Selector":                  "normalised and resolved to a node by the handler",
+	"WaitNav":                   "the handler waits for navigation around the action",
+	"DialogAction":              "the handler arms the dialog watcher around the action",
+	"DialogText":                "the handler arms the dialog watcher around the action",
+	"DismissBanners":            "the handler runs the banner pass after a waitNav click",
+	"DismissKnownInterstitials": "the handler dismisses the interstitial before resolving the target",
+	"Vocab":                     "the handler's vocabulary-supersession gate reads it before dispatch; no action reads it",
+	"Browser":                   "the orchestrator routes the request to an instance of that browser",
 }
 
 // A payload key that is a real ActionRequest field but not one the target action READS is
@@ -34,68 +37,53 @@ var consumedElsewhere = map[string]string{
 // field select reads — and answered filled:true with len:0. So the contract this pins is
 // key-to-CONSUMING-ACTION, not key-to-struct.
 func TestEveryMCPActionPayloadKeyIsReadByTheActionItIsSentTo(t *testing.T) {
-	keysByKind := mcpPayloadKeysByKind(t)
-	if len(keysByKind) < 5 {
-		t.Fatalf("found payload keys for only %d action kinds, so this census is not reading the handler", len(keysByKind))
+	fieldsByKind := mcpPayloadKeysByKind(t)
+	if len(fieldsByKind) < 5 {
+		t.Fatalf("found request fields for only %d action kinds, so this census is not reading the handler", len(fieldsByKind))
 	}
-	fieldByKey := actionRequestFieldsByJSONKey()
 	readsByKind := actionRequestReadsByKind(t)
 	if !readsByKind[bridge.ActionFill]["Text"] {
 		t.Fatalf("the fill action is not seen reading Text, so the bridge side of this census read nothing useful: %v", readsByKind[bridge.ActionFill])
 	}
 
 	checked := 0
-	for _, kind := range sortedKeys(keysByKind) {
-		entry := keysByKind[kind]
-		for _, key := range entry.keys {
-			if _, ok := consumedElsewhere[key]; ok {
-				continue
-			}
-			field, ok := fieldByKey[key]
-			if !ok {
-				t.Errorf("%s posts %q, which is not a field of bridge.ActionRequest at all", kind, key)
+	for _, kind := range sortedKeys(fieldsByKind) {
+		entry := fieldsByKind[kind]
+		for _, field := range entry.keys {
+			if _, ok := consumedElsewhere[field]; ok {
 				continue
 			}
 			checked++
 			read := readByAnyDispatchableKind(readsByKind, entry.dispatchesTo, field)
-			reason, accounted := postedButUnread[kind+"/"+key]
+			reason, accounted := postedButUnread[kind+"/"+field]
 			switch {
 			case read && accounted:
-				t.Errorf("%s posts %q and the action now reads ActionRequest.%s; drop its entry so this census keeps meaning what it says", kind, key, field)
+				t.Errorf("%s writes ActionRequest.%s and the action now reads it; drop its entry so this census keeps meaning what it says", kind, field)
 			case read:
 			case accounted:
-				t.Logf("accounted: %s posts %q (ActionRequest.%s) unread — %s", kind, key, field, reason)
+				t.Logf("accounted: %s writes ActionRequest.%s unread — %s", kind, field, reason)
 			default:
-				t.Errorf("%s posts %q (ActionRequest.%s), which no action it dispatches to (%v) reads; the write would be silently dropped",
-					kind, key, field, entry.dispatchesTo)
+				t.Errorf("%s writes ActionRequest.%s, which no action it dispatches to (%v) reads; the write would be silently dropped",
+					kind, field, entry.dispatchesTo)
 			}
 		}
 	}
 	if checked < 5 {
-		t.Fatalf("only %d payload keys were checked against a consuming action, so this census proves little", checked)
+		t.Fatalf("only %d request fields were checked against a consuming action, so this census proves little", checked)
 	}
 
-	for key := range consumedElsewhere {
-		if !anyKindPosts(keysByKind, key) {
-			t.Errorf("%q is recorded as consumed by another layer but nothing posts it any more; drop the entry", key)
+	for field := range consumedElsewhere {
+		if !anyKindPosts(fieldsByKind, field) {
+			t.Errorf("ActionRequest.%s is recorded as consumed by another layer but no tool writes it any more; drop the entry", field)
 		}
 	}
 }
 
 type payloadCase struct {
 	keys []string
-	// dispatchesTo is the kind itself plus any kind the handler rewrites payload["kind"]
-	// to, since the scroll case turns itself into mouse-wheel for the wheel form.
+	// dispatchesTo is the kind itself plus any kind a builder rewrites req.Kind to, since
+	// the scroll builder turns itself into mouse-wheel for the wheel form.
 	dispatchesTo []string
-}
-
-// gatedByDeclaringSet covers the keys whose per-kind gate the walker cannot see, because the
-// handler computes a local flag under the gate and writes the key under the flag. Naming the
-// SET rather than the kinds keeps it derived: shrink xyAction and this narrows with it.
-var gatedByDeclaringSet = map[string]string{
-	"x":     "xyAction",
-	"y":     "xyAction",
-	"hasXY": "xyAction",
 }
 
 // postedButUnread records keys a tool forwards that its action does not read — the same
@@ -112,38 +100,32 @@ var declaringSets = map[string]map[string]bool{
 	"xyAction":       xyAction,
 }
 
-// mcpPayloadKeysByKind reads the handler rather than a hand-written list: a tool that starts
-// posting a new key has to be measured, and a list would simply not mention it. Keys set
-// before the switch belong to every kind the tool set can send, which is itself derived from
-// the handler registration.
+// mcpPayloadKeysByKind reads the handler and the builders it hands the request to, rather
+// than a hand-written list: a tool that starts writing a new field has to be measured, and a
+// list would simply not mention it. Fields written before the kind switch belong to every
+// kind the tool set can send, which is itself derived from the handler registration.
 func mcpPayloadKeysByKind(t *testing.T) map[string]payloadCase {
 	t.Helper()
 
 	pkg := srccensus.Load(t, ".", 18)
-	fn := findFuncDecl(t, pkg, "handleAction")
-	keys := map[string]map[string]bool{}
-	rewrites := map[string]map[string]bool{}
-	collectPayloadKeys(t, fn.Body, mcpActionKinds(t, pkg), keys, rewrites)
-
-	for key, setName := range gatedByDeclaringSet {
-		set, known := declaringSets[setName]
-		if !known {
-			t.Fatalf("%q is recorded as gated by the unknown declaring set %q", key, setName)
-		}
-		for kind := range keys {
-			if !set[kind] {
-				delete(keys[kind], key)
+	walker := requestWriteWalker{t: t, funcs: map[string]*ast.FuncDecl{}, keys: map[string]map[string]bool{}, rewrites: map[string]map[string]bool{}}
+	_, files := pkg.Syntax()
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Body != nil && fn.Recv == nil {
+				walker.funcs[fn.Name.Name] = fn
 			}
 		}
 	}
+	walker.collect(findFuncDecl(t, pkg, "handleAction").Body, "req", mcpActionKinds(t, pkg), map[string]bool{})
 
 	out := map[string]payloadCase{}
-	for kind, set := range keys {
+	for kind, set := range walker.keys {
 		entry := payloadCase{dispatchesTo: []string{kind}}
 		for key := range set {
 			entry.keys = append(entry.keys, key)
 		}
-		for rewritten := range rewrites[kind] {
+		for rewritten := range walker.rewrites[kind] {
 			if rewritten != kind {
 				entry.dispatchesTo = append(entry.dispatchesTo, rewritten)
 			}
@@ -181,46 +163,74 @@ func mcpActionKinds(t *testing.T, pkg *srccensus.Package) []string {
 	return kinds
 }
 
-// collectPayloadKeys walks the handler body carrying the kinds the current statement applies
-// to. A `switch kind` case narrows it to that case's kinds, an `if kind == "x"` to x, and a
-// declaring-set lookup to the kinds that set declares — which is what keeps `mode`, gated on
-// click inside a clause shared with hover and focus, from being attributed to all three.
-func collectPayloadKeys(t *testing.T, node ast.Node, kinds []string, keys, rewrites map[string]map[string]bool) {
-	t.Helper()
+type requestWriteWalker struct {
+	t        *testing.T
+	funcs    map[string]*ast.FuncDecl
+	keys     map[string]map[string]bool
+	rewrites map[string]map[string]bool
+}
+
+// collect walks a body carrying the kinds the current statement applies to. A `switch kind`
+// case narrows it to that case's kinds, an `if kind == "x"` to x, and a declaring-set lookup
+// to the kinds that set declares. A call handing the request to a builder in this file is
+// followed into the builder under the kinds that reach the call.
+func (w *requestWriteWalker) collect(node ast.Node, param string, kinds []string, visiting map[string]bool) {
+	w.t.Helper()
 
 	switch n := node.(type) {
 	case nil:
 		return
 	case *ast.AssignStmt:
 		for i, lhs := range n.Lhs {
-			index, ok := lhs.(*ast.IndexExpr)
-			if !ok || !isIdent(index.X, "payload") {
-				continue
-			}
-			key, ok := stringLit(index.Index)
-			if !ok {
+			sel, ok := lhs.(*ast.SelectorExpr)
+			if !ok || !isIdent(sel.X, param) {
 				continue
 			}
 			for _, kind := range kinds {
-				if key == "kind" {
-					if i < len(n.Rhs) {
-						if rewritten, ok := stringLit(n.Rhs[i]); ok {
-							addTo(rewrites, kind, rewritten)
-						}
-					}
+				if sel.Sel.Name != "Kind" {
+					addTo(w.keys, kind, sel.Sel.Name)
 					continue
 				}
-				addTo(keys, kind, key)
+				if i < len(n.Rhs) {
+					if rewritten, ok := stringLit(n.Rhs[i]); ok {
+						addTo(w.rewrites, kind, rewritten)
+					}
+				}
+			}
+		}
+	case *ast.CompositeLit:
+		if isActionRequestType(n.Type) {
+			for _, elt := range n.Elts {
+				pair, ok := elt.(*ast.KeyValueExpr)
+				if !ok {
+					continue
+				}
+				if key, ok := pair.Key.(*ast.Ident); ok && key.Name != "Kind" {
+					for _, kind := range kinds {
+						addTo(w.keys, kind, key.Name)
+					}
+				}
+			}
+		}
+	case *ast.CallExpr:
+		if callee, ok := w.funcs[calleeName(n.Fun)]; ok && !visiting[callee.Name.Name] && passesRequest(n, param) {
+			if calleeParam := actionRequestParamName(callee); calleeParam != "" {
+				visiting[callee.Name.Name] = true
+				w.collect(callee.Body, calleeParam, kinds, visiting)
+				delete(visiting, callee.Name.Name)
 			}
 		}
 	case *ast.IfStmt:
 		body := kinds
-		if restricted, ok := restrictKinds(t, n.Cond, kinds, assignsPayload(n.Body)); ok {
+		if restricted, ok := restrictKinds(w.t, n.Cond, kinds, writesRequest(n.Body, param)); ok {
 			body = restricted
 		}
-		collectPayloadKeys(t, n.Body, body, keys, rewrites)
+		if n.Init != nil {
+			w.collect(n.Init, param, kinds, visiting)
+		}
+		w.collect(n.Body, param, body, visiting)
 		if n.Else != nil {
-			collectPayloadKeys(t, n.Else, kinds, keys, rewrites)
+			w.collect(n.Else, param, kinds, visiting)
 		}
 		return
 	case *ast.SwitchStmt:
@@ -237,7 +247,7 @@ func collectPayloadKeys(t *testing.T, node ast.Node, kinds []string, keys, rewri
 					}
 				}
 				for _, stmt := range clause.Body {
-					collectPayloadKeys(t, stmt, caseKinds, keys, rewrites)
+					w.collect(stmt, param, caseKinds, visiting)
 				}
 			}
 			return
@@ -245,13 +255,22 @@ func collectPayloadKeys(t *testing.T, node ast.Node, kinds []string, keys, rewri
 	}
 
 	for _, child := range childNodes(node) {
-		collectPayloadKeys(t, child, kinds, keys, rewrites)
+		w.collect(child, param, kinds, visiting)
 	}
+}
+
+func passesRequest(call *ast.CallExpr, param string) bool {
+	for _, arg := range call.Args {
+		if isRequestArg(arg, param) {
+			return true
+		}
+	}
+	return false
 }
 
 // restrictKinds narrows the applicable kinds for a conditional: `kind == "x"` to x, and a
 // declaring-set lookup to that set's members.
-func restrictKinds(t *testing.T, cond ast.Expr, kinds []string, gatesPayload bool) ([]string, bool) {
+func restrictKinds(t *testing.T, cond ast.Expr, kinds []string, gatesRequest bool) ([]string, bool) {
 	t.Helper()
 
 	switch c := cond.(type) {
@@ -264,8 +283,8 @@ func restrictKinds(t *testing.T, cond ast.Expr, kinds []string, gatesPayload boo
 				}
 			}
 		case token.LOR:
-			left, okLeft := restrictKinds(t, c.X, kinds, gatesPayload)
-			right, okRight := restrictKinds(t, c.Y, kinds, gatesPayload)
+			left, okLeft := restrictKinds(t, c.X, kinds, gatesRequest)
+			right, okRight := restrictKinds(t, c.Y, kinds, gatesRequest)
 			if okLeft && okRight {
 				return union(left, right), true
 			}
@@ -277,8 +296,8 @@ func restrictKinds(t *testing.T, cond ast.Expr, kinds []string, gatesPayload boo
 		}
 		set, known := declaringSets[name]
 		if !known {
-			if gatesPayload {
-				t.Fatalf("payload keys are gated on the unknown declaring set %q; register it in declaringSets so this census keeps meaning what it says", name)
+			if gatesRequest {
+				t.Fatalf("request fields are gated on the unknown declaring set %q; register it in declaringSets so this census keeps meaning what it says", name)
 			}
 			return nil, false
 		}
@@ -288,26 +307,29 @@ func restrictKinds(t *testing.T, cond ast.Expr, kinds []string, gatesPayload boo
 		}
 		return intersect(kinds, declared), true
 	case *ast.ParenExpr:
-		return restrictKinds(t, c.X, kinds, gatesPayload)
+		return restrictKinds(t, c.X, kinds, gatesRequest)
 	}
 	return nil, false
 }
 
-// assignsPayload reports whether a subtree writes any payload key, so an unknown per-kind
-// gate is a failure only when it actually decides one.
-func assignsPayload(node ast.Node) bool {
+// writesRequest reports whether a subtree writes a request field or hands the request on,
+// so an unknown per-kind gate is a failure only when it actually decides one.
+func writesRequest(node ast.Node, param string) bool {
 	found := false
 	ast.Inspect(node, func(n ast.Node) bool {
-		assign, ok := n.(*ast.AssignStmt)
-		if !ok {
-			return true
-		}
-		for _, lhs := range assign.Lhs {
-			if index, ok := lhs.(*ast.IndexExpr); ok && isIdent(index.X, "payload") {
+		switch x := n.(type) {
+		case *ast.AssignStmt:
+			for _, lhs := range x.Lhs {
+				if sel, ok := lhs.(*ast.SelectorExpr); ok && isIdent(sel.X, param) {
+					found = true
+				}
+			}
+		case *ast.CallExpr:
+			if passesRequest(x, param) {
 				found = true
 			}
 		}
-		return true
+		return !found
 	})
 	return found
 }
@@ -496,6 +518,8 @@ func isActionRequestType(expr ast.Expr) bool {
 	switch t := expr.(type) {
 	case *ast.Ident:
 		return t.Name == "ActionRequest"
+	case *ast.SelectorExpr:
+		return t.Sel.Name == "ActionRequest"
 	case *ast.StarExpr:
 		return isActionRequestType(t.X)
 	}

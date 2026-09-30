@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
 	"github.com/pinchtab/pinchtab/internal/scroll"
 	"github.com/spf13/cobra"
@@ -382,11 +383,11 @@ func TestEverySpellingOfAZeroReachesTheResolverRatherThanASubstitutedMagnitude(t
 			r := callTool(t, "pinchtab_scroll", tc.args, srv)
 
 			body, _ := resultJSON(t, r)["body"].(map[string]any)
-			value, present := body[tc.axis]
-			if !present {
-				t.Fatalf("payload carries no %s, so the bridge cannot refuse a zero it never receives: %v", tc.axis, body)
+			got, supplied := suppliedScrollAxis(decodeActionBody(t, body), tc.axis)
+			if !supplied {
+				t.Fatalf("the bridge decodes no supplied %s, so it cannot refuse a zero it never receives: %v", tc.axis, body)
 			}
-			if got, _ := value.(float64); got != 0 {
+			if got != 0 {
 				t.Errorf("%s = %v, want 0 — the caller supplied the magnitude and asked for none", tc.axis, got)
 			}
 		})
@@ -453,11 +454,11 @@ func TestScrollDirectionAtATargetKeepsBothItsRoutingAndASuppliedZero(t *testing.
 			if got, _ := body["kind"].(string); got != tc.wantKind {
 				t.Errorf("kind = %q, want %q — honouring the zero must not change which action the target routes to", got, tc.wantKind)
 			}
-			value, present := body[tc.axis]
-			if !present {
-				t.Fatalf("payload carries no %s, so the bridge cannot refuse a zero it never receives: %v", tc.axis, body)
+			got, supplied := suppliedScrollAxis(decodeActionBody(t, body), tc.axis)
+			if !supplied {
+				t.Fatalf("the bridge decodes no supplied %s, so it cannot refuse a zero it never receives: %v", tc.axis, body)
 			}
-			if got, _ := value.(float64); got != 0 {
+			if got != 0 {
 				t.Errorf("%s = %v, want 0 — the caller supplied the magnitude and asked for none", tc.axis, got)
 			}
 		})
@@ -747,11 +748,11 @@ func TestFillClearsOnASuppliedEmptyValueAndStillRefusesAnAbsentOne(t *testing.T)
 				t.Fatalf("a supplied empty %s was refused: %s", key, resultText(t, r))
 			}
 			body, _ := resultJSON(t, r)["body"].(map[string]any)
-			text, present := body["text"]
-			if !present {
-				t.Fatalf("payload carries no text key, so the bridge cannot tell a clear from a request whose text never arrived: %v", body)
+			got, supplied := bridge.FillText(decodeActionBody(t, body))
+			if !supplied {
+				t.Fatalf("the bridge decodes no supplied text, so it cannot tell a clear from a request whose text never arrived: %v", body)
 			}
-			if got, _ := text.(string); got != "" {
+			if got != "" {
 				t.Errorf("forwarded text = %q, want the empty string that clears the field", got)
 			}
 		})
@@ -855,8 +856,8 @@ func TestFillStillSendsAnEmptyStringVerbatim(t *testing.T) {
 	if res.IsError {
 		t.Fatalf("an empty value was refused: %s", resultText(t, res))
 	}
-	if !strings.Contains(body, `"text":""`) {
-		t.Errorf("posted %s, want text:\"\" — the documented way to clear a field", body)
+	if text, supplied := bridge.FillText(decodeActionJSON(t, body)); !supplied || text != "" {
+		t.Errorf("posted %s, want a supplied empty text — the documented way to clear a field", body)
 	}
 }
 
@@ -874,11 +875,11 @@ func TestSelectForwardsASuppliedEmptyValueAndStillRefusesAnAbsentOne(t *testing.
 				t.Fatalf("a supplied empty %s was refused: %s", key, resultText(t, r))
 			}
 			body, _ := resultJSON(t, r)["body"].(map[string]any)
-			value, present := body["value"]
-			if !present {
-				t.Fatalf("payload carries no value key, so the bridge cannot tell a placeholder selection from a request whose value never arrived: %v", body)
+			got, supplied := bridge.SelectValue(decodeActionBody(t, body))
+			if !supplied {
+				t.Fatalf("the bridge decodes no supplied value, so it cannot tell a placeholder selection from a request whose value never arrived: %v", body)
 			}
-			if got, _ := value.(string); got != "" {
+			if got != "" {
 				t.Errorf("forwarded value = %q, want the empty string that selects the placeholder", got)
 			}
 		})
@@ -957,12 +958,12 @@ func TestSelectSendsAnEmptyValueOnEverySurface(t *testing.T) {
 	if res.IsError {
 		t.Fatalf("MCP refused an empty value: %s", resultText(t, res))
 	}
-	if !strings.Contains(mcpBody, `"value":""`) {
-		t.Errorf("MCP posted %s, want value:\"\" — the key presence is what the bridge reads", mcpBody)
+	if value, supplied := bridge.SelectValue(decodeActionJSON(t, mcpBody)); !supplied || value != "" {
+		t.Errorf("MCP posted %s, want a supplied empty value — supplied-ness is what the bridge reads", mcpBody)
 	}
 
-	if cliBody := cliSelectBody(t, ""); !strings.Contains(cliBody, `"value":""`) {
-		t.Errorf("the CLI posted %s, want value:\"\" — the surfaces must express the same selection", cliBody)
+	if cliBody := cliSelectBody(t, ""); !suppliedEmptySelect(t, cliBody) {
+		t.Errorf("the CLI posted %s, want a supplied empty value — the surfaces must express the same selection", cliBody)
 	}
 }
 
@@ -1308,4 +1309,42 @@ func TestAValidLaterSelectorAliasStillWinsOverAMistypedEarlierOne(t *testing.T) 
 	if got, _ := body["selector"].(string); got != "e5" {
 		t.Errorf("posted selector = %q, want the valid alias e5", got)
 	}
+}
+
+func decodeActionJSON(t *testing.T, body string) bridge.ActionRequest {
+	t.Helper()
+	var req bridge.ActionRequest
+	if err := json.Unmarshal([]byte(body), &req); err != nil {
+		t.Fatalf("posted body %s does not decode as an action request: %v", body, err)
+	}
+	return req
+}
+
+func decodeActionBody(t *testing.T, body map[string]any) bridge.ActionRequest {
+	t.Helper()
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return decodeActionJSON(t, string(raw))
+}
+
+func suppliedEmptySelect(t *testing.T, body string) bool {
+	t.Helper()
+	value, supplied := bridge.SelectValue(decodeActionJSON(t, body))
+	return supplied && value == ""
+}
+
+func suppliedScrollAxis(req bridge.ActionRequest, axis string) (int, bool) {
+	switch axis {
+	case "scrollX":
+		return req.ScrollX, req.HasScroll
+	case "scrollY":
+		return req.ScrollY, req.HasScroll
+	case "deltaX":
+		return req.DeltaX, req.HasDelta
+	case "deltaY":
+		return req.DeltaY, req.HasDelta
+	}
+	return 0, false
 }
