@@ -44,6 +44,18 @@ func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths [
 	return o.LaunchWithTargetSelection(name, port, headless, "", nil, opts)
 }
 
+func (o *Orchestrator) activeInstanceConflict(name, port string) error {
+	for _, inst := range o.instances {
+		if inst.Port == port && instanceIsActive(inst) {
+			return fmt.Errorf("port %s already in use by instance %q", port, inst.ProfileName)
+		}
+		if inst.ProfileName == name && instanceIsActive(inst) {
+			return fmt.Errorf("profile %q already has an active instance (%s)", name, inst.Status)
+		}
+	}
+	return nil
+}
+
 func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts LaunchOptions) (*bridge.Instance, error) {
 	// Validate profile name to prevent path traversal attacks
 	if err := profiles.ValidateProfileName(name); err != nil {
@@ -56,19 +68,14 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 		}
 	}()
 
-	o.mu.Lock()
-
 	if port == "" || port == "0" {
-		o.mu.Unlock()
 		allocatedPort, err := o.ports().AllocatePort()
 		if err != nil {
 			return nil, fmt.Errorf("failed to allocate port: %w", err)
 		}
 		port = fmt.Sprintf("%d", allocatedPort)
 		reservedPorts = append(reservedPorts, allocatedPort)
-		o.mu.Lock()
 	} else {
-		o.mu.Unlock()
 		portInt, err := parsePortNumber(port)
 		if err != nil {
 			return nil, err
@@ -80,22 +87,17 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 		if portInt >= o.ports().start && portInt <= o.ports().end {
 			reservedPorts = append(reservedPorts, portInt)
 		}
-		o.mu.Lock()
 	}
 
-	for _, inst := range o.instances {
-		if inst.Port == port && instanceIsActive(inst) {
-			o.mu.Unlock()
-			return nil, fmt.Errorf("port %s already in use by instance %q", port, inst.ProfileName)
-		}
-		if inst.ProfileName == name && instanceIsActive(inst) {
-			o.mu.Unlock()
-			return nil, fmt.Errorf("profile %q already has an active instance (%s)", name, inst.Status)
-		}
+	o.mu.Lock()
+	err := o.activeInstanceConflict(name, port)
+	o.mu.Unlock()
+	if err != nil {
+		return nil, err
 	}
+
 	portInspection := o.runner.InspectPort(port)
 	if !portInspection.Available {
-		o.mu.Unlock()
 		err := portConflictError(port, portInspection)
 		slog.Error("instance launch blocked by port conflict", "profile", name, "port", port, "pid", portInspection.PID, "command", portInspection.Command, "error", err.Error())
 		return nil, err
@@ -104,6 +106,11 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 	profileID := o.idMgr.ProfileID(name)
 	instanceID := o.idMgr.InstanceID(profileID, name)
 
+	o.mu.Lock()
+	if err := o.activeInstanceConflict(name, port); err != nil {
+		o.mu.Unlock()
+		return nil, err
+	}
 	if inst, ok := o.instances[instanceID]; ok && inst.Status == "running" {
 		o.mu.Unlock()
 		return nil, fmt.Errorf("instance already running for profile %q", name)

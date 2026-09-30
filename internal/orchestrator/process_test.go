@@ -322,7 +322,7 @@ func TestRingBufferSince_OffsetBeyondEndResets(t *testing.T) {
 
 func TestRingBufferKeepsOnlyTheTailAcrossManyWrites(t *testing.T) {
 	rb := newRingBuffer(10)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		_, _ = rb.Write([]byte("abc"))
 	}
 	_, _ = rb.Write([]byte("0123456789XYZ"))
