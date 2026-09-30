@@ -1,7 +1,7 @@
 #!/bin/bash
 # Validate docs.json - check JSON syntax and verify all referenced files exist
 
-set -e
+set -euo pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -36,7 +36,7 @@ fi
 
 # Extract all file paths from docs.json
 # Looks for patterns like "path/to/file.md"
-files=$(grep -oE '"[a-zA-Z0-9/_.-]+\.md"' "$DOCS_JSON" | tr -d '"' | sort -u)
+files=$(grep -oE '"[a-zA-Z0-9/_.-]+\.md"' "$DOCS_JSON" | tr -d '"' | sort -u || true)
 
 if [ -z "$files" ]; then
     echo -e "${YELLOW}⚠️  No markdown files found in $DOCS_JSON${NC}"

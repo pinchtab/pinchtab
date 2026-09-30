@@ -15,12 +15,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-BOLD=$'\033[1m'
-ACCENT=$'\033[38;2;251;191;36m'
-MUTED=$'\033[38;2;90;100;128m'
-SUCCESS=$'\033[38;2;0;229;204m'
-ERROR=$'\033[38;2;255;107;107m'
-NC=$'\033[0m'
+source scripts/lib/term.sh
 
 DEV_PORT=${PINCHTAB_DEV_PORT:-9867}
 SERVER_ARGS=("$@")

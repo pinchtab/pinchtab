@@ -1,31 +1,12 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # check-dashboard.sh — Dashboard quality checks (matches CI: dashboard.yml)
 # Runs: typecheck → eslint → prettier
 
 cd "$(dirname "$0")/.."
 
-BOLD=$'\033[1m'
-ACCENT=$'\033[38;2;251;191;36m'
-SUCCESS=$'\033[38;2;0;229;204m'
-ERROR=$'\033[38;2;230;57;70m'
-MUTED=$'\033[38;2;90;100;128m'
-NC=$'\033[0m'
-
-ok()   { echo -e "  ${SUCCESS}✓${NC} $1"; return 0; }
-fail() {
-  echo -e "  ${ERROR}✗${NC} $1"
-  if [ -n "${2:-}" ]; then
-    echo -e "    ${MUTED}$2${NC}"
-  fi
-  return 0
-}
-
-section() {
-  echo ""
-  echo -e "  ${ACCENT}${BOLD}$1${NC}"
-}
+source scripts/lib/term.sh
 
 confirm() {
   if [ -r /dev/tty ]; then

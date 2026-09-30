@@ -4,12 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-BOLD=$'\033[1m'
-ACCENT=$'\033[38;2;251;191;36m'
-MUTED=$'\033[38;2;90;100;128m'
-SUCCESS=$'\033[38;2;0;229;204m'
-ERROR=$'\033[38;2;230;57;70m'
-NC=$'\033[0m'
+source "$ROOT/scripts/lib/term.sh"
 
 usage() {
   cat <<'EOF'

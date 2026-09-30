@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build and run PinchTab with React dashboard
-set -e
+set -euo pipefail
 
 cd "$(dirname "$0")/.."
 

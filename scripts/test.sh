@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # test.sh — Run Go tests with optional scope
 # Usage: test.sh [unit|all]
@@ -7,22 +7,7 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-BOLD=$'\033[1m'
-ACCENT=$'\033[38;2;251;191;36m'
-SUCCESS=$'\033[38;2;0;229;204m'
-ERROR=$'\033[38;2;230;57;70m'
-MUTED=$'\033[38;2;90;100;128m'
-NC=$'\033[0m'
-
-SYSTEM_REGEX='^(TestProxy_InstanceIsolation|TestOrchestrator_(HealthCheck|HashBasedIDs|PortAllocation|PortReuse|ListInstances|FirstRequestLazyChrome|AggregateTabsEndpoint|StopNonexistent|InstanceCleanup))$'
-
-ok()   { echo -e "  ${SUCCESS}✓${NC} $1"; }
-fail() { echo -e "  ${ERROR}✗${NC} $1"; }
-
-section() {
-  echo ""
-  echo -e "  ${ACCENT}${BOLD}$1${NC}"
-}
+source scripts/lib/term.sh
 
 # print_skipped_tests lists every skipped test with the reason it gave, so the
 # skip list is reviewable: "skipped because Windows-only" and "skipped because we

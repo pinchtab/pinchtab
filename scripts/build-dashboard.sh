@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build React dashboard and copy to internal/dashboard/dashboard/
-set -e
+set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
