@@ -116,13 +116,13 @@ func styleSecurityLevel(level string) string {
 func SecurityLevelColor(level string) string {
 	switch level {
 	case "LOCKED":
-		return string(colorSuccess)
+		return string(termstyle.ColorSuccess)
 	case "GUARDED":
-		return string(colorWarning)
+		return string(termstyle.ColorWarning)
 	case "ELEVATED":
-		return string(colorWarning)
+		return string(termstyle.ColorWarning)
 	default:
-		return string(colorDanger)
+		return string(termstyle.ColorDanger)
 	}
 }
 

@@ -2,6 +2,8 @@ package report
 
 import (
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/cli/termstyle"
 )
 
 func TestSecurityLevelColor(t *testing.T) {
@@ -9,11 +11,11 @@ func TestSecurityLevelColor(t *testing.T) {
 		level string
 		want  string
 	}{
-		{level: "LOCKED", want: string(colorSuccess)},
-		{level: "GUARDED", want: string(colorWarning)},
-		{level: "ELEVATED", want: string(colorWarning)},
-		{level: "EXPOSED", want: string(colorDanger)},
-		{level: "UNKNOWN", want: string(colorDanger)},
+		{level: "LOCKED", want: string(termstyle.ColorSuccess)},
+		{level: "GUARDED", want: string(termstyle.ColorWarning)},
+		{level: "ELEVATED", want: string(termstyle.ColorWarning)},
+		{level: "EXPOSED", want: string(termstyle.ColorDanger)},
+		{level: "UNKNOWN", want: string(termstyle.ColorDanger)},
 	}
 
 	for _, tt := range tests {

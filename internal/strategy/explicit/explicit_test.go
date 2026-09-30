@@ -30,11 +30,13 @@ func newStrategy(t *testing.T) *Strategy {
 	t.Helper()
 	orch := orchestrator.NewOrchestratorWithRunner(t.TempDir(), noopRunner{})
 	orch.ApplyRuntimeConfig(&config.RuntimeConfig{})
-	return &Strategy{orch: orch}
+	s := New()
+	s.SetOrchestrator(orch)
+	return s
 }
 
 func TestExplicitStrategy_Name(t *testing.T) {
-	s := &Strategy{}
+	s := New()
 	if s.Name() != "explicit" {
 		t.Fatalf("expected 'explicit', got %q", s.Name())
 	}

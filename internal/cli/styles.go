@@ -9,24 +9,13 @@ import (
 )
 
 var (
-	ColorBorder      = termstyle.Color("#2b3345")
-	ColorTextPrimary = termstyle.Color("#e2e8f0")
-	ColorTextMuted   = termstyle.Color("#64748b")
-	ColorAccent      = termstyle.Color("#60a5fa")
-	ColorAccentLight = termstyle.Color("#93c5fd")
-	ColorSuccess     = termstyle.Color("#22c55e")
-	ColorWarning     = termstyle.Color("#fbbf24")
-	ColorDanger      = termstyle.Color("#ef4444")
-)
-
-var (
-	HeadingStyle = termstyle.NewStyle().Foreground(ColorAccent).Bold(true)
-	CommandStyle = termstyle.NewStyle().Foreground(ColorAccentLight)
-	MutedStyle   = termstyle.NewStyle().Foreground(ColorTextMuted)
-	SuccessStyle = termstyle.NewStyle().Foreground(ColorSuccess).Bold(true)
-	WarningStyle = termstyle.NewStyle().Foreground(ColorWarning).Bold(true)
-	ErrorStyle   = termstyle.NewStyle().Foreground(ColorDanger).Bold(true)
-	ValueStyle   = termstyle.NewStyle().Foreground(ColorTextPrimary)
+	HeadingStyle = termstyle.Heading
+	CommandStyle = termstyle.Command
+	MutedStyle   = termstyle.Muted
+	SuccessStyle = termstyle.Success
+	WarningStyle = termstyle.Warning
+	ErrorStyle   = termstyle.Error
+	ValueStyle   = termstyle.Value
 )
 
 func StyleStdout(style termstyle.Style, text string) string {

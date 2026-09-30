@@ -9,6 +9,26 @@ import (
 
 type Color string
 
+const (
+	ColorTextPrimary Color = "#e2e8f0"
+	ColorTextMuted   Color = "#64748b"
+	ColorAccent      Color = "#60a5fa"
+	ColorAccentLight Color = "#93c5fd"
+	ColorSuccess     Color = "#22c55e"
+	ColorWarning     Color = "#fbbf24"
+	ColorDanger      Color = "#ef4444"
+)
+
+var (
+	Heading = NewStyle().Foreground(ColorAccent).Bold(true)
+	Command = NewStyle().Foreground(ColorAccentLight)
+	Muted   = NewStyle().Foreground(ColorTextMuted)
+	Success = NewStyle().Foreground(ColorSuccess).Bold(true)
+	Warning = NewStyle().Foreground(ColorWarning).Bold(true)
+	Error   = NewStyle().Foreground(ColorDanger).Bold(true)
+	Value   = NewStyle().Foreground(ColorTextPrimary)
+)
+
 type Style struct {
 	foreground Color
 	bold       bool
