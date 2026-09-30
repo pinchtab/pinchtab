@@ -38,8 +38,8 @@ func TestQuarantineCorruptedProfile(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(quarantinePath, "Default", "Preferences")); err != nil {
 		t.Fatalf("expected marker preserved in quarantine: %v", err)
 	}
-	if _, err := os.Stat(marker); !os.IsNotExist(err) {
-		t.Fatalf("expected fresh profile dir empty, but original marker still present: err=%v", err)
+	if prefs, err := os.ReadFile(marker); err != nil || string(prefs) != "{}" {
+		t.Fatalf("recreated profile Default/Preferences = %q (err=%v), want the seeded {}", prefs, err)
 	}
 
 	// Fresh profile dir must exist and be writable.

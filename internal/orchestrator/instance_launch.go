@@ -147,7 +147,7 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 			profilePath = resolvedPath
 		}
 	}
-	if err := os.MkdirAll(filepath.Join(profilePath, "Default"), 0755); err != nil {
+	if err := bridge.EnsureChromiumSkeleton(profilePath); err != nil {
 		return nil, fmt.Errorf("create profile dir: %w", err)
 	}
 	instanceStateDir := filepath.Join(profilePath, ".pinchtab-state")

@@ -410,6 +410,9 @@ func quarantineCorruptedProfile(profileDir string, keep int) (string, error) {
 	if err := os.MkdirAll(profileDir, 0700); err != nil {
 		return quarantinePath, fmt.Errorf("recreate profile dir: %w", err)
 	}
+	if err := EnsureChromiumSkeleton(profileDir); err != nil {
+		return quarantinePath, fmt.Errorf("seed recreated profile dir: %w", err)
+	}
 	// After the rename, so a failed quarantine never costs an older artefact.
 	removals, err := PruneQuarantinedProfiles(profileDir, quarantinePath, keep)
 	if err != nil {
