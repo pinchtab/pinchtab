@@ -152,7 +152,7 @@ func parseExtractSchema(req extractRequest) (extract.Schema, error) {
 	if err != nil {
 		var unsupported *extract.UnsupportedError
 		if errors.As(err, &unsupported) {
-			return extract.Schema{}, fmt.Errorf("schema %s", err)
+			return extract.Schema{}, fmt.Errorf("schema %w", err)
 		}
 		return extract.Schema{}, fmt.Errorf("schema: %w", err)
 	}

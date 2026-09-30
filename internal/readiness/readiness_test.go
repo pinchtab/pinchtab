@@ -71,7 +71,7 @@ func TestWaitUntil_DoesNotOvershootTheTimeoutByAnInterval(t *testing.T) {
 	_, err := WaitUntil(context.Background(), 50*time.Millisecond, time.Second, func() (struct{}, bool, error) {
 		return struct{}{}, false, nil
 	})
-	if err != ErrNotReady {
+	if !errors.Is(err, ErrNotReady) {
 		t.Fatalf("err = %v, want ErrNotReady", err)
 	}
 	if elapsed := time.Since(start); elapsed > 300*time.Millisecond {

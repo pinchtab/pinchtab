@@ -10,7 +10,7 @@ import (
 )
 
 func fillRateBucket(host string) {
-	for i := 0; i < rateLimitMaxReq; i++ {
+	for range rateLimitMaxReq {
 		requestLimiter.RecordFailure(host)
 	}
 }

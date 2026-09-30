@@ -82,14 +82,12 @@ func TestConcurrentSameNameExternalAttachLeavesOneInstance(t *testing.T) {
 	var wg sync.WaitGroup
 	start := make(chan struct{})
 	errs := make(chan error, callers)
-	for i := 0; i < callers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range callers {
+		wg.Go(func() {
 			<-start
 			_, _, err := o.attachExternalInstance("dup-attach", bridge.Instance{URL: "http://127.0.0.1:9222"}, "")
 			errs <- err
-		}()
+		})
 	}
 	close(start)
 	wg.Wait()

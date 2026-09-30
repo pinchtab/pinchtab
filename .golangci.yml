@@ -1,0 +1,36 @@
+version: "2"
+
+linters:
+  enable:
+    - modernize
+    - errorlint
+    - dupl
+    - forbidigo
+    - unparam
+    - gocognit
+  settings:
+    dupl:
+      threshold: 150
+    gocognit:
+      min-complexity: 60
+    forbidigo:
+      forbid:
+        - pattern: ^time\.Sleep$
+          msg: wait on a context, ticker or readiness helper instead of sleeping
+        - pattern: ^os\.(Getenv|LookupEnv)$
+          msg: read PINCHTAB_* settings through internal/config
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - dupl
+          - forbidigo
+          - gocognit
+          - unparam
+      - path: ^internal/(config/|server/bridge\.go$)
+        linters:
+          - forbidigo
+        text: os\.(Getenv|LookupEnv)
+
+issues:
+  new-from-rev: origin/main

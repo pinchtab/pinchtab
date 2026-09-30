@@ -363,7 +363,7 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 		return nil, res.err
 	}
 	if armedDialog {
-		waitForArmedDialogSettle(dm, req.TabID, dialogAutoHandleTimeout)
+		waitForArmedDialogSettle(ctx, dm, req.TabID)
 	}
 	b.waitNavIfRequested(ctx, req)
 	return map[string]any{"clicked": true}, nil
@@ -375,18 +375,20 @@ func (b *Bridge) waitNavIfRequested(ctx context.Context, req ActionRequest) {
 	}
 }
 
-func waitForArmedDialogSettle(dm *DialogManager, tabID string, timeout time.Duration) {
+func waitForArmedDialogSettle(ctx context.Context, dm *DialogManager, tabID string) {
 	if dm == nil || strings.TrimSpace(tabID) == "" {
 		return
 	}
-	if timeout <= 0 {
-		timeout = dialogAutoHandleTimeout
-	}
 
-	if _, err := readiness.WaitUntil(context.Background(), timeout, dialogAutoHandlePollInterval, func() (struct{}, bool, error) {
+	if _, err := readiness.WaitUntil(ctx, dialogAutoHandleTimeout, dialogAutoHandlePollInterval, func() (struct{}, bool, error) {
 		return struct{}{}, !dm.HasAutoHandler(tabID), nil
 	}); err == nil {
-		time.Sleep(dialogAutoHandleSettleDelay)
+		settle := time.NewTimer(dialogAutoHandleSettleDelay)
+		defer settle.Stop()
+		select {
+		case <-ctx.Done():
+		case <-settle.C:
+		}
 		return
 	}
 	_ = dm.TakeAutoHandler(tabID)
@@ -784,7 +786,7 @@ func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (r
 		return nil, err
 	}
 	if armedDialog {
-		waitForArmedDialogSettle(dm, req.TabID, dialogAutoHandleTimeout)
+		waitForArmedDialogSettle(ctx, dm, req.TabID)
 	}
 	b.waitNavIfRequested(ctx, req)
 	return map[string]any{"clicked": true, "human": true}, nil

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -75,9 +76,7 @@ func newAuthProxy(t *testing.T, authorized *atomic.Int32) *httptest.Server {
 			return
 		}
 		defer func() { _ = resp.Body.Close() }()
-		for k, v := range resp.Header {
-			w.Header()[k] = v
-		}
+		maps.Copy(w.Header(), resp.Header)
 		w.WriteHeader(resp.StatusCode)
 		_, _ = io.Copy(w, resp.Body)
 	}))

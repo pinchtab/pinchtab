@@ -59,7 +59,7 @@ func TestAttemptLimiterTakeCountsAndRefusesAtomically(t *testing.T) {
 	now := time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)
 	limiter.now = func() time.Time { return now }
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if allowed, _ := limiter.Take("10.0.0.1"); !allowed {
 			t.Fatalf("take %d refused before the cap", i+1)
 		}

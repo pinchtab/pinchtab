@@ -635,9 +635,7 @@ func TestATabClosingMidRecordingKeepsTheFramesRecoverable(t *testing.T) {
 		t.Fatalf("the recording was not written to %s: %v", out, err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	if err := rec.start(ctx, "tab-next", "", "gif", 5, 80, 1.0); err != nil {
+	if err := rec.start(t.Context(), "tab-next", "", "gif", 5, 80, 1.0); err != nil {
 		t.Fatalf("a new recording after an early end was refused: %v", err)
 	}
 	_, _ = rec.stop("", "")
