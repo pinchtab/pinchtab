@@ -7,7 +7,7 @@ import (
 )
 
 func TestBridgeClientAllowsTheFullNavigationBudget(t *testing.T) {
-	got := NewBridgeClient().client.Timeout
+	got := NewBridgeClientWithAuth(nil).client.Timeout
 	if got != httpx.MaxNavigationHTTPDuration {
 		t.Fatalf("timeout = %v, want %v", got, httpx.MaxNavigationHTTPDuration)
 	}
