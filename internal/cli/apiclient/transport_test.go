@@ -76,11 +76,11 @@ func TestAnUnbuildableRequestFailsBeforeTheWire(t *testing.T) {
 
 	for name, call := range map[string]func() error{
 		"malformed base": func() error {
-			_, err := DoRawE(srv.Client(), "http://bad host:9867", "", http.MethodPost, "/action", WithBody(map[string]any{"kind": "click"}))
+			_, err := (Conn{Client: srv.Client(), Base: "http://bad host:9867"}).Raw(http.MethodPost, "/action", WithBody(map[string]any{"kind": "click"}))
 			return err
 		},
 		"unencodable body": func() error {
-			_, err := DoRawE(srv.Client(), srv.URL, "", http.MethodPost, "/geolocation", WithBody(map[string]any{"latitude": math.NaN(), "longitude": 0.0}))
+			_, err := (Conn{Client: srv.Client(), Base: srv.URL}).Raw(http.MethodPost, "/geolocation", WithBody(map[string]any{"latitude": math.NaN(), "longitude": 0.0}))
 			return err
 		},
 	} {

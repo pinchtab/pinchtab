@@ -678,7 +678,7 @@ func TestNavigateRefusesAnErrorPageLanding(t *testing.T) {
 			defer srv.Close()
 
 			body := map[string]any{"url": target, "tabId": "tab1"}
-			status, raw, _ := apiclient.DoPostQuietWithStatus(srv.Client(), srv.URL, "", "/navigate", body)
+			status, raw, _ := (apiclient.Conn{Client: srv.Client(), Base: srv.URL}).PostQuietWithStatus("/navigate", body)
 			if status != http.StatusBadGateway {
 				t.Fatalf("status = %d, want 502: %s", status, raw)
 			}
@@ -699,7 +699,7 @@ func TestNavigateRefusesAnErrorPageLanding(t *testing.T) {
 			if tc.netError == "" && !strings.Contains(msg, "recorded no reason") {
 				t.Fatalf("error %q does not state that no reason was recorded", msg)
 			}
-			if _, err := apiclient.DoRawE(srv.Client(), srv.URL, "", http.MethodPost, "/navigate", apiclient.WithBody(body)); err == nil {
+			if _, err := (apiclient.Conn{Client: srv.Client(), Base: srv.URL}).Raw(http.MethodPost, "/navigate", apiclient.WithBody(body)); err == nil {
 				t.Fatal("the CLI's request path treats this navigate as a success, so pinchtab nav would exit 0")
 			}
 		})
@@ -724,14 +724,14 @@ func TestNavigateRefusesAnErrorPageLanding(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(h.HandleNavigate))
 		defer srv.Close()
 		body := map[string]any{"url": target, "tabId": "tab1"}
-		status, raw, result := apiclient.DoPostQuietWithStatus(srv.Client(), srv.URL, "", "/navigate", body)
+		status, raw, result := (apiclient.Conn{Client: srv.Client(), Base: srv.URL}).PostQuietWithStatus("/navigate", body)
 		if status != 200 || result["url"] != target || result["tabId"] != "tab1" {
 			t.Fatalf("status %d body %s", status, raw)
 		}
 		if _, ok := result["title"]; !ok {
 			t.Fatalf("success body lost its title key: %s", raw)
 		}
-		if _, err := apiclient.DoRawE(srv.Client(), srv.URL, "", http.MethodPost, "/navigate", apiclient.WithBody(body)); err != nil {
+		if _, err := (apiclient.Conn{Client: srv.Client(), Base: srv.URL}).Raw(http.MethodPost, "/navigate", apiclient.WithBody(body)); err != nil {
 			t.Fatalf("a loaded page reads as a failure on the CLI path: %v", err)
 		}
 	})

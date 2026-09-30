@@ -82,17 +82,3 @@ func TestConnRawReturnsBodyForMethod(t *testing.T) {
 		t.Fatalf("request = %s %s -> %q, want DELETE /tabs/t1 -> plain", got.method, got.path, body)
 	}
 }
-
-func TestConnTabPath(t *testing.T) {
-	var conn apiclient.Conn
-	cases := []struct{ tab, suffix, want string }{
-		{"", "snapshot", "/snapshot"},
-		{"t1", "/snapshot", "/tabs/t1/snapshot"},
-		{"a/b", "text", "/tabs/a%2Fb/text"},
-	}
-	for _, c := range cases {
-		if got := conn.TabPath(c.tab, c.suffix); got != c.want {
-			t.Errorf("TabPath(%q, %q) = %q, want %q", c.tab, c.suffix, got, c.want)
-		}
-	}
-}

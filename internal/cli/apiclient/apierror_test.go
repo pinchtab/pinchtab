@@ -181,7 +181,7 @@ func TestUnrelatedTabNotFoundGetsNoRemedy(t *testing.T) {
 	}
 }
 
-// DoRawE returns instead of terminating — one caller polls it
+// Conn.Raw returns instead of terminating — one caller polls it
 // ten times a second — so rendering its error must leave the cache alone.
 func TestReturningRequestPathsLeaveTheCacheIntact(t *testing.T) {
 	path := cachedTabFile(t, "CACHED-TAB")
@@ -196,10 +196,10 @@ func TestReturningRequestPathsLeaveTheCacheIntact(t *testing.T) {
 		call func() ([]byte, error)
 	}{
 		{"GET", func() ([]byte, error) {
-			return DoRawE(srv.Client(), srv.URL, "", http.MethodGet, "/tabs/CACHED-TAB/text")
+			return (Conn{Client: srv.Client(), Base: srv.URL}).Raw(http.MethodGet, "/tabs/CACHED-TAB/text")
 		}},
 		{"POST", func() ([]byte, error) {
-			return DoRawE(srv.Client(), srv.URL, "", http.MethodPost, "/action", WithBody(map[string]any{"kind": "click"}))
+			return (Conn{Client: srv.Client(), Base: srv.URL}).Raw(http.MethodPost, "/action", WithBody(map[string]any{"kind": "click"}))
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -268,7 +268,7 @@ func TestTerminalPathsClearTheCachedTabAndSayTheyDid(t *testing.T) {
 		return
 	}
 
-	for _, mode := range []string{"ExitWithAPIError", "DoGetRaw"} {
+	for _, mode := range []string{"ExitWithAPIError", "GetRaw"} {
 		t.Run(mode, func(t *testing.T) {
 			dir := t.TempDir()
 			path := filepath.Join(dir, "current-tab-127.0.0.1-9867")
@@ -314,13 +314,13 @@ func runTerminalChild(mode string) {
 	switch mode {
 	case "ExitWithAPIError":
 		ExitWithAPIError(http.StatusNotFound, body)
-	case "DoGetRaw":
+	case "GetRaw":
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write(body)
 		}))
 		defer srv.Close()
-		DoGetRaw(srv.Client(), srv.URL, "", "/tabs/CACHED-TAB/text", nil)
+		(Conn{Client: srv.Client(), Base: srv.URL}).GetRaw("/tabs/CACHED-TAB/text", nil)
 	}
 	fmt.Fprintf(os.Stderr, "child mode %q returned instead of exiting\n", mode)
 	os.Exit(9)

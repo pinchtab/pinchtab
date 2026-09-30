@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -166,49 +165,4 @@ func decodeObject(body []byte) map[string]any {
 
 func prepend(first RequestOption, opts []RequestOption) []RequestOption {
 	return append([]RequestOption{first}, opts...)
-}
-
-func DoGet(client *http.Client, base, token, path string, params url.Values, opts ...RequestOption) map[string]any {
-	r := newRequest(http.MethodGet, base, path, prepend(WithQuery(params), opts)...)
-	return render(r, execute(client, token, r))
-}
-
-func DoGetRaw(client *http.Client, base, token, path string, params url.Values, opts ...RequestOption) []byte {
-	return execute(client, token, newRequest(http.MethodGet, base, path, prepend(WithQuery(params), opts)...))
-}
-
-func DoPost(client *http.Client, base, token, path string, body map[string]any, opts ...RequestOption) map[string]any {
-	r := newRequest(http.MethodPost, base, path, prepend(WithBody(body), opts)...)
-	return render(r, execute(client, token, r))
-}
-
-// DoPostQuiet is like DoPost but does not print the response body. Callers are
-// responsible for rendering whatever output is appropriate (e.g. a single
-// field for machine-friendly piping).
-func DoPostQuiet(client *http.Client, base, token, path string, body map[string]any, opts ...RequestOption) map[string]any {
-	return DoPost(client, base, token, path, body, prepend(Quiet(), opts)...)
-}
-
-// DoPostRaw sends a POST and returns the raw response body without printing.
-// Exits on HTTP errors.
-func DoPostRaw(client *http.Client, base, token, path string, body map[string]any, opts ...RequestOption) []byte {
-	return execute(client, token, newRequest(http.MethodPost, base, path, prepend(WithBody(body), opts)...))
-}
-
-func DoPostQuietWithStatus(client *http.Client, base, token, path string, body map[string]any, opts ...RequestOption) (int, []byte, map[string]any) {
-	status, respBody := mustRequest(client, token, newRequest(http.MethodPost, base, path, prepend(WithBody(body), opts)...))
-	var result map[string]any
-	if status < http.StatusBadRequest {
-		result = decodeObject(respBody)
-	}
-	return status, respBody, result
-}
-
-func DoDelete(client *http.Client, base, token, path string, params url.Values, opts ...RequestOption) map[string]any {
-	r := newRequest(http.MethodDelete, base, path, prepend(WithQuery(params), opts)...)
-	return render(r, execute(client, token, r))
-}
-
-func DoRawE(client *http.Client, base, token, method, path string, opts ...RequestOption) ([]byte, error) {
-	return executeE(client, token, newRequest(method, base, path, opts...))
 }
