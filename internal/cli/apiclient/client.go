@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/api/types"
+	"github.com/pinchtab/pinchtab/internal/cli/clistate"
 )
 
 const (
@@ -109,15 +110,7 @@ func writeVocabStore(base string, store vocabStore) {
 }
 
 func vocabStorePath(base string) string {
-	dir := os.Getenv("XDG_STATE_HOME")
-	if dir != "" {
-		dir += "/pinchtab"
-	} else if home, err := os.UserHomeDir(); err == nil {
-		dir = home + "/.local/state/pinchtab"
-	} else {
-		dir = "/tmp/pinchtab"
-	}
-	return filepath.Join(dir, "vocab-"+fileSlug(base))
+	return filepath.Join(clistate.Dir(), "vocab-"+fileSlug(base))
 }
 
 func fileSlug(s string) string {

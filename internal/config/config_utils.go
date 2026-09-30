@@ -75,7 +75,7 @@ func ProvisionFileToken(fc *FileConfig, configPath string) (bool, error) {
 	if fc != nil && strings.TrimSpace(fc.Server.Token) != "" {
 		return false, nil
 	}
-	if strings.TrimSpace(os.Getenv("PINCHTAB_CONFIG")) != "" {
+	if configPathOverride() != "" {
 		if _, statErr := os.Stat(configPath); statErr == nil {
 			return false, fmt.Errorf("%w in %s when PINCHTAB_CONFIG is set; add server.token or set PINCHTAB_TOKEN", ErrOperatorConfigToken, configPath)
 		} else if !os.IsNotExist(statErr) {

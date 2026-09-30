@@ -15,20 +15,31 @@ import (
 	"github.com/pinchtab/pinchtab/internal/safelog"
 )
 
-func TestEnvOr(t *testing.T) {
-	key := "PINCHTAB_TEST_ENV"
-	fallback := "default"
+func TestBlankConfigOverrideMeansTheDefaultPathEverywhere(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PINCHTAB_CONFIG", "  ")
 
-	_ = os.Unsetenv(key)
-	if got := envOr(key, fallback); got != fallback {
-		t.Errorf("envOr() = %v, want %v", got, fallback)
+	defaultPath := DefaultConfigPath()
+	if got := ConfigFilePath(); got != defaultPath {
+		t.Fatalf("ConfigFilePath() = %q, want the default %q", got, defaultPath)
 	}
-
-	val := "set"
-	_ = os.Setenv(key, val)
-	defer func() { _ = os.Unsetenv(key) }()
-	if got := envOr(key, fallback); got != val {
-		t.Errorf("envOr() = %v, want %v", got, val)
+	if _, loadedFrom, err := LoadFileConfig(); err != nil || loadedFrom != defaultPath {
+		t.Fatalf("LoadFileConfig() path = %q err = %v, want %q", loadedFrom, err, defaultPath)
+	}
+	if status := InspectConfigFile(); status.EnvOverride || status.Path != defaultPath {
+		t.Fatalf("InspectConfigFile() = %+v, want no override at %q", status, defaultPath)
+	}
+	if err := os.MkdirAll(filepath.Dir(defaultPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(defaultPath, []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ProvisionFileToken(&FileConfig{}, defaultPath); err != nil {
+		t.Fatalf("ProvisionFileToken treated a blank PINCHTAB_CONFIG as an operator override: %v", err)
+	}
+	if hint := DefaultConfigHint(); hint != "" {
+		t.Fatalf("DefaultConfigHint() = %q, want none for a blank override", hint)
 	}
 }
 

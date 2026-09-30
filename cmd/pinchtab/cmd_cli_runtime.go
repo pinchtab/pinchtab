@@ -219,7 +219,7 @@ func resolveCLIToken(cfg *config.RuntimeConfig, base string) (string, error) {
 	if !loopbackBase(base) {
 		return "", fmt.Errorf("refusing to send the local config's server.token to %s: set PINCHTAB_TOKEN (or PINCHTAB_SESSION) with the credential for that host", base)
 	}
-	apiclient.UseTokenSource("server.token in " + cliTokenConfigPath())
+	apiclient.UseTokenSource("server.token in " + config.ConfigFilePath())
 	return cfg.Token, nil
 }
 
@@ -250,13 +250,6 @@ func loopbackBase(base string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
-}
-
-func cliTokenConfigPath() string {
-	if p := strings.TrimSpace(os.Getenv("PINCHTAB_CONFIG")); p != "" {
-		return p
-	}
-	return config.DefaultConfigPath()
 }
 
 func resolveCLIAgentID() string {

@@ -19,8 +19,8 @@ import (
 // exists there, or "" when it does not apply. It only computes the text; the
 // caller routes it through output.Advisory, which owns suppression and dedupe.
 func DefaultConfigHint() string {
-	defaultConfigPath := filepath.Join(userConfigDir(), "config.json")
-	if envOr("PINCHTAB_CONFIG", defaultConfigPath) == defaultConfigPath {
+	defaultConfigPath := DefaultConfigPath()
+	if ConfigFilePath() == defaultConfigPath {
 		return ""
 	}
 	if _, err := os.Stat(defaultConfigPath); err != nil {
@@ -46,10 +46,16 @@ type parsedConfigFile struct {
 	Advisories     []string // non-gating: FileConfigAdvisories
 }
 
+func configPathOverride() string {
+	return strings.TrimSpace(os.Getenv("PINCHTAB_CONFIG"))
+}
+
 func resolveConfigPath() (path, defaultPath string, envOverride bool) {
-	defaultPath = filepath.Join(userConfigDir(), "config.json")
-	path = envOr("PINCHTAB_CONFIG", defaultPath)
-	return path, defaultPath, os.Getenv("PINCHTAB_CONFIG") != ""
+	defaultPath = DefaultConfigPath()
+	if override := configPathOverride(); override != "" {
+		return override, defaultPath, true
+	}
+	return defaultPath, defaultPath, false
 }
 
 // ConfigFilePath returns the effective config file path (honoring PINCHTAB_CONFIG),
@@ -393,13 +399,6 @@ func InspectConfigFile() ConfigFileStatus {
 		ParseErr:    res.ParseErr,
 		UnknownKeys: res.UnknownKeys,
 	}
-}
-
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
 
 func finalizeProfileConfig(cfg *RuntimeConfig) {

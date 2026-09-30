@@ -15,14 +15,6 @@ type PreparedChange struct {
 	ValidationErrors []error
 }
 
-func CurrentConfigPath() string {
-	configPath := os.Getenv("PINCHTAB_CONFIG")
-	if configPath == "" {
-		configPath = config.DefaultConfigPath()
-	}
-	return configPath
-}
-
 func GetValue(path string) (string, error) {
 	return config.EffectiveConfigValue(path)
 }
@@ -52,7 +44,7 @@ func SavePreparedChange(change *PreparedChange) error {
 // ValidateCurrentFile returns the file's gating errors and its non-gating advisories
 // separately, because only the first decides whether the file is valid.
 func ValidateCurrentFile() (string, []error, []string, error) {
-	configPath := CurrentConfigPath()
+	configPath := config.ConfigFilePath()
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return configPath, nil, nil, fmt.Errorf("read config file: %w", err)

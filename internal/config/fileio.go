@@ -79,7 +79,7 @@ func savedConfigBaseline() *FileConfig {
 // LoadFileConfig loads a FileConfig from the default or specified path.
 // Returns the config and the path it was loaded from.
 func LoadFileConfig() (*FileConfig, string, error) {
-	configPath := envOr("PINCHTAB_CONFIG", filepath.Join(userConfigDir(), "config.json"))
+	configPath := ConfigFilePath()
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {

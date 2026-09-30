@@ -41,8 +41,8 @@ func emitConfigToken(token string, toStdout bool) error {
 	}
 
 	if err := copyToClipboard(token); err != nil {
-		return fmt.Errorf("clipboard unavailable (%v); run `pinchtab config token --stdout` to print it, or read server.token from %s",
-			err, workflow.CurrentConfigPath())
+		return fmt.Errorf("clipboard unavailable (%w); run `pinchtab config token --stdout` to print it, or read server.token from %s",
+			err, config.ConfigFilePath())
 	}
 
 	fmt.Fprintln(os.Stderr, cli.StyleStderr(cli.SuccessStyle, "Token copied to clipboard."))
@@ -50,7 +50,7 @@ func emitConfigToken(token string, toStdout bool) error {
 }
 
 func handleConfigInit() {
-	configPath := workflow.CurrentConfigPath()
+	configPath := config.ConfigFilePath()
 
 	if _, err := os.Stat(configPath); err == nil {
 		fmt.Printf("Config file already exists at %s\n", configPath)
@@ -72,7 +72,7 @@ func handleConfigInit() {
 }
 
 func handleConfigPath() {
-	fmt.Println(workflow.CurrentConfigPath())
+	fmt.Println(config.ConfigFilePath())
 }
 
 func handleConfigGet(path string) {
