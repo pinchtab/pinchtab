@@ -8,7 +8,6 @@ export { default as CreateProfileModal } from "./CreateProfileModal";
 export { default as StartInstanceModal } from "./StartInstanceModal";
 export { default as ScreencastTile } from "../screencast/ScreencastTile";
 export { default as AgentItem } from "./AgentItem";
-export { default as ActivityLine } from "../../activities/ActivityLine";
 export { default as TabsChart } from "./TabsChart";
 export { default as ServerSummary } from "./ServerSummary";
 export { default as HandoffNotifications } from "./HandoffNotifications";
