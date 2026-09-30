@@ -1,6 +1,7 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Select } from "../components/atoms";
 import { SidebarPanel, SidebarPanelHeader } from "../components/molecules";
+import { useAsyncResource } from "../hooks/useAsyncResource";
 import { useAppStore } from "../stores/useAppStore";
 import * as api from "../services/api";
 import { fetchActivity } from "./api";
@@ -42,11 +43,7 @@ export default function ActivityExplorer({
     ...initialFilters,
     ...lockedFilters,
   });
-  const [events, setEvents] = useState<DashboardActivityEvent[]>([]);
   const tabs = useAllTabs();
-  const [count, setCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
   const deferredFilters = useDeferredValue(filters);
   const effectiveFilters = useMemo(
@@ -61,24 +58,12 @@ export default function ActivityExplorer({
     return q;
   }, [effectiveFilters, embedded]);
   const queryKey = JSON.stringify(query);
-  const stableQuery = useRef(query);
-  stableQuery.current = query;
 
-  const [sessions, setSessions] = useState<api.Session[]>([]);
-
-  useEffect(() => {
-    if (!embedded) return;
-    let cancelled = false;
-    void api
-      .fetchSessions()
-      .then((s) => {
-        if (!cancelled) setSessions(s);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [embedded]);
+  const { data: sessions } = useAsyncResource(
+    embedded ? api.fetchSessions : null,
+    [embedded],
+    { initial: [] as api.Session[] },
+  );
 
   useEffect(() => {
     setFilters((current) => {
@@ -91,32 +76,24 @@ export default function ActivityExplorer({
     });
   }, [initialFilters, lockedFilters]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const response = await fetchActivity(stableQuery.current);
-        if (cancelled) return;
-        setEvents(response.events.map(normalizeDashboardActivityEvent));
-        setCount(response.count);
-      } catch (err) {
-        if (cancelled) return;
-        setError(
-          err instanceof Error ? err.message : "Failed to load activity",
-        );
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [queryKey]);
+  const {
+    data: { events, count },
+    loading,
+    error,
+  } = useAsyncResource(
+    async () => {
+      const response = await fetchActivity(query);
+      return {
+        events: response.events.map(normalizeDashboardActivityEvent),
+        count: response.count,
+      };
+    },
+    [queryKey],
+    {
+      initial: { events: [] as DashboardActivityEvent[], count: 0 },
+      errorMessage: "Failed to load activity",
+    },
+  );
 
   const stats = useMemo(() => {
     const agents = new Set(
