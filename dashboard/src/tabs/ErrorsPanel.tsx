@@ -1,7 +1,7 @@
 import { useState } from "react";
 import * as api from "../services/api";
 import type { ErrorLogEntry } from "../services/api";
-import { formatLogTime } from "./formatLogTime";
+import { formatClockTime } from "../lib/format";
 import TabLogPanel from "./TabLogPanel";
 
 interface Props {
@@ -19,7 +19,7 @@ function ErrorRow({ entry }: { entry: ErrorLogEntry }) {
         className="flex w-full gap-2 px-3 py-1.5 text-left"
       >
         <span className="shrink-0 text-text-muted">
-          {formatLogTime(entry.timestamp)}
+          {formatClockTime(entry.timestamp)}
         </span>
         {entry.type && (
           <span className="shrink-0 font-semibold text-destructive">

@@ -14,6 +14,7 @@ import type {
   MemoryDataPoint,
   ServerDataPoint,
 } from "../../stores/useAppStore";
+import { formatClockTime } from "../../lib/format";
 
 interface Props {
   data: TabDataPoint[];
@@ -34,13 +35,6 @@ const COLORS = [
   "#ec4899",
   "#14b8a6",
 ];
-
-function formatTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function formatMetricValue(value: number, maximumFractionDigits = 0): string {
   if (!Number.isFinite(value)) return "0";
@@ -106,7 +100,7 @@ function GlassTooltip({
           textTransform: "uppercase" as const,
         }}
       >
-        {formatTime(label as number)}
+        {formatClockTime(label as number, { seconds: false })}
       </div>
       {payload.map((entry) => {
         const nameStr = String(entry.dataKey);
@@ -444,7 +438,9 @@ export default function TabsChart({
 
             <XAxis
               dataKey="timestamp"
-              tickFormatter={formatTime}
+              tickFormatter={(value: number) =>
+                formatClockTime(value, { seconds: false })
+              }
               stroke="#64748b"
               fontSize={11}
               tickLine={false}

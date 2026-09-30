@@ -1,6 +1,7 @@
 import { IconRobot, IconBolt } from "../atoms/Icon";
 import type { Agent } from "../../types";
 import type { Session } from "../../services/api";
+import { formatClockTime } from "../../lib/format";
 
 interface Props {
   agent: Agent;
@@ -32,17 +33,12 @@ function timeAgo(date: string): string {
   return `${Math.floor(secs / 86400)}d`;
 }
 
-function formatSessionTime(ts: string): string {
-  return new Date(ts).toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function sessionDisplayName(session: Session): string {
   if (session.label) return session.label;
-  const start = formatSessionTime(session.createdAt);
-  const end = formatSessionTime(session.lastSeenAt || session.createdAt);
+  const start = formatClockTime(session.createdAt, { seconds: false });
+  const end = formatClockTime(session.lastSeenAt || session.createdAt, {
+    seconds: false,
+  });
   return start === end ? `Session ${start}` : `Session ${start}–${end}`;
 }
 

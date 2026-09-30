@@ -3,6 +3,7 @@ import type {
   InstanceMetrics,
   InstanceTab,
 } from "../../generated/types";
+import { formatUptime } from "../../lib/format";
 
 interface Props {
   instance?: Instance | null;
@@ -52,20 +53,6 @@ function fmt(n: number, decimals = 0): string {
   return new Intl.NumberFormat("en-US", {
     maximumFractionDigits: decimals,
   }).format(n);
-}
-
-function formatUptime(startTime: string): string {
-  const ms = Date.now() - new Date(startTime).getTime();
-  if (ms < 0) return "just now";
-  const secs = Math.floor(ms / 1000);
-  if (secs < 60) return `${secs}s`;
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  const remainMins = mins % 60;
-  if (hrs < 24) return `${hrs}h ${remainMins}m`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ${hrs % 24}h`;
 }
 
 function formatCrashTime(time: string): string {

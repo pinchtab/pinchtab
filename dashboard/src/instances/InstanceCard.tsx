@@ -1,19 +1,11 @@
 import { Card, Badge, Button, StatusDot } from "../components/atoms";
 import type { Instance } from "../types";
+import { formatUptime } from "../lib/format";
 
 interface Props {
   instance: Instance;
   onOpen: () => void;
   onStop: () => void;
-}
-
-function formatUptime(startTime: string): string {
-  const diff = Date.now() - new Date(startTime).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ${mins % 60}m`;
-  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
 }
 
 export default function InstanceCard({ instance, onOpen, onStop }: Props) {

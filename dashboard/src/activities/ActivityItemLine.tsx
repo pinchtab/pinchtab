@@ -14,14 +14,7 @@ import { activityStatusVariant } from "./helpers";
 import type { ActivityFilters, DashboardActivityEvent } from "./types";
 import CopyIdPill from "./CopyIdPill";
 import FilterPill from "./FilterPill";
-
-function formatTime(ts: string): string {
-  return new Date(ts).toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
+import { formatClockTime } from "../lib/format";
 
 function EventIcon({ event }: { event: DashboardActivityEvent }) {
   if (event.channel === "progress") return <IconMessageCircle />;
@@ -144,7 +137,7 @@ export default function ActivityItemLine({
       </span>
 
       <span className="dashboard-mono w-16 shrink-0 text-[0.68rem] text-text-muted">
-        {formatTime(event.timestamp)}
+        {formatClockTime(event.timestamp)}
       </span>
 
       {inHandoff && (

@@ -1,6 +1,6 @@
 import * as api from "../services/api";
 import type { ConsoleLogEntry } from "../services/api";
-import { formatLogTime } from "./formatLogTime";
+import { formatClockTime } from "../lib/format";
 import TabLogPanel from "./TabLogPanel";
 
 interface Props {
@@ -26,7 +26,7 @@ function ConsoleRow({ entry }: { entry: ConsoleLogEntry }) {
       className={`flex gap-2 border-b border-border-subtle/50 px-3 py-1.5 hover:bg-white/2 ${LEVEL_BACKGROUNDS[entry.level] ?? ""}`}
     >
       <span className="shrink-0 text-text-muted">
-        {formatLogTime(entry.timestamp)}
+        {formatClockTime(entry.timestamp)}
       </span>
       <span
         className={`w-10 shrink-0 font-semibold uppercase ${LEVEL_STYLES[entry.level] || "text-text-muted"}`}
