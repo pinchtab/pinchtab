@@ -70,7 +70,7 @@ func TestEveryButtonFlagRefusesAnUnknownNameLocally(t *testing.T) {
 }
 
 func buttonContractBlock(text string) (string, bool) {
-	for _, block := range strings.Split(text, "\n\n") {
+	for block := range strings.SplitSeq(text, "\n\n") {
 		if strings.Contains(block, "`button`") && strings.Contains(block, "400") {
 			return block, true
 		}

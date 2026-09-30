@@ -150,12 +150,11 @@ func TestScrollRegistersThePixelFlags(t *testing.T) {
 // directionsEnumeratedAfter extracts the keyword list a line presents after marker, so the
 // prose can keep its own separators and order while the SET is what gets compared.
 func directionsEnumeratedAfter(text, marker string) ([]string, bool) {
-	for _, line := range strings.Split(text, "\n") {
-		idx := strings.Index(line, marker)
-		if idx < 0 {
+	for line := range strings.SplitSeq(text, "\n") {
+		_, list, ok := strings.Cut(line, marker)
+		if !ok {
 			continue
 		}
-		list := line[idx+len(marker):]
 		if cut := strings.Index(list, "("); cut >= 0 {
 			list = list[:cut]
 		}

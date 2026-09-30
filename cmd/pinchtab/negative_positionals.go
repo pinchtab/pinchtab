@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -157,17 +158,12 @@ func takesValue(flag *pflag.Flag) bool {
 }
 
 func cutFlagValue(name string) (string, bool) {
-	if i := strings.IndexByte(name, '='); i >= 0 {
-		return name[:i], true
+	if before, _, ok := strings.Cut(name, "="); ok {
+		return before, true
 	}
 	return name, false
 }
 
 func holdsNegativeNumber(args []string) bool {
-	for _, arg := range args {
-		if looksNumeric(arg) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(args, looksNumeric)
 }

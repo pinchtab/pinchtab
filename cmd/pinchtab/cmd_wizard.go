@@ -179,15 +179,13 @@ var guardDownPosture = securityPosture{
 	bind:            "",
 }
 
-func boolPtr(b bool) *bool { return &b }
-
 func applyPosture(cfg *config.FileConfig, p securityPosture) {
-	cfg.Security.AllowEvaluate = boolPtr(p.allowEvaluate)
-	cfg.Security.AllowDownload = boolPtr(p.allowDownload)
-	cfg.Security.AllowCookies = boolPtr(p.allowCookies)
-	cfg.Security.AllowUpload = boolPtr(p.allowUpload)
-	cfg.Security.AllowMacro = boolPtr(p.allowMacro)
-	cfg.Security.AllowScreencast = boolPtr(p.allowScreencast)
+	cfg.Security.AllowEvaluate = new(p.allowEvaluate)
+	cfg.Security.AllowDownload = new(p.allowDownload)
+	cfg.Security.AllowCookies = new(p.allowCookies)
+	cfg.Security.AllowUpload = new(p.allowUpload)
+	cfg.Security.AllowMacro = new(p.allowMacro)
+	cfg.Security.AllowScreencast = new(p.allowScreencast)
 	idpi := cfg.Security.EffectiveIDPI()
 	idpi.Enabled = p.idpiOn
 	idpi.StrictMode = p.idpiOn

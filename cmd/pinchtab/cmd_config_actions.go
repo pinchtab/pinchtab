@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/api/types"
@@ -173,10 +174,8 @@ func displayConfigValue(path, value string) string {
 // wherever it appears.
 func isSensitiveConfigPath(path string) bool {
 	segments := strings.Split(strings.ToLower(strings.TrimSpace(path)), ".")
-	for _, segment := range segments {
-		if segment == "credentials" {
-			return true
-		}
+	if slices.Contains(segments, "credentials") {
+		return true
 	}
 	last := segments[len(segments)-1]
 	for _, suffix := range []string{"token", "password", "secret", "key", "passphrase"} {

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -290,12 +291,7 @@ func visitAllCommands(cmd *cobra.Command, visit func(*cobra.Command)) {
 }
 
 func containsToken(args []string, want string) bool {
-	for _, arg := range args {
-		if arg == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(args, want)
 }
 
 // The doc sites an agent reads, plus every command's own help. This replaces the
@@ -371,7 +367,7 @@ func documentedPinchtabExamples(t *testing.T) []documentedExample {
 
 	var examples []documentedExample
 	for site, text := range texts {
-		for _, line := range strings.Split(text, "\n") {
+		for line := range strings.SplitSeq(text, "\n") {
 			fields := strings.Fields(strings.TrimPrefix(strings.TrimSpace(line), "$ "))
 			if len(fields) < 2 || fields[0] != "pinchtab" {
 				continue

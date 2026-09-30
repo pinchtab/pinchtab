@@ -371,7 +371,7 @@ func TestEveryDispatchedDaemonVerbDeclaresItsNotInstalledPolicy(t *testing.T) {
 	body = body[:strings.Index(body, "\nfunc ")]
 
 	var verbs []string
-	for _, line := range strings.Split(body, "\n") {
+	for line := range strings.SplitSeq(body, "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, `case "`) {
 			continue

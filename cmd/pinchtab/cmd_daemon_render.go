@@ -82,7 +82,7 @@ func printDaemonRecentLogs(st daemonStatus) {
 	}
 	fmt.Println()
 	fmt.Println(cli.StyleStdout(cli.HeadingStyle, "Recent logs:"))
-	for _, line := range strings.Split(logs, "\n") {
+	for line := range strings.SplitSeq(logs, "\n") {
 		if strings.TrimSpace(line) != "" {
 			fmt.Printf("  %s\n", cli.StyleStdout(cli.MutedStyle, line))
 		}

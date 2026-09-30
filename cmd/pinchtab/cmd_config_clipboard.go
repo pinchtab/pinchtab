@@ -59,7 +59,7 @@ func copyToClipboard(text string) error {
 		}
 		if err != nil {
 			if len(strings.TrimSpace(string(output))) > 0 {
-				lastErr = fmt.Errorf("%s: %s", err, strings.TrimSpace(string(output)))
+				lastErr = fmt.Errorf("%w: %s", err, strings.TrimSpace(string(output)))
 			} else {
 				lastErr = err
 			}

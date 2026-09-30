@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -47,26 +48,14 @@ func TestBinaryPermutations(t *testing.T) {
 	}
 
 	for os := range expectedOS {
-		found := false
-		for _, configOS := range build.GOOS {
-			if configOS == os {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(build.GOOS, os)
 		if !found {
 			t.Errorf("OS %q not found in goreleaser config", os)
 		}
 	}
 
 	for arch := range expectedArch {
-		found := false
-		for _, configArch := range build.GOARCH {
-			if configArch == arch {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(build.GOARCH, arch)
 		if !found {
 			t.Errorf("Architecture %q not found in goreleaser config", arch)
 		}

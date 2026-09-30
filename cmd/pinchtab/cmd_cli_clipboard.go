@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
@@ -78,21 +79,10 @@ func clipboardRead(client *http.Client, base, token string) {
 
 func clipboardWrite(client *http.Client, base, token string, args []string) {
 	result := apiclient.DoPost(client, base, token, "/clipboard/write", map[string]any{
-		"text": joinArgs(args),
+		"text": strings.Join(args, " "),
 	})
 
 	if result != nil {
 		fmt.Println("Clipboard updated")
 	}
-}
-
-func joinArgs(args []string) string {
-	if len(args) == 0 {
-		return ""
-	}
-	out := args[0]
-	for _, arg := range args[1:] {
-		out += " " + arg
-	}
-	return out
 }
