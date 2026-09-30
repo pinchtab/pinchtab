@@ -48,10 +48,11 @@ func TestTabScopedPrologueRejections(t *testing.T) {
 	oversized := `{"tabId":"` + strings.Repeat("x", maxBodySize+1) + `"}`
 
 	cases := []struct {
-		name      string
-		pathID    string
-		body      func(valid string) string
-		wantError string
+		name       string
+		pathID     string
+		body       func(valid string) string
+		wantError  string
+		wantStatus int
 	}{
 		{
 			name:      "missing tab id",
@@ -66,10 +67,11 @@ func TestTabScopedPrologueRejections(t *testing.T) {
 			wantError: "decode: unexpected EOF",
 		},
 		{
-			name:      "oversized body",
-			pathID:    "tab_abc",
-			body:      func(string) string { return oversized },
-			wantError: "decode: http: request body too large",
+			name:       "oversized body",
+			pathID:     "tab_abc",
+			body:       func(string) string { return oversized },
+			wantError:  "decode: http: request body too large",
+			wantStatus: http.StatusRequestEntityTooLarge,
 		},
 		{
 			name:      "body tabId disagrees with the path",
@@ -85,8 +87,12 @@ func TestTabScopedPrologueRejections(t *testing.T) {
 				h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 				status, gotError := driveTabScoped(t, ep.handler(h), tc.pathID, tc.body(ep.validBody))
 
-				if status != http.StatusBadRequest {
-					t.Fatalf("status = %d, want 400 (error=%q)", status, gotError)
+				wantStatus := tc.wantStatus
+				if wantStatus == 0 {
+					wantStatus = http.StatusBadRequest
+				}
+				if status != wantStatus {
+					t.Fatalf("status = %d, want %d (error=%q)", status, wantStatus, gotError)
 				}
 				if gotError != tc.wantError {
 					t.Fatalf("error = %q, want %q", gotError, tc.wantError)

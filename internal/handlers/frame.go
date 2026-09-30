@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -398,8 +397,7 @@ func (h *Handlers) HandleFrame(w http.ResponseWriter, r *http.Request) {
 	tabID := r.URL.Query().Get("tabId")
 	var req frameRequest
 	if r.Method != http.MethodGet {
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-			httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
+		if !decodeRequiredJSON(w, r, &req) {
 			return
 		}
 		if req.TabID != "" {

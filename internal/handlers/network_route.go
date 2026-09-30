@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -126,8 +125,7 @@ func (h *Handlers) handleNetworkRouteFor(w http.ResponseWriter, r *http.Request,
 	}
 
 	var req routeRuleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.Error(w, 400, fmt.Errorf("decode body: %w", err))
+	if !decodeRequiredJSON(w, r, &req) {
 		return
 	}
 	if req.Pattern == "" {

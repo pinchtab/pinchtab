@@ -57,7 +57,11 @@ func (h *Handlers) HandleExtract(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, schema, err := parseExtractRequest(w, r)
+	var req extractRequest
+	if !decodeRequiredJSON(w, r, &req) {
+		return
+	}
+	schema, err := parseExtractSchema(req)
 	if err != nil {
 		httpx.Error(w, 400, err)
 		return
@@ -136,13 +140,9 @@ func (h *Handlers) HandleTabExtract(w http.ResponseWriter, r *http.Request) {
 	h.withPathTabIDBody(w, r, h.HandleExtract)
 }
 
-func parseExtractRequest(w http.ResponseWriter, r *http.Request) (extractRequest, extract.Schema, error) {
-	var req extractRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		return extractRequest{}, extract.Schema{}, fmt.Errorf("decode: %w", err)
-	}
+func parseExtractSchema(req extractRequest) (extract.Schema, error) {
 	if len(req.Schema) == 0 {
-		return extractRequest{}, extract.Schema{}, fmt.Errorf("missing required field 'schema'")
+		return extract.Schema{}, fmt.Errorf("missing required field 'schema'")
 	}
 	var quoted string
 	if json.Unmarshal(req.Schema, &quoted) == nil {
@@ -152,14 +152,14 @@ func parseExtractRequest(w http.ResponseWriter, r *http.Request) (extractRequest
 	if err != nil {
 		var unsupported *extract.UnsupportedError
 		if errors.As(err, &unsupported) {
-			return extractRequest{}, extract.Schema{}, fmt.Errorf("schema %s", err)
+			return extract.Schema{}, fmt.Errorf("schema %s", err)
 		}
-		return extractRequest{}, extract.Schema{}, fmt.Errorf("schema: %w", err)
+		return extract.Schema{}, fmt.Errorf("schema: %w", err)
 	}
 	if schema, err = schema.WithScope(req.Scope); err != nil {
-		return extractRequest{}, extract.Schema{}, err
+		return extract.Schema{}, err
 	}
-	return req, schema, nil
+	return schema, nil
 }
 
 func buildExtractResponse(result extract.Result, elementCount int, idpiWarning string, start time.Time) extractResponse {

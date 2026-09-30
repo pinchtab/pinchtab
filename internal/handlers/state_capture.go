@@ -96,8 +96,7 @@ func (h *Handlers) HandleStateLoad(w http.ResponseWriter, r *http.Request) {
 		Name  string `json:"name"`
 		TabID string `json:"tabId"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
+	if !decodeRequiredJSON(w, r, &req) {
 		return
 	}
 	if req.Name == "" {

@@ -264,8 +264,8 @@ func TestHandleTabNetworkRoute_BodyExceedsCap(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.HandleTabNetworkRoute(w, req)
 
-	if w.Code != 400 {
-		t.Fatalf("expected 400 for oversized body, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413 for oversized body, got %d: %s", w.Code, w.Body.String())
 	}
 	if len(b.rules["tab1"]) != 0 {
 		t.Errorf("oversized rule should not have been stored")

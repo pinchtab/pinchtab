@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -46,8 +45,7 @@ type scrapeRequest struct {
 // @Endpoint POST /scrape
 func (h *Handlers) HandleScrape(w http.ResponseWriter, r *http.Request) {
 	var req scrapeRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
+	if !decodeRequiredJSON(w, r, &req) {
 		return
 	}
 	req.URL = strings.TrimSpace(req.URL)

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -62,9 +61,8 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := parseFindRequest(w, r)
-	if err != nil {
-		httpx.Error(w, 400, err)
+	req, ok := parseFindRequest(w, r)
+	if !ok {
 		return
 	}
 
@@ -116,12 +114,11 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 }
 
 // parseFindRequest decodes and normalizes the find request: the {id} path
-// override, a trimmed non-empty query, and Threshold/TopK defaults. Returns an
-// error (mapped to 400 by the caller) on a decode failure or a missing query.
-func parseFindRequest(w http.ResponseWriter, r *http.Request) (findRequest, error) {
+// override, a trimmed non-empty query, and Threshold/TopK defaults.
+func parseFindRequest(w http.ResponseWriter, r *http.Request) (findRequest, bool) {
 	var req findRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		return findRequest{}, fmt.Errorf("decode: %w", err)
+	if !decodeRequiredJSON(w, r, &req) {
+		return findRequest{}, false
 	}
 
 	if pathID := r.PathValue("id"); pathID != "" {
@@ -130,7 +127,8 @@ func parseFindRequest(w http.ResponseWriter, r *http.Request) (findRequest, erro
 
 	req.Query = strings.TrimSpace(req.Query)
 	if req.Query == "" {
-		return findRequest{}, fmt.Errorf("missing required field 'query'")
+		httpx.Error(w, 400, fmt.Errorf("missing required field 'query'"))
+		return findRequest{}, false
 	}
 	if req.Threshold <= 0 {
 		req.Threshold = 0.3
@@ -138,7 +136,7 @@ func parseFindRequest(w http.ResponseWriter, r *http.Request) (findRequest, erro
 	if req.TopK <= 0 {
 		req.TopK = 3
 	}
-	return req, nil
+	return req, true
 }
 
 // resolveOrRefreshSnapshotNodes returns the tab's cached snapshot AX nodes,

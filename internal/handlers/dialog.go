@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -20,8 +19,7 @@ func (h *Handlers) HandleDialog(w http.ResponseWriter, r *http.Request) {
 		Action string `json:"action"` // "accept" or "dismiss"
 		Text   string `json:"text"`   // optional prompt text
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
+	if !decodeRequiredJSON(w, r, &req) {
 		return
 	}
 	if req.Action == "" {

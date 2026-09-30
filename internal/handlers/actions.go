@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -446,8 +445,7 @@ func decodeActionRequest(w http.ResponseWriter, r *http.Request) (bridge.ActionR
 		httpx.Error(w, 400, unknownQueryFieldsError(unknown))
 		return bridge.ActionRequest{}, false
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
+	if !decodeRequiredJSON(w, r, &req) {
 		return bridge.ActionRequest{}, false
 	}
 	req.Kind = bridge.CanonicalActionKind(req.Kind)
@@ -777,8 +775,7 @@ func (h *Handlers) HandleActions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req actionsRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
+	if !decodeRequiredJSON(w, r, &req) {
 		return
 	}
 
@@ -1017,8 +1014,7 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 		StopOnError bool                   `json:"stopOnError"`
 		StepTimeout float64                `json:"stepTimeout"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		httpx.ErrorCode(w, 400, "bad_request", fmt.Sprintf("decode: %v", err), false, nil)
+	if !decodeRequiredJSON(w, r, &req) {
 		return
 	}
 	if len(req.Steps) == 0 {

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -26,8 +25,7 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 		URL              string `json:"url"`
 		BrowserContextID string `json:"browserContextId"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
+	if !decodeRequiredJSON(w, r, &req) {
 		return
 	}
 

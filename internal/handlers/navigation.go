@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -100,8 +99,7 @@ func decodeNavigateRequest(w http.ResponseWriter, r *http.Request) (navigateRequ
 		}
 		return req, true
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
+	if !decodeRequiredJSON(w, r, &req) {
 		return navigateRequest{}, false
 	}
 	return req, true

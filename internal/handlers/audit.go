@@ -25,8 +25,7 @@ type auditRequest struct {
 // @Endpoint POST /audit
 func (h *Handlers) HandleAudit(w http.ResponseWriter, r *http.Request) {
 	var req auditRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
+	if !decodeRequiredJSON(w, r, &req) {
 		return
 	}
 	if len(req.URLs) == 0 && req.SitemapURL == "" && len(req.SeaportalResults) == 0 {

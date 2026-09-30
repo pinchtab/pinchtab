@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -99,10 +98,8 @@ func (h *Handlers) HandleClipboardWrite(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req clipboardRequest
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		httpx.Error(w, http.StatusBadRequest, fmt.Errorf("decode: %w", err))
+	if err := httpx.DecodeJSONBody(w, r, maxBodySize, &req); err != nil {
+		writeJSONDecodeError(w, err)
 		return
 	}
 	if req.Text == nil {

@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -19,8 +18,7 @@ func (h *Handlers) HandleTabLock(w http.ResponseWriter, r *http.Request) {
 		Owner      string `json:"owner"`
 		TimeoutSec int    `json:"timeoutSec"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
+	if !decodeRequiredJSON(w, r, &req) {
 		return
 	}
 	if req.TabID == "" || req.Owner == "" {
@@ -53,8 +51,7 @@ func (h *Handlers) HandleTabUnlock(w http.ResponseWriter, r *http.Request) {
 		TabID string `json:"tabId"`
 		Owner string `json:"owner"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
-		httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
+	if !decodeRequiredJSON(w, r, &req) {
 		return
 	}
 	if req.TabID == "" || req.Owner == "" {

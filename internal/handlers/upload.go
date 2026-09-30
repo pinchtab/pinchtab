@@ -86,7 +86,7 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 
 	var req uploadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.Error(w, 400, fmt.Errorf("invalid JSON body: %w", err))
+		httpx.Error(w, httpx.StatusForJSONDecodeError(err), fmt.Errorf("invalid JSON body: %w", err))
 		return
 	}
 
