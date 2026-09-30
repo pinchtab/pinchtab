@@ -643,14 +643,18 @@ func opensANestedBranch(n ast.Node) bool {
 	return false
 }
 
+var snapshotResponseWriters = []string{"HandleSnapshot", "writeSnapshotPlain", "writeSnapshotFile", "writeSnapshotDiff", "writeSnapshot"}
+
 func TestEveryResponseBranchDisclosesIgnoredParams(t *testing.T) {
 	pkg := srccensus.Load(t, ".", handlersSourceFileFloor)
 	fset, _ := pkg.Syntax()
-	handler, _ := handlerFuncDecl(t, pkg, "HandleSnapshot")
-
-	blocks := successResponseBlocks(handler)
-	if len(blocks) < 7 {
-		t.Fatalf("found %d response branches in HandleSnapshot; there are seven, so the scan is matching the wrong thing — lower this floor only for a branch deliberately removed", len(blocks))
+	var blocks []ast.Node
+	for _, name := range snapshotResponseWriters {
+		fn, _ := handlerFuncDecl(t, pkg, name)
+		blocks = append(blocks, successResponseBlocks(fn)...)
+	}
+	if len(blocks) < 5 {
+		t.Fatalf("found %d response branches across %v; there are five (file, diff, plain text, yaml, json), so the scan is matching the wrong thing — lower this floor only for a branch deliberately removed", len(blocks), snapshotResponseWriters)
 	}
 	for _, block := range blocks {
 		if !disclosesIgnoredParams(block) {

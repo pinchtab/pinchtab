@@ -236,7 +236,7 @@ func TestEveryRefPublishSiteRoutesThroughTheEpochRefBook(t *testing.T) {
 	if !callsAnyIdent(snapshot, "publishVocab") {
 		t.Error("HandleSnapshot does not emit the token in a response header, so a client reading a compact/text snapshot cannot obtain it")
 	}
-	if !mentionsString(snapshot, "vocabularyToken") {
+	if snapshotJSON, _ := handlerFuncDecl(t, pkg, "writeSnapshot"); !mentionsString(snapshotJSON, "vocabularyToken") {
 		t.Error("HandleSnapshot does not carry the token in its JSON body, so a JSON snapshot consumer cannot echo it")
 	}
 	capture, _ := handlerFuncDecl(t, pkg, "HandleCapture")
