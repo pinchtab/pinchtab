@@ -42,26 +42,23 @@ func (h *Handlers) resolveActionRequestSelector(ctx context.Context, tabID strin
 	}
 
 	frameID := h.selectorFrameID(tabID)
-	for attempt := 0; attempt < 2; attempt++ {
-		modalNodeID, modalOpen, err := bridge.TopmostModalNodeID(ctx, frameID)
-		if err != nil {
-			return actionSelectorResolution{status: selectorFailureStatus(err)}, frameScopedSelectorError("topmost dialog", err)
-		}
-
-		attemptReq := original
-		resolution, resolveErr := h.resolveActionRequestSelectorInScope(ctx, tabID, frameID, modalNodeID, modalOpen, &attemptReq)
-
-		afterNodeID, afterOpen, scopeErr := bridge.TopmostModalNodeID(ctx, frameID)
-		if scopeErr != nil {
-			return actionSelectorResolution{status: selectorFailureStatus(scopeErr)}, frameScopedSelectorError("recheck topmost dialog", scopeErr)
-		}
-		if modalNodeID == afterNodeID && modalOpen == afterOpen {
-			*req = attemptReq
-			return resolution, resolveErr
-		}
+	var resolution actionSelectorResolution
+	var attemptReq bridge.ActionRequest
+	resolveErr, scopeErr := withStableModalScope(ctx, frameID, false, func(modalNodeID int64, modalOpen bool) error {
+		attemptReq = original
+		var err error
+		resolution, err = h.resolveActionRequestSelectorInScope(ctx, tabID, frameID, modalNodeID, modalOpen, &attemptReq)
+		return err
+	})
+	var readErr *modalScopeReadError
+	if errors.As(scopeErr, &readErr) {
+		return actionSelectorResolution{status: selectorFailureStatus(readErr.err)}, frameScopedSelectorError(readErr.stage, readErr.err)
 	}
-
-	return actionSelectorResolution{status: http.StatusConflict}, fmt.Errorf("topmost dialog changed twice during selector resolution; retry after the page settles")
+	if scopeErr != nil {
+		return actionSelectorResolution{status: http.StatusConflict}, fmt.Errorf("topmost dialog changed twice during selector resolution; retry after the page settles")
+	}
+	*req = attemptReq
+	return resolution, resolveErr
 }
 
 // resolveActionRequestDestination runs a scratch request through the source resolver so a

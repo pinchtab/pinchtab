@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -65,59 +66,46 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 	refParam := r.URL.Query().Get("ref")
 	ghostRoute := textRoute != nil && textRoute.UsedBrowser == config.BrowserGhostChrome
 	vocabBefore := h.tabVocab(resolvedTabID)
-	for attempt := 0; attempt < 2; attempt++ {
-		var modalNodeID int64
-		var modalOpen bool
+	elementRead := selectorParam != "" || refParam != ""
+	var text string
+	var extraction textExtraction
+	workErr, scopeErr := withStableModalScope(tCtx, targetFrameID, ghostRoute, func(modalNodeID int64, modalOpen bool) error {
+		text, extraction = "", textExtraction{}
 		var err error
-		if !ghostRoute {
-			modalNodeID, modalOpen, err = bridge.TopmostModalNodeID(tCtx, targetFrameID)
-			if err != nil {
-				respondSelectorFailure(w, err)
-				return
-			}
-		}
-
-		var text string
-		var extraction textExtraction
-		if selectorParam != "" || refParam != "" {
+		switch {
+		case elementRead:
 			text, err = h.extractElementText(tCtx, resolvedTabID, targetFrameID, selectorParam, refParam, modalNodeID)
 			h.publishVocabIfReepoched(w, resolvedTabID, vocabBefore)
-		} else if modalOpen {
+		case modalOpen:
 			err = h.Bridge.CallFunctionOnNode(tCtx, modalNodeID, elementInnerTextJS, nil, &text)
 			extraction = textExtraction{Text: text, Mode: extractionRaw, RawLength: utf8.RuneCountInString(text), RawKnown: true}
-		} else {
+		default:
 			extraction, err = h.extractDocumentText(tCtx, mode, targetFrameID)
 		}
-
-		stable := true
-		if !ghostRoute {
-			afterNodeID, afterOpen, scopeErr := bridge.TopmostModalNodeID(tCtx, targetFrameID)
-			if scopeErr != nil {
-				respondSelectorFailure(w, fmt.Errorf("recheck topmost dialog: %w", scopeErr))
-				return
-			}
-			stable = modalNodeID == afterNodeID && modalOpen == afterOpen
-		}
-		if !stable {
-			continue
-		}
-		if err != nil {
-			if selectorParam != "" || refParam != "" {
-				respondSelectorFailure(w, fmt.Errorf("element text extract: %w", err))
-				return
-			}
-			httpx.Error(w, http.StatusInternalServerError, err)
-			return
-		}
-		scopeInfo := h.frameDisclosureFor(tCtx, resolvedTabID, targetFrameID)
-		if selectorParam != "" || refParam != "" {
-			h.writeElementTextResponse(w, r, tCtx, text, scopeInfo)
-		} else {
-			h.writeTextResponse(w, r, tCtx, extraction, maxChars, format, textRoute, scopeInfo)
-		}
+		return err
+	})
+	if errors.Is(scopeErr, errModalUnstable) {
+		httpx.Error(w, http.StatusConflict, fmt.Errorf("topmost dialog changed twice during text extraction; retry after the page settles"))
 		return
 	}
-	httpx.Error(w, http.StatusConflict, fmt.Errorf("topmost dialog changed twice during text extraction; retry after the page settles"))
+	if scopeErr != nil {
+		respondSelectorFailure(w, scopeErr)
+		return
+	}
+	if workErr != nil {
+		if elementRead {
+			respondSelectorFailure(w, fmt.Errorf("element text extract: %w", workErr))
+			return
+		}
+		httpx.Error(w, http.StatusInternalServerError, workErr)
+		return
+	}
+	scopeInfo := h.frameDisclosureFor(tCtx, resolvedTabID, targetFrameID)
+	if elementRead {
+		h.writeElementTextResponse(w, r, tCtx, text, scopeInfo)
+		return
+	}
+	h.writeTextResponse(w, r, tCtx, extraction, maxChars, format, textRoute, scopeInfo)
 }
 
 // writeElementTextResponse writes an already scope-validated element read.

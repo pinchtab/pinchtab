@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -208,44 +210,19 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 	frameScope := h.selectorFrameID(resolvedTabID)
 	scopeInfo := h.frameDisclosureFor(tCtx, resolvedTabID, frameScope)
 	ghostRoute := snapChromeRoute != nil && snapChromeRoute.UsedBrowser == config.BrowserGhostChrome
-	var modalOpen bool
 	if frameScope != "" || selector != "" || !ghostRoute {
-		// Frame-scoped or selector-scoped: inline AX tree fetch with scoping.
 		var rawNodes []bridge.RawAXNode
-		stable := false
-		for attempt := 0; attempt < 2; attempt++ {
-			var modalNodeID int64
-			var modalErr error
-			if !ghostRoute {
-				modalNodeID, modalOpen, modalErr = bridge.TopmostModalNodeID(tCtx, frameScope)
-				if modalErr != nil {
-					respondSelectorFailure(w, modalErr)
-					return
-				}
-			}
-
-			candidateNodes, candidateScope, scopeErr := h.scopedSnapshotNodes(
-				tCtx, resolvedTabID, frameScope, selector, modalNodeID, modalOpen,
-			)
-			if !ghostRoute {
-				afterNodeID, afterOpen, recheckErr := bridge.TopmostModalNodeID(tCtx, frameScope)
-				if recheckErr != nil {
-					respondSelectorFailure(w, fmt.Errorf("recheck topmost dialog: %w", recheckErr))
-					return
-				}
-				if modalNodeID != afterNodeID || modalOpen != afterOpen {
-					continue
-				}
-			}
-			if scopeErr != nil {
-				respondSelectorFailure(w, scopeErr)
-				return
-			}
-			rawNodes, scopeNodeID, stable = candidateNodes, candidateScope, true
-			break
-		}
-		if !stable {
+		workErr, scopeErr := withStableModalScope(tCtx, frameScope, ghostRoute, func(modalNodeID int64, modalOpen bool) error {
+			var err error
+			rawNodes, scopeNodeID, err = h.scopedSnapshotNodes(tCtx, resolvedTabID, frameScope, selector, modalNodeID, modalOpen)
+			return err
+		})
+		if errors.Is(scopeErr, errModalUnstable) {
 			httpx.Error(w, http.StatusConflict, fmt.Errorf("topmost dialog changed twice during snapshot; retry after the page settles"))
+			return
+		}
+		if err := cmp.Or(scopeErr, workErr); err != nil {
+			respondSelectorFailure(w, err)
 			return
 		}
 
