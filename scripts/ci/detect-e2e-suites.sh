@@ -56,3 +56,36 @@ for suite in "${suites[@]}"; do
     echo "run_${suite//-/_}=false"
   fi
 done
+
+event="${E2E_EVENT:-pull_request}"
+dispatch_suite="${E2E_DISPATCH_SUITE:-all}"
+basic=()
+extended=()
+for area in api cli infra; do
+  case "$event" in
+    pull_request)
+      basic+=("$area")
+      [[ $escalated == *" $area-extended "* ]] && extended+=("$area-extended")
+      ;;
+    push)
+      extended+=("$area-extended")
+      ;;
+    workflow_dispatch)
+      if [ "$dispatch_suite" = all ] || [ "$dispatch_suite" = "$area" ]; then
+        basic+=("$area")
+        extended+=("$area-extended")
+      fi
+      ;;
+  esac
+done
+
+json_list() {
+  local out="" item
+  for item in "$@"; do
+    out+="${out:+,}\"$item\""
+  done
+  printf '[%s]' "$out"
+}
+
+echo "basic_suites=$(json_list ${basic[@]+"${basic[@]}"})"
+echo "extended_suites=$(json_list ${extended[@]+"${extended[@]}"})"

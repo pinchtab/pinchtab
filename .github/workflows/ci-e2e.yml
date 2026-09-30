@@ -1,152 +1,76 @@
 name: CI / E2E
-
-permissions:
-  contents: read
-
+permissions: {contents: read}
 on:
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.gitignore'
-      - 'skills/**'
+    paths-ignore: &docs-only ['**.md', 'docs/**', 'LICENSE', '.gitignore', 'skills/**']
   push:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.gitignore'
-      - 'skills/**'
+    paths-ignore: *docs-only
   workflow_dispatch:
     inputs:
       suite:
-        description: 'Suite to run'
-        required: false
-        default: 'all'
+        description: Suite to run
+        default: all
         type: choice
-        options:
-          - all
-          - api
-          - cli
-          - infra
-          - smoke
-
+        options: [all, api, cli, infra, smoke]
 
 jobs:
   detect-changes:
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     outputs:
-      run_api_extended: ${{ steps.changes.outputs.run_api_extended }}
-      run_cli_extended: ${{ steps.changes.outputs.run_cli_extended }}
-      run_infra_extended: ${{ steps.changes.outputs.run_infra_extended }}
+      basic_suites: ${{ steps.changes.outputs.basic_suites }}
+      extended_suites: ${{ steps.changes.outputs.extended_suites }}
       run_smoke: ${{ steps.changes.outputs.run_smoke }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: Decide which suites this diff needs
+        with: {fetch-depth: 0}
+      - name: Decide which suites this run needs
         id: changes
         shell: bash
         env:
-          EVENT_NAME: ${{ github.event_name }}
+          E2E_EVENT: ${{ github.event_name }}
+          E2E_DISPATCH_SUITE: ${{ inputs.suite }}
           BEFORE_SHA: ${{ github.event.before }}
           CURRENT_SHA: ${{ github.sha }}
         run: |
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            git diff --name-only origin/main...HEAD
-          else
-            git diff --name-only "$BEFORE_SHA" "$CURRENT_SHA"
-          fi | ./scripts/ci/detect-e2e-suites.sh >> "$GITHUB_OUTPUT"
+          case "$E2E_EVENT" in
+            pull_request) git diff --name-only origin/main...HEAD ;;
+            push) git diff --name-only "$BEFORE_SHA" "$CURRENT_SHA" ;;
+          esac | ./scripts/ci/detect-e2e-suites.sh >> "$GITHUB_OUTPUT"
 
-  api:
-    if: >-
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'workflow_dispatch' && (inputs.suite == 'all' || inputs.suite == 'api'))
+  basic:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.basic_suites != '[]'
+    strategy:
+      fail-fast: false
+      matrix: {suite: "${{ fromJSON(needs.detect-changes.outputs.basic_suites) }}"}
     uses: ./.github/workflows/reusable-e2e.yml
     with:
       ref: ${{ github.sha }}
-      suite: api
-      summary_title: E2E API Tests
+      suite: ${{ matrix.suite }}
+      summary_title: E2E ${{ matrix.suite }} Tests
       timeout_minutes: 15
 
-  cli:
-    if: >-
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'workflow_dispatch' && (inputs.suite == 'all' || inputs.suite == 'cli'))
-    uses: ./.github/workflows/reusable-e2e.yml
-    with:
-      ref: ${{ github.sha }}
-      suite: cli
-      summary_title: E2E CLI Tests
-      timeout_minutes: 15
-
-  infra:
-    if: >-
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'workflow_dispatch' && (inputs.suite == 'all' || inputs.suite == 'infra'))
-    uses: ./.github/workflows/reusable-e2e.yml
-    with:
-      ref: ${{ github.sha }}
-      suite: infra
-      summary_title: E2E Infra Tests
-      timeout_minutes: 15
-
-  api-extended:
+  extended:
     needs: [detect-changes]
-    if: >-
-      always() &&
-      (needs.detect-changes.result == 'success' || needs.detect-changes.result == 'skipped') &&
-      (github.event_name == 'push' ||
-      (github.event_name == 'pull_request' && needs.detect-changes.outputs.run_api_extended == 'true') ||
-      (github.event_name == 'workflow_dispatch' && (inputs.suite == 'all' || inputs.suite == 'api')))
+    if: needs.detect-changes.outputs.extended_suites != '[]'
+    strategy:
+      fail-fast: false
+      matrix: {suite: "${{ fromJSON(needs.detect-changes.outputs.extended_suites) }}"}
     uses: ./.github/workflows/reusable-e2e.yml
     with:
       ref: ${{ github.sha }}
-      suite: api-extended
-      summary_title: E2E API Extended Tests
-      timeout_minutes: 20
-
-  cli-extended:
-    needs: [detect-changes]
-    if: >-
-      always() &&
-      (needs.detect-changes.result == 'success' || needs.detect-changes.result == 'skipped') &&
-      (github.event_name == 'push' ||
-      (github.event_name == 'pull_request' && needs.detect-changes.outputs.run_cli_extended == 'true') ||
-      (github.event_name == 'workflow_dispatch' && (inputs.suite == 'all' || inputs.suite == 'cli')))
-    uses: ./.github/workflows/reusable-e2e.yml
-    with:
-      ref: ${{ github.sha }}
-      suite: cli-extended
-      summary_title: E2E CLI Extended Tests
-      timeout_minutes: 20
-
-  infra-extended:
-    needs: [detect-changes]
-    if: >-
-      always() &&
-      (needs.detect-changes.result == 'success' || needs.detect-changes.result == 'skipped') &&
-      (github.event_name == 'push' ||
-      (github.event_name == 'pull_request' && needs.detect-changes.outputs.run_infra_extended == 'true') ||
-      (github.event_name == 'workflow_dispatch' && (inputs.suite == 'all' || inputs.suite == 'infra')))
-    uses: ./.github/workflows/reusable-e2e.yml
-    with:
-      ref: ${{ github.sha }}
-      suite: infra-extended
-      summary_title: E2E Infra Extended Tests
-      timeout_minutes: 25
+      suite: ${{ matrix.suite }}
+      summary_title: E2E ${{ matrix.suite }} Tests
+      timeout_minutes: ${{ matrix.suite == 'infra-extended' && 25 || 20 }}
 
   smoke:
     needs: [detect-changes]
     if: >-
-      always() &&
-      (needs.detect-changes.result == 'success' || needs.detect-changes.result == 'skipped') &&
-      (((github.event_name == 'pull_request' || github.event_name == 'push') && needs.detect-changes.outputs.run_smoke == 'true') ||
-      (github.event_name == 'workflow_dispatch' && (inputs.suite == 'all' || inputs.suite == 'smoke')))
+      needs.detect-changes.outputs.run_smoke == 'true' ||
+      (github.event_name == 'workflow_dispatch' && (inputs.suite == 'all' || inputs.suite == 'smoke'))
     uses: ./.github/workflows/reusable-smoke.yml
     with:
       ref: ${{ github.sha }}

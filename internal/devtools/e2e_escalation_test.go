@@ -2,6 +2,7 @@ package devtools
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -160,6 +161,9 @@ func TestTheWorkflowConsumesExactlyTheEmittedOutputs(t *testing.T) {
 	emitted := map[string]bool{}
 	for _, name := range detectSuiteNames(t, root) {
 		emitted[name] = true
+		if strings.HasSuffix(name, "_extended") {
+			continue
+		}
 		if !strings.Contains(body, "steps.changes.outputs."+name) {
 			t.Errorf("%s emits %s but %s never exports it, so the suite it gates can never run", escalationScript, name, escalationWorkflow)
 		}
@@ -178,6 +182,9 @@ func TestEveryEscalatableSuiteAlsoRunsWithoutADiffToClaimIt(t *testing.T) {
 	automatic := suitesOnAutomaticTriggers(t, root)
 
 	for _, name := range detectSuiteNames(t, root) {
+		if !strings.HasPrefix(name, "run_") {
+			continue
+		}
 		suite := strings.ReplaceAll(strings.TrimPrefix(name, "run_"), "_", "-")
 		if !automatic[suite] {
 			t.Errorf("the %s suite runs only when a diff escalates it or a human dispatches it, so a merge the map does not claim never exercises the coverage it holds; give it a job gated on github.event_name == '<event>' under an automatic trigger in %s or %s", suite, escalationWorkflow, smokeWorkflow)
@@ -201,6 +208,11 @@ type ciJob struct {
 func suitesOnAutomaticTriggers(t *testing.T, root string) map[string]bool {
 	t.Helper()
 	automatic := map[string]bool{}
+	for _, event := range automaticEvents(parseWorkflow(t, root, escalationWorkflow)) {
+		for _, suite := range plannedSuites(t, root, nil, "E2E_EVENT="+event) {
+			automatic[suite] = true
+		}
+	}
 	for _, rel := range []string{escalationWorkflow, smokeWorkflow} {
 		workflow := parseWorkflow(t, root, rel)
 		for _, event := range automaticEvents(workflow) {
@@ -280,13 +292,34 @@ func detectSuiteNames(t *testing.T, root string) []string {
 	return names
 }
 
-func runDetect(t *testing.T, root string, changed []string) []string {
+// plannedSuites is what the basic and extended matrices of the E2E workflow run
+// for the given diff and event environment.
+func plannedSuites(t *testing.T, root string, changed []string, env ...string) []string {
+	t.Helper()
+	var suites []string
+	for _, line := range runDetect(t, root, changed, env...) {
+		name, value, _ := strings.Cut(line, "=")
+		if name != "basic_suites" && name != "extended_suites" {
+			continue
+		}
+		var list []string
+		if err := json.Unmarshal([]byte(value), &list); err != nil {
+			t.Fatalf("%s emitted %s=%s, which is not a JSON list: %v", escalationScript, name, value, err)
+		}
+		suites = append(suites, list...)
+	}
+	sort.Strings(suites)
+	return suites
+}
+
+func runDetect(t *testing.T, root string, changed []string, env ...string) []string {
 	t.Helper()
 	if readRepoFile(t, root, escalationScript) == "" || readRepoFile(t, root, escalationMap) == "" {
 		t.Fatalf("%s and %s must both hold content, and reading them here is also what keeps a cached green from surviving an edit to either", escalationScript, escalationMap)
 	}
 	cmd := exec.Command("bash", filepath.Join(root, escalationScript))
 	cmd.Stdin = strings.NewReader(strings.Join(changed, "\n"))
+	cmd.Env = append(os.Environ(), env...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -639,4 +672,28 @@ func escalatablePaths(t *testing.T, root string) []string {
 		t.Fatalf("%s names %d suite-claiming rules but they match only %d tracked files; the probe set has stopped representing the map and this guard would pass on a handful of paths", escalationMap, len(claiming), len(paths))
 	}
 	return paths
+}
+
+func TestTheMatricesRunWhatEachTriggerRanBeforeTheCollapse(t *testing.T) {
+	root := repoRoot(t)
+	cases := []struct {
+		name    string
+		changed []string
+		env     []string
+		want    []string
+	}{
+		{"pull request with no escalation", []string{"README.md"}, []string{"E2E_EVENT=pull_request"}, []string{"api", "cli", "infra"}},
+		{"pull request escalating api", []string{"tests/e2e/scenarios/api/x.sh"}, []string{"E2E_EVENT=pull_request"}, []string{"api", "api-extended", "cli", "infra"}},
+		{"push", nil, []string{"E2E_EVENT=push"}, []string{"api-extended", "cli-extended", "infra-extended"}},
+		{"dispatch all", nil, []string{"E2E_EVENT=workflow_dispatch", "E2E_DISPATCH_SUITE=all"}, []string{"api", "api-extended", "cli", "cli-extended", "infra", "infra-extended"}},
+		{"dispatch cli", nil, []string{"E2E_EVENT=workflow_dispatch", "E2E_DISPATCH_SUITE=cli"}, []string{"cli", "cli-extended"}},
+		{"dispatch smoke", nil, []string{"E2E_EVENT=workflow_dispatch", "E2E_DISPATCH_SUITE=smoke"}, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := plannedSuites(t, root, tc.changed, tc.env...); strings.Join(got, " ") != strings.Join(tc.want, " ") {
+				t.Errorf("planned %v, want %v", got, tc.want)
+			}
+		})
+	}
 }
