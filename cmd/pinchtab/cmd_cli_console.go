@@ -26,3 +26,14 @@ var errorsCmd = &cobra.Command{
 		})
 	},
 }
+
+func configureConsoleFlags() {
+	consoleCmd.Flags().Bool("clear", false, "Clear console logs")
+	consoleCmd.Flags().String("limit", "", "Maximum entries to return")
+	errorsCmd.Flags().Bool("clear", false, "Clear error logs")
+	errorsCmd.Flags().String("limit", "", "Maximum entries to return")
+	addJSONFlag(consoleCmd)
+	addJSONFlag(errorsCmd)
+	addTabFlag(consoleCmd)
+	addTabFlag(errorsCmd)
+}

@@ -178,3 +178,24 @@ var instanceLogsCmd = &cobra.Command{
 		})
 	},
 }
+
+func configureManagementFlags() {
+	addJSONFlag(healthCmd)
+	startInstanceCmd.Flags().String("profile", "", "Profile to use")
+	startInstanceCmd.Flags().String("mode", "", "Instance mode")
+	startInstanceCmd.Flags().String("port", "", "Port number")
+	startInstanceCmd.Flags().StringArray("extension", nil, "Load browser extension (repeatable)")
+	startInstanceCmd.Flags().StringArray("allow-domain", nil, "Add an instance-scoped IDPI allowed domain (repeatable)")
+	startInstanceCmd.Flags().String("browser", "", "Named browser target to use (e.g. chrome, cloak)")
+	startInstanceCmd.Flags().StringArray("browser-fallback", nil, "Named browser target to fall back to if the primary fails (repeatable; overrides config browser.fallbackOrder)")
+	activityCmd.PersistentFlags().Int("limit", 200, "Maximum number of events to return")
+	activityCmd.PersistentFlags().Int("age-sec", 0, "Only include events from the last N seconds")
+	// Both spellings share one implementation, and listInstances forwards the
+	// INVOKED command to the action, so the flag has to exist on each of them.
+	addJSONFlag(instancesCmd)
+	addJSONFlag(instanceListCmd)
+	profilesCmd.Flags().Bool("json", false, "Output full JSON response instead of terse status")
+	profilesPruneCmd.Flags().Bool("confirm", false, "Actually remove the quarantined profiles (without it, nothing is deleted)")
+	profilesPruneCmd.Flags().String("profile", "", "Reclaim only this quarantined profile directory (default: all of them)")
+	profilesPruneCmd.Flags().Bool("json", false, "Output full JSON response instead of terse status")
+}

@@ -101,3 +101,18 @@ func init() {
 	setCmd.AddCommand(setCredentialsCmd)
 	setCmd.AddCommand(setMediaCmd)
 }
+
+func configureEmulationFlags() {
+	addTabFlag(setViewportCmd)
+	addTabFlag(setGeoCmd)
+	addTabFlag(setOfflineCmd)
+	addTabFlag(setHeadersCmd)
+	addTabFlag(setCredentialsCmd)
+	addTabFlag(setMediaCmd)
+	addJSONFlag(setViewportCmd)
+	addJSONFlag(setGeoCmd)
+	addJSONFlag(setOfflineCmd)
+	addJSONFlag(setHeadersCmd)
+	addJSONFlag(setCredentialsCmd)
+	addJSONFlag(setMediaCmd)
+}

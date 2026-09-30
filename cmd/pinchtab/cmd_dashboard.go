@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
@@ -95,13 +96,27 @@ func resolveHost(bind string) string {
 	}
 }
 
+const dashboardProbeTimeout = time.Second
+
 func isDashboardReachable(host, port string) bool {
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), 1*time.Second)
+	return tcpReachable(net.JoinHostPort(host, port), dashboardProbeTimeout)
+}
+
+// tcpReachable reports whether something accepts TCP connections at hostport.
+func tcpReachable(hostport string, timeout time.Duration) bool {
+	conn, err := net.DialTimeout("tcp", hostport, timeout)
 	if err != nil {
 		return false
 	}
 	_ = conn.Close()
 	return true
+}
+
+const localPortProbeTimeout = 200 * time.Millisecond
+
+func portIsListening(baseURL string) bool {
+	host := strings.TrimPrefix(strings.TrimPrefix(baseURL, "http://"), "https://")
+	return tcpReachable(host, localPortProbeTimeout)
 }
 
 func openBrowser(url string) error {

@@ -40,3 +40,10 @@ var recordStatusCmd = &cobra.Command{
 		})
 	},
 }
+
+func configureBrowserRecordFlags() {
+	recordStartCmd.Flags().Int("fps", 5, "Frames per second (1-30)")
+	recordStartCmd.Flags().Int("quality", 80, "JPEG capture quality (1-100)")
+	recordStartCmd.Flags().Float64("scale", 1.0, "Resolution scale multiplier")
+	addTabFlag(recordStartCmd)
+}

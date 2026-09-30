@@ -32,3 +32,16 @@ exists (CI gate).`,
 		})
 	},
 }
+
+func configureCompareFlags() {
+	compareCmd.Flags().String("pages", "", "Comma-separated relative paths to compare (default: the base URLs)")
+	compareCmd.Flags().Bool("visual-diff", true, "Capture screenshots and compute visual diffs")
+	compareCmd.Flags().String("output-dir", "", "Write report.json and diffs/ to this directory")
+	compareCmd.Flags().Int("concurrency", 0, "Pages audited in parallel per side (default 2, max 8)")
+	compareCmd.Flags().Bool("json", false, "Print the comparison report JSON to stdout")
+	compareCmd.Flags().Bool("fail-on-diff", false, "Exit non-zero when any visual or data diff exists")
+	compareCmd.Flags().String("format", "json", "Report format: json, md, or html")
+	compareCmd.Flags().StringArray("cookie", nil, "Inject a cookie as name=value before the run (repeatable; the cookie jar is cleared afterwards)")
+	compareCmd.Flags().String("cookies-file", "", "Inject cookies from a JSON array of {name, value, domain, ...} objects")
+	compareCmd.Flags().String("profile", "", "Run against the instance of this browser profile")
+}

@@ -37,3 +37,8 @@ func init() {
 	cacheCmd.AddCommand(cacheClearCmd)
 	cacheCmd.AddCommand(cacheStatusCmd)
 }
+
+func configureCacheFlags() {
+	addJSONFlag(cacheClearCmd)
+	addJSONFlag(cacheStatusCmd)
+}

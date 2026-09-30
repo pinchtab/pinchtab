@@ -66,3 +66,8 @@ func init() {
 	cookiesSetCmd.Flags().Bool("secure", false, "Mark the cookie Secure")
 	cookiesSetCmd.Flags().Bool("http-only", false, "Mark the cookie HttpOnly")
 }
+
+func configureCookiesFlags() {
+	addJSONFlag(cookiesClearCmd)
+	addJSONFlag(cookiesSetCmd)
+}

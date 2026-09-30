@@ -53,3 +53,18 @@ set up can be mocking or blocking traffic; an empty list means it does neither.`
 		})
 	},
 }
+
+func configureNetworkRouteFlags() {
+	networkRouteCmd.Flags().Bool("abort", false, "Block matching requests instead of letting them through")
+	networkRouteCmd.Flags().String("body", "", "Fulfill matching requests with this JSON body (mutually exclusive with --abort)")
+	networkRouteCmd.Flags().String("resource-type", "", "Limit to a CDP resource category (e.g. script, image, xhr, fetch)")
+	networkRouteCmd.Flags().String("content-type", "", "(With --body) Response Content-Type (default application/json)")
+	networkRouteCmd.Flags().Int("status", 0, "(With --body) Response status code (default 200)")
+	networkRouteCmd.Flags().String("method", "", "Limit to an HTTP method (GET, POST, ...). Fulfill rules without --method skip OPTIONS preflights to avoid breaking CORS.")
+	addTabFlag(networkRouteCmd)
+	addTabFlag(networkUnrouteCmd)
+	addTabFlag(networkRulesCmd)
+	addJSONFlag(networkRouteCmd)
+	addJSONFlag(networkUnrouteCmd)
+	addJSONFlag(networkRulesCmd)
+}
