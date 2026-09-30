@@ -127,8 +127,6 @@ func describeRouteRule(rule map[string]any) string {
 }
 
 func networkRoutePath(cmd *cobra.Command) string {
-	if tab, _ := cmd.Flags().GetString("tab"); tab != "" {
-		return fmt.Sprintf("/tabs/%s/network/route", url.PathEscape(tab))
-	}
-	return "/network/route"
+	tab, _ := cmd.Flags().GetString("tab")
+	return apiclient.TabPath(tab, "network/route")
 }

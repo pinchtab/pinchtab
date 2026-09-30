@@ -77,3 +77,14 @@ func TestTabHandoffStatus(t *testing.T) {
 		t.Fatalf("expected /tabs/tab_123/handoff, got %s", m.lastPath)
 	}
 }
+
+func TestTabHandoffEscapesTheTabID(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+
+	TabHandoff(m.server.Client(), m.base(), "", "a/b", "", 0, newHandoffCmd())
+
+	if m.lastRawPath != "/tabs/a%2Fb/handoff" {
+		t.Fatalf("expected /tabs/a%%2Fb/handoff, got %s", m.lastRawPath)
+	}
+}

@@ -94,10 +94,10 @@ func TabHandoff(client *http.Client, base, token, tabID, reason string, timeoutM
 	}
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoPost(client, base, token, fmt.Sprintf("/tabs/%s/handoff", tabID), body)
+		apiclient.DoPost(client, base, token, apiclient.TabPath(tabID, "handoff"), body)
 		return
 	}
-	apiclient.DoPostQuiet(client, base, token, fmt.Sprintf("/tabs/%s/handoff", tabID), body)
+	apiclient.DoPostQuiet(client, base, token, apiclient.TabPath(tabID, "handoff"), body)
 	output.Value("paused")
 	if reason != "" {
 		output.Hint(fmt.Sprintf("reason: %s", reason))
@@ -112,10 +112,10 @@ func TabResume(client *http.Client, base, token, tabID, status string, cmd *cobr
 	}
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoPost(client, base, token, fmt.Sprintf("/tabs/%s/resume", tabID), body)
+		apiclient.DoPost(client, base, token, apiclient.TabPath(tabID, "resume"), body)
 		return
 	}
-	apiclient.DoPostQuiet(client, base, token, fmt.Sprintf("/tabs/%s/resume", tabID), body)
+	apiclient.DoPostQuiet(client, base, token, apiclient.TabPath(tabID, "resume"), body)
 	output.Value("resumed")
 }
 
@@ -123,10 +123,10 @@ func TabResume(client *http.Client, base, token, tabID, status string, cmd *cobr
 func TabHandoffStatus(client *http.Client, base, token, tabID string, cmd *cobra.Command) {
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		apiclient.DoGet(client, base, token, fmt.Sprintf("/tabs/%s/handoff", tabID), nil)
+		apiclient.DoGet(client, base, token, apiclient.TabPath(tabID, "handoff"), nil)
 		return
 	}
-	body := apiclient.DoGetRaw(client, base, token, fmt.Sprintf("/tabs/%s/handoff", tabID), nil)
+	body := apiclient.DoGetRaw(client, base, token, apiclient.TabPath(tabID, "handoff"), nil)
 	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		fmt.Println(string(body))

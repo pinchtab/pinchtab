@@ -19,6 +19,7 @@ type mockServer struct {
 	server      *httptest.Server
 	lastMethod  string
 	lastPath    string
+	lastRawPath string
 	lastQuery   string
 	lastBody    string
 	lastHeaders http.Header
@@ -38,6 +39,7 @@ func newMockServer() *mockServer {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		m.lastMethod = r.Method
 		m.lastPath = r.URL.Path
+		m.lastRawPath = r.URL.EscapedPath()
 		m.lastQuery = r.URL.RawQuery
 		m.lastHeaders = r.Header
 		if r.Body != nil {

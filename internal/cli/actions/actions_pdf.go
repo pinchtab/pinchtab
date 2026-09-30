@@ -76,12 +76,7 @@ func PDF(client *http.Client, base, token string, cmd *cobra.Command) {
 		outFile = fmt.Sprintf("page-%s.pdf", time.Now().Format("20060102-150405"))
 	}
 
-	var data []byte
-	if tabID != "" {
-		data = apiclient.DoGetRaw(client, base, token, fmt.Sprintf("/tabs/%s/pdf", tabID), params)
-	} else {
-		data = apiclient.DoGetRaw(client, base, token, "/pdf", params)
-	}
+	data := apiclient.DoGetRaw(client, base, token, apiclient.TabPath(tabID, "pdf"), params)
 	if data == nil {
 		return
 	}
