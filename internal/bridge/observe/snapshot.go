@@ -403,246 +403,269 @@ func isAXNodeHidden(n RawAXNode) bool {
 	return false
 }
 
+type snapshotBuilder struct {
+	filter   string
+	maxDepth int
+
+	nodeByID          map[string]RawAXNode
+	parentMap         map[string]string
+	childMap          map[string][]string
+	backendToAX       map[int64]string
+	frameOwners       map[string]int64
+	ownerToChildFrame map[int64]RawFrame
+	frameOrder        []string
+	frameChildRoots   map[string][]string
+	hiddenNodes       map[string]bool
+	maxAncestorWalk   int
+
+	visited map[string]bool
+	flat    []A11yNode
+	refs    map[string]int64
+}
+
 func BuildSnapshot(nodes []RawAXNode, filter string, maxDepth int) ([]A11yNode, map[string]int64) {
-	nodeByID := make(map[string]RawAXNode, len(nodes))
-	parentMap := make(map[string]string)
-	childMap := make(map[string][]string, len(nodes))
-	backendToAX := make(map[int64]string, len(nodes))
-	frameRoots := make(map[string][]string, 4)
-	frameOwners := make(map[string]int64, 4)
-	ownerToChildFrame := make(map[int64]RawFrame, 4)
-	frameOrder := make([]string, 0, 4)
+	b := &snapshotBuilder{
+		filter:   filter,
+		maxDepth: maxDepth,
+		visited:  make(map[string]bool, len(nodes)),
+		flat:     make([]A11yNode, 0),
+		refs:     make(map[string]int64),
+	}
+	b.indexNodes(nodes)
+	b.markHidden(nodes)
+	for _, rootID := range b.topRoots(nodes) {
+		b.visit(rootID, 0)
+	}
+	return b.flat, b.refs
+}
+
+func (b *snapshotBuilder) indexNodes(nodes []RawAXNode) {
+	b.nodeByID = make(map[string]RawAXNode, len(nodes))
+	b.parentMap = make(map[string]string)
+	b.childMap = make(map[string][]string, len(nodes))
+	b.backendToAX = make(map[int64]string, len(nodes))
+	b.frameOwners = make(map[string]int64, 4)
+	b.ownerToChildFrame = make(map[int64]RawFrame, 4)
+	b.frameOrder = make([]string, 0, 4)
 	seenFrames := make(map[string]bool, 4)
 
 	for _, n := range nodes {
-		nodeByID[n.NodeID] = n
-		childMap[n.NodeID] = append(childMap[n.NodeID], n.ChildIDs...)
+		b.nodeByID[n.NodeID] = n
+		b.childMap[n.NodeID] = append(b.childMap[n.NodeID], n.ChildIDs...)
 		if n.BackendDOMNodeID != 0 {
-			backendToAX[n.BackendDOMNodeID] = n.NodeID
+			b.backendToAX[n.BackendDOMNodeID] = n.NodeID
 		}
 		if !seenFrames[n.FrameID] {
-			frameOrder = append(frameOrder, n.FrameID)
+			b.frameOrder = append(b.frameOrder, n.FrameID)
 			seenFrames[n.FrameID] = true
 		}
-		if n.FrameOwnerNodeID != 0 && frameOwners[n.FrameID] == 0 {
-			frameOwners[n.FrameID] = n.FrameOwnerNodeID
-			ownerToChildFrame[n.FrameOwnerNodeID] = RawFrame{
+		if n.FrameOwnerNodeID != 0 && b.frameOwners[n.FrameID] == 0 {
+			b.frameOwners[n.FrameID] = n.FrameOwnerNodeID
+			b.ownerToChildFrame[n.FrameOwnerNodeID] = RawFrame{
 				ID:   n.FrameID,
 				URL:  n.FrameURL,
 				Name: n.FrameName,
 			}
 		}
 		for _, childID := range n.ChildIDs {
-			parentMap[childID] = n.NodeID
+			b.parentMap[childID] = n.NodeID
 		}
 	}
-	maxAncestorWalk := max(len(parentMap)+1, 1)
+	b.maxAncestorWalk = max(len(b.parentMap)+1, 1)
+}
 
-	// Build a set of AX node IDs that are hidden, including inherited hidden
-	// status from ancestors. A child of a hidden node is also hidden.
-	hiddenNodes := make(map[string]bool, len(nodes)/4)
+func (b *snapshotBuilder) markHidden(nodes []RawAXNode) {
+	b.hiddenNodes = make(map[string]bool, len(nodes)/4)
 	for _, n := range nodes {
 		if isAXNodeHidden(n) {
-			hiddenNodes[n.NodeID] = true
+			b.hiddenNodes[n.NodeID] = true
 		}
 	}
-	isHidden := func(nodeID string) bool {
-		cur := nodeID
-		for range maxAncestorWalk {
-			if hiddenNodes[cur] {
-				return true
-			}
-			p, ok := parentMap[cur]
-			if !ok {
-				break
-			}
-			cur = p
-		}
-		return false
-	}
+}
 
-	for _, n := range nodes {
-		parentID, ok := parentMap[n.NodeID]
+func (b *snapshotBuilder) isHidden(nodeID string) bool {
+	cur := nodeID
+	for range b.maxAncestorWalk {
+		if b.hiddenNodes[cur] {
+			return true
+		}
+		p, ok := b.parentMap[cur]
 		if !ok {
-			frameRoots[n.FrameID] = append(frameRoots[n.FrameID], n.NodeID)
-			continue
-		}
-		parentNode, ok := nodeByID[parentID]
-		if !ok || parentNode.FrameID != n.FrameID {
-			frameRoots[n.FrameID] = append(frameRoots[n.FrameID], n.NodeID)
-		}
-	}
-
-	rootFrameID := ""
-	for _, frameID := range frameOrder {
-		if frameOwners[frameID] == 0 {
-			rootFrameID = frameID
 			break
 		}
+		cur = p
 	}
-	if rootFrameID == "" && len(frameOrder) > 0 {
-		rootFrameID = frameOrder[0]
-	}
+	return false
+}
 
+func (b *snapshotBuilder) frameRoots(nodes []RawAXNode) map[string][]string {
+	roots := make(map[string][]string, 4)
+	for _, n := range nodes {
+		parentID, ok := b.parentMap[n.NodeID]
+		if !ok {
+			roots[n.FrameID] = append(roots[n.FrameID], n.NodeID)
+			continue
+		}
+		parentNode, ok := b.nodeByID[parentID]
+		if !ok || parentNode.FrameID != n.FrameID {
+			roots[n.FrameID] = append(roots[n.FrameID], n.NodeID)
+		}
+	}
+	return roots
+}
+
+func (b *snapshotBuilder) rootFrameID() string {
+	for _, frameID := range b.frameOrder {
+		if b.frameOwners[frameID] == 0 {
+			return frameID
+		}
+	}
+	if len(b.frameOrder) > 0 {
+		return b.frameOrder[0]
+	}
+	return ""
+}
+
+func (b *snapshotBuilder) topRoots(nodes []RawAXNode) []string {
+	frameRoots := b.frameRoots(nodes)
+	rootFrameID := b.rootFrameID()
 	topRoots := make([]string, 0, len(nodes))
-	frameChildRoots := make(map[string][]string)
-	for _, frameID := range frameOrder {
+	b.frameChildRoots = make(map[string][]string)
+	for _, frameID := range b.frameOrder {
 		roots := frameRoots[frameID]
 		if len(roots) == 0 {
 			continue
 		}
-		ownerBackendID := frameOwners[frameID]
-		ownerAXID := backendToAX[ownerBackendID]
+		ownerAXID := b.backendToAX[b.frameOwners[frameID]]
 		if frameID == rootFrameID || ownerAXID == "" {
 			topRoots = append(topRoots, roots...)
 			continue
 		}
-		frameChildRoots[ownerAXID] = append(frameChildRoots[ownerAXID], roots...)
+		b.frameChildRoots[ownerAXID] = append(b.frameChildRoots[ownerAXID], roots...)
 	}
 	if len(topRoots) == 0 {
 		for _, n := range nodes {
 			topRoots = append(topRoots, n.NodeID)
 		}
 	}
+	return topRoots
+}
 
-	flat := make([]A11yNode, 0)
-	refs := make(map[string]int64)
-	refID := 0
-	appendNode := func(n RawAXNode, depth int) {
-		role := n.Role.String()
-		name := n.Name.String()
-		ref := fmt.Sprintf("e%d", refID)
-		entry := A11yNode{
-			Ref:       ref,
-			Role:      role,
-			Name:      name,
-			Depth:     depth,
-			FrameID:   n.FrameID,
-			FrameURL:  n.FrameURL,
-			FrameName: n.FrameName,
-		}
-		if childFrame, ok := ownerToChildFrame[n.BackendDOMNodeID]; ok {
-			entry.ChildFrameID = childFrame.ID
-			entry.ChildFrameURL = childFrame.URL
-			entry.ChildFrameName = childFrame.Name
-		}
+func (b *snapshotBuilder) appendNode(n RawAXNode, depth int) {
+	ref := fmt.Sprintf("e%d", len(b.flat))
+	entry := A11yNode{
+		Ref:       ref,
+		Role:      n.Role.String(),
+		Name:      n.Name.String(),
+		Depth:     depth,
+		FrameID:   n.FrameID,
+		FrameURL:  n.FrameURL,
+		FrameName: n.FrameName,
+	}
+	if childFrame, ok := b.ownerToChildFrame[n.BackendDOMNodeID]; ok {
+		entry.ChildFrameID = childFrame.ID
+		entry.ChildFrameURL = childFrame.URL
+		entry.ChildFrameName = childFrame.Name
+	}
+	if v := n.Value.String(); v != "" {
+		entry.Value = normalizeMaskedValue(v)
+	}
+	if n.BackendDOMNodeID != 0 {
+		entry.NodeID = n.BackendDOMNodeID
+		b.refs[ref] = n.BackendDOMNodeID
+	}
+	applyAXProperties(&entry, n.Properties)
+	entry.Hidden = b.isHidden(n.NodeID)
+	b.flat = append(b.flat, entry)
+}
 
-		if v := n.Value.String(); v != "" {
-			entry.Value = normalizeMaskedValue(v)
+func applyAXProperties(entry *A11yNode, props []RawAXProp) {
+	for _, prop := range props {
+		if prop.Name == "disabled" && prop.Value.String() == "true" {
+			entry.Disabled = true
 		}
-		if n.BackendDOMNodeID != 0 {
-			entry.NodeID = n.BackendDOMNodeID
-			refs[ref] = n.BackendDOMNodeID
+		if prop.Name == "focused" && prop.Value.String() == "true" {
+			entry.Focused = true
 		}
-
-		for _, prop := range n.Properties {
-			if prop.Name == "disabled" && prop.Value.String() == "true" {
-				entry.Disabled = true
-			}
-			if prop.Name == "focused" && prop.Value.String() == "true" {
-				entry.Focused = true
-			}
-			// The accessibility tree already answers this for checkboxes, radios,
-			// menuitemcheckbox/radio and any custom role carrying aria-checked, and
-			// it answers "mixed" for a native indeterminate box too. Reading it here
-			// costs nothing: no DOM access and no extra round trip. The other route
-			// — evaluating aria-checked in the page, as /checked and the check action
-			// do — would add a page call to every snapshot and would have to run in
-			// the best-effort DOM pass, where a failure produces an absent field that
-			// every consumer reads as unchecked.
-			if prop.Name == "checked" {
-				if state, ok := checkedStateFromAX(prop.Value.String()); ok {
-					entry.Checked = state
-				}
-			}
-			// Unconditional by design: this pass has no DOM access, and the DOM
-			// enrichment that knows whether the field is empty is best-effort. If
-			// it never runs, this mask is what keeps a password out of the
-			// snapshot, so it must not depend on a signal available only there.
-			if prop.Name == "autocomplete" && IsSensitiveAutocomplete(prop.Value.String()) {
-				entry.Value = MaskedValue
+		// The accessibility tree already answers this for checkboxes, radios,
+		// menuitemcheckbox/radio and any custom role carrying aria-checked, and
+		// it answers "mixed" for a native indeterminate box too. Reading it here
+		// costs nothing: no DOM access and no extra round trip. The other route
+		// — evaluating aria-checked in the page, as /checked and the check action
+		// do — would add a page call to every snapshot and would have to run in
+		// the best-effort DOM pass, where a failure produces an absent field that
+		// every consumer reads as unchecked.
+		if prop.Name == "checked" {
+			if state, ok := checkedStateFromAX(prop.Value.String()); ok {
+				entry.Checked = state
 			}
 		}
-
-		// Tag nodes that are visually hidden but still present in the a11y tree
-		// (e.g. display:none with explicit ARIA attributes). This lets consumers
-		// (AI agents) know the content is not visible to the user.
-		if isHidden(n.NodeID) {
-			entry.Hidden = true
-		}
-
-		flat = append(flat, entry)
-		refID++
-	}
-
-	isSkippableNode := func(n RawAXNode) bool {
-		role := n.Role.String()
-		name := n.Name.String()
-		if n.Ignored {
-			return true
-		}
-		if role == "none" || role == "generic" || role == "InlineTextBox" {
-			return true
-		}
-		if name == "" && role == "StaticText" {
-			return true
-		}
-		return false
-	}
-
-	isFlattenableFrameRoot := func(n RawAXNode) bool {
-		role := n.Role.String()
-		return n.FrameOwnerNodeID != 0 && (role == "WebArea" || role == "RootWebArea")
-	}
-
-	visited := make(map[string]bool, len(nodes))
-	var visitFrameRoot func(string, int)
-	var visit func(string, int)
-
-	visit = func(nodeID string, depth int) {
-		if nodeID == "" || visited[nodeID] {
-			return
-		}
-		n, ok := nodeByID[nodeID]
-		if !ok {
-			return
-		}
-		visited[nodeID] = true
-		if maxDepth >= 0 && depth > maxDepth {
-			return
-		}
-
-		if !isSkippableNode(n) && (filter != FilterInteractive || InteractiveRoles[n.Role.String()] || ContextRoles[n.Role.String()]) {
-			appendNode(n, depth)
-		}
-
-		for _, childID := range childMap[nodeID] {
-			visit(childID, depth+1)
-		}
-		for _, frameRootID := range frameChildRoots[nodeID] {
-			visitFrameRoot(frameRootID, depth+1)
+		// Unconditional by design: this pass has no DOM access, and the DOM
+		// enrichment that knows whether the field is empty is best-effort. If
+		// it never runs, this mask is what keeps a password out of the
+		// snapshot, so it must not depend on a signal available only there.
+		if prop.Name == "autocomplete" && IsSensitiveAutocomplete(prop.Value.String()) {
+			entry.Value = MaskedValue
 		}
 	}
+}
 
-	visitFrameRoot = func(nodeID string, depth int) {
-		n, ok := nodeByID[nodeID]
-		if !ok {
-			return
-		}
-		if isFlattenableFrameRoot(n) {
-			for _, childID := range childMap[nodeID] {
-				visit(childID, depth)
-			}
-			return
-		}
-		visit(nodeID, depth)
+func isSkippableNode(n RawAXNode) bool {
+	if n.Ignored {
+		return true
 	}
-
-	for _, rootID := range topRoots {
-		visit(rootID, 0)
+	role := n.Role.String()
+	if role == "none" || role == "generic" || role == "InlineTextBox" {
+		return true
 	}
+	return role == "StaticText" && n.Name.String() == ""
+}
 
-	return flat, refs
+func isFlattenableFrameRoot(n RawAXNode) bool {
+	role := n.Role.String()
+	return n.FrameOwnerNodeID != 0 && (role == "WebArea" || role == "RootWebArea")
+}
+
+func (b *snapshotBuilder) passesFilter(n RawAXNode) bool {
+	role := n.Role.String()
+	return b.filter != FilterInteractive || InteractiveRoles[role] || ContextRoles[role]
+}
+
+func (b *snapshotBuilder) visit(nodeID string, depth int) {
+	if nodeID == "" || b.visited[nodeID] {
+		return
+	}
+	n, ok := b.nodeByID[nodeID]
+	if !ok {
+		return
+	}
+	b.visited[nodeID] = true
+	if b.maxDepth >= 0 && depth > b.maxDepth {
+		return
+	}
+	if !isSkippableNode(n) && b.passesFilter(n) {
+		b.appendNode(n, depth)
+	}
+	for _, childID := range b.childMap[nodeID] {
+		b.visit(childID, depth+1)
+	}
+	for _, frameRootID := range b.frameChildRoots[nodeID] {
+		b.visitFrameRoot(frameRootID, depth+1)
+	}
+}
+
+func (b *snapshotBuilder) visitFrameRoot(nodeID string, depth int) {
+	n, ok := b.nodeByID[nodeID]
+	if !ok {
+		return
+	}
+	if !isFlattenableFrameRoot(n) {
+		b.visit(nodeID, depth)
+		return
+	}
+	for _, childID := range b.childMap[nodeID] {
+		b.visit(childID, depth)
+	}
 }
 
 func FilterSubtree(nodes []RawAXNode, scopeBackendID int64) []RawAXNode {
