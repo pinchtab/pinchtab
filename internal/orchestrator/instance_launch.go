@@ -109,7 +109,24 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 		return nil, fmt.Errorf("instance already running for profile %q", name)
 	}
 
+	o.instances[instanceID] = &InstanceInternal{
+		Instance: bridge.Instance{
+			ID:          instanceID,
+			ProfileID:   profileID,
+			ProfileName: name,
+			Port:        port,
+			Status:      "starting",
+		},
+	}
 	o.mu.Unlock()
+	reserved := true
+	defer func() {
+		if reserved {
+			o.mu.Lock()
+			delete(o.instances, instanceID)
+			o.mu.Unlock()
+		}
+	}()
 
 	cdpPort, err := o.ports().AllocatePort()
 	if err != nil {
@@ -235,6 +252,7 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 	o.instances[instanceID] = inst
 	snapshot := inst.Instance
 	o.mu.Unlock()
+	reserved = false
 	reservedPorts = nil
 
 	o.startMonitor(inst)

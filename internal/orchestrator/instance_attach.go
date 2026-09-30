@@ -21,6 +21,9 @@ import (
 // attachExternalInstance registers an external instance or updates an existing
 // bridge in place (upsert). Non-bridge duplicates still return an error.
 func (o *Orchestrator) attachExternalInstance(name string, inst bridge.Instance, authToken string) (*bridge.Instance, bool, error) {
+	profileID := o.idMgr.ProfileID(name)
+	instanceID := o.idMgr.InstanceID(profileID, name)
+
 	o.mu.Lock()
 	for _, existing := range o.instances {
 		if existing.ProfileName == name && instanceIsActive(existing) {
@@ -48,10 +51,7 @@ func (o *Orchestrator) attachExternalInstance(name string, inst bridge.Instance,
 			return nil, false, fmt.Errorf("instance with name %q already exists", name)
 		}
 	}
-	o.mu.Unlock()
 
-	profileID := o.idMgr.ProfileID(name)
-	instanceID := o.idMgr.InstanceID(profileID, name)
 	inst.ID = instanceID
 	inst.ProfileID = profileID
 	inst.ProfileName = name
@@ -62,8 +62,6 @@ func (o *Orchestrator) attachExternalInstance(name string, inst bridge.Instance,
 		URL:       inst.URL,
 		authToken: authToken,
 	}
-
-	o.mu.Lock()
 	o.instances[instanceID] = internal
 	o.mu.Unlock()
 
