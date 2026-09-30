@@ -28,29 +28,17 @@ func (e *NoOptionMatchError) Error() string {
 }
 
 func FillByNodeID(ctx context.Context, nodeID int64, value string) error {
-	return chromedp.Run(ctx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", map[string]any{"backendNodeId": nodeID}, nil)
-		}),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var result json.RawMessage
-			if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
-				"backendNodeId": nodeID,
-			}, &result); err != nil {
-				return err
-			}
-			var resolved struct {
-				Object struct {
-					ObjectID string `json:"objectId"`
-				} `json:"object"`
-			}
-			if err := json.Unmarshal(result, &resolved); err != nil {
-				return err
-			}
-			// Use the native value setter for the concrete element type to bypass
-			// framework-patched setters (e.g. React's value tracker). Calling the
-			// input setter on a textarea throws with an incompatible receiver.
-			js := `function(v) {
+	objectID, err := ResolveNodeObjectID(ctx, nodeID)
+	if err != nil {
+		return err
+	}
+	if err := focusNode(ctx, nodeID); err != nil {
+		return err
+	}
+	// Use the native value setter for the concrete element type to bypass
+	// framework-patched setters (e.g. React's value tracker). Calling the
+	// input setter on a textarea throws with an incompatible receiver.
+	js := `function(v) {
 				var proto = null;
 				if (this instanceof window.HTMLTextAreaElement) {
 					proto = window.HTMLTextAreaElement.prototype;
@@ -62,13 +50,13 @@ func FillByNodeID(ctx context.Context, nodeID int64, value string) error {
 				this.dispatchEvent(new Event('input', {bubbles: true}));
 				this.dispatchEvent(new Event('change', {bubbles: true}));
 			}`
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-				"functionDeclaration": js,
-				"objectId":            resolved.Object.ObjectID,
-				"arguments":           []map[string]any{{"value": value}},
-			}, nil)
-		}),
-	)
+	return callFunctionOnObject(ctx, objectID, js, []map[string]any{{"value": value}}, nil)
+}
+
+func focusNode(ctx context.Context, nodeID int64) error {
+	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", map[string]any{"backendNodeId": nodeID}, nil)
+	}))
 }
 
 // SelectByNodeID sets the value of a <select> element, with a forgiving
@@ -94,28 +82,16 @@ func FillByNodeID(ctx context.Context, nodeID int64, value string) error {
 // a <select> element; the error enumerates available values + texts to make
 // the failure actionable.
 func SelectByNodeID(ctx context.Context, nodeID int64, value string) error {
-	return chromedp.Run(ctx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", map[string]any{"backendNodeId": nodeID}, nil)
-		}),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var result json.RawMessage
-			if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
-				"backendNodeId": nodeID,
-			}, &result); err != nil {
-				return err
-			}
-			var resolved struct {
-				Object struct {
-					ObjectID string `json:"objectId"`
-				} `json:"object"`
-			}
-			if err := json.Unmarshal(result, &resolved); err != nil {
-				return err
-			}
-			// Return a structured object so the caller can inspect (a) the match
-			// strategy used and (b) the effective option value that was applied.
-			js := `function(v) {
+	objectID, err := ResolveNodeObjectID(ctx, nodeID)
+	if err != nil {
+		return err
+	}
+	if err := focusNode(ctx, nodeID); err != nil {
+		return err
+	}
+	// Return a structured object so the caller can inspect (a) the match
+	// strategy used and (b) the effective option value that was applied.
+	js := `function(v) {
 				var opts = this.options ? Array.from(this.options) : null;
 				if (!opts) {
 					// Not a <select>; preserve legacy behavior.
@@ -165,48 +141,33 @@ func SelectByNodeID(ctx context.Context, nodeID int64, value string) error {
 				this.dispatchEvent(new Event('change', {bubbles: true}));
 				return { ok: true, matchedBy: matchedBy, value: match.value, text: (match.text || "").trim() };
 			}`
-			var callResult json.RawMessage
-			if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-				"functionDeclaration": js,
-				"objectId":            resolved.Object.ObjectID,
-				"arguments":           []map[string]any{{"value": value}},
-				"returnByValue":       true,
-			}, &callResult); err != nil {
-				return err
-			}
-			var cr struct {
-				Result struct {
-					Value json.RawMessage `json:"value"`
-				} `json:"result"`
-			}
-			if err := json.Unmarshal(callResult, &cr); err != nil {
-				return err
-			}
-			var outcome struct {
-				OK        bool   `json:"ok"`
-				Error     string `json:"error"`
-				MatchedBy string `json:"matchedBy"`
-				Available []struct {
-					Value string `json:"value"`
-					Text  string `json:"text"`
-				} `json:"available"`
-			}
-			if err := json.Unmarshal(cr.Result.Value, &outcome); err != nil {
-				// Callers that use this helper on non-JSON-serializable
-				// outcomes (shouldn't happen given the JS above) get the raw
-				// error surfaced instead of a silent success.
-				return fmt.Errorf("parse select result: %w", err)
-			}
-			if !outcome.OK {
-				available := make([]SelectOption, len(outcome.Available))
-				for i, o := range outcome.Available {
-					available[i] = SelectOption{Value: o.Value, Text: o.Text}
-				}
-				return &NoOptionMatchError{Value: value, Available: available}
-			}
-			return nil
-		}),
-	)
+	var raw json.RawMessage
+	if err := callFunctionOnObject(ctx, objectID, js, []map[string]any{{"value": value}}, &raw); err != nil {
+		return err
+	}
+	var outcome struct {
+		OK        bool   `json:"ok"`
+		Error     string `json:"error"`
+		MatchedBy string `json:"matchedBy"`
+		Available []struct {
+			Value string `json:"value"`
+			Text  string `json:"text"`
+		} `json:"available"`
+	}
+	if err := json.Unmarshal(raw, &outcome); err != nil {
+		// Callers that use this helper on non-JSON-serializable
+		// outcomes (shouldn't happen given the JS above) get the raw
+		// error surfaced instead of a silent success.
+		return fmt.Errorf("parse select result: %w", err)
+	}
+	if !outcome.OK {
+		available := make([]SelectOption, len(outcome.Available))
+		for i, o := range outcome.Available {
+			available[i] = SelectOption{Value: o.Value, Text: o.Text}
+		}
+		return &NoOptionMatchError{Value: value, Available: available}
+	}
+	return nil
 }
 
 // ReadInputValue reads back the effective value of an input element. For React
@@ -214,55 +175,22 @@ func SelectByNodeID(ctx context.Context, nodeID int64, value string) error {
 // React state) rather than the DOM value, since the DOM value can be stale.
 // Returns the effective value the framework considers current.
 func ReadInputValue(ctx context.Context, nodeID int64) (string, error) {
-	var value string
-	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		var result json.RawMessage
-		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
-			"backendNodeId": nodeID,
-		}, &result); err != nil {
-			return err
-		}
-		var resolved struct {
-			Object struct {
-				ObjectID string `json:"objectId"`
-			} `json:"object"`
-		}
-		if err := json.Unmarshal(result, &resolved); err != nil {
-			return err
-		}
-		js := `function() {
-			var el = this;
-			var fiberKey = Object.keys(el).find(function(k) {
-				return k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$');
-			});
-			if (fiberKey) {
-				var fiber = el[fiberKey];
-				var props = fiber && fiber.memoizedProps;
-				if (props && 'value' in props) {
-					return props.value || "";
-				}
+	js := `function() {
+		var el = this;
+		var fiberKey = Object.keys(el).find(function(k) {
+			return k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$');
+		});
+		if (fiberKey) {
+			var fiber = el[fiberKey];
+			var props = fiber && fiber.memoizedProps;
+			if (props && 'value' in props) {
+				return props.value || "";
 			}
-			return el.value || "";
-		}`
-		var callResult json.RawMessage
-		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": js,
-			"objectId":            resolved.Object.ObjectID,
-			"returnByValue":       true,
-		}, &callResult); err != nil {
-			return err
 		}
-		var cr struct {
-			Result struct {
-				Value string `json:"value"`
-			} `json:"result"`
-		}
-		if err := json.Unmarshal(callResult, &cr); err != nil {
-			return err
-		}
-		value = cr.Result.Value
-		return nil
-	}))
+		return el.value || "";
+	}`
+	var value string
+	err := CallFunctionOnNode(ctx, nodeID, js, nil, &value)
 	return value, err
 }
 

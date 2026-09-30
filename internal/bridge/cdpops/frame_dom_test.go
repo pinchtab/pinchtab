@@ -2,6 +2,7 @@ package cdpops
 
 import (
 	"context"
+	"encoding/json"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -132,4 +133,31 @@ func describeExpr(expr ast.Expr) string {
 		return describeExpr(e.X) + "." + e.Sel.Name
 	}
 	return "a computed expression"
+}
+
+func TestADetachedNodeIsRefusedTheSameWayByEveryNodeAction(t *testing.T) {
+	orig := resolveNodeAction
+	t.Cleanup(func() { resolveNodeAction = orig })
+	resolveNodeAction = func(context.Context, int64) (json.RawMessage, error) {
+		return json.RawMessage(`{"object":{}}`), nil
+	}
+
+	const want = "element not found in DOM (backendNodeId=42)"
+	actions := map[string]func(context.Context) error{
+		"fill":     func(ctx context.Context) error { return FillByNodeID(ctx, 42, "v") },
+		"select":   func(ctx context.Context) error { return SelectByNodeID(ctx, 42, "v") },
+		"js click": func(ctx context.Context) error { return JSClickByBackendNode(ctx, 42) },
+		"read value": func(ctx context.Context) error {
+			_, err := ReadInputValue(ctx, 42)
+			return err
+		},
+	}
+	for name, action := range actions {
+		t.Run(name, func(t *testing.T) {
+			err := action(context.Background())
+			if err == nil || err.Error() != want {
+				t.Fatalf("%s on a detached node = %v, want %q", name, err, want)
+			}
+		})
+	}
 }

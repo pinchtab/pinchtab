@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/chromedp/chromedp"
 
@@ -41,65 +42,84 @@ func FrameExecutionContextID(ctx context.Context, frameID string) (int64, error)
 	return cdptk.IsolatedContextID(ctx, frameID)
 }
 
+var resolveNodeAction = func(ctx context.Context, backendNodeID int64) (json.RawMessage, error) {
+	var resolved json.RawMessage
+	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
+			"backendNodeId": backendNodeID,
+		}, &resolved)
+	}))
+	return resolved, err
+}
+
+// ResolveNodeObjectID converts a backend node id to a main-world JS object handle,
+// refusing a node that no longer resolves to an object.
+func ResolveNodeObjectID(ctx context.Context, backendNodeID int64) (string, error) {
+	raw, err := resolveNodeAction(ctx, backendNodeID)
+	if err != nil {
+		return "", fmt.Errorf("resolve node: %w", err)
+	}
+	var resolved struct {
+		Object struct {
+			ObjectID string `json:"objectId"`
+		} `json:"object"`
+	}
+	if err := json.Unmarshal(raw, &resolved); err != nil {
+		return "", fmt.Errorf("parse resolved node: %w", err)
+	}
+	if strings.TrimSpace(resolved.Object.ObjectID) == "" {
+		return "", fmt.Errorf("element not found in DOM (backendNodeId=%d)", backendNodeID)
+	}
+	return resolved.Object.ObjectID, nil
+}
+
 // CallFunctionOnNode resolves a backend node to a JS object and invokes the
 // given function declaration on it, decoding the (by-value) result into result
 // when non-nil.
 func CallFunctionOnNode(ctx context.Context, backendNodeID int64, functionDecl string, args []map[string]any, result any) error {
-	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		var resolveResult json.RawMessage
-		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
-			"backendNodeId": backendNodeID,
-		}, &resolveResult); err != nil {
-			return fmt.Errorf("resolve node: %w", err)
-		}
+	objectID, err := ResolveNodeObjectID(ctx, backendNodeID)
+	if err != nil {
+		return err
+	}
+	return callFunctionOnObject(ctx, objectID, functionDecl, args, result)
+}
 
-		var resolved struct {
-			Object struct {
-				ObjectID string `json:"objectId"`
-			} `json:"object"`
-		}
-		if err := json.Unmarshal(resolveResult, &resolved); err != nil {
-			return fmt.Errorf("parse resolved node: %w", err)
-		}
-		if resolved.Object.ObjectID == "" {
-			return fmt.Errorf("element not found in DOM (backendNodeId=%d)", backendNodeID)
-		}
+func callFunctionOnObject(ctx context.Context, objectID, functionDecl string, args []map[string]any, result any) error {
+	params := map[string]any{
+		"functionDeclaration": functionDecl,
+		"objectId":            objectID,
+		"returnByValue":       true,
+	}
+	if len(args) > 0 {
+		params["arguments"] = args
+	}
 
-		params := map[string]any{
-			"functionDeclaration": functionDecl,
-			"objectId":            resolved.Object.ObjectID,
-			"returnByValue":       true,
-		}
-		if len(args) > 0 {
-			params["arguments"] = args
-		}
+	var callResult json.RawMessage
+	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", params, &callResult)
+	})); err != nil {
+		return fmt.Errorf("call function on node: %w", err)
+	}
 
-		var callResult json.RawMessage
-		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", params, &callResult); err != nil {
-			return fmt.Errorf("call function on node: %w", err)
-		}
+	var callParsed struct {
+		Result struct {
+			Value json.RawMessage `json:"value"`
+		} `json:"result"`
+		ExceptionDetails *struct {
+			Text string `json:"text"`
+		} `json:"exceptionDetails,omitempty"`
+	}
+	if err := json.Unmarshal(callResult, &callParsed); err != nil {
+		return fmt.Errorf("parse call result: %w", err)
+	}
+	if callParsed.ExceptionDetails != nil && callParsed.ExceptionDetails.Text != "" {
+		return fmt.Errorf("call function on node: %s", callParsed.ExceptionDetails.Text)
+	}
 
-		var callParsed struct {
-			Result struct {
-				Type  string          `json:"type"`
-				Value json.RawMessage `json:"value"`
-			} `json:"result"`
-			ExceptionDetails *struct {
-				Text string `json:"text"`
-			} `json:"exceptionDetails,omitempty"`
-		}
-		if err := json.Unmarshal(callResult, &callParsed); err != nil {
-			return fmt.Errorf("parse call result: %w", err)
-		}
-		if callParsed.ExceptionDetails != nil && callParsed.ExceptionDetails.Text != "" {
-			return fmt.Errorf("call function on node: %s", callParsed.ExceptionDetails.Text)
-		}
-
-		if result == nil || len(callParsed.Result.Value) == 0 {
-			return nil
-		}
-		return json.Unmarshal(callParsed.Result.Value, result)
-	}))
+	if result == nil || len(callParsed.Result.Value) == 0 {
+		return nil
+	}
+	return json.Unmarshal(callParsed.Result.Value, result)
 }
 
 // DescribeNode fetches DOM.describeNode metadata for a backend node, falling

@@ -181,13 +181,11 @@ const moduleGoFileFloor = 400
 // knew only the string literal would read as a whole-module guard while every
 // typed call site went unchecked.
 var mainWorldResolvers = map[string]string{
-	"internal/bridge/action_form.go":        "form fill operates on an already-chosen field",
-	"internal/bridge/action_pointer.go":     "flyout-item click acts on an already-chosen node",
-	"internal/bridge/semantic_metadata.go":  "metadata enrichment reads an already-chosen node",
-	"internal/bridge/tab_auto_switch.go":    "tab switching acts on an already-chosen target",
-	"internal/bridge/cdpops/element_ops.go": "element ops act on an already-chosen node",
-	"internal/bridge/cdpops/frame_dom.go":   "callFunctionOn helper for an already-chosen node",
-	"internal/bridge/cdpops/pointer.go":     "pointer actions act on an already-chosen node",
+	"internal/bridge/action_form.go":       "form fill operates on an already-chosen field",
+	"internal/bridge/action_pointer.go":    "flyout-item click acts on an already-chosen node",
+	"internal/bridge/semantic_metadata.go": "metadata enrichment reads an already-chosen node",
+	"internal/bridge/tab_auto_switch.go":   "tab switching acts on an already-chosen target",
+	"internal/bridge/cdpops/frame_dom.go":  "ResolveNodeObjectID serves cdpops element and pointer ops on an already-chosen node",
 }
 
 // resolveNodeSpellings pairs each way of issuing DOM.resolveNode with the token

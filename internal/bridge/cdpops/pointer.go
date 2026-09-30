@@ -2,7 +2,6 @@ package cdpops
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -206,11 +205,6 @@ func dispatchSyntheticMouseMove(ctx context.Context, x, y float64, button input.
 }
 
 func dispatchSyntheticMouseMoveOnNode(ctx context.Context, nodeID int64, button input.MouseButton, buttons int64) error {
-	objectID, err := resolveBackendNodeObjectID(ctx, nodeID)
-	if err != nil {
-		return err
-	}
-
 	const fn = `function(button, buttons) {
 		var r = this.getBoundingClientRect();
 		var cx = r.left + r.width / 2;
@@ -225,16 +219,10 @@ func dispatchSyntheticMouseMoveOnNode(ctx context.Context, nodeID int64, button 
 		this.dispatchEvent(new MouseEvent('mousemove', init));
 	}`
 
-	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": fn,
-			"objectId":            objectID,
-			"arguments": []map[string]any{
-				{"value": mouseButtonCode(button)},
-				{"value": buttons},
-			},
-		}, nil)
-	}))
+	return CallFunctionOnNode(ctx, nodeID, fn, []map[string]any{
+		{"value": mouseButtonCode(button)},
+		{"value": buttons},
+	}, nil)
 }
 
 // mouseButtonCode is MouseEvent.button for the synthetic DOM fallback, read off the table.
@@ -359,18 +347,8 @@ func ClickByNodeID(ctx context.Context, nodeID int64) error {
 }
 
 func jsClickIfLink(ctx context.Context, nodeID int64) error {
-	var resolved json.RawMessage
-	if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
-		"backendNodeId": nodeID,
-	}, &resolved); err != nil {
-		return nil
-	}
-	var obj struct {
-		Object struct {
-			ObjectID string `json:"objectId"`
-		} `json:"object"`
-	}
-	if json.Unmarshal(resolved, &obj) != nil || obj.Object.ObjectID == "" {
+	objectID, err := ResolveNodeObjectID(ctx, nodeID)
+	if err != nil {
 		return nil
 	}
 
@@ -384,11 +362,7 @@ func jsClickIfLink(ctx context.Context, nodeID int64) error {
 			el = el.parentElement;
 		}
 	}`
-	err := chromedp.FromContext(ctx).Target.Execute(ctx,
-		"Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": js,
-			"objectId":            obj.Object.ObjectID,
-		}, nil)
+	err = callFunctionOnObject(ctx, objectID, js, nil, nil)
 	if linkContextGone(err) {
 		// The trusted press already followed the link and the old document's
 		// context is gone: the click landed, so there is nothing left to do.
@@ -606,65 +580,25 @@ const jsDoubleClickFn = `function() {
 	el.dispatchEvent(new MouseEvent('dblclick', Object.assign({}, base, {detail: 2})));
 }`
 
-func resolveBackendNodeObjectID(ctx context.Context, backendNodeID int64) (string, error) {
-	var resolved json.RawMessage
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
-			"backendNodeId": backendNodeID,
-		}, &resolved)
-	})); err != nil {
-		return "", fmt.Errorf("DOM.resolveNode: %w", err)
-	}
-	var out struct {
-		Object struct {
-			ObjectID string `json:"objectId"`
-		} `json:"object"`
-	}
-	if err := json.Unmarshal(resolved, &out); err != nil {
-		return "", err
-	}
-	if strings.TrimSpace(out.Object.ObjectID) == "" {
-		return "", fmt.Errorf("element not found in DOM (backendNodeId=%d)", backendNodeID)
-	}
-	return out.Object.ObjectID, nil
-}
-
-// callFunctionOnBackendNode resolves the backend node to a Runtime object and
-// invokes fn against it via Runtime.callFunctionOn. The JS click variants share
-// this resolve-then-invoke wrapper and differ only in the fn they pass, so a
-// future fix to the JS fallback path lands here once.
-func callFunctionOnBackendNode(ctx context.Context, backendNodeID int64, fn string) error {
-	objectID, err := resolveBackendNodeObjectID(ctx, backendNodeID)
-	if err != nil {
-		return err
-	}
-	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": fn,
-			"objectId":            objectID,
-		}, nil)
-	}))
-}
-
 // JSClickByBackendNode performs a click via Runtime.callFunctionOn rather
 // than synthesized CDP Input.dispatchMouseEvent. Headless Chromium's CDP
 // path can stall ~5s waiting on the renderer ack chain for press/release;
 // the JS path runs the same handler chain (mousedown, mouseup, click) plus
 // the browser's default action (el.click()) without the ack tax.
 func JSClickByBackendNode(ctx context.Context, backendNodeID int64) error {
-	return callFunctionOnBackendNode(ctx, backendNodeID, jsClickFn)
+	return CallFunctionOnNode(ctx, backendNodeID, jsClickFn, nil, nil)
 }
 
 // JSDispatchClickByBackendNode dispatches synthetic pointer/mouse events on the
 // target element without invoking element.click(). This bypasses occlusion while
 // staying closer to the browser event sequence than a DOM click.
 func JSDispatchClickByBackendNode(ctx context.Context, backendNodeID int64) error {
-	return callFunctionOnBackendNode(ctx, backendNodeID, jsDispatchClickFn)
+	return CallFunctionOnNode(ctx, backendNodeID, jsDispatchClickFn, nil, nil)
 }
 
 func JSDoubleClickByBackendNode(ctx context.Context, backendNodeID int64) error {
 	if _, _, err := PointerPointForNode(ctx, backendNodeID, true); err != nil {
 		return err
 	}
-	return callFunctionOnBackendNode(ctx, backendNodeID, jsDoubleClickFn)
+	return CallFunctionOnNode(ctx, backendNodeID, jsDoubleClickFn, nil, nil)
 }
