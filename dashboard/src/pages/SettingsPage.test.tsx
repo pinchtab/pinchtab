@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import SettingsPage from "./SettingsPage";
 import { useAppStore } from "../stores/useAppStore";
-import { defaultBackendConfig, type BackendConfigState } from "../types";
+import type { BackendConfig, BackendConfigState } from "../types";
 
 vi.mock("../services/api", () => ({
   fetchBackendConfig: vi.fn(),
@@ -22,9 +22,44 @@ function renderSettingsPage() {
   );
 }
 
+const backendConfig = {
+  server: { port: "9867", bind: "127.0.0.1", token: "", stateDir: "" },
+  browser: {
+    version: "",
+    binary: "",
+    extraFlags: "",
+    cloak: { platform: "", disableDefaultStealthArgs: true },
+    extensionPaths: [],
+  },
+  browsers: { default: "chrome" },
+  instanceDefaults: { mode: "headless", maxTabs: 20, stealthLevel: "light" },
+  security: {
+    allowedDomains: ["127.0.0.1", "localhost", "::1"],
+    trustedProxyCIDRs: [],
+    trustedResolveCIDRs: [],
+    attach: { enabled: false, allowHosts: [], allowSchemes: ["ws", "wss"] },
+    idpi: { enabled: true, strictMode: true, customPatterns: [] },
+  },
+  profiles: { baseDir: "", defaultProfile: "default" },
+  multiInstance: {
+    strategy: "always-on",
+    allocationPolicy: "fcfs",
+    restart: {},
+  },
+  timeouts: {
+    actionSec: 30,
+    navigateSec: 60,
+    shutdownSec: 10,
+    waitNavMs: 1000,
+  },
+  observability: { activity: { enabled: true, events: {} } },
+  sessions: { dashboard: { persist: true } },
+  autoSolver: { enabled: false, solvers: ["cloudflare", "semantic"] },
+} as BackendConfig;
+
 function makeConfigState(): BackendConfigState {
   return {
-    config: structuredClone(defaultBackendConfig),
+    config: structuredClone(backendConfig),
     configPath: "/tmp/config.json",
     tokenConfigured: true,
     restartRequired: false,

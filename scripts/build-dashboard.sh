@@ -58,7 +58,7 @@ echo "🔄 Generating TypeScript types..."
 go tool -modfile=../tools/go.mod tygo generate
 
 # Normalize tygo output with prettier so generation doesn't dirty git
-if [ -f "src/generated/types.ts" ]; then
+if [ -d "src/generated" ]; then
   bun run types:format
 fi
 

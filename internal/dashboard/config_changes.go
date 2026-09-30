@@ -37,6 +37,8 @@ func sensitiveConfigChanges(current, next *config.FileConfig) sensitiveConfigCha
 	if current == nil || next == nil {
 		return out
 	}
+	effectiveCurrent, effectiveNext := config.EffectiveFileConfig(*current), config.EffectiveFileConfig(*next)
+	current, next = &effectiveCurrent, &effectiveNext
 	if !sameConfigSection(current.Security, next.Security) {
 		out.requiresElevation = true
 		out.names = append(out.names, "security")
@@ -85,29 +87,30 @@ func changedTargetProxyNames(current, next config.BrowserTargetsConfig) []string
 
 func (c *ConfigAPI) restartReasonsFor(next config.FileConfig) []string {
 	reasons := make([]string, 0, 8)
+	boot, next := config.EffectiveFileConfig(c.boot), config.EffectiveFileConfig(next)
 
-	if !sameConfigSection(c.boot.Security, next.Security) {
+	if !sameConfigSection(boot.Security, next.Security) {
 		reasons = append(reasons, "Security policy")
 	}
-	if c.boot.Server.Port != next.Server.Port || c.boot.Server.Bind != next.Server.Bind {
+	if boot.Server.Port != next.Server.Port || boot.Server.Bind != next.Server.Bind {
 		reasons = append(reasons, "Server address")
 	}
-	if c.boot.Server.StateDir != next.Server.StateDir {
+	if boot.Server.StateDir != next.Server.StateDir {
 		reasons = append(reasons, "Server state directory (server.stateDir)")
 	}
-	if effectiveProfilesDir(c.boot) != effectiveProfilesDir(next) {
+	if effectiveProfilesDir(boot) != effectiveProfilesDir(next) {
 		reasons = append(reasons, "Profiles directory")
 	}
-	if c.boot.MultiInstance.Strategy != next.MultiInstance.Strategy {
+	if boot.MultiInstance.Strategy != next.MultiInstance.Strategy {
 		reasons = append(reasons, "Routing strategy")
 	}
-	if c.boot.InstanceDefaults.StealthLevel != next.InstanceDefaults.StealthLevel {
+	if boot.InstanceDefaults.StealthLevel != next.InstanceDefaults.StealthLevel {
 		reasons = append(reasons, "Stealth level")
 	}
-	if !c.boot.Sessions.AgentEnabled() && next.Sessions.AgentEnabled() {
+	if !boot.Sessions.AgentEnabled() && next.Sessions.AgentEnabled() {
 		reasons = append(reasons, "Agent sessions")
 	}
-	if !sameConfigSection(c.boot.MultiInstance.Restart, next.MultiInstance.Restart) {
+	if !sameConfigSection(boot.MultiInstance.Restart, next.MultiInstance.Restart) {
 		reasons = append(reasons, "Restart policy")
 	}
 

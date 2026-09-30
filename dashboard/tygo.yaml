@@ -4,3 +4,8 @@ packages:
     type_mappings:
       time.Time: "string"
       "map[string]interface{}": "Record<string, unknown>"
+  - path: "github.com/pinchtab/pinchtab/internal/config"
+    output_path: "src/generated/config.ts"
+    include_files:
+      - "config_types.go"
+      - "browser_proxy.go"

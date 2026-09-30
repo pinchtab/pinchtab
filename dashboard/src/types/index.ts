@@ -12,6 +12,7 @@ import type {
   ScreencastSettings,
   Settings,
 } from "../generated/types";
+import type { FileConfig } from "../generated/config";
 
 export type {
   Profile,
@@ -42,190 +43,13 @@ export interface MonitoringSnapshot {
   serverMetrics: MonitoringServerMetrics;
 }
 
-export interface BackendServerConfig {
-  port: string;
-  bind: string;
-  token: string;
-  stateDir: string;
-  trustProxyHeaders: boolean;
-  cookieSecure?: boolean;
-}
+type Settled<T> = T extends readonly unknown[]
+  ? T
+  : T extends object
+    ? { [K in keyof T]-?: Settled<T[K]> }
+    : T;
 
-export interface BackendDashboardSessionConfig {
-  persist: boolean;
-  idleTimeoutSec: number;
-  maxLifetimeSec: number;
-  elevationWindowSec: number;
-  persistElevationAcrossRestart: boolean;
-  requireElevation: boolean;
-}
-
-export interface BackendSessionsConfig {
-  dashboard: BackendDashboardSessionConfig;
-}
-
-export interface BackendActivityEventsConfig {
-  dashboard: boolean;
-  server: boolean;
-  bridge: boolean;
-  orchestrator: boolean;
-  scheduler: boolean;
-  mcp: boolean;
-  other: boolean;
-}
-
-export interface BackendActivityConfig {
-  enabled: boolean;
-  sessionIdleSec: number;
-  retentionDays: number;
-  stateDir: string;
-  events: BackendActivityEventsConfig;
-}
-
-export interface BackendObservabilityConfig {
-  activity: BackendActivityConfig;
-}
-
-export type BackendBrowserProvider = "chrome" | "cloak" | "ghost-chrome";
-
-export interface BackendCloakBrowserConfig {
-  fingerprintSeed: string;
-  platform: "" | "windows" | "macos" | "linux";
-  locale: string;
-  timezone: string;
-  webrtcIP: string;
-  fontsDir: string;
-  storageQuotaMB?: number;
-  disableDefaultStealthArgs?: boolean;
-}
-
-export interface BackendBrowserConfig {
-  provider: BackendBrowserProvider;
-  version: string;
-  binary: string;
-  remoteDebuggingPort?: number;
-  extraFlags: string;
-  cloak: BackendCloakBrowserConfig;
-  extensionPaths: string[];
-}
-
-export interface BackendTabPolicy {
-  eviction?: "reject" | "close_oldest" | "close_lru";
-  lifecycle?: "keep" | "close_idle" | "freeze_idle";
-  closeDelaySec?: number;
-  restore?: boolean;
-}
-
-export interface BackendInstanceDefaultsConfig {
-  mode: "headless" | "headed";
-  noRestore: boolean;
-  timezone: string;
-  blockImages: boolean;
-  blockMedia: boolean;
-  blockAds: boolean;
-  maxTabs: number;
-  maxParallelTabs: number;
-  userAgent: string;
-  noAnimations: boolean;
-  stealthLevel: "light" | "medium" | "full";
-  tabEvictionPolicy: "reject" | "close_oldest" | "close_lru";
-  tabPolicy?: BackendTabPolicy;
-}
-
-export interface BackendSecurityConfig {
-  allowEvaluate: boolean;
-  allowMacro: boolean;
-  allowScreencast: boolean;
-  allowDownload: boolean;
-  allowCookies: boolean;
-  allowUpload: boolean;
-  allowNetworkIntercept: boolean;
-  allowFileScheme: boolean;
-  allowedDomains: string[];
-  trustedProxyCIDRs: string[];
-  trustedResolveCIDRs: string[];
-  attach: BackendAttachConfig;
-  idpi: BackendIDPIConfig;
-}
-
-export interface BackendProfilesConfig {
-  baseDir: string;
-  defaultProfile: string;
-}
-
-export interface BackendMultiInstanceConfig {
-  strategy:
-    | "simple"
-    | "explicit"
-    | "simple-autorestart"
-    | "always-on"
-    | "no-instance";
-  allocationPolicy: "fcfs" | "round_robin" | "random";
-  instancePortStart: number;
-  instancePortEnd: number;
-  restart: BackendMultiInstanceRestartConfig;
-}
-
-export interface BackendMultiInstanceRestartConfig {
-  maxRestarts: number;
-  initBackoffSec: number;
-  maxBackoffSec: number;
-  stableAfterSec: number;
-}
-
-export interface BackendAttachConfig {
-  enabled: boolean;
-  allowHosts: string[];
-  allowSchemes: string[];
-}
-
-export interface BackendIDPIConfig {
-  enabled: boolean;
-  strictMode: boolean;
-  scanContent: boolean;
-  wrapContent: boolean;
-  customPatterns: string[];
-}
-
-export interface BackendTimeoutsConfig {
-  actionSec: number;
-  navigateSec: number;
-  shutdownSec: number;
-  waitNavMs: number;
-}
-
-export interface BackendAutoSolverConfig {
-  enabled: boolean;
-  autoTrigger: boolean;
-  triggerOnNavigate: boolean;
-  triggerOnAction: boolean;
-  maxAttempts: number;
-  solverTimeoutSec: number;
-  retryBaseDelayMs: number;
-  retryMaxDelayMs: number;
-  solvers: string[];
-  llmProvider: string;
-  llmFallback: boolean;
-}
-
-export interface BackendBrowsersConfig {
-  default?: BackendBrowserProvider;
-  available?: string[];
-}
-
-export interface BackendConfig {
-  server: BackendServerConfig;
-  browser: BackendBrowserConfig;
-  browsers?: BackendBrowsersConfig;
-  instanceDefaults: BackendInstanceDefaultsConfig;
-  security: BackendSecurityConfig;
-  profiles: BackendProfilesConfig;
-  multiInstance: BackendMultiInstanceConfig;
-  timeouts: BackendTimeoutsConfig;
-  observability: BackendObservabilityConfig;
-  sessions: BackendSessionsConfig;
-  autoSolver: BackendAutoSolverConfig;
-}
+export type BackendConfig = Settled<FileConfig>;
 
 export interface BackendConfigState {
   config: BackendConfig;
@@ -235,251 +59,33 @@ export interface BackendConfigState {
   restartReasons: string[];
 }
 
-export const defaultBackendConfig: BackendConfig = {
-  server: {
-    port: "9867",
-    bind: "127.0.0.1",
-    token: "",
-    stateDir: "",
-    trustProxyHeaders: false,
-    cookieSecure: undefined,
-  },
-  browser: {
-    provider: "chrome",
-    version: "144.0.7559.133",
-    binary: "",
-    remoteDebuggingPort: undefined,
-    extraFlags: "",
-    cloak: {
-      fingerprintSeed: "",
-      platform: "",
-      locale: "",
-      timezone: "",
-      webrtcIP: "",
-      fontsDir: "",
-      storageQuotaMB: undefined,
-      disableDefaultStealthArgs: true,
-    },
-    extensionPaths: [],
-  },
-  browsers: {
-    default: "chrome",
-  },
-  instanceDefaults: {
-    mode: "headless",
-    noRestore: false,
-    timezone: "",
-    blockImages: false,
-    blockMedia: false,
-    blockAds: false,
-    maxTabs: 20,
-    maxParallelTabs: 0,
-    userAgent: "",
-    noAnimations: false,
-    stealthLevel: "light",
-    tabEvictionPolicy: "close_lru",
-    tabPolicy: {
-      lifecycle: "keep",
-      closeDelaySec: 300,
-      restore: false,
-    },
-  },
-  security: {
-    allowEvaluate: false,
-    allowMacro: false,
-    allowScreencast: false,
-    allowDownload: false,
-    allowCookies: false,
-    allowUpload: false,
-    allowNetworkIntercept: false,
-    allowFileScheme: false,
-    allowedDomains: ["127.0.0.1", "localhost", "::1"],
-    trustedProxyCIDRs: [],
-    trustedResolveCIDRs: [],
-    attach: {
-      enabled: false,
-      allowHosts: ["127.0.0.1", "localhost", "::1"],
-      allowSchemes: ["ws", "wss"],
-    },
-    idpi: {
-      enabled: true,
-      strictMode: true,
-      scanContent: true,
-      wrapContent: true,
-      customPatterns: [],
-    },
-  },
-  profiles: {
-    baseDir: "",
-    defaultProfile: "default",
-  },
-  multiInstance: {
-    strategy: "always-on",
-    allocationPolicy: "fcfs",
-    instancePortStart: 9868,
-    instancePortEnd: 9968,
-    restart: {
-      maxRestarts: 20,
-      initBackoffSec: 2,
-      maxBackoffSec: 60,
-      stableAfterSec: 300,
-    },
-  },
-  timeouts: {
-    actionSec: 30,
-    navigateSec: 60,
-    shutdownSec: 10,
-    waitNavMs: 1000,
-  },
-  observability: {
-    activity: {
-      enabled: true,
-      sessionIdleSec: 1800,
-      retentionDays: 30,
-      stateDir: "",
-      events: {
-        dashboard: false,
-        server: false,
-        bridge: false,
-        orchestrator: false,
-        scheduler: false,
-        mcp: false,
-        other: false,
-      },
-    },
-  },
-  sessions: {
-    dashboard: {
-      persist: true,
-      idleTimeoutSec: 7 * 24 * 60 * 60,
-      maxLifetimeSec: 7 * 24 * 60 * 60,
-      elevationWindowSec: 15 * 60,
-      persistElevationAcrossRestart: false,
-      requireElevation: false,
-    },
-  },
-  autoSolver: {
-    enabled: false,
-    autoTrigger: true,
-    triggerOnNavigate: true,
-    triggerOnAction: true,
-    maxAttempts: 8,
-    solverTimeoutSec: 30,
-    retryBaseDelayMs: 500,
-    retryMaxDelayMs: 10000,
-    solvers: ["cloudflare", "semantic"],
-    llmProvider: "",
-    llmFallback: false,
-  },
-};
-
-export function normalizeBackendConfig(
-  input?: Partial<BackendConfig> | null,
-): BackendConfig {
+export function normalizeBackendConfigState(
+  input: BackendConfigState,
+): BackendConfigState {
+  const { browser, security, autoSolver } = input.config;
   return {
-    server: {
-      ...defaultBackendConfig.server,
-      ...(input?.server ?? {}),
-    },
-    browser: {
-      ...defaultBackendConfig.browser,
-      ...(input?.browser ?? {}),
-      provider:
-        input?.browser?.provider === "cloak"
-          ? "cloak"
-          : input?.browser?.provider === "ghost-chrome"
-            ? "ghost-chrome"
-            : "chrome",
-      cloak: {
-        ...defaultBackendConfig.browser.cloak,
-        ...(input?.browser?.cloak ?? {}),
-      },
-      extensionPaths:
-        input?.browser?.extensionPaths ??
-        defaultBackendConfig.browser.extensionPaths,
-    },
-    browsers: {
-      ...defaultBackendConfig.browsers,
-      ...(input?.browsers ?? {}),
-    },
-    instanceDefaults: {
-      ...defaultBackendConfig.instanceDefaults,
-      ...(input?.instanceDefaults ?? {}),
-    },
-    security: {
-      ...defaultBackendConfig.security,
-      ...(input?.security ?? {}),
-      allowedDomains:
-        input?.security?.allowedDomains ??
-        defaultBackendConfig.security.allowedDomains,
-      attach: {
-        ...defaultBackendConfig.security.attach,
-        ...(input?.security?.attach ?? {}),
-        allowHosts:
-          input?.security?.attach?.allowHosts ??
-          defaultBackendConfig.security.attach.allowHosts,
-        allowSchemes:
-          input?.security?.attach?.allowSchemes ??
-          defaultBackendConfig.security.attach.allowSchemes,
-      },
-      idpi: {
-        ...defaultBackendConfig.security.idpi,
-        ...(input?.security?.idpi ?? {}),
-        customPatterns:
-          input?.security?.idpi?.customPatterns ??
-          defaultBackendConfig.security.idpi.customPatterns,
-      },
-    },
-    profiles: {
-      ...defaultBackendConfig.profiles,
-      ...(input?.profiles ?? {}),
-    },
-    multiInstance: {
-      ...defaultBackendConfig.multiInstance,
-      ...(input?.multiInstance ?? {}),
-    },
-    timeouts: {
-      ...defaultBackendConfig.timeouts,
-      ...(input?.timeouts ?? {}),
-    },
-    observability: {
-      ...defaultBackendConfig.observability,
-      ...(input?.observability ?? {}),
-      activity: {
-        ...defaultBackendConfig.observability.activity,
-        ...(input?.observability?.activity ?? {}),
-        events: {
-          ...defaultBackendConfig.observability.activity.events,
-          ...(input?.observability?.activity?.events ?? {}),
+    ...input,
+    restartReasons: input.restartReasons ?? [],
+    config: {
+      ...input.config,
+      browser: { ...browser, extensionPaths: browser.extensionPaths ?? [] },
+      security: {
+        ...security,
+        allowedDomains: security.allowedDomains ?? [],
+        trustedProxyCIDRs: security.trustedProxyCIDRs ?? [],
+        trustedResolveCIDRs: security.trustedResolveCIDRs ?? [],
+        attach: {
+          ...security.attach,
+          allowHosts: security.attach.allowHosts ?? [],
+          allowSchemes: security.attach.allowSchemes ?? [],
+        },
+        idpi: {
+          ...security.idpi,
+          customPatterns: security.idpi.customPatterns ?? [],
         },
       },
+      autoSolver: { ...autoSolver, solvers: autoSolver.solvers ?? [] },
     },
-    sessions: {
-      ...defaultBackendConfig.sessions,
-      ...(input?.sessions ?? {}),
-      dashboard: {
-        ...defaultBackendConfig.sessions.dashboard,
-        ...(input?.sessions?.dashboard ?? {}),
-      },
-    },
-    autoSolver: {
-      ...defaultBackendConfig.autoSolver,
-      ...(input?.autoSolver ?? {}),
-      solvers:
-        input?.autoSolver?.solvers ?? defaultBackendConfig.autoSolver.solvers,
-    },
-  };
-}
-
-export function normalizeBackendConfigState(
-  input: Partial<BackendConfigState>,
-): BackendConfigState {
-  return {
-    config: normalizeBackendConfig(input.config),
-    configPath: input.configPath ?? "",
-    tokenConfigured: input.tokenConfigured ?? false,
-    restartRequired: input.restartRequired ?? false,
-    restartReasons: input.restartReasons ?? [],
   };
 }
 

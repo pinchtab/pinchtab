@@ -1,8 +1,4 @@
-import type {
-  BackendBrowserProvider,
-  BackendCloakBrowserConfig,
-  BackendConfig,
-} from "../../types";
+import type { BackendConfig } from "../../types";
 import type { UpdateBackendSection } from "./settingsShared";
 import { csvToList, fieldClass, listToCsv } from "./settingsShared";
 import { SectionCard, SettingRow } from "./SettingsSharedComponents";
@@ -17,9 +13,8 @@ export function BrowserSettingsSection({
   updateBackendSection,
 }: BrowserSettingsSectionProps) {
   const cloak = backendConfig.browser.cloak;
-  const currentProvider: BackendBrowserProvider =
-    backendConfig.browsers?.default ?? "chrome";
-  const updateCloak = (patch: Partial<BackendCloakBrowserConfig>) =>
+  const currentProvider = backendConfig.browsers.default || "chrome";
+  const updateCloak = (patch: Partial<typeof cloak>) =>
     updateBackendSection("browser", {
       cloak: {
         ...cloak,
@@ -40,7 +35,7 @@ export function BrowserSettingsSection({
           value={currentProvider}
           onChange={(e) =>
             updateBackendSection("browsers", {
-              default: e.target.value as BackendBrowserProvider,
+              default: e.target.value,
             })
           }
           className={fieldClass}
@@ -98,8 +93,7 @@ export function BrowserSettingsSection({
               value={cloak.platform}
               onChange={(e) =>
                 updateCloak({
-                  platform: e.target
-                    .value as BackendCloakBrowserConfig["platform"],
+                  platform: e.target.value,
                 })
               }
               className={fieldClass}

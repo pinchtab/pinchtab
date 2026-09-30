@@ -1,9 +1,4 @@
-import type {
-  BackendConfig,
-  BackendConfigState,
-  BackendIDPIConfig,
-  BackendSecurityConfig,
-} from "../../types";
+import type { BackendConfig, BackendConfigState } from "../../types";
 
 export type SectionId =
   | "dashboard"
@@ -83,17 +78,21 @@ export const sections: Array<{
 export const fieldClass =
   "w-full rounded-sm border border-border-subtle bg-[rgb(var(--brand-surface-code-rgb)/0.72)] px-3 py-2 text-sm text-text-primary placeholder:text-text-muted transition-all duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
 
-export type UpdateBackendSection = <K extends keyof BackendConfig>(
+type BackendSection = {
+  [K in keyof BackendConfig]: BackendConfig[K] extends object ? K : never;
+}[keyof BackendConfig];
+
+export type UpdateBackendSection = <K extends BackendSection>(
   section: K,
   patch: Partial<BackendConfig[K]>,
 ) => void;
 
 export type SecurityEndpointKey = Exclude<
-  keyof BackendSecurityConfig,
+  keyof BackendConfig["security"],
   "attach" | "idpi"
 >;
 export type IDPIToggleKey = Exclude<
-  keyof BackendIDPIConfig,
+  keyof BackendConfig["security"]["idpi"],
   "allowedDomains" | "customPatterns"
 >;
 

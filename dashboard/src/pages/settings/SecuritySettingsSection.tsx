@@ -1,4 +1,4 @@
-import type { BackendConfig, BackendSecurityConfig } from "../../types";
+import type { BackendConfig } from "../../types";
 import type {
   SecurityEndpointKey,
   UpdateBackendSection,
@@ -10,6 +10,8 @@ import {
   securityEndpointRows,
 } from "./settingsShared";
 import { SectionCard, SettingRow } from "./SettingsSharedComponents";
+
+type BackendSecurityConfig = BackendConfig["security"];
 
 interface SecuritySettingsSectionProps {
   backendConfig: BackendConfig;

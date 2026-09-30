@@ -29,6 +29,19 @@ func TestSensitiveConfigChangesIgnoresAbsentVersusEmptyContainers(t *testing.T) 
 	}
 }
 
+func TestSavingTheServedEffectiveConfigIsNotAChange(t *testing.T) {
+	sparse := config.FileConfig{}
+	served := config.EffectiveFileConfig(sparse)
+
+	if changes := sensitiveConfigChanges(&sparse, &served); changes.requiresElevation {
+		t.Errorf("sensitiveConfigChanges() demands elevation for %v when only defaults were spelled out", changes.names)
+	}
+	api := &ConfigAPI{boot: sparse}
+	if reasons := api.restartReasonsFor(served); len(reasons) > 0 {
+		t.Errorf("restartReasonsFor() = %v when only defaults were spelled out", reasons)
+	}
+}
+
 func TestRestartReasonsIncludeStateDirAndDerivedProfilesDir(t *testing.T) {
 	boot := config.DefaultFileConfig()
 	boot.Server.StateDir = filepath.Join(t.TempDir(), "old")

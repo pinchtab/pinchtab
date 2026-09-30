@@ -318,7 +318,7 @@ func (c *ConfigAPI) currentConfig() (config.FileConfig, string, []string, error)
 
 func (c *ConfigAPI) configEnvelopeFor(cfg config.FileConfig, path string, restartReasons []string) configEnvelope {
 	return configEnvelope{
-		Config:          redactToken(cfg),
+		Config:          redactToken(config.EffectiveFileConfig(cfg)),
 		ConfigPath:      path,
 		TokenConfigured: c.tokenConfigured(cfg),
 		RestartRequired: len(restartReasons) > 0,

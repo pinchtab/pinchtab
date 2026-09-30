@@ -70,23 +70,23 @@ if [ ! -d "node_modules" ]; then
 fi
 
 section "Types (tygo)"
-GENERATED_TYPES="src/generated/types.ts"
-BEFORE_FIX="$(mktemp)"
-cp "$GENERATED_TYPES" "$BEFORE_FIX"
+GENERATED_TYPES="src/generated"
+BEFORE_FIX="$(mktemp -d)"
+cp -R "$GENERATED_TYPES/." "$BEFORE_FIX"
 go tool -modfile=../tools/go.mod tygo generate
 $RUN run types:format
-if cmp -s "$BEFORE_FIX" "$GENERATED_TYPES"; then
+if diff -rq "$BEFORE_FIX" "$GENERATED_TYPES" >/dev/null; then
   ok "Types in sync"
 else
   fail "Types out of sync" "Run: cd dashboard && go tool -modfile=../tools/go.mod tygo generate && $RUN run types:format"
   if confirm "Fix generated types now?"; then
     ok "Types fixed"
   else
-    rm -f "$BEFORE_FIX"
+    rm -rf "${BEFORE_FIX:?}"
     exit 1
   fi
 fi
-rm -f "$BEFORE_FIX"
+rm -rf "${BEFORE_FIX:?}"
 
 section "TypeScript"
 if $RUN run typecheck 2>&1; then
