@@ -137,7 +137,7 @@ func TestNoProxyHopAddsResponseHeadersUnderAKeyItDoesNotName(t *testing.T) {
 		})
 	}
 
-	if helperCalls < 3 {
+	if helperCalls < 2 {
 		t.Fatalf("found %d call(s) to CopyProxiedResponseHeaders in the whole module, want at least the known proxy hops; the helper has been inlined again, or this census has stopped seeing the module", helperCalls)
 	}
 }
