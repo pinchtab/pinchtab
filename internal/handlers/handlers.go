@@ -17,7 +17,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/heapsnap"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/idpi"
-	"github.com/pinchtab/pinchtab/internal/ids"
 	"github.com/pinchtab/pinchtab/internal/routes"
 	"github.com/pinchtab/semantic"
 	"github.com/pinchtab/semantic/recovery"
@@ -29,7 +28,6 @@ type Handlers struct {
 	Profiles        bridge.ProfileService
 	Dashboard       *dashboard.Dashboard
 	Orchestrator    bridge.OrchestratorService
-	IdMgr           *ids.Manager
 	Matcher         semantic.ElementMatcher
 	IntentCache     *recovery.IntentCache
 	Recovery        *recovery.RecoveryEngine
@@ -65,7 +63,6 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 		Profiles:     p,
 		Dashboard:    d,
 		Orchestrator: o,
-		IdMgr:        ids.NewManager(),
 		Matcher:      matcher,
 		IntentCache:  intentCache,
 		IDPIGuard:    idpiGuard,

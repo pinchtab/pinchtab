@@ -8,7 +8,6 @@ import (
 
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/ids"
 )
 
 func (tm *TabManager) browserGuardsActive() bool {
@@ -111,10 +110,7 @@ func (tm *TabManager) adoptExistingTarget(targetID target.ID, enforceLimit bool)
 	if rawCDPID == "" {
 		return "", fmt.Errorf("target id required")
 	}
-	if tm.idMgr == nil {
-		tm.idMgr = ids.NewManager()
-	}
-	tabID := tm.idMgr.TabIDFromCDPTarget(rawCDPID)
+	tabID := rawCDPID
 
 	tm.mu.RLock()
 	entry, tracked := tm.tabs[tabID]

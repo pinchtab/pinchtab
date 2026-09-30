@@ -13,6 +13,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/ids"
 	"github.com/pinchtab/pinchtab/internal/profiles"
 )
 
@@ -103,8 +104,8 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 		return nil, err
 	}
 
-	profileID := o.idMgr.ProfileID(name)
-	instanceID := o.idMgr.InstanceID(profileID, name)
+	profileID := ids.ProfileID(name)
+	instanceID := ids.InstanceID(profileID, name)
 
 	o.mu.Lock()
 	if err := o.activeInstanceConflict(name, port); err != nil {

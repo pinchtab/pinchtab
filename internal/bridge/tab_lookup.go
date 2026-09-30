@@ -121,8 +121,7 @@ func (tm *TabManager) TabContext(tabID string) (context.Context, string, error) 
 			if len(targets) == 0 {
 				return nil, "", fmt.Errorf("no tabs open")
 			}
-			rawID := string(targets[0].TargetID)
-			tabID = tm.idMgr.TabIDFromCDPTarget(rawID)
+			tabID = string(targets[0].TargetID)
 		}
 	}
 
@@ -135,7 +134,7 @@ func (tm *TabManager) TabContext(tabID string) (context.Context, string, error) 
 		if err == nil {
 			for _, t := range targets {
 				raw := string(t.TargetID)
-				if tm.idMgr.TabIDFromCDPTarget(raw) == tabID {
+				if raw == tabID {
 					if _, adoptErr := tm.adoptExistingTarget(target.ID(raw), false); adoptErr != nil {
 						slog.Warn("adopt target failed", "tabId", tabID, "err", adoptErr)
 						break
@@ -174,7 +173,7 @@ func (tm *TabManager) ResolveTabByIndex(index int) (string, string, string, erro
 		return "", "", "", fmt.Errorf("tab index %d out of range (1-%d)", index, len(targets))
 	}
 	t := targets[index-1]
-	tabID := tm.idMgr.TabIDFromCDPTarget(string(t.TargetID))
+	tabID := string(t.TargetID)
 	return tabID, t.URL, t.Title, nil
 }
 

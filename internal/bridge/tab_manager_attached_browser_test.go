@@ -108,7 +108,7 @@ func TestCreateTabSurvivesUserClosingTheAdoptedBrowserContextTab(t *testing.T) {
 	}
 	adoptedUserTab := chromeCtx.Target.TargetID.String()
 
-	tm := NewTabManager(browserCtx, &config.RuntimeConfig{}, nil, nil, nil)
+	tm := NewTabManager(browserCtx, &config.RuntimeConfig{}, nil, nil)
 
 	if _, _, _, err := tm.CreateTab("about:blank"); err != nil {
 		t.Fatalf("baseline CreateTab against the attached browser failed: %v", err)
@@ -164,7 +164,7 @@ func TestTabSelectionDropsATabThatDiedAfterTheDestroyedEventStopped(t *testing.T
 	}
 	adoptedUserTab := chromeCtx.Target.TargetID.String()
 
-	tm := NewTabManager(browserCtx, &config.RuntimeConfig{}, nil, nil, nil)
+	tm := NewTabManager(browserCtx, &config.RuntimeConfig{}, nil, nil)
 	workTabID, _, _, err := tm.CreateTab("about:blank")
 	if err != nil {
 		t.Fatalf("create the tab under test: %v", err)

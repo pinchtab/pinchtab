@@ -145,7 +145,7 @@ func TestTabSetupFailsClosedWhenPausedTargetCannotResume(t *testing.T) {
 
 func TestManagedTargetSetupPropagatesDebuggerGuardFailure(t *testing.T) {
 	want := errors.New("guard unavailable")
-	tm := NewTabManager(context.Background(), nil, nil, nil, func(context.Context, string) error { return want })
+	tm := NewTabManager(context.Background(), nil, nil, func(context.Context, string) error { return want })
 
 	if _, err := tm.setupManagedTarget(context.Background(), "tab", "target"); !errors.Is(err, want) {
 		t.Fatalf("setupManagedTarget error = %v, want %v", err, want)

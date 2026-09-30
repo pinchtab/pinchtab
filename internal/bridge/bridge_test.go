@@ -115,7 +115,7 @@ func TestTabManagerRemoteAllocatorInitialization(t *testing.T) {
 
 	// Use context.TODO() instead of nil to avoid lint warnings
 	ctx := context.TODO()
-	tm := NewTabManager(ctx, cfg, nil, nil, nil)
+	tm := NewTabManager(ctx, cfg, nil, nil)
 	if tm == nil {
 		t.Error("TabManager should be created")
 	}
@@ -177,7 +177,7 @@ func TestBridgeTabOperations_RejectNilTabManager(t *testing.T) {
 
 func TestTabContext_RejectsUnknownTabID(t *testing.T) {
 	// TabContext should reject tab IDs that aren't tracked
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
 
 	// Try to get context for a non-existent tab
 	_, _, err := tm.TabContext("tab_nonexistent")
@@ -190,7 +190,7 @@ func TestTabContext_RejectsUnknownTabID(t *testing.T) {
 }
 
 func TestTabContext_RejectsUnknownRawCDPID(t *testing.T) {
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
 
 	rawCDPID := "A25658CE1BA82659EBE9C93C46CEE63A"
 
@@ -209,24 +209,8 @@ func TestQuietStealthObservers(t *testing.T) {
 	}
 }
 
-func TestCreateTab_ReturnsRawCDPID(t *testing.T) {
-	// Verify TabIDFromCDPTarget returns raw CDP ID (no prefix)
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
-
-	if tm.idMgr == nil {
-		t.Error("TabManager should have idMgr initialized")
-	}
-
-	rawCDP := "A25658CE1BA82659EBE9C93C46CEE63A"
-	tabID := tm.idMgr.TabIDFromCDPTarget(rawCDP)
-
-	if tabID != rawCDP {
-		t.Errorf("expected %s, got %s", rawCDP, tabID)
-	}
-}
-
 func TestTabContext_AcceptsRegisteredID(t *testing.T) {
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
 
 	rawCDPID := "RAWCDPID123456789012345678901234"
 	ctx := context.Background()
@@ -249,7 +233,7 @@ func TestTabContext_AcceptsRegisteredID(t *testing.T) {
 }
 
 func TestTabContext_EmptyID_UsesCurrentTrackedTab(t *testing.T) {
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
 
 	ctx := context.Background()
 	tabID := "SOMECDPID"
@@ -272,7 +256,7 @@ func TestTabContext_EmptyID_UsesCurrentTrackedTab(t *testing.T) {
 }
 
 func TestSelectCurrentTrackedTabFallsBackToMostRecentlyUsed(t *testing.T) {
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
 	now := time.Now()
 
 	tm.tabs["older"] = &TabEntry{Ctx: context.Background(), CreatedAt: now.Add(-3 * time.Minute), LastUsed: now.Add(-2 * time.Minute)}
@@ -285,7 +269,7 @@ func TestSelectCurrentTrackedTabFallsBackToMostRecentlyUsed(t *testing.T) {
 }
 
 func TestMarkAccessedUpdatesCurrentTabAndLastUsed(t *testing.T) {
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
 	oldTime := time.Now().Add(-1 * time.Hour)
 	tm.tabs["tab1"] = &TabEntry{Ctx: context.Background(), CreatedAt: oldTime, LastUsed: oldTime}
 	tm.tabs["tab2"] = &TabEntry{Ctx: context.Background(), CreatedAt: oldTime, LastUsed: oldTime}
@@ -309,7 +293,7 @@ func TestMarkAccessedUpdatesCurrentTabAndLastUsed(t *testing.T) {
 func TestCloseTab_PreventsLastTabClose(t *testing.T) {
 	// CloseTab should fail when attempting to close the last remaining tab
 	// This prevents Chrome from exiting and crashing the server
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
 
 	// Without a valid browser context, ListTargets will fail
 	// which triggers the guard at the start of CloseTab
@@ -367,7 +351,7 @@ func TestEvaluateTabPolicy(t *testing.T) {
 }
 
 func TestTabManagerStoresTabPolicyState(t *testing.T) {
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
 	tm.tabs["tab1"] = &TabEntry{Ctx: context.Background()}
 
 	state := TabPolicyState{
@@ -390,7 +374,7 @@ func TestTabManagerStoresTabPolicyState(t *testing.T) {
 
 func TestPurgeTrackedTabStateByTargetID(t *testing.T) {
 	logStore := NewConsoleLogStore(10)
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, logStore, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, logStore, nil)
 	dm := NewDialogManager()
 	tm.SetDialogManager(dm)
 

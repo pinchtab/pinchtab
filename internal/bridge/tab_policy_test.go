@@ -12,7 +12,7 @@ import (
 
 func newRefCacheTabManager(t *testing.T) *TabManager {
 	t.Helper()
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
 	tm.SetRefCache("tab1", &RefCache{DomEpoch: "tok", Refs: map[string]int64{"e1": 42}})
 	tm.SetFrameScope("tab1", FrameScope{FrameID: "f1"})
 	return tm
@@ -59,7 +59,7 @@ func TestStartTabPolicyWatcherAttachesWithoutIDPI(t *testing.T) {
 	ctx, cancel := chromedp.NewContext(context.Background())
 	defer cancel()
 
-	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil, nil)
+	tm := NewTabManager(context.Background(), &config.RuntimeConfig{}, nil, nil)
 	if tm.idpiDomainPolicyActive() {
 		t.Fatal("default config unexpectedly activates the IDPI domain policy; this test asserts the non-IDPI path")
 	}

@@ -6,7 +6,7 @@ import (
 )
 
 func scopedTabManager(ids ...string) *TabManager {
-	tm := NewTabManager(context.Background(), nil, nil, nil, nil)
+	tm := NewTabManager(context.Background(), nil, nil, nil)
 	for _, id := range ids {
 		tm.tabs[id] = &TabEntry{Ctx: context.Background()}
 	}

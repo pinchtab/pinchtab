@@ -49,7 +49,7 @@ func TestFreezeIdleFreezesARealTabAndAnActionUnfreezesIt(t *testing.T) {
 		t.Fatalf("attach: %v", err)
 	}
 
-	tm := NewTabManager(browserCtx, &config.RuntimeConfig{TabLifecyclePolicy: "freeze_idle", TabCloseDelay: 50 * time.Millisecond}, nil, nil, nil)
+	tm := NewTabManager(browserCtx, &config.RuntimeConfig{TabLifecyclePolicy: "freeze_idle", TabCloseDelay: 50 * time.Millisecond}, nil, nil)
 	tabID := string(raw)
 	tm.tabs[tabID] = &TabEntry{Ctx: tabCtx, CDPID: tabID, CreatedAt: time.Now(), LastUsed: time.Now()}
 

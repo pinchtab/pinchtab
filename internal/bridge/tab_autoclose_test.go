@@ -15,7 +15,8 @@ func newAutoCloseTM(t *testing.T, policy string, delay time.Duration, tabID stri
 	tm := NewTabManager(context.Background(), &config.RuntimeConfig{
 		TabLifecyclePolicy: policy,
 		TabCloseDelay:      delay,
-	}, nil, nil, nil)
+	}, nil, nil)
+
 	tm.tabs[tabID] = &TabEntry{
 		CDPID:     tabID,
 		CreatedAt: time.Now(),

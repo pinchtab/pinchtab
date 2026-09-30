@@ -12,7 +12,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/httpx"
-	"github.com/pinchtab/pinchtab/internal/ids"
 	"github.com/pinchtab/pinchtab/internal/instance"
 	"github.com/pinchtab/pinchtab/internal/profiles"
 )
@@ -77,7 +76,6 @@ type Orchestrator struct {
 	// repeated dashboard visibility queries. Routing never reads it.
 	tabsCache        *TabsCache
 	portAllocator    *PortAllocator
-	idMgr            *ids.Manager
 	eventHandlers    []EventHandler
 	instanceMgr      *instance.Manager
 	live             config.Live
@@ -191,7 +189,6 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 		bindings:      NewBindings(nil),
 		tabsCache:     NewTabsCache(0, nil),
 		portAllocator: NewPortAllocator(config.DefaultInstancePortStart, config.DefaultInstancePortEnd),
-		idMgr:         ids.NewManager(),
 		shutdownCh:    make(chan struct{}),
 	}
 

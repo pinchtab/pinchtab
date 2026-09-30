@@ -8,8 +8,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/ids"
 )
 
-var idMgr = ids.NewManager()
-
 var reservedWindowsProfileNames = map[string]struct{}{
 	"CON":  {},
 	"PRN":  {},
@@ -36,7 +34,7 @@ var reservedWindowsProfileNames = map[string]struct{}{
 }
 
 func profileID(name string) string {
-	return idMgr.ProfileID(name)
+	return ids.ProfileID(name)
 }
 
 // ValidateProfileName enforces a cross-platform-safe profile name policy for

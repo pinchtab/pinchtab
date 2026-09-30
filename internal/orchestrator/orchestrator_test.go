@@ -24,6 +24,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/browsers/providerhooks"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/ids"
 )
 
 func envMap(items []string) map[string]string {
@@ -142,11 +143,11 @@ func TestOrchestrator_StopProfile(t *testing.T) {
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
 
 	o.mu.Lock()
-	instID := o.idMgr.InstanceID(o.idMgr.ProfileID("p1"), "p1")
+	instID := ids.InstanceID(ids.ProfileID("p1"), "p1")
 	o.instances[instID] = &InstanceInternal{
 		Instance: bridge.Instance{
 			ID:          instID,
-			ProfileID:   o.idMgr.ProfileID("p1"),
+			ProfileID:   ids.ProfileID("p1"),
 			ProfileName: "p1",
 			Port:        "9001",
 			Status:      "running",

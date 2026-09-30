@@ -36,7 +36,8 @@ func newFreezeTM(t *testing.T, policy string, delay time.Duration) (*TabManager,
 	tm := NewTabManager(context.Background(), &config.RuntimeConfig{
 		TabLifecyclePolicy: policy,
 		TabCloseDelay:      delay,
-	}, nil, nil, nil)
+	}, nil, nil)
+
 	rec := &frozenRecorder{}
 	tm.setFrozen = rec.set
 	tm.tabs["tab1"] = &TabEntry{Ctx: context.Background(), CDPID: "tab1", CreatedAt: time.Now(), LastUsed: time.Now()}

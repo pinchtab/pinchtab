@@ -11,7 +11,6 @@ import (
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	bridgeruntime "github.com/pinchtab/pinchtab/internal/bridge/runtime"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/ids"
 	"github.com/pinchtab/pinchtab/internal/stealth"
 )
 
@@ -22,7 +21,6 @@ type Bridge struct {
 	BrowserCancel context.CancelFunc
 	Config        *config.RuntimeConfig
 	URLReader     URLReader
-	IdMgr         *ids.Manager
 	*TabManager
 	StealthBundle *stealth.Bundle
 	Actions       map[string]ActionFunc
@@ -75,7 +73,6 @@ type Bridge struct {
 }
 
 func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridge {
-	idMgr := ids.NewManager()
 	netBufSize := DefaultNetworkBufferSize
 	if cfg != nil && cfg.NetworkBufferSize > 0 {
 		netBufSize = cfg.NetworkBufferSize
@@ -85,7 +82,6 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 		AllocCtx:            allocCtx,
 		BrowserCtx:          browserCtx,
 		Config:              cfg,
-		IdMgr:               idMgr,
 		netMonitor:          NewNetworkMonitor(netBufSize),
 		fingerprintOverlays: make(map[string]bool),
 		handoffs:            make(map[string]TabHandoffState),
@@ -198,15 +194,12 @@ type reinitWiringOpts struct {
 	initActionRegistry bool
 }
 
-// reinitWiring owns the IdMgr/LogStore nil-guards, the TabManager wiring (via
+// reinitWiring owns the LogStore nil-guard, the TabManager wiring (via
 // wireTabManager, gated on TabManager being nil), and the optional
 // StartBrowserGuards / InitActionRegistry steps that every launch/reinit/
 // remote-CDP path repeats. Centralizing the sequence here keeps the paths from
 // drifting; per-path differences are expressed through opts.
 func (b *Bridge) reinitWiring(browserCtx context.Context, opts reinitWiringOpts) {
-	if b.IdMgr == nil {
-		b.IdMgr = ids.NewManager()
-	}
 	if b.LogStore == nil {
 		b.LogStore = NewConsoleLogStore(1000)
 	}
@@ -226,7 +219,7 @@ func (b *Bridge) reinitWiring(browserCtx context.Context, opts reinitWiringOpts)
 // setup can't drift across paths. Callers gate on their own guards and add any
 // path-specific setup (e.g. New's StartBrowserGuards) afterward.
 func (b *Bridge) wireTabManager(browserCtx context.Context) {
-	b.TabManager = NewTabManager(browserCtx, b.Config, b.IdMgr, b.LogStore, b.tabSetup)
+	b.TabManager = NewTabManager(browserCtx, b.Config, b.LogStore, b.tabSetup)
 	b.SetOnAfterClose(func() { go b.SaveState() })
 	b.SetDialogManager(b.Dialogs)
 	b.SetNetworkMonitor(b.netMonitor)

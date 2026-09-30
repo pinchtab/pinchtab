@@ -39,7 +39,7 @@ func TestReconcileTabBudgetBoundsUntrackedTargets(t *testing.T) {
 	tm := NewTabManager(ctx, &config.RuntimeConfig{
 		MaxTabs:           maxTabs,
 		TabEvictionPolicy: "close_lru",
-	}, nil, nil, nil)
+	}, nil, nil)
 
 	exec, err := browserExecutorContext(ctx)
 	if err != nil {

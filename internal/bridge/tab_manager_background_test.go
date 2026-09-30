@@ -84,13 +84,14 @@ func TestCreateTabRequestsRenderedTargetWithoutWindowFocus(t *testing.T) {
 	}
 
 	setupCalled := false
-	tm := NewTabManager(browserCtx, nil, nil, nil, func(ctx context.Context, _ string) error {
+	tm := NewTabManager(browserCtx, nil, nil, func(ctx context.Context, _ string) error {
 		if cdp.ExecutorFromContext(ctx) == nil {
 			return fmt.Errorf("tab setup received no target executor")
 		}
 		setupCalled = true
 		return nil
 	})
+
 	_, _, tabCancel, err := tm.CreateTabInBrowserContext("about:blank", "context-profile")
 	if err != nil {
 		t.Fatalf("CreateTab: %v", err)
@@ -129,13 +130,14 @@ func TestCreateTabRequestsRenderedTargetWithoutWindowFocus(t *testing.T) {
 	}
 
 	adoptSetupCalled := false
-	adoptTM := NewTabManager(browserCtx, nil, nil, nil, func(ctx context.Context, _ string) error {
+	adoptTM := NewTabManager(browserCtx, nil, nil, func(ctx context.Context, _ string) error {
 		if cdp.ExecutorFromContext(ctx) == nil {
 			return fmt.Errorf("adopted tab setup received no target executor")
 		}
 		adoptSetupCalled = true
 		return nil
 	})
+
 	if _, err := adoptTM.adoptExistingTarget(target.ID("created-tab"), false); err != nil {
 		t.Fatalf("adoptExistingTarget: %v", err)
 	}

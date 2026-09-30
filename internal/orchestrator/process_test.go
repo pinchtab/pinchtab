@@ -9,7 +9,6 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/ids"
 )
 
 type mockRunner struct {
@@ -122,7 +121,7 @@ func TestLaunch_Mocked(t *testing.T) {
 	if len(runner.args) != 1 || runner.args[0] != "bridge" {
 		t.Fatalf("expected child process args [bridge], got %v", runner.args)
 	}
-	if !ids.IsValidID(inst.ID, "inst") {
+	if !strings.HasPrefix(inst.ID, "inst_") {
 		t.Errorf("expected ID format inst_XXXXXXXX, got %s", inst.ID)
 	}
 }

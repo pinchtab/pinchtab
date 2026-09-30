@@ -113,7 +113,8 @@ func TestAdoptExistingTarget_EnforcesRejectTabLimit(t *testing.T) {
 	tm := NewTabManager(context.Background(), &config.RuntimeConfig{
 		MaxTabs:           1,
 		TabEvictionPolicy: "reject",
-	}, nil, nil, nil)
+	}, nil, nil)
+
 	tm.tabs["existing"] = &TabEntry{Ctx: context.Background(), CDPID: "existing"}
 
 	_, err := tm.adoptExistingTarget(target.ID("new-target"), true)

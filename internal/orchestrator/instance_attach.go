@@ -15,6 +15,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/ids"
 	"github.com/pinchtab/pinchtab/internal/profiles"
 	"github.com/pinchtab/pinchtab/internal/readiness"
 	internalurls "github.com/pinchtab/pinchtab/internal/urls"
@@ -23,8 +24,8 @@ import (
 // attachExternalInstance registers an external instance or updates an existing
 // bridge in place (upsert). Non-bridge duplicates still return an error.
 func (o *Orchestrator) attachExternalInstance(name string, inst bridge.Instance, authToken string) (*bridge.Instance, bool, error) {
-	profileID := o.idMgr.ProfileID(name)
-	instanceID := o.idMgr.InstanceID(profileID, name)
+	profileID := ids.ProfileID(name)
+	instanceID := ids.InstanceID(profileID, name)
 
 	o.mu.Lock()
 	for _, existing := range o.instances {
@@ -107,8 +108,8 @@ func (o *Orchestrator) AttachWithOptions(name, cdpURL string, opts AttachOptions
 	}()
 	portStr := strconv.Itoa(bridgePort)
 
-	profileID := o.idMgr.ProfileID(name)
-	instanceID := o.idMgr.InstanceID(profileID, name)
+	profileID := ids.ProfileID(name)
+	instanceID := ids.InstanceID(profileID, name)
 
 	o.mu.Lock()
 	for _, existing := range o.instances {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/ids"
 )
 
 type gatedRunner struct {
@@ -119,7 +120,7 @@ func TestFailedRelaunchKeepsThePreviousErrorRecord(t *testing.T) {
 	stubPortAvailability(t, func(int) bool { return true })
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true, runErr: errors.New("exec format error")})
 
-	previousID := o.idMgr.InstanceID(o.idMgr.ProfileID("relaunch"), "relaunch")
+	previousID := ids.InstanceID(ids.ProfileID("relaunch"), "relaunch")
 	previous := &InstanceInternal{Instance: bridge.Instance{ID: previousID, ProfileName: "relaunch", Status: "error", Error: "chrome crashed"}}
 	o.instances[previousID] = previous
 

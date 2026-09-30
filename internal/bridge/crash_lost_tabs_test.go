@@ -29,7 +29,7 @@ func TestATabLostToABrowserDeathIsReportedAsLostWhateverBrowserAnswers(t *testin
 	b := bridgeHoldingTabs(t, "tabA", "tabB")
 	event := b.recordBrowserDeath("unexpected context cancellation")
 
-	relaunched := NewTabManager(context.Background(), nil, nil, nil, nil)
+	relaunched := NewTabManager(context.Background(), nil, nil, nil)
 	_, _, err := relaunched.TabContext("tabA")
 	var lost *TabNotFoundError
 	if !errors.As(err, &lost) {
@@ -50,7 +50,7 @@ func TestAnUnknownTabIsNotBlamedOnACrash(t *testing.T) {
 	b := bridgeHoldingTabs(t, "tabA")
 	b.recordBrowserDeath("inspector.targetCrashed")
 
-	_, _, err := NewTabManager(context.Background(), nil, nil, nil, nil).TabContext("never-existed")
+	_, _, err := NewTabManager(context.Background(), nil, nil, nil).TabContext("never-existed")
 	var lost *TabNotFoundError
 	if !errors.As(err, &lost) {
 		t.Fatalf("TabContext = %v, want a TabNotFoundError", err)
@@ -126,7 +126,7 @@ func TestTheBrowserContextEndingRecordsTheDeathAndTheTabsItTook(t *testing.T) {
 		t.Errorf("crash total = %d, want the one death", summary.Total)
 	}
 
-	_, _, err := NewTabManager(context.Background(), nil, nil, nil, nil).TabContext("tabB")
+	_, _, err := NewTabManager(context.Background(), nil, nil, nil).TabContext("tabB")
 	var lost *TabNotFoundError
 	if !errors.As(err, &lost) || lost.Crash == nil || lost.Crash.Reason != death.Reason {
 		t.Fatalf("TabContext after the death = %v, want the tab reported as lost to it", err)

@@ -13,7 +13,6 @@ import (
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/ids"
 )
 
 const (
@@ -33,7 +32,6 @@ type TabSetupFunc func(ctx context.Context, tabID string) error
 type TabManager struct {
 	browserCtx        context.Context
 	config            *config.RuntimeConfig
-	idMgr             *ids.Manager
 	tabs              map[string]*TabEntry
 	accessed          map[string]bool
 	snapshots         map[string]*RefCache
@@ -60,10 +58,7 @@ type TabManager struct {
 	pendingClicks map[target.ID]*pendingClickSlot
 }
 
-func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr *ids.Manager, logStore *ConsoleLogStore, onTabSetup TabSetupFunc) *TabManager {
-	if idMgr == nil {
-		idMgr = ids.NewManager()
-	}
+func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, logStore *ConsoleLogStore, onTabSetup TabSetupFunc) *TabManager {
 	maxParallel := 0
 	if cfg != nil {
 		maxParallel = cfg.MaxParallelTabs
@@ -71,7 +66,6 @@ func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, idMgr 
 	return &TabManager{
 		browserCtx: browserCtx,
 		config:     cfg,
-		idMgr:      idMgr,
 		tabs:       make(map[string]*TabEntry),
 		accessed:   make(map[string]bool),
 		snapshots:  make(map[string]*RefCache),
@@ -235,7 +229,7 @@ func (tm *TabManager) createTab(url, browserContextID string) (string, context.C
 	)
 
 	rawCDPID := string(targetID)
-	tabID := tm.idMgr.TabIDFromCDPTarget(rawCDPID)
+	tabID := rawCDPID
 
 	if tm.onTabSetup != nil {
 		if err := chromedp.Run(ctx, chromedp.ActionFunc(func(execCtx context.Context) error {
