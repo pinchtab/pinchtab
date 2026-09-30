@@ -1,7 +1,9 @@
 package config
 
 import (
+	"encoding/json"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -90,6 +92,47 @@ func TestTheAgentSessionBlockReachesTheWire(t *testing.T) {
 	}
 }
 
+func TestTheWireTwinOmitsEveryUnsetPointerSettingTheStructOmits(t *testing.T) {
+	declared := pointerLeafOmitempty(reflect.TypeFor[FileConfig]())
+	onWire := pointerLeafOmitempty(reflect.TypeFor[fileConfigJSON]())
+	if len(onWire) == 0 {
+		t.Fatal("walked no pointer leaves on fileConfigJSON; this check compares nothing")
+	}
+
+	var drifted []string
+	for path, wireOmits := range onWire {
+		if declOmits, ok := declared[path]; ok && declOmits != wireOmits {
+			drifted = append(drifted, path)
+		}
+	}
+	sort.Strings(drifted)
+	if len(drifted) > 0 {
+		t.Errorf("omitempty differs between FileConfig and fileConfigJSON on %v, so an unset setting marshals as null in one and is absent in the other", drifted)
+	}
+}
+
+func TestTheDefaultFileConfigMarshalsNoNull(t *testing.T) {
+	out, err := json.Marshal(DefaultFileConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "null") {
+		t.Errorf("DefaultFileConfig marshals a null, which config init writes as an explicit unset key:\n%s", out)
+	}
+}
+
+func TestAnExplicitEmptyAllowlistSurvivesMarshal(t *testing.T) {
+	fc := DefaultFileConfig()
+	fc.Security.AllowedDomains = []string{}
+	out, err := json.Marshal(fc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), `"allowedDomains":[]`) {
+		t.Errorf("an explicit empty allowedDomains was dropped, so reload falls back to the idpi alias:\n%s", out)
+	}
+}
+
 type jsonPathSet []string
 
 func (s jsonPathSet) has(path string) bool {
@@ -101,11 +144,28 @@ func (s jsonPathSet) has(path string) bool {
 	return false
 }
 
-// jsonLeafPaths walks a config struct's json tags into dotted leaf paths. Nested structs
-// (and pointers to them) are descended; slices and maps are leaves, since their element
-// shape is not what this parity check is about.
 func jsonLeafPaths(t reflect.Type) jsonPathSet {
 	var paths jsonPathSet
+	walkJSONLeaves(t, func(path string, _ reflect.StructField) {
+		paths = append(paths, path)
+	})
+	sort.Strings(paths)
+	return paths
+}
+
+func pointerLeafOmitempty(t reflect.Type) map[string]bool {
+	leaves := map[string]bool{}
+	walkJSONLeaves(t, func(path string, field reflect.StructField) {
+		if field.Type.Kind() != reflect.Ptr {
+			return
+		}
+		_, opts, _ := strings.Cut(field.Tag.Get("json"), ",")
+		leaves[path] = slices.Contains(strings.Split(opts, ","), "omitempty")
+	})
+	return leaves
+}
+
+func walkJSONLeaves(t reflect.Type, visit func(path string, field reflect.StructField)) {
 	var walk func(t reflect.Type, prefix string, depth int)
 	walk = func(t reflect.Type, prefix string, depth int) {
 		if depth > 8 {
@@ -139,10 +199,8 @@ func jsonLeafPaths(t reflect.Type) jsonPathSet {
 				walk(fieldType, path, depth+1)
 				continue
 			}
-			paths = append(paths, path)
+			visit(path, field)
 		}
 	}
 	walk(t, "", 0)
-	sort.Strings(paths)
-	return paths
 }

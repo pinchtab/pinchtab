@@ -38,11 +38,10 @@ type browserConfigJSON struct {
 	BrowserExtraFlags string                  `json:"extraFlags"`
 	Cloak             *cloakBrowserConfigJSON `json:"cloak,omitempty"`
 	ExtensionPaths    []string                `json:"extensionPaths"`
-	// Pointer so omitempty drops the field for legacy configs (byte-identical round-trip).
-	Proxy         *BrowserProxyConfig  `json:"proxy,omitempty"`
-	DefaultTarget string               `json:"defaultTarget,omitempty"`
-	FallbackOrder []string             `json:"fallbackOrder,omitempty"`
-	Targets       BrowserTargetsConfig `json:"targets,omitempty"`
+	Proxy             *BrowserProxyConfig     `json:"proxy,omitempty"`
+	DefaultTarget     string                  `json:"defaultTarget,omitempty"`
+	FallbackOrder     []string                `json:"fallbackOrder,omitempty"`
+	Targets           BrowserTargetsConfig    `json:"targets,omitempty"`
 }
 
 type cloakBrowserConfigJSON struct {
@@ -58,17 +57,17 @@ type cloakBrowserConfigJSON struct {
 
 type instanceDefaultsConfigJSON struct {
 	Mode                   string             `json:"mode"`
-	NoRestore              *bool              `json:"noRestore"`
+	NoRestore              *bool              `json:"noRestore,omitempty"`
 	Timezone               string             `json:"timezone"`
-	BlockImages            *bool              `json:"blockImages"`
-	BlockMedia             *bool              `json:"blockMedia"`
-	BlockAds               *bool              `json:"blockAds"`
-	MaxTabs                *int               `json:"maxTabs"`
-	MaxParallelTabs        *int               `json:"maxParallelTabs"`
+	BlockImages            *bool              `json:"blockImages,omitempty"`
+	BlockMedia             *bool              `json:"blockMedia,omitempty"`
+	BlockAds               *bool              `json:"blockAds,omitempty"`
+	MaxTabs                *int               `json:"maxTabs,omitempty"`
+	MaxParallelTabs        *int               `json:"maxParallelTabs,omitempty"`
 	UserAgent              string             `json:"userAgent"`
-	NoAnimations           *bool              `json:"noAnimations"`
-	CaptureAllowActivation *bool              `json:"captureAllowActivation"`
-	Humanize               *bool              `json:"humanize"`
+	NoAnimations           *bool              `json:"noAnimations,omitempty"`
+	CaptureAllowActivation *bool              `json:"captureAllowActivation,omitempty"`
+	Humanize               *bool              `json:"humanize,omitempty"`
 	StealthLevel           string             `json:"stealthLevel"`
 	TabEvictionPolicy      string             `json:"tabEvictionPolicy"`
 	TabPolicy              *TabPolicyDefaults `json:"tabPolicy,omitempty"`
@@ -82,39 +81,39 @@ type profilesConfigJSON struct {
 }
 
 type securityConfigJSON struct {
-	AllowEvaluate          *bool          `json:"allowEvaluate"`
-	AllowMacro             *bool          `json:"allowMacro"`
-	AllowScreencast        *bool          `json:"allowScreencast"`
-	AllowDownload          *bool          `json:"allowDownload"`
-	AllowCookies           *bool          `json:"allowCookies"`
-	AllowNetworkIntercept  *bool          `json:"allowNetworkIntercept"`
-	AllowMemory            *bool          `json:"allowMemory"`
-	AllowFileScheme        *bool          `json:"allowFileScheme"`
-	AllowedDomains         []string       `json:"allowedDomains"`
+	AllowEvaluate          *bool          `json:"allowEvaluate,omitempty"`
+	AllowMacro             *bool          `json:"allowMacro,omitempty"`
+	AllowScreencast        *bool          `json:"allowScreencast,omitempty"`
+	AllowDownload          *bool          `json:"allowDownload,omitempty"`
+	AllowCookies           *bool          `json:"allowCookies,omitempty"`
+	AllowNetworkIntercept  *bool          `json:"allowNetworkIntercept,omitempty"`
+	AllowMemory            *bool          `json:"allowMemory,omitempty"`
+	AllowFileScheme        *bool          `json:"allowFileScheme,omitempty"`
+	AllowedDomains         []string       `json:"allowedDomains,omitzero"`
 	DownloadAllowedDomains []string       `json:"downloadAllowedDomains"`
-	DownloadMaxBytes       *int           `json:"downloadMaxBytes"`
-	MemorySnapshotMaxBytes *int           `json:"memorySnapshotMaxBytes"`
-	AllowUpload            *bool          `json:"allowUpload"`
-	AllowClipboard         *bool          `json:"allowClipboard"`
-	AllowStateExport       *bool          `json:"allowStateExport"`
-	StateEncryptionKey     *string        `json:"stateEncryptionKey"`
-	UploadMaxRequestBytes  *int           `json:"uploadMaxRequestBytes"`
-	UploadMaxFiles         *int           `json:"uploadMaxFiles"`
-	UploadMaxFileBytes     *int           `json:"uploadMaxFileBytes"`
-	UploadMaxTotalBytes    *int           `json:"uploadMaxTotalBytes"`
-	MaxRedirects           *int           `json:"maxRedirects"`
+	DownloadMaxBytes       *int           `json:"downloadMaxBytes,omitempty"`
+	MemorySnapshotMaxBytes *int           `json:"memorySnapshotMaxBytes,omitempty"`
+	AllowUpload            *bool          `json:"allowUpload,omitempty"`
+	AllowClipboard         *bool          `json:"allowClipboard,omitempty"`
+	AllowStateExport       *bool          `json:"allowStateExport,omitempty"`
+	StateEncryptionKey     *string        `json:"stateEncryptionKey,omitempty"`
+	UploadMaxRequestBytes  *int           `json:"uploadMaxRequestBytes,omitempty"`
+	UploadMaxFiles         *int           `json:"uploadMaxFiles,omitempty"`
+	UploadMaxFileBytes     *int           `json:"uploadMaxFileBytes,omitempty"`
+	UploadMaxTotalBytes    *int           `json:"uploadMaxTotalBytes,omitempty"`
+	MaxRedirects           *int           `json:"maxRedirects,omitempty"`
 	TrustedProxyCIDRs      []string       `json:"trustedProxyCIDRs"`
 	TrustedResolveCIDRs    []string       `json:"trustedResolveCIDRs"`
-	TrustLoopbackProxy     *bool          `json:"trustLoopbackProxy"`
+	TrustLoopbackProxy     *bool          `json:"trustLoopbackProxy,omitempty"`
 	Attach                 attachJSON     `json:"attach"`
 	IDPI                   idpiConfigJSON `json:"idpi"`
 }
 
 type attachJSON struct {
-	Enabled          *bool    `json:"enabled"`
+	Enabled          *bool    `json:"enabled,omitempty"`
 	AllowHosts       []string `json:"allowHosts"`
 	AllowSchemes     []string `json:"allowSchemes"`
-	ForwardProxyAuth *bool    `json:"forwardProxyAuth"`
+	ForwardProxyAuth *bool    `json:"forwardProxyAuth,omitempty"`
 }
 
 type idpiConfigJSON struct {
@@ -130,16 +129,16 @@ type idpiConfigJSON struct {
 type multiInstanceConfigJSON struct {
 	Strategy          string                   `json:"strategy"`
 	AllocationPolicy  string                   `json:"allocationPolicy"`
-	InstancePortStart *int                     `json:"instancePortStart"`
-	InstancePortEnd   *int                     `json:"instancePortEnd"`
+	InstancePortStart *int                     `json:"instancePortStart,omitempty"`
+	InstancePortEnd   *int                     `json:"instancePortEnd,omitempty"`
 	Restart           multiInstanceRestartJSON `json:"restart"`
 }
 
 type multiInstanceRestartJSON struct {
-	MaxRestarts    *int `json:"maxRestarts"`
-	InitBackoffSec *int `json:"initBackoffSec"`
-	MaxBackoffSec  *int `json:"maxBackoffSec"`
-	StableAfterSec *int `json:"stableAfterSec"`
+	MaxRestarts    *int `json:"maxRestarts,omitempty"`
+	InitBackoffSec *int `json:"initBackoffSec,omitempty"`
+	MaxBackoffSec  *int `json:"maxBackoffSec,omitempty"`
+	StableAfterSec *int `json:"stableAfterSec,omitempty"`
 }
 
 type timeoutsConfigJSON struct {
@@ -150,15 +149,15 @@ type timeoutsConfigJSON struct {
 }
 
 type schedulerFileConfigJSON struct {
-	Enabled           *bool  `json:"enabled"`
+	Enabled           *bool  `json:"enabled,omitempty"`
 	Strategy          string `json:"strategy"`
-	MaxQueueSize      *int   `json:"maxQueueSize"`
-	MaxPerAgent       *int   `json:"maxPerAgent"`
-	MaxInflight       *int   `json:"maxInflight"`
-	MaxPerAgentFlight *int   `json:"maxPerAgentInflight"`
-	ResultTTLSec      *int   `json:"resultTTLSec"`
-	WorkerCount       *int   `json:"workerCount"`
-	MaxBatchSize      *int   `json:"maxBatchSize"`
+	MaxQueueSize      *int   `json:"maxQueueSize,omitempty"`
+	MaxPerAgent       *int   `json:"maxPerAgent,omitempty"`
+	MaxInflight       *int   `json:"maxInflight,omitempty"`
+	MaxPerAgentFlight *int   `json:"maxPerAgentInflight,omitempty"`
+	ResultTTLSec      *int   `json:"resultTTLSec,omitempty"`
+	WorkerCount       *int   `json:"workerCount,omitempty"`
+	MaxBatchSize      *int   `json:"maxBatchSize,omitempty"`
 }
 
 type observabilityFileConfigJSON struct {
@@ -166,9 +165,9 @@ type observabilityFileConfigJSON struct {
 }
 
 type activityConfigJSON struct {
-	Enabled        *bool                    `json:"enabled"`
-	SessionIdleSec *int                     `json:"sessionIdleSec"`
-	RetentionDays  *int                     `json:"retentionDays"`
+	Enabled        *bool                    `json:"enabled,omitempty"`
+	SessionIdleSec *int                     `json:"sessionIdleSec,omitempty"`
+	RetentionDays  *int                     `json:"retentionDays,omitempty"`
 	StateDir       string                   `json:"stateDir"`
 	Events         activityEventsConfigJSON `json:"events"`
 }
@@ -188,11 +187,6 @@ type sessionsFileConfigJSON struct {
 	Agent     agentSessionConfigJSON     `json:"agent,omitempty"`
 }
 
-// agentSessionConfigJSON mirrors AgentSessionFileConfig. Its absence is why
-// `config patch {"sessions":{"agent":{"enabled":true}}}` answered success and wrote
-// nothing: the update path patches the existing file object with the marshalled map, so
-// a key in neither could not appear. TestTheWireTwinCarriesEveryDeclaredField is what
-// keeps this hand-maintained twin from falling behind again.
 type agentSessionConfigJSON struct {
 	Enabled        *bool  `json:"enabled,omitempty"`
 	Mode           string `json:"mode,omitempty"`

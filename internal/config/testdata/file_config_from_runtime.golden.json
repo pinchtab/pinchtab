@@ -80,7 +80,6 @@
     "allowNetworkIntercept": true,
     "allowMemory": true,
     "allowFileScheme": true,
-    "allowedDomains": null,
     "downloadAllowedDomains": [
       "dl.example"
     ],
@@ -89,7 +88,6 @@
     "allowUpload": true,
     "allowClipboard": true,
     "allowStateExport": true,
-    "stateEncryptionKey": null,
     "uploadMaxRequestBytes": 1000,
     "uploadMaxFiles": 4,
     "uploadMaxFileBytes": 500,
@@ -148,15 +146,7 @@
     "waitNavMs": 444
   },
   "scheduler": {
-    "enabled": null,
-    "strategy": "",
-    "maxQueueSize": null,
-    "maxPerAgent": null,
-    "maxInflight": null,
-    "maxPerAgentInflight": null,
-    "resultTTLSec": null,
-    "workerCount": null,
-    "maxBatchSize": null
+    "strategy": ""
   },
   "observability": {
     "activity": {
