@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/browsers"
-	"github.com/pinchtab/pinchtab/internal/safelog"
 )
 
 // SetConfigValue sets a dotted path in FileConfig (e.g., "server.port", "instanceDefaults.mode").
@@ -18,63 +17,6 @@ func SetConfigValue(fc *FileConfig, path string, value string) error {
 		return err
 	}
 	return section.set(fc, field, value)
-}
-
-func setServerField(s *ServerConfig, field, value string) error {
-	switch field {
-	case "port":
-		s.Port = value
-	case "bind":
-		s.Bind = value
-	case "token":
-		s.Token = value
-	case "stateDir":
-		s.StateDir = value
-	case "logLevel":
-		if _, err := safelog.ParseLevel(value); err != nil {
-			return fmt.Errorf("server.logLevel: %w", err)
-		}
-		s.LogLevel = strings.ToLower(strings.TrimSpace(value))
-	case "networkBufferSize":
-		n, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("server.networkBufferSize must be a number: %w", err)
-		}
-		s.NetworkBufferSize = &n
-	case "retainNetworkBodies":
-		b, err := parseBool(value)
-		if err != nil {
-			return fmt.Errorf("server.retainNetworkBodies must be true or false: %w", err)
-		}
-		s.RetainNetworkBodies = &b
-	case "retainNetworkBodyMaxBytes":
-		n, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("server.retainNetworkBodyMaxBytes must be a number: %w", err)
-		}
-		s.RetainNetworkBodyMaxBytes = &n
-	case "trustProxyHeaders":
-		b, err := parseBool(value)
-		if err != nil {
-			return fmt.Errorf("server.trustProxyHeaders must be true or false: %w", err)
-		}
-		s.TrustProxyHeaders = &b
-	case "cookieSecure":
-		v := strings.ToLower(strings.TrimSpace(value))
-		if v == "" || v == "auto" || v == "null" {
-			// Unset to enable auto-detect behavior (tri-state: nil = auto-detect).
-			s.CookieSecure = nil
-			return nil
-		}
-		b, err := parseBool(value)
-		if err != nil {
-			return fmt.Errorf("server.cookieSecure must be true or false (or empty/auto/null to unset): %w", err)
-		}
-		s.CookieSecure = &b
-	default:
-		return fmt.Errorf("unknown field server.%s", field)
-	}
-	return nil
 }
 
 func setBrowserField(b *BrowserConfig, field, value string) error {
@@ -493,116 +435,6 @@ func setTabPolicyField(tp *TabPolicyDefaults, field, value string) error {
 	return nil
 }
 
-var securityBoolFields = map[string]func(*SecurityConfig) **bool{
-	"allowEvaluate":         func(s *SecurityConfig) **bool { return &s.AllowEvaluate },
-	"allowClipboard":        func(s *SecurityConfig) **bool { return &s.AllowClipboard },
-	"allowMacro":            func(s *SecurityConfig) **bool { return &s.AllowMacro },
-	"allowScreencast":       func(s *SecurityConfig) **bool { return &s.AllowScreencast },
-	"allowDownload":         func(s *SecurityConfig) **bool { return &s.AllowDownload },
-	"allowCookies":          func(s *SecurityConfig) **bool { return &s.AllowCookies },
-	"allowStateExport":      func(s *SecurityConfig) **bool { return &s.AllowStateExport },
-	"allowUpload":           func(s *SecurityConfig) **bool { return &s.AllowUpload },
-	"allowNetworkIntercept": func(s *SecurityConfig) **bool { return &s.AllowNetworkIntercept },
-	"allowMemory":           func(s *SecurityConfig) **bool { return &s.AllowMemory },
-	"allowFileScheme":       func(s *SecurityConfig) **bool { return &s.AllowFileScheme },
-	"trustLoopbackProxy":    func(s *SecurityConfig) **bool { return &s.TrustLoopbackProxy },
-}
-
-func setSecurityField(s *SecurityConfig, field, value string) error {
-	if strings.HasPrefix(field, "attach.") {
-		return setAttachField(&s.Attach, strings.TrimPrefix(field, "attach."), value)
-	}
-	if strings.HasPrefix(field, "idpi.") {
-		return setIDPIField(s, strings.TrimPrefix(field, "idpi."), value)
-	}
-	if field == "allowedDomains" {
-		domains := parseCSVList(value)
-		if err := validateAllowlistEntries(domains); err != nil {
-			return err
-		}
-		s.AllowedDomains = domains
-		return nil
-	}
-	if field == "downloadAllowedDomains" {
-		s.DownloadAllowedDomains = parseCSVList(value)
-		return nil
-	}
-	if field == "trustedProxyCIDRs" {
-		s.TrustedProxyCIDRs = parseCSVList(value)
-		return nil
-	}
-	if field == "trustedResolveCIDRs" {
-		s.TrustedResolveCIDRs = parseCSVList(value)
-		return nil
-	}
-	switch field {
-	case "downloadMaxBytes":
-		n, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("security.downloadMaxBytes must be a number: %w", err)
-		}
-		s.DownloadMaxBytes = &n
-		return nil
-	case "memorySnapshotMaxBytes":
-		n, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("security.memorySnapshotMaxBytes must be a number: %w", err)
-		}
-		s.MemorySnapshotMaxBytes = &n
-		return nil
-	case "uploadMaxRequestBytes":
-		n, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("security.uploadMaxRequestBytes must be a number: %w", err)
-		}
-		s.UploadMaxRequestBytes = &n
-		return nil
-	case "uploadMaxFiles":
-		n, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("security.uploadMaxFiles must be a number: %w", err)
-		}
-		s.UploadMaxFiles = &n
-		return nil
-	case "uploadMaxFileBytes":
-		n, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("security.uploadMaxFileBytes must be a number: %w", err)
-		}
-		s.UploadMaxFileBytes = &n
-		return nil
-	case "uploadMaxTotalBytes":
-		n, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("security.uploadMaxTotalBytes must be a number: %w", err)
-		}
-		s.UploadMaxTotalBytes = &n
-		return nil
-	case "maxRedirects":
-		n, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("security.maxRedirects must be a number: %w", err)
-		}
-		s.MaxRedirects = &n
-		return nil
-	case "stateEncryptionKey":
-		key := value
-		s.StateEncryptionKey = &key
-		return nil
-	}
-
-	slot, known := securityBoolFields[field]
-	if !known {
-		return fmt.Errorf("unknown field security.%s", field)
-	}
-	b, err := parseBool(value)
-	if err != nil {
-		return fmt.Errorf("security.%s: %w", field, err)
-	}
-	*slot(s) = &b
-	return nil
-}
-
 func setProfilesField(p *ProfilesConfig, field, value string) error {
 	switch field {
 	case "baseDir":
@@ -903,16 +735,5 @@ func setAutoSolverCredentialsField(c *AutoSolverCredentialsConf, field, value st
 	default:
 		return fmt.Errorf("unknown field autoSolver.credentials.%s", field)
 	}
-	return nil
-}
-
-// setIntPtrField parses value into an int and points field at it, naming the full path
-// in the refusal — the same shape every numeric setter in this package uses.
-func setIntPtrField(field **int, path, value string) error {
-	n, err := strconv.Atoi(value)
-	if err != nil {
-		return fmt.Errorf("%s must be a number: %w", path, err)
-	}
-	*field = &n
 	return nil
 }

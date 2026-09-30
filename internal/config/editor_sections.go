@@ -30,8 +30,8 @@ type configSection struct {
 var configSections = []configSection{
 	{
 		name: "server",
-		set:  func(fc *FileConfig, f, v string) error { return setServerField(&fc.Server, f, v) },
-		get:  func(fc *FileConfig, f string) (string, error) { return getServerField(&fc.Server, f) },
+		set:  func(fc *FileConfig, f, v string) error { return serverFields.setField(&fc.Server, f, v) },
+		get:  func(fc *FileConfig, f string) (string, error) { return serverFields.getField(&fc.Server, f) },
 	},
 	{
 		name: "browser",

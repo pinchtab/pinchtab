@@ -20,33 +20,6 @@ func GetConfigValue(fc *FileConfig, path string) (string, error) {
 	return section.get(fc, field)
 }
 
-func getServerField(s *ServerConfig, field string) (string, error) {
-	switch field {
-	case "port":
-		return s.Port, nil
-	case "bind":
-		return s.Bind, nil
-	case "token":
-		return s.Token, nil
-	case "stateDir":
-		return s.StateDir, nil
-	case "logLevel":
-		return s.LogLevel, nil
-	case "networkBufferSize":
-		return formatIntPtr(s.NetworkBufferSize), nil
-	case "retainNetworkBodies":
-		return formatBoolPtr(s.RetainNetworkBodies), nil
-	case "retainNetworkBodyMaxBytes":
-		return formatIntPtr(s.RetainNetworkBodyMaxBytes), nil
-	case "trustProxyHeaders":
-		return formatBoolPtr(s.TrustProxyHeaders), nil
-	case "cookieSecure":
-		return formatBoolPtr(s.CookieSecure), nil
-	default:
-		return "", fmt.Errorf("unknown field server.%s", field)
-	}
-}
-
 func getBrowserField(b *BrowserConfig, field string) (string, error) {
 	if strings.HasPrefix(field, "cloak.") {
 		return getCloakBrowserField(&b.Cloak, strings.TrimPrefix(field, "cloak."))
@@ -327,68 +300,6 @@ func getTabPolicyField(tp *TabPolicyDefaults, field string) (string, error) {
 		return formatBoolPtr(tp.Restore), nil
 	default:
 		return "", fmt.Errorf("unknown field instanceDefaults.tabPolicy.%s", field)
-	}
-}
-
-func getSecurityField(s *SecurityConfig, field string) (string, error) {
-	if strings.HasPrefix(field, "attach.") {
-		return getAttachField(&s.Attach, strings.TrimPrefix(field, "attach."))
-	}
-	if strings.HasPrefix(field, "idpi.") {
-		return getIDPIField(s.IDPI, strings.TrimPrefix(field, "idpi."))
-	}
-
-	switch field {
-	case "allowEvaluate":
-		return formatBoolPtr(s.AllowEvaluate), nil
-	case "allowClipboard":
-		return formatBoolPtr(s.AllowClipboard), nil
-	case "allowMacro":
-		return formatBoolPtr(s.AllowMacro), nil
-	case "allowScreencast":
-		return formatBoolPtr(s.AllowScreencast), nil
-	case "allowDownload":
-		return formatBoolPtr(s.AllowDownload), nil
-	case "allowCookies":
-		return formatBoolPtr(s.AllowCookies), nil
-	case "allowStateExport":
-		return formatBoolPtr(s.AllowStateExport), nil
-	case "stateEncryptionKey":
-		return formatStringPtr(s.StateEncryptionKey), nil
-	case "allowNetworkIntercept":
-		return formatBoolPtr(s.AllowNetworkIntercept), nil
-	case "allowMemory":
-		return formatBoolPtr(s.AllowMemory), nil
-	case "allowFileScheme":
-		return formatBoolPtr(s.AllowFileScheme), nil
-	case "allowedDomains":
-		return strings.Join(s.AllowedDomains, ","), nil
-	case "downloadAllowedDomains":
-		return strings.Join(s.DownloadAllowedDomains, ","), nil
-	case "downloadMaxBytes":
-		return formatIntPtr(s.DownloadMaxBytes), nil
-	case "memorySnapshotMaxBytes":
-		return formatIntPtr(s.MemorySnapshotMaxBytes), nil
-	case "allowUpload":
-		return formatBoolPtr(s.AllowUpload), nil
-	case "uploadMaxRequestBytes":
-		return formatIntPtr(s.UploadMaxRequestBytes), nil
-	case "uploadMaxFiles":
-		return formatIntPtr(s.UploadMaxFiles), nil
-	case "uploadMaxFileBytes":
-		return formatIntPtr(s.UploadMaxFileBytes), nil
-	case "uploadMaxTotalBytes":
-		return formatIntPtr(s.UploadMaxTotalBytes), nil
-	case "maxRedirects":
-		return formatIntPtr(s.MaxRedirects), nil
-	case "trustedProxyCIDRs":
-		return strings.Join(s.TrustedProxyCIDRs, ","), nil
-	case "trustedResolveCIDRs":
-		return strings.Join(s.TrustedResolveCIDRs, ","), nil
-	case "trustLoopbackProxy":
-		return formatBoolPtr(s.TrustLoopbackProxy), nil
-	default:
-		return "", fmt.Errorf("unknown field security.%s", field)
 	}
 }
 

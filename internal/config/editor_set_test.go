@@ -452,3 +452,59 @@ func TestSetActivityStateDirIsRefusedRatherThanSilentlyIgnored(t *testing.T) {
 		t.Fatalf("the neighbouring activity keys must stay settable: %v", err)
 	}
 }
+
+type fieldTableRow struct {
+	path string
+	kind fieldKind
+}
+
+func fieldTableRows[T any](tbl fieldTable[T]) []fieldTableRow {
+	rows := make([]fieldTableRow, 0, len(tbl.fields))
+	for _, spec := range tbl.fields {
+		rows = append(rows, fieldTableRow{path: tbl.section + "." + spec.key, kind: spec.kind})
+	}
+	return rows
+}
+
+func allFieldTableRows() []fieldTableRow {
+	return append(fieldTableRows(serverFields), fieldTableRows(securityFields)...)
+}
+
+func TestFieldTablesRoundTripEveryRow(t *testing.T) {
+	probes := map[fieldKind]string{
+		fieldString: "warn",
+		fieldInt:    "42",
+		fieldBool:   "true",
+		fieldList:   "a.example.com,b.example.com",
+	}
+	for _, row := range allFieldTableRows() {
+		t.Run(row.path, func(t *testing.T) {
+			probe := probes[row.kind]
+			fc := &FileConfig{}
+			if err := SetConfigValue(fc, row.path, probe); err != nil {
+				t.Fatalf("set %s = %q: %v", row.path, probe, err)
+			}
+			got, err := GetConfigValue(fc, row.path)
+			if err != nil {
+				t.Fatalf("get %s: %v", row.path, err)
+			}
+			if got != probe {
+				t.Errorf("%s round-tripped to %q, want %q", row.path, got, probe)
+			}
+		})
+	}
+}
+
+func TestFieldTablesRefuseBadValuesNamingThePath(t *testing.T) {
+	bad := map[fieldKind]string{fieldInt: "many", fieldBool: "maybe"}
+	for _, row := range allFieldTableRows() {
+		value, ok := bad[row.kind]
+		if !ok {
+			continue
+		}
+		err := SetConfigValue(&FileConfig{}, row.path, value)
+		if err == nil || !strings.Contains(err.Error(), row.path) {
+			t.Errorf("set %s = %q: error %v, want a refusal naming the path", row.path, value, err)
+		}
+	}
+}
