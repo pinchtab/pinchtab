@@ -112,18 +112,12 @@ jobs:
           ref: ${{ inputs.ref }}
           fetch-depth: 0
 
-      - uses: actions/setup-go@v7
+      - uses: ./.github/actions/setup-toolchain
         with:
-          go-version-file: go.mod
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: .bun-version
+          install-dashboard-deps: "false"
 
       - name: Build dashboard
-        run: |
-          cd dashboard && bun install --frozen-lockfile && cd ..
-          ./scripts/build-dashboard.sh
+        run: ./scripts/build-dashboard.sh
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0

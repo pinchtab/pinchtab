@@ -34,17 +34,9 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.ref }}
 
-      - uses: actions/setup-go@v7
+      - uses: ./.github/actions/setup-toolchain
         with:
-          go-version-file: go.mod
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: .bun-version
-
-      - name: Install dashboard dependencies
-        working-directory: dashboard
-        run: bun install --frozen-lockfile
+          install-dashboard-deps: "false"
 
       - name: Run GoReleaser
         run: |

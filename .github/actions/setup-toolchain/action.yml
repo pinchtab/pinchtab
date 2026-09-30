@@ -1,0 +1,25 @@
+name: Setup toolchain
+description: Go from go.mod, Bun from .bun-version, and optionally the dashboard's locked dependencies.
+
+inputs:
+  install-dashboard-deps:
+    description: Run bun install in dashboard/. Leave false when scripts/build-dashboard.sh runs later in the job, since it installs itself.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v7
+      with:
+        go-version-file: go.mod
+
+    - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        bun-version-file: .bun-version
+
+    - name: Install dashboard dependencies
+      if: inputs.install-dashboard-deps == 'true'
+      shell: bash
+      working-directory: dashboard
+      run: bun install --frozen-lockfile
