@@ -66,8 +66,7 @@ func Instances(client *http.Client, base, token string, cmd *cobra.Command) {
 
 	instances, err := decodeInstancesResponse(body)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse instances: %v\n", err)
-		os.Exit(1)
+		runtimeErr("Failed to parse instances: %v", err)
 	}
 
 	if len(instances) == 0 {
@@ -102,8 +101,7 @@ func Profiles(client *http.Client, base, token string, cmd *cobra.Command) {
 
 	profiles, err := decodeProfilesResponse(body)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse profiles: %v\n", err)
-		os.Exit(1)
+		runtimeErr("Failed to parse profiles: %v", err)
 	}
 
 	fmt.Print(formatProfileList(profiles))
@@ -148,8 +146,7 @@ func ProfilesPrune(client *http.Client, base, token string, cmd *cobra.Command) 
 		} `json:"profiles"`
 	}
 	if err := json.Unmarshal(raw, &resp); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse prune response: %v\n", err)
-		os.Exit(1)
+		runtimeErr("Failed to parse prune response: %v", err)
 	}
 
 	if resp.Count == 0 {

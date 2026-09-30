@@ -26,9 +26,14 @@ func StyleStderr(style termstyle.Style, text string) string {
 	return renderToWriter(os.Stderr, style, text)
 }
 
+const (
+	ExitRuntime = 1
+	ExitUsage   = 2
+)
+
 func Fatal(format string, args ...any) {
 	fmt.Fprintln(os.Stderr, StyleStderr(ErrorStyle, fmt.Sprintf(format, args...)))
-	os.Exit(1)
+	os.Exit(ExitRuntime)
 }
 
 func SetupUsage(root *cobra.Command) {

@@ -17,14 +17,14 @@ func StateCurrent(client *http.Client, base, token string, cmd *cobra.Command) {
 		params.Set("tabId", tabID)
 	}
 
-	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/state", params), 1, "Failed to read current browser state")
-	buf := decodeMap(result, 1, "Failed to parse response")
+	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/state", params), "Failed to read current browser state")
+	buf := decodeMap(result, "Failed to parse response")
 	printIndented(buf)
 }
 
 func StateList(client *http.Client, base, token string) {
-	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/state/list", nil), 1, "Failed to list state files")
-	buf := decodeMap(result, 1, "Failed to parse response")
+	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/state/list", nil), "Failed to list state files")
+	buf := decodeMap(result, "Failed to parse response")
 	printIndented(buf)
 }
 
@@ -40,7 +40,7 @@ func StateSave(client *http.Client, base, token string, cmd *cobra.Command, name
 		body["tabId"] = tabID
 	}
 
-	requireMap(apiclient.DoPost(client, base, token, "/state/save", body), 1, "Failed to save state")
+	requireMap(apiclient.DoPost(client, base, token, "/state/save", body), "Failed to save state")
 }
 
 // StateLoad supports exact name or prefix-based loading (most recent match).
@@ -48,7 +48,7 @@ func StateLoad(client *http.Client, base, token string, cmd *cobra.Command, name
 	tabID, _ := cmd.Flags().GetString("tab")
 
 	if name == "" {
-		exitErr(1, stateNameRequired)
+		usageErr("%s", stateNameRequired)
 	}
 
 	body := map[string]any{
@@ -58,31 +58,31 @@ func StateLoad(client *http.Client, base, token string, cmd *cobra.Command, name
 		body["tabId"] = tabID
 	}
 
-	requireMap(apiclient.DoPost(client, base, token, "/state/load", body), 1, "Failed to load state")
+	requireMap(apiclient.DoPost(client, base, token, "/state/load", body), "Failed to load state")
 }
 
 func StateShow(client *http.Client, base, token string, name string) {
 	if name == "" {
-		exitErr(1, stateNameRequired)
+		usageErr("%s", stateNameRequired)
 	}
 
 	params := url.Values{}
 	params.Set("name", name)
 
-	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/state/show", params), 1, "Failed to show state")
-	buf := decodeMap(result, 1, "Failed to parse response")
+	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/state/show", params), "Failed to show state")
+	buf := decodeMap(result, "Failed to parse response")
 	printIndented(buf)
 }
 
 func StateDelete(client *http.Client, base, token string, name string) {
 	if name == "" {
-		exitErr(1, stateNameRequired)
+		usageErr("%s", stateNameRequired)
 	}
 
 	params := url.Values{}
 	params.Set("name", name)
 
-	requireMap(apiclient.DoDelete(client, base, token, "/state", params), 1, "Failed to delete state")
+	requireMap(apiclient.DoDelete(client, base, token, "/state", params), "Failed to delete state")
 }
 
 func StateClean(client *http.Client, base, token string, cmd *cobra.Command) {
@@ -92,5 +92,5 @@ func StateClean(client *http.Client, base, token string, cmd *cobra.Command) {
 		"olderThanHours": hours,
 	}
 
-	requireMap(apiclient.DoPost(client, base, token, "/state/clean", body), 1, "Failed to clean state files")
+	requireMap(apiclient.DoPost(client, base, token, "/state/clean", body), "Failed to clean state files")
 }

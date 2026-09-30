@@ -10,7 +10,7 @@ import (
 
 // CacheClear clears the browser's HTTP disk cache.
 func CacheClear(client *http.Client, base, token string, cmd *cobra.Command) {
-	result := requireMap(apiclient.DoPostQuiet(client, base, token, "/cache/clear", nil), 2, "ERROR: cache: clear failed")
+	result := requireMap(apiclient.DoPostQuiet(client, base, token, "/cache/clear", nil), "ERROR: cache: clear failed")
 
 	jsonOut, _ := cmd.Flags().GetBool("json")
 	if jsonOut {
@@ -22,8 +22,8 @@ func CacheClear(client *http.Client, base, token string, cmd *cobra.Command) {
 
 // CacheStatus checks if the browser cache can be cleared.
 func CacheStatus(client *http.Client, base, token string, cmd *cobra.Command) {
-	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/cache/status", nil), 2, "ERROR: cache: status check failed")
-	buf := decodeMap(result, 2, "ERROR: cache")
+	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/cache/status", nil), "ERROR: cache: status check failed")
+	buf := decodeMap(result, "ERROR: cache")
 
 	jsonOut, _ := cmd.Flags().GetBool("json")
 	if jsonOut {

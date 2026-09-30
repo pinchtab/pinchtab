@@ -29,7 +29,7 @@ func SetViewport(client *http.Client, base, token string, cmd *cobra.Command, ar
 func parsePositiveIntArg(name, raw string) int {
 	var value int
 	if _, err := fmt.Sscanf(raw, "%d", &value); err != nil || value <= 0 {
-		exitErr(2, fmt.Sprintf("ERROR: invalid %s %q: must be a positive integer", name, raw))
+		usageErr("ERROR: invalid %s %q: must be a positive integer", name, raw)
 	}
 	return value
 }

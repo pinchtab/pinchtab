@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"github.com/pinchtab/pinchtab/internal/cli"
 )
 
 func exitErr(code int, msg string) {
@@ -11,24 +13,32 @@ func exitErr(code int, msg string) {
 	os.Exit(code)
 }
 
-func requireBytes(result []byte, code int, failMsg string) []byte {
+func usageErr(format string, args ...any) {
+	exitErr(cli.ExitUsage, fmt.Sprintf(format, args...))
+}
+
+func runtimeErr(format string, args ...any) {
+	exitErr(cli.ExitRuntime, fmt.Sprintf(format, args...))
+}
+
+func requireBytes(result []byte, failMsg string) []byte {
 	if result == nil {
-		exitErr(code, failMsg)
+		runtimeErr("%s", failMsg)
 	}
 	return result
 }
 
-func requireMap(result map[string]any, code int, failMsg string) map[string]any {
+func requireMap(result map[string]any, failMsg string) map[string]any {
 	if result == nil {
-		exitErr(code, failMsg)
+		runtimeErr("%s", failMsg)
 	}
 	return result
 }
 
-func decodeMap(result []byte, code int, errPrefix string) map[string]any {
+func decodeMap(result []byte, errPrefix string) map[string]any {
 	var buf map[string]any
 	if err := json.Unmarshal(result, &buf); err != nil {
-		exitErr(code, fmt.Sprintf("%s: %v", errPrefix, err))
+		runtimeErr("%s: %v", errPrefix, err)
 	}
 	return buf
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
@@ -24,8 +23,8 @@ func CookiesGet(client *http.Client, base, token string, cmd *cobra.Command) {
 		params.Set("url", target)
 	}
 
-	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/cookies", params), 1, "Failed to get cookies")
-	printIndented(decodeMap(result, 1, "Failed to parse response"))
+	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/cookies", params), "Failed to get cookies")
+	printIndented(decodeMap(result, "Failed to parse response"))
 }
 
 // CookiesSet sets one cookie on the tab's current URL. The URL is left to the
@@ -57,10 +56,9 @@ func CookiesSet(client *http.Client, base, token string, cmd *cobra.Command, nam
 		body["url"] = target
 	}
 
-	result := requireMap(apiclient.DoPostQuiet(client, base, token, "/cookies", body), 1, "Failed to set cookie")
+	result := requireMap(apiclient.DoPostQuiet(client, base, token, "/cookies", body), "Failed to set cookie")
 	if !cookieWriteConfirmed(result) {
-		fmt.Fprintf(os.Stderr, "ERROR: cookies: %q was not set (%v)\n", name, jsonLine(result))
-		os.Exit(2)
+		runtimeErr("ERROR: cookies: %q was not set (%v)", name, jsonLine(result))
 	}
 	printCookiesResult(cmd, result)
 }
@@ -69,8 +67,7 @@ func CookiesSet(client *http.Client, base, token string, cmd *cobra.Command, nam
 func CookiesClear(client *http.Client, base, token string, cmd *cobra.Command) {
 	result := apiclient.DoDelete(client, base, token, "/cookies", nil, apiclient.Quiet())
 	if result == nil {
-		fmt.Fprintln(os.Stderr, "ERROR: cookies: clear failed")
-		os.Exit(2)
+		runtimeErr("ERROR: cookies: clear failed")
 	}
 	printCookiesResult(cmd, result)
 }

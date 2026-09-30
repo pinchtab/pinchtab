@@ -34,7 +34,7 @@ func NetworkRoute(client *http.Client, base, token string, cmd *cobra.Command, p
 	method, _ := cmd.Flags().GetString("method")
 
 	if abort && body != "" {
-		exitErr(1, "Error: --abort and --body are mutually exclusive")
+		usageErr("Error: --abort and --body are mutually exclusive")
 	}
 
 	req := map[string]any{"pattern": pattern}
@@ -61,7 +61,7 @@ func NetworkRoute(client *http.Client, base, token string, cmd *cobra.Command, p
 	}
 
 	path := networkRoutePath(cmd)
-	result := requireMap(apiclient.DoPostQuiet(client, base, token, path, req), 1, "Failed to install route")
+	result := requireMap(apiclient.DoPostQuiet(client, base, token, path, req), "Failed to install route")
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
@@ -79,7 +79,7 @@ func NetworkUnroute(client *http.Client, base, token string, cmd *cobra.Command,
 		params.Set("pattern", pattern)
 	}
 	path := networkRoutePath(cmd)
-	result := requireMap(apiclient.DoDelete(client, base, token, path, params), 1, "Failed to remove route(s)")
+	result := requireMap(apiclient.DoDelete(client, base, token, path, params), "Failed to remove route(s)")
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
@@ -95,7 +95,7 @@ func NetworkUnroute(client *http.Client, base, token string, cmd *cobra.Command,
 
 func NetworkRules(client *http.Client, base, token string, cmd *cobra.Command) {
 	path := networkRoutePath(cmd)
-	result := requireMap(apiclient.DoGet(client, base, token, path, nil), 1, "Failed to list routes")
+	result := requireMap(apiclient.DoGet(client, base, token, path, nil), "Failed to list routes")
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {

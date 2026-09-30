@@ -21,8 +21,8 @@ func StorageGet(client *http.Client, base, token string, cmd *cobra.Command, key
 		params.Set("tabId", tab)
 	}
 
-	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/storage", params), 1, "Failed to get storage")
-	buf := decodeMap(result, 1, "Failed to parse response")
+	result := requireBytes(apiclient.DoGetRaw(client, base, token, "/storage", params), "Failed to get storage")
+	buf := decodeMap(result, "Failed to parse response")
 	printIndented(buf)
 }
 
@@ -43,13 +43,13 @@ func StorageSet(client *http.Client, base, token string, cmd *cobra.Command, key
 		body["tabId"] = tabID
 	}
 
-	requireMap(apiclient.DoPost(client, base, token, "/storage", body), 1, "Failed to set storage item")
+	requireMap(apiclient.DoPost(client, base, token, "/storage", body), "Failed to set storage item")
 }
 
 // StorageDelete removes a single storage key.
 func StorageDelete(client *http.Client, base, token string, cmd *cobra.Command, key string) {
 	if key == "" {
-		exitErr(1, `Error: storage delete needs a key; to wipe the whole store use "pinchtab storage clear"`)
+		usageErr(`Error: storage delete needs a key; to wipe the whole store use "pinchtab storage clear"`)
 	}
 	deleteStorage(client, base, token, cmd, key)
 }
@@ -81,5 +81,5 @@ func deleteStorage(client *http.Client, base, token string, cmd *cobra.Command, 
 		body["tabId"] = tabID
 	}
 
-	requireMap(apiclient.DoDelete(client, base, token, "/storage", nil, apiclient.WithBody(body)), 1, "Failed to delete storage")
+	requireMap(apiclient.DoDelete(client, base, token, "/storage", nil, apiclient.WithBody(body)), "Failed to delete storage")
 }

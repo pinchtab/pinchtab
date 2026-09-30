@@ -138,8 +138,7 @@ func NetworkStream(client *http.Client, base, token string, cmd *cobra.Command) 
 
 	resp, err := apiclient.OpenStream(client, base, token, "/network/stream", params)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error connecting to stream: %v\n", err)
-		os.Exit(1)
+		runtimeErr("Error connecting to stream: %v", err)
 	}
 	defer resp.Body.Close() //nolint:errcheck // best-effort cleanup
 
@@ -157,7 +156,6 @@ func NetworkStream(client *http.Client, base, token string, cmd *cobra.Command) 
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "Stream error: %v\n", err)
-		os.Exit(1)
+		runtimeErr("Stream error: %v", err)
 	}
 }

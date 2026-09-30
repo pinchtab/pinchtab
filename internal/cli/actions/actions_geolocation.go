@@ -27,7 +27,7 @@ func SetGeolocation(client *http.Client, base, token string, cmd *cobra.Command,
 func parseFloatArg(name, raw string) float64 {
 	value, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
-		exitErr(2, fmt.Sprintf("ERROR: invalid %s %q: must be a number", name, raw))
+		usageErr("ERROR: invalid %s %q: must be a number", name, raw)
 	}
 	return value
 }

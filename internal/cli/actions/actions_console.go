@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -48,8 +47,7 @@ func readLog(client *http.Client, base, token string, cmd *cobra.Command, path, 
 	}
 	result := apiclient.DoGetRaw(client, base, token, path, params)
 	if result == nil {
-		fmt.Fprintln(os.Stderr, failMsg)
-		os.Exit(1)
+		runtimeErr("%s", failMsg)
 	}
 	print(result)
 }
@@ -78,8 +76,7 @@ func printConsoleLogs(data []byte) {
 		} `json:"console"`
 	}
 	if err := json.Unmarshal(data, &resp); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse response: %v\n", err)
-		os.Exit(1)
+		runtimeErr("Failed to parse response: %v", err)
 	}
 
 	if len(resp.Console) == 0 {
@@ -106,8 +103,7 @@ func printErrorLogs(data []byte) {
 		} `json:"errors"`
 	}
 	if err := json.Unmarshal(data, &resp); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse response: %v\n", err)
-		os.Exit(1)
+		runtimeErr("Failed to parse response: %v", err)
 	}
 
 	if len(resp.Errors) == 0 {
