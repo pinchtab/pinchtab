@@ -440,6 +440,17 @@ func TestExecuteAction_ClickRejectsModeAndEffectiveHumanizeTogether(t *testing.T
 				Mode: "dispatch",
 			},
 		},
+		{
+			name:   "coordinates with instance humanize default",
+			config: &config.RuntimeConfig{Humanize: true},
+			req: ActionRequest{
+				Kind:  ActionClick,
+				HasXY: true,
+				X:     10,
+				Y:     20,
+				Mode:  "dom",
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -508,19 +519,84 @@ func TestClickAction_HumanizeOptInUsesHumanizedPath(t *testing.T) {
 		t.Fatalf("humanize=false should force raw click coordinate path, got: %v", err)
 	}
 
-	humanized := New(context.TODO(), nil, &config.RuntimeConfig{})
-	_, err = humanized.Actions[ActionClick](context.Background(), ActionRequest{
-		Kind:     ActionClick,
-		Humanize: boolPtr(true),
-		HasXY:    true,
-		X:        10,
-		Y:        20,
-	})
-	if err == nil {
-		t.Fatal("expected humanized coordinate-only click to fail")
+}
+
+func TestClickAction_HumanizedCoordinateClick(t *testing.T) {
+	origHumanClick := humanClickCoordinateAction
+	t.Cleanup(func() { humanClickCoordinateAction = origHumanClick })
+
+	var clicked [][2]float64
+	humanClickCoordinateAction = func(ctx context.Context, x, y float64) error {
+		clicked = append(clicked, [2]float64{x, y})
+		return nil
 	}
-	if !strings.Contains(err.Error(), "need selector") {
-		t.Fatalf("humanized click should require selector/ref/nodeId, got: %v", err)
+
+	b := New(context.TODO(), nil, &config.RuntimeConfig{Humanize: true})
+	res, err := b.ExecuteAction(context.Background(), ActionClick, ActionRequest{
+		Kind:  ActionClick,
+		HasXY: true,
+		X:     10,
+		Y:     20,
+	})
+	if err != nil {
+		t.Fatalf("humanized coordinate click returned error: %v", err)
+	}
+	if clicked, _ := res["clicked"].(bool); !clicked {
+		t.Fatalf("expected clicked=true, got %#v", res)
+	}
+	if human, _ := res["human"].(bool); !human {
+		t.Fatalf("expected human=true, got %#v", res)
+	}
+	if len(clicked) != 1 || clicked[0] != [2]float64{10, 20} {
+		t.Fatalf("humanized click points = %v, want [[10 20]]", clicked)
+	}
+}
+
+func TestClickAction_HumanizedHonoursWaitNav(t *testing.T) {
+	origHumanClick := humanClickCoordinateAction
+	origClickElement := clickElementAction
+	origWaitNav := waitNavAction
+	t.Cleanup(func() {
+		humanClickCoordinateAction = origHumanClick
+		clickElementAction = origClickElement
+		waitNavAction = origWaitNav
+	})
+	humanClickCoordinateAction = func(ctx context.Context, x, y float64) error { return nil }
+	clickElementAction = func(ctx context.Context, backendNodeID cdp.BackendNodeID) error { return nil }
+
+	var waits []time.Duration
+	waitNavAction = func(ctx context.Context, delay time.Duration) { waits = append(waits, delay) }
+
+	tests := []struct {
+		name      string
+		req       ActionRequest
+		wantWaits int
+	}{
+		{name: "coordinates with waitNav", req: ActionRequest{HasXY: true, X: 1, Y: 2, WaitNav: true}, wantWaits: 1},
+		{name: "node with waitNav and dialog detection", req: ActionRequest{NodeID: 42, TabID: "tab-1", WaitNav: true}, wantWaits: 1},
+		{name: "without waitNav", req: ActionRequest{NodeID: 42}, wantWaits: 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			waits = nil
+			b := New(context.TODO(), nil, &config.RuntimeConfig{Humanize: true, WaitNavDelay: 7 * time.Millisecond})
+			tc.req.Kind = ActionClick
+			res, err := b.ExecuteAction(context.Background(), ActionClick, tc.req)
+			if err != nil {
+				t.Fatalf("humanized click returned error: %v", err)
+			}
+			if human, _ := res["human"].(bool); !human {
+				t.Fatalf("expected human=true, got %#v", res)
+			}
+			if len(waits) != tc.wantWaits {
+				t.Fatalf("waitNav calls = %d, want %d", len(waits), tc.wantWaits)
+			}
+			for _, d := range waits {
+				if d != 7*time.Millisecond {
+					t.Fatalf("waitNav delay = %v, want 7ms", d)
+				}
+			}
+		})
 	}
 }
 

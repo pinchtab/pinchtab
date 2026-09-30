@@ -20,6 +20,7 @@ var mouseDownByCoordinateAction = MouseDownByCoordinate
 var mouseUpByCoordinateAction = MouseUpByCoordinate
 var clickByCoordinateAction = ClickByCoordinate
 var clickElementAction = ClickElement
+var humanClickCoordinateAction = Click
 var hoverElementAction = HoverElement
 var hoverCoordinateAction = Hover
 var clickByNodeIDAction = ClickByNodeID
@@ -28,6 +29,9 @@ var dispatchClickByBackendNodeAction = JSDispatchClickByBackendNode
 var clickFloatingFlyoutItemAction = clickFloatingFlyoutItem
 var doubleClickByNodeIDAction = DoubleClickByNodeID
 var jsDoubleClickByBackendNodeAction = JSDoubleClickByBackendNode
+var waitNavAction = func(ctx context.Context, delay time.Duration) {
+	_ = chromedp.Run(ctx, chromedp.Sleep(delay))
+}
 
 // trustedNodeClickTimeout bounds each of the trusted CDP click and its JS
 // fallback. It is kept short so a dialog-blocked JS fallback cannot hang for
@@ -345,9 +349,7 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 				if result.err != nil {
 					return nil, result.err
 				}
-				if req.WaitNav {
-					_ = chromedp.Run(ctx, chromedp.Sleep(b.Config.WaitNavDelay))
-				}
+				b.waitNavIfRequested(ctx, req)
 				return map[string]any{"clicked": true}, nil
 			case <-ticker.C:
 				if e := dialogBlocking(dm, req.TabID); e != nil {
@@ -367,10 +369,14 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 	if armedDialog {
 		waitForArmedDialogSettle(dm, req.TabID, dialogAutoHandleTimeout)
 	}
-	if req.WaitNav {
-		_ = chromedp.Run(ctx, chromedp.Sleep(b.Config.WaitNavDelay))
-	}
+	b.waitNavIfRequested(ctx, req)
 	return map[string]any{"clicked": true}, nil
+}
+
+func (b *Bridge) waitNavIfRequested(ctx context.Context, req ActionRequest) {
+	if req.WaitNav {
+		waitNavAction(ctx, b.Config.WaitNavDelay)
+	}
 }
 
 func waitForArmedDialogSettle(dm *DialogManager, tabID string, timeout time.Duration) {
@@ -731,24 +737,27 @@ func (r ActionRequest) hasDragDestination() bool {
 func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (result map[string]any, err error) {
 	auto := b.beginAutoSwitch(req)
 	defer func() { result = auto.settle(ctx, result, err) }()
-	var backendNodeID cdp.BackendNodeID
+	var click func(context.Context) error
 	switch {
 	case req.NodeID > 0:
-		backendNodeID = cdp.BackendNodeID(req.NodeID)
 		if auto != nil {
 			auto.prepareNode(ctx, req.NodeID)
 		}
+		click = humanClickNode(cdp.BackendNodeID(req.NodeID))
 	case req.Selector != "":
 		node, err := firstNodeBySelector(ctx, req.Selector)
 		if err != nil {
 			return nil, err
 		}
-		backendNodeID = node.BackendNodeID
 		if auto != nil {
 			auto.prepareNode(ctx, int64(node.BackendNodeID))
 		}
+		click = humanClickNode(node.BackendNodeID)
+	case req.HasXY:
+		x, y := req.X, req.Y
+		click = func(ctx context.Context) error { return humanClickCoordinateAction(ctx, x, y) }
 	default:
-		return nil, NewInvalidActionRequestError("need selector, ref, or nodeId")
+		return nil, NewInvalidActionRequestError("need selector, ref, nodeId, or x/y coordinates")
 	}
 
 	// If the caller expects this click to open a native JS dialog, arm a
@@ -771,7 +780,7 @@ func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (r
 
 	resultCh := make(chan error, 1)
 	go func() {
-		resultCh <- clickElementAction(clickCtx, backendNodeID)
+		resultCh <- click(clickCtx)
 	}()
 
 	if detectDialog {
@@ -783,6 +792,7 @@ func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (r
 				if err != nil {
 					return nil, err
 				}
+				b.waitNavIfRequested(ctx, req)
 				return map[string]any{"clicked": true, "human": true}, nil
 			case <-ticker.C:
 				if e := dialogBlocking(dm, req.TabID); e != nil {
@@ -801,7 +811,12 @@ func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (r
 	if armedDialog {
 		waitForArmedDialogSettle(dm, req.TabID, dialogAutoHandleTimeout)
 	}
+	b.waitNavIfRequested(ctx, req)
 	return map[string]any{"clicked": true, "human": true}, nil
+}
+
+func humanClickNode(backendNodeID cdp.BackendNodeID) func(context.Context) error {
+	return func(ctx context.Context) error { return clickElementAction(ctx, backendNodeID) }
 }
 
 func (b *Bridge) actionScrollIntoView(ctx context.Context, req ActionRequest) (map[string]any, error) {
