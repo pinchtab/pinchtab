@@ -71,7 +71,7 @@ func pinchtabHeaderLiterals(t *testing.T, files []srccensus.SourceFile) map[stri
 				return true
 			}
 			val, err := strconv.Unquote(lit.Value)
-			if err == nil && strings.HasPrefix(headerKey(val), "x-pinchtab-") {
+			if err == nil && (strings.HasPrefix(headerKey(val), "x-pinchtab-") || strings.HasPrefix(headerKey(val), "x-idpi-")) {
 				out[headerKey(val)] = append(out[headerKey(val)], f.Name)
 			}
 			return true
@@ -105,7 +105,7 @@ func singleHomeViolations(headers map[string][]string) []string {
 func TestEachWireHeaderLiteralIsSingleHomed(t *testing.T) {
 	headers := pinchtabHeaderLiterals(t, srccensus.Tree(t, moduleRoot, minModuleFiles))
 
-	for _, wire := range []string{HeaderVocab, HeaderTabID, HeaderSource} {
+	for _, wire := range []string{HeaderVocab, HeaderTabID, HeaderSource, HeaderIDPIWarning, HeaderIDPIPattern} {
 		locs := headers[headerKey(wire)]
 		if len(locs) != 1 || locs[0] != headerHomeFile {
 			t.Errorf("wire header %s must be spelled exactly once, in %s; found %v", wire, headerHomeFile, locs)

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/browsers"
@@ -228,7 +229,7 @@ func (h *Handlers) validateNavigateTargets(w http.ResponseWriter, r *http.Reques
 		return navTargets{}, false
 	}
 	if domainResult.Threat {
-		w.Header().Set("X-IDPI-Warning", domainResult.Reason)
+		w.Header().Set(types.HeaderIDPIWarning, domainResult.Reason)
 	}
 
 	// file:// has no network target, so SSRF/private-IP resolution does not apply.

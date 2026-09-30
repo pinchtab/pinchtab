@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/contentguard"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -41,21 +42,16 @@ func (h *Handlers) scanSnapshotIDPI(w http.ResponseWriter, flat []bridge.A11yNod
 		}
 	}
 
-	idpi := h.IDPIGuard.ScanContent(sb.String())
-	if idpi.Blocked {
+	scan := (&contentguard.Scanner{Guard: h.IDPIGuard}).ScanOnly(sb.String())
+	if scan.Blocked {
 		httpx.Error(w, http.StatusForbidden,
-			fmt.Errorf("snapshot blocked by IDPI scanner: %s%s", idpi.Reason, idpiScannerHint()))
+			fmt.Errorf("snapshot blocked by IDPI scanner: %s%s", scan.BlockReason, idpiScannerHint()))
 		out.Blocked = true
 		return out
 	}
-	if idpi.Threat {
-		w.Header().Set("X-IDPI-Warning", idpi.Reason)
-		if idpi.Pattern != "" {
-			w.Header().Set("X-IDPI-Pattern", idpi.Pattern)
-		}
-		out.Threat = true
-		out.Reason = idpi.Reason
-	}
+	scan.SetHeaders(w)
+	out.Threat = scan.Warning != ""
+	out.Reason = scan.Warning
 	return out
 }
 

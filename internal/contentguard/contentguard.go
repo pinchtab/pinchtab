@@ -5,6 +5,7 @@ package contentguard
 import (
 	"net/http"
 
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/idpi"
 )
 
@@ -28,19 +29,9 @@ type Result struct {
 // Scan runs IDPI content scanning on text. If WrapEnabled and content is not
 // blocked, wraps the text with trust-boundary markers.
 func (s *Scanner) Scan(text, pageURL string) *Result {
-	if s == nil || s.Guard == nil || !s.Guard.Enabled() {
-		return &Result{Text: text}
-	}
-	cr := s.Guard.ScanContent(text)
-	r := &Result{Text: text}
-	if cr.Blocked {
-		r.Blocked = true
-		r.BlockReason = cr.Reason
+	r := s.ScanOnly(text)
+	if r.Blocked || s == nil || s.Guard == nil || !s.Guard.Enabled() {
 		return r
-	}
-	if cr.Threat {
-		r.Warning = cr.Reason
-		r.Pattern = cr.Pattern
 	}
 	if s.WrapEnabled {
 		r.Text = s.Guard.WrapContent(text, pageURL)
@@ -75,9 +66,9 @@ func (r *Result) SetHeaders(w http.ResponseWriter) {
 		return
 	}
 	if r.Warning != "" {
-		w.Header().Set("X-IDPI-Warning", r.Warning)
+		w.Header().Set(types.HeaderIDPIWarning, r.Warning)
 	}
 	if r.Pattern != "" {
-		w.Header().Set("X-IDPI-Pattern", r.Pattern)
+		w.Header().Set(types.HeaderIDPIPattern, r.Pattern)
 	}
 }

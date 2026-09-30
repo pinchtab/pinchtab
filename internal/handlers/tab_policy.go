@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
@@ -180,7 +181,7 @@ func (h *Handlers) enforceCurrentTabDomainPolicy(w http.ResponseWriter, r *http.
 
 func (h *Handlers) applyTabPolicyState(w http.ResponseWriter, state bridge.TabPolicyState) (string, bool) {
 	if state.Threat {
-		w.Header().Set("X-IDPI-Warning", state.Reason)
+		w.Header().Set(types.HeaderIDPIWarning, state.Reason)
 	}
 	if state.Blocked {
 		writeIDPIDomainBlocked(w,

@@ -30,6 +30,16 @@ export const HeaderTabID = "X-PinchTab-Tab-Id";
  * (Vocab, Tab-Id) and the source tag the trusted hops set.
  */
 export const HeaderSource = "X-PinchTab-Source";
+/**
+ * The IDPI response headers warning a client that the content or domain it
+ * asked for matched a prompt-injection pattern without being blocked.
+ */
+export const HeaderIDPIWarning = "X-IDPI-Warning";
+/**
+ * The IDPI response headers warning a client that the content or domain it
+ * asked for matched a prompt-injection pattern without being blocked.
+ */
+export const HeaderIDPIPattern = "X-IDPI-Pattern";
 
 //////////
 // source: health.go
