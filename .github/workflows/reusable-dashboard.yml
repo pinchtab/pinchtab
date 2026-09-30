@@ -34,6 +34,9 @@ jobs:
       - name: Prettier check
         run: bun run format:check
 
+      - name: Unused exports (knip)
+        run: bun run knip
+
       - name: Run tests
         run: bun run test:run
 

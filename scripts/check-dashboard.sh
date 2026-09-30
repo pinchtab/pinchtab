@@ -108,6 +108,14 @@ else
   fi
 fi
 
+section "Knip"
+if $RUN run knip 2>&1; then
+  ok "No unused exports"
+else
+  fail "Unused exports or types"
+  exit 1
+fi
+
 section "Summary"
 echo ""
 echo -e "  ${SUCCESS}${BOLD}Dashboard checks passed!${NC}"
