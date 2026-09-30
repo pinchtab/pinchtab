@@ -288,14 +288,18 @@ func abs(n int) int {
 type keyboardAction struct {
 	kind string
 	arg  string
+	set  func(*bridge.ActionRequest, string)
 }
 
+func setKey(req *bridge.ActionRequest, v string)  { req.Key = v }
+func setText(req *bridge.ActionRequest, v string) { req.Text = v }
+
 var keyboardActions = map[string]keyboardAction{
-	"press":  {kind: "press", arg: "key"},
-	"down":   {kind: "keydown", arg: "key"},
-	"up":     {kind: "keyup", arg: "key"},
-	"type":   {kind: "keyboard-type", arg: "text"},
-	"insert": {kind: "keyboard-inserttext", arg: "text"},
+	"press":  {kind: "press", arg: "key", set: setKey},
+	"down":   {kind: "keydown", arg: "key", set: setKey},
+	"up":     {kind: "keyup", arg: "key", set: setKey},
+	"type":   {kind: "keyboard-type", arg: "text", set: setText},
+	"insert": {kind: "keyboard-inserttext", arg: "text", set: setText},
 }
 
 func handleKeyboard(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -308,14 +312,12 @@ func handleKeyboard(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		payload := map[string]any{"kind": action.kind, action.arg: value}
-		if tabID := optString(r, "tabId"); tabID != "" {
-			payload["tabId"] = tabID
-		}
+		req := bridge.ActionRequest{Kind: action.kind, TabID: optString(r, "tabId"), Browser: routingBrowser(r)}
+		action.set(&req, value)
 		if nodeID, ok := optInt(r, "nodeId"); ok && nodeID > 0 {
-			payload["nodeId"] = nodeID
+			req.NodeID = int64(nodeID)
 		}
-		return toolResult(c.Post(ctx, routedPathWithBody(r, "/action", payload), payload))
+		return toolResult(c.Post(ctx, routedPath(r, "/action"), req))
 	}
 }
 

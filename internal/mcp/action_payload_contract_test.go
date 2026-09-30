@@ -79,6 +79,56 @@ func TestEveryMCPActionPayloadKeyIsReadByTheActionItIsSentTo(t *testing.T) {
 	}
 }
 
+// The keyboard tool builds its request from a per-action setter table the census walker
+// cannot follow, so its keys are measured on the wire instead: every key a keyboard action
+// posts must be a field its bridge kind reads, or one another layer owns.
+func TestEveryKeyboardPayloadKeyIsReadByTheActionItIsSentTo(t *testing.T) {
+	readsByKind := actionRequestReadsByKind(t)
+	fieldByKey := actionRequestFieldsByJSONKey()
+	checked := 0
+	for _, name := range sortedActionNames(keyboardActions) {
+		action := keyboardActions[name]
+		srv, _ := upstreamRecorder(t)
+		r := callTool(t, "pinchtab_key", map[string]any{"action": name, action.arg: "x", "tabId": "t1", "nodeId": float64(7), "browser": "chrome"}, srv)
+		if r.IsError {
+			t.Fatalf("action=%q was rejected: %s", name, resultText(t, r))
+		}
+		body, _ := resultJSON(t, r)["body"].(map[string]any)
+		if body["kind"] != action.kind || body[action.arg] != "x" {
+			t.Fatalf("action=%q posted %v, want kind %q carrying %s", name, body, action.kind, action.arg)
+		}
+		for key := range body {
+			if key == "kind" {
+				continue
+			}
+			field, known := fieldByKey[key]
+			if !known {
+				t.Errorf("action=%q posts %q, which is not an ActionRequest field", name, key)
+				continue
+			}
+			checked++
+			if _, owned := consumedElsewhere[field]; owned {
+				continue
+			}
+			if !readsByKind[action.kind][field] {
+				t.Errorf("action=%q posts ActionRequest.%s, which the %s action never reads; the write would be silently dropped", name, field, action.kind)
+			}
+		}
+	}
+	if checked < len(keyboardActions)*2 {
+		t.Fatalf("only %d keyboard payload keys were checked, so this census proves little", checked)
+	}
+}
+
+func sortedActionNames(actions map[string]keyboardAction) []string {
+	names := make([]string, 0, len(actions))
+	for name := range actions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 type payloadCase struct {
 	keys []string
 	// dispatchesTo is the kind itself plus any kind a builder rewrites req.Kind to, since
