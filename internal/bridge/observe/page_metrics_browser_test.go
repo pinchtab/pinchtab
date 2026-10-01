@@ -37,6 +37,12 @@ func launchBrowser(t *testing.T) context.Context {
 	return ctx
 }
 
+func allowSlowTargetReads(t *testing.T) {
+	original := targetReadTimeout
+	targetReadTimeout = 30 * time.Second
+	t.Cleanup(func() { targetReadTimeout = original })
+}
+
 func openTab(t *testing.T, browserCtx context.Context, html string) context.Context {
 	t.Helper()
 	ctx, cancel := chromedp.NewContext(browserCtx)
@@ -47,9 +53,8 @@ func openTab(t *testing.T, browserCtx context.Context, html string) context.Cont
 	return ctx
 }
 
-// Two page states the counters must tell apart, or nothing proves a reading was
-// taken from the target rather than invented.
 func TestPageCountersMoveBetweenATrivialAndADOMHeavyPage(t *testing.T) {
+	allowSlowTargetReads(t)
 	browser := launchBrowser(t)
 	trivial := openTab(t, browser, "<html><body>hi</body></html>")
 	heavy := openTab(t, browser, "<html><body>"+strings.Repeat("<div><span>x</span></div>", 3000)+"<script>for(let i=0;i<500;i++)document.addEventListener('x'+i,()=>{})</script></body></html>")
@@ -87,12 +92,8 @@ func TestPageCountersMoveBetweenATrivialAndADOMHeavyPage(t *testing.T) {
 	}
 }
 
-// The per-poll cost the Settings toggle gates, measured rather than asserted: the
-// figures are logged so the card can carry them, and the bounds pinned are
-// that some poll reads every tab and the fastest poll stays under the dashboard's
-// 5s emit interval: host load stretches the mean and can push a single target past
-// its read timeout, neither of which is the cost of the poll itself.
 func TestPerPollCostAcrossSeveralTabsIsRecorded(t *testing.T) {
+	allowSlowTargetReads(t)
 	browser := launchBrowser(t)
 	const tabs = 5
 	targets := map[string]context.Context{}
@@ -115,8 +116,8 @@ func TestPerPollCostAcrossSeveralTabsIsRecorded(t *testing.T) {
 		}
 	}
 	allTargets := time.Since(start) / polls
-	if complete == 0 {
-		t.Fatalf("none of %d polls read all %d tabs", polls, tabs)
+	if complete != polls {
+		t.Fatalf("%d of %d polls read all %d tabs, want every poll to", complete, polls, tabs)
 	}
 	var total, fastest time.Duration
 	for i := range polls {

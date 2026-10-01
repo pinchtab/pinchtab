@@ -10,7 +10,7 @@ import (
 	"github.com/shirou/gopsutil/v4/process"
 )
 
-const targetReadTimeout = 2 * time.Second
+var targetReadTimeout = 2 * time.Second
 
 // MemoryMetrics holds what PinchTab measures for one browser instance: RSS across
 // the process tree, the renderer count, and the page counters summed over every
