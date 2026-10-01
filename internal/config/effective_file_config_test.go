@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -124,4 +125,32 @@ func flattenConfigMap(prefix string, value any, into ...map[string]string) map[s
 		flattenConfigMap(path, nested, out)
 	}
 	return out
+}
+
+func TestAnUntouchedFileAndItsSpelledOutEffectiveConfigLoadTheSameRuntime(t *testing.T) {
+	explicitnessMarkers := map[string]bool{"HeadlessSet": true}
+	untouched := savedConfigBaseline()
+	spelled, err := json.Marshal(EffectiveFileConfig(*untouched))
+	if err != nil {
+		t.Fatal(err)
+	}
+	onDisk := savedConfigBaseline()
+	if err := json.Unmarshal(spelled, onDisk); err != nil {
+		t.Fatal(err)
+	}
+	fromUntouched, fromSpelled := defaultRuntimeConfig(), defaultRuntimeConfig()
+	applyFileConfig(fromUntouched, untouched)
+	applyFileConfig(fromSpelled, onDisk)
+	a, b := reflect.ValueOf(fromUntouched).Elem(), reflect.ValueOf(fromSpelled).Elem()
+	for i := 0; i < a.NumField(); i++ {
+		name := a.Type().Field(i).Name
+		if explicitnessMarkers[name] || !a.Type().Field(i).IsExported() {
+			continue
+		}
+		left, _ := json.Marshal(a.Field(i).Interface())
+		right, _ := json.Marshal(b.Field(i).Interface())
+		if string(left) != string(right) {
+			t.Errorf("%s: untouched file loads %s, spelled-out effective config loads %s", name, left, right)
+		}
+	}
 }
