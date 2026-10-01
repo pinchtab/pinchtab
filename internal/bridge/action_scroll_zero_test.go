@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"reflect"
 	"strconv"
@@ -64,33 +63,32 @@ var presenceFlagOf = map[string]string{
 func presenceInferredKeys(t *testing.T) []string {
 	t.Helper()
 
-	file, err := parser.ParseFile(token.NewFileSet(), "action_request.go", nil, 0)
-	if err != nil {
-		t.Fatalf("parse action_request.go: %v", err)
-	}
+	_, files := srccensus.Load(t, ".", 20).Syntax()
 	var keys []string
-	ast.Inspect(file, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
+	for _, file := range files {
+		ast.Inspect(file, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			fn, ok := call.Fun.(*ast.Ident)
+			if !ok || fn.Name != "hasJSONKey" || len(call.Args) != 2 {
+				return true
+			}
+			lit, ok := call.Args[1].(*ast.BasicLit)
+			if !ok || lit.Kind != token.STRING {
+				t.Fatalf("hasJSONKey is called with a computed key, so the census cannot enumerate it")
+			}
+			key, uErr := strconv.Unquote(lit.Value)
+			if uErr != nil {
+				t.Fatalf("unquote %s: %v", lit.Value, uErr)
+			}
+			keys = append(keys, key)
 			return true
-		}
-		fn, ok := call.Fun.(*ast.Ident)
-		if !ok || fn.Name != "hasJSONKey" || len(call.Args) != 2 {
-			return true
-		}
-		lit, ok := call.Args[1].(*ast.BasicLit)
-		if !ok || lit.Kind != token.STRING {
-			t.Fatalf("hasJSONKey is called with a computed key, so the census cannot enumerate it")
-		}
-		key, uErr := strconv.Unquote(lit.Value)
-		if uErr != nil {
-			t.Fatalf("unquote %s: %v", lit.Value, uErr)
-		}
-		keys = append(keys, key)
-		return true
-	})
+		})
+	}
 	if len(keys) == 0 {
-		t.Fatal("no hasJSONKey call sites found; the census is reading the wrong file")
+		t.Fatal("no hasJSONKey call sites found; the census is reading the wrong package")
 	}
 	return keys
 }

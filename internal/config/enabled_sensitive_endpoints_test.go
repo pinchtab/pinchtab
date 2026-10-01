@@ -1,13 +1,13 @@
 package config
 
 import (
-	"os"
 	"reflect"
 	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/routes"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 func withCapability(t *testing.T, cap routes.Capability) *RuntimeConfig {
@@ -57,14 +57,13 @@ func TestAllowStateExportAloneIsNotReportedAsSensitiveEndpointsDisabled(t *testi
 }
 
 func TestTheReporterRestatesNoCapabilityCount(t *testing.T) {
-	src, err := os.ReadFile("config_methods.go")
-	if err != nil {
-		t.Fatal(err)
+	pkg := srccensus.Load(t, ".", 25)
+	reporter := pkg.MustFunc(t, "EnabledSensitiveEndpoints")
+	src := pkg.FileSource(reporter)
+	if m := regexp.MustCompile(`make\(\[\]string, 0, \d+\)`).FindString(src); m != "" {
+		t.Errorf("%s restates the capability count: %s", reporter.File, m)
 	}
-	if m := regexp.MustCompile(`make\(\[\]string, 0, \d+\)`).Find(src); m != nil {
-		t.Errorf("config_methods.go restates the capability count: %s", m)
-	}
-	if strings.Count(string(src), "cfg.Allow") > 0 {
-		t.Errorf("config_methods.go reads a capability flag by name; the routes table is the only list")
+	if strings.Contains(src, "cfg.Allow") {
+		t.Errorf("%s reads a capability flag by name; the routes table is the only list", reporter.File)
 	}
 }

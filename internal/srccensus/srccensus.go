@@ -73,6 +73,7 @@ func (s Site) String() string {
 type Package struct {
 	fset  *token.FileSet
 	files map[string]*ast.File
+	src   map[string][]byte
 	dir   string
 }
 
@@ -87,16 +88,21 @@ func Load(t testing.TB, dir string, minFiles int) *Package {
 		t.Fatalf("cannot enumerate %s, so this census would check nothing: %v", dir, err)
 	}
 
-	pkg := &Package{fset: token.NewFileSet(), files: map[string]*ast.File{}, dir: dir}
+	pkg := &Package{fset: token.NewFileSet(), files: map[string]*ast.File{}, src: map[string][]byte{}, dir: dir}
 	for _, path := range paths {
 		if strings.HasSuffix(path, "_test.go") {
 			continue
 		}
-		file, err := parser.ParseFile(pkg.fset, path, nil, 0)
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("cannot read %s, so this census would skip it silently: %v", path, err)
+		}
+		file, err := parser.ParseFile(pkg.fset, path, raw, 0)
 		if err != nil {
 			t.Fatalf("cannot parse %s, so this census would skip it silently: %v", path, err)
 		}
 		pkg.files[filepath.Base(path)] = file
+		pkg.src[filepath.Base(path)] = raw
 	}
 	if len(pkg.files) < minFiles {
 		t.Fatalf("parsed %d non-test files in %s, want at least %d; the census matched almost nothing and would pass vacuously", len(pkg.files), dir, minFiles)
@@ -363,11 +369,32 @@ func (p *Package) Func(name string) (Func, bool) {
 	return found, ok
 }
 
+// MustFunc is Func for a guard that cannot proceed without the declaration.
+func (p *Package) MustFunc(t testing.TB, name string) Func {
+	t.Helper()
+	fn, ok := p.Func(name)
+	if !ok {
+		t.Fatalf("%s is not declared anywhere in %s; re-point this guard at whatever replaced it rather than deleting it", name, p.dir)
+	}
+	return fn
+}
+
 // Syntax exposes the parsed files, keyed by base name and sharing one FileSet, for a rule
 // the finders cannot express — a type check, or a match on call arguments. The scope is
 // still Load's, so a guard reaching for raw syntax keeps the derived file set and its floor.
 func (p *Package) Syntax() (*token.FileSet, map[string]*ast.File) {
 	return p.fset, maps.Clone(p.files)
+}
+
+// Source is the text of fn's declaration, for a rule about what one function says.
+func (p *Package) Source(fn Func) string {
+	return string(p.src[fn.File][p.fset.Position(fn.start).Offset:p.fset.Position(fn.end).Offset])
+}
+
+// FileSource is the whole text of the file declaring fn: a file-scoped ban anchored on a
+// declaration follows that declaration through a rename of its file.
+func (p *Package) FileSource(fn Func) string {
+	return string(p.src[fn.File])
 }
 
 // Dir is the directory the census read, for a not-found message that says where it looked.

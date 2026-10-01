@@ -12,6 +12,7 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
@@ -251,26 +252,14 @@ func TestADragDestinationGoneAfterRefreshStillRefuses(t *testing.T) {
 // owner. A future re-resolution site that forgets the secondary targets is exactly
 // how the destination was left behind the first time.
 func TestEveryReResolutionSiteRefreshesSecondaryTargets(t *testing.T) {
-	execution, err := os.ReadFile("action_execution.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(execution), "func (h *Handlers) refreshActionSecondaryTargets(") {
-		t.Fatal("refreshActionSecondaryTargets was renamed or moved; re-point this census at whatever replaced it rather than deleting it")
-	}
-	body := string(execution)
-	start := strings.Index(body, "func (h *Handlers) executeActionResilient(")
-	end := strings.Index(body[start:], "\nfunc ")
-	resilient := body[start : start+end]
+	pkg := srccensus.Load(t, ".", 80)
+	pkg.MustFunc(t, "refreshActionSecondaryTargets")
+	resilient := pkg.Source(pkg.MustFunc(t, "executeActionResilient"))
 	if got := strings.Count(resilient, "h.refreshActionSecondaryTargets("); got != 3 {
 		t.Errorf("executeActionResilient calls refreshActionSecondaryTargets %d times, want 3 — the recovery-first callback, the pointer retry, and the post-failure heal each re-resolve after the snapshot may have changed", got)
 	}
 
-	actions, err := os.ReadFile("actions.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(actions), "h.refreshActionSecondaryTargets(") {
+	if !strings.Contains(pkg.Source(pkg.MustFunc(t, "resolveActionDestination")), "h.refreshActionSecondaryTargets(") {
 		t.Error("HandleAction no longer routes a missing drag destination through the shared re-resolution; the unconditional 404 this card removed is the likely regression")
 	}
 }

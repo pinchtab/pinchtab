@@ -5,7 +5,6 @@ import (
 	"go/parser"
 	"go/token"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -37,30 +36,9 @@ func TestEveryASTParsingTestUnderInternalBuildsOnSrccensus(t *testing.T) {
 	}
 }
 
-// literalSourceReadsAwaitingPort lists the tests that still read a production file by
-// literal name, each awaiting a port to srccensus.Load plus a declaration lookup (PIN-088).
-// The list may only shrink: an entry whose file no longer reads by name fails as stale.
-var literalSourceReadsAwaitingPort = map[string]bool{
-	"internal/bridge/action_scroll_zero_test.go":          true,
-	"internal/bridge/observe/network_body_clamp_test.go":  true,
-	"internal/cdptk/isolated_world_test.go":               true,
-	"internal/cli/report/security_defaults_test.go":       true,
-	"internal/config/config_unknown_keys_test.go":         true,
-	"internal/config/enabled_sensitive_endpoints_test.go": true,
-	"internal/handlers/action_drag_destination_test.go":   true,
-	"internal/handlers/binary_export_test.go":             true,
-	"internal/handlers/capture_test.go":                   true,
-	"internal/handlers/middleware_stream_auth_test.go":    true,
-	"internal/instance/bridge_client_auth_test.go":        true,
-	"internal/mcp/handlers_interaction_test.go":           true,
-	"internal/selector/selector_test.go":                  true,
-	"internal/stealth/bundle_test.go":                     true,
-}
-
 func TestNoTestUnderInternalReadsSourceByLiteralFilename(t *testing.T) {
 	files := TestTree(t, filepath.Join("..", ".."), 100)
 
-	offending := map[string][]string{}
 	for _, file := range files {
 		if !strings.HasPrefix(file.Name, "internal/") || strings.HasPrefix(file.Name, "internal/srccensus/") {
 			continue
@@ -71,23 +49,7 @@ func TestNoTestUnderInternalReadsSourceByLiteralFilename(t *testing.T) {
 			continue
 		}
 		if len(reads) > 0 {
-			offending[file.Name] = reads
-		}
-	}
-
-	names := make([]string, 0, len(offending))
-	for name := range offending {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		if !literalSourceReadsAwaitingPort[name] {
-			t.Errorf("%s reads Go source by literal filename (%s); load the package with srccensus.Load and locate the declaration by name, so a rename or a move to a sibling file keeps the guard pointed at the code", name, strings.Join(offending[name], ", "))
-		}
-	}
-	for name := range literalSourceReadsAwaitingPort {
-		if _, still := offending[name]; !still {
-			t.Errorf("%s no longer reads source by literal filename; delete its literalSourceReadsAwaitingPort entry so the list keeps shrinking", name)
+			t.Errorf("%s reads Go source by literal filename (%s); load the package with srccensus.Load and locate the declaration by name, so a rename or a move to a sibling file keeps the guard pointed at the code", file.Name, strings.Join(reads, ", "))
 		}
 	}
 }

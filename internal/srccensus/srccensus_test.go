@@ -249,6 +249,22 @@ func TestFuncFindsADeclarationInAnySiblingFile(t *testing.T) {
 	}
 }
 
+func TestSourceIsTheDeclarationAndFileSourceItsWholeFile(t *testing.T) {
+	file := "package p\n\nfunc before() {}\n\nfunc owner() { body() }\n\nfunc after() {}\n"
+	pkg := Load(t, writePackage(t, map[string]string{"a.go": file}), 1)
+
+	fn, ok := pkg.Func("owner")
+	if !ok {
+		t.Fatal("owner not found")
+	}
+	if got := pkg.Source(fn); got != "func owner() { body() }" {
+		t.Errorf("Source(owner) = %q, want exactly its declaration", got)
+	}
+	if got := pkg.FileSource(fn); got != file {
+		t.Errorf("FileSource(owner) = %q, want the whole of a.go", got)
+	}
+}
+
 // Receiver-name-blind on purpose: a census keyed on one spelling is scoped to that
 // spelling, which is how the identical assignment through a renamed variable survives.
 func TestFieldAssignmentsIgnoresWhatTheReceiverIsCalled(t *testing.T) {

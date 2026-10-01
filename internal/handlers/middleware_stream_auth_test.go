@@ -8,10 +8,9 @@ import (
 	"go/token"
 	"net/http"
 	"net/http/httptest"
-	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -317,11 +316,7 @@ func TestStreamSiteCensusStaysBehindStreamAwareMiddleware(t *testing.T) {
 		}
 	}
 
-	frontDoor, err := os.ReadFile("../server/front_door_metrics.go")
-	if err != nil {
-		t.Fatalf("read front door wiring: %v", err)
-	}
-	if !strings.Contains(string(frontDoor), "AuthMiddlewareWithSessions") {
+	if len(srccensus.Load(t, filepath.Join("..", "server"), 8).CallsAllowingNone("handlers.AuthMiddlewareWithSessions")) == 0 {
 		t.Fatal("front door no longer mounts AuthMiddlewareWithSessions; the stream-aware credential re-check does not reach the stream sites")
 	}
 }

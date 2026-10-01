@@ -3,9 +3,10 @@ package instance
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 // recordingBridge answers /tabs only when a credential is presented, which is
@@ -67,13 +68,11 @@ func TestFetchTabsWithoutAnAuthorizerStillWorks(t *testing.T) {
 // call that happened to be reported. The rule is pinned over the source so a new
 // method cannot dispatch without going through bc.authorized.
 func TestEveryRequestThisClientBuildsIsAuthorized(t *testing.T) {
-	source, err := os.ReadFile("bridge_client.go")
-	if err != nil {
-		t.Fatalf("read the source this rule is about: %v", err)
-	}
+	pkg := srccensus.Load(t, ".", 5)
+	source := pkg.FileSource(pkg.MustFunc(t, "authorized"))
 
 	dispatches := 0
-	for _, line := range strings.Split(string(source), "\n") {
+	for line := range strings.SplitSeq(source, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "//") || !strings.Contains(trimmed, "bc.client.Do(") {
 			continue

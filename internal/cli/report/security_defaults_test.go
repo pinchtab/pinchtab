@@ -1,11 +1,11 @@
 package report
 
 import (
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/routes"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 // The recommended-defaults report used to hand-list its capability lines and had drifted
@@ -60,11 +60,9 @@ func TestRecommendedDefaultsEmitNoFabricatedSetting(t *testing.T) {
 // share capabilityDisableLines, so no capability disable line may be written as a literal:
 // finding one means a hand-listed copy has returned.
 func TestNoHandListedCapabilityDisableLineRemains(t *testing.T) {
-	src, err := os.ReadFile("security_defaults.go")
-	if err != nil {
-		t.Fatalf("read source: %v", err)
-	}
-	text := string(src)
+	pkg := srccensus.Load(t, ".", 5)
+	owner := pkg.MustFunc(t, "capabilityDisableLines")
+	text := pkg.FileSource(owner)
 	found := 0
 	for cap := range routes.CapabilityEndpoints() {
 		meta, ok := routes.Meta(cap)
@@ -72,7 +70,7 @@ func TestNoHandListedCapabilityDisableLineRemains(t *testing.T) {
 			continue
 		}
 		if strings.Contains(text, `"`+meta.Setting+" = false"+`"`) {
-			t.Errorf("security_defaults.go hand-lists %q as a literal; it must come from capabilityDisableLines so a ninth capability is covered by construction", meta.Setting+" = false")
+			t.Errorf("%s hand-lists %q as a literal; it must come from capabilityDisableLines so a ninth capability is covered by construction", owner.File, meta.Setting+" = false")
 		}
 		found++
 	}

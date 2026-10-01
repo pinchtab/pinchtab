@@ -254,17 +254,15 @@ func TestNetworkExportAutoNamesUniquelyButHonoursAnExplicitPath(t *testing.T) {
 // checkable without a browser is that the branch routes the generated name through the
 // collision-proof helper while the caller-supplied path still uses a plain write.
 func TestSnapshotFileBranchRoutesTheGeneratedNameThroughTheUniqueHelper(t *testing.T) {
-	raw, err := os.ReadFile("snapshot_render.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	src := string(raw)
+	pkg := srccensus.Load(t, ".", 80)
+	writer := pkg.MustFunc(t, "writeSnapshotFile")
+	src := pkg.Source(writer)
 
 	if !strings.Contains(src, `writeUniqueFile(snapshotDir, "snapshot-"+timestamp, ext, content)`) {
 		t.Error("the auto-named snapshot no longer goes through writeUniqueFile, so two snapshots in one second can overwrite again")
 	}
-	if strings.Contains(src, "os.WriteFile(") {
-		t.Error("snapshot_render.go writes a file directly; the caller-named path goes through saveToCallerPath")
+	if strings.Contains(pkg.FileSource(writer), "os.WriteFile(") {
+		t.Errorf("%s writes a file directly; the caller-named path goes through saveToCallerPath", writer.File)
 	}
 	explicitBranch := src[strings.Index(src, `if q.outputPath != "" {`):]
 	if end := strings.Index(explicitBranch, "\n\t} else {"); end >= 0 {

@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 func writeConfigFixture(t *testing.T, body string) string {
@@ -209,20 +211,11 @@ func TestUnknownConfigKeysErrorNamesThePaths(t *testing.T) {
 // WRITING; if the reader ever switched to that, the walk would start reporting
 // keys the loader honours and accepting keys it ignores.
 func TestReaderDecodesAFileConfigShadowSoTheWalkChecksTheRightKeys(t *testing.T) {
-	src, err := os.ReadFile("config_file_marshal.go")
-	if err != nil {
-		t.Fatal(err)
+	pkg := srccensus.Load(t, ".", 25)
+	unmarshaler := pkg.Source(pkg.MustFunc(t, "UnmarshalJSON"))
+	if !strings.HasPrefix(unmarshaler, "func (fc *FileConfig) UnmarshalJSON(") {
+		t.Fatalf("the UnmarshalJSON found is not FileConfig's; the unknown-key walk's premise cannot be checked: %.80s", unmarshaler)
 	}
-	body := string(src)
-	start := strings.Index(body, "func (fc *FileConfig) UnmarshalJSON(")
-	if start < 0 {
-		t.Fatal("FileConfig.UnmarshalJSON not found; the unknown-key walk's premise cannot be checked")
-	}
-	end := strings.Index(body[start:], "\n}\n")
-	if end < 0 {
-		t.Fatal("could not delimit UnmarshalJSON")
-	}
-	unmarshaler := body[start : start+end]
 
 	if !strings.Contains(unmarshaler, "type rawFileConfig FileConfig") {
 		t.Error("UnmarshalJSON no longer decodes a defined-type shadow of FileConfig; UnknownFileConfigKeys walks FileConfig's tags and must be pointed at whatever shape the reader now uses")

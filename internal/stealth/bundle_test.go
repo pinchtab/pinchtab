@@ -1,7 +1,6 @@
 package stealth
 
 import (
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -434,11 +433,8 @@ func TestTheLaunchOverrideUserAgentIsNeverEmpty(t *testing.T) {
 
 	// The field asserted above is the one the launch path applies. Without this the
 	// test would keep passing after the launch override started reading something else.
-	raw, err := os.ReadFile("emulation.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(raw), "emulation.SetUserAgentOverride(persona.UserAgent)") {
-		t.Error("emulation.go no longer applies persona.UserAgent, so the non-empty guarantee above is about a field the launch path does not use")
+	pkg := srccensus.Load(t, ".", 5)
+	if !strings.Contains(pkg.Source(pkg.MustFunc(t, "BuildUserAgentOverride")), "emulation.SetUserAgentOverride(persona.UserAgent)") {
+		t.Error("BuildUserAgentOverride no longer applies persona.UserAgent, so the non-empty guarantee above is about a field the launch path does not use")
 	}
 }

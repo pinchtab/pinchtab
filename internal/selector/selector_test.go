@@ -1,10 +1,13 @@
 package selector
 
 import (
-	"os"
-	"regexp"
+	"go/ast"
+	"go/token"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 func TestParse_ExplicitPrefixes(t *testing.T) {
@@ -574,21 +577,32 @@ func TestPrefixTableCoversEveryKindWithAPrefix(t *testing.T) {
 func declaredKinds(t *testing.T) []Kind {
 	t.Helper()
 
-	raw, err := os.ReadFile("selector.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	declaration := regexp.MustCompile(`(?m)^\s*(?:const\s+)?Kind\w+\s+Kind = "([^"]*)"`)
+	pkg := srccensus.Load(t, ".", 1)
+	_, files := pkg.Syntax()
 	var kinds []Kind
-	for _, m := range declaration.FindAllStringSubmatch(string(raw), -1) {
-		if m[1] == "" {
-			continue
-		}
-		kinds = append(kinds, Kind(m[1]))
+	for _, file := range files {
+		ast.Inspect(file, func(node ast.Node) bool {
+			spec, ok := node.(*ast.ValueSpec)
+			if !ok {
+				return true
+			}
+			if typ, isIdent := spec.Type.(*ast.Ident); !isIdent || typ.Name != "Kind" {
+				return true
+			}
+			for _, value := range spec.Values {
+				lit, isLit := value.(*ast.BasicLit)
+				if !isLit || lit.Kind != token.STRING {
+					continue
+				}
+				if kind, err := strconv.Unquote(lit.Value); err == nil && kind != "" {
+					kinds = append(kinds, Kind(kind))
+				}
+			}
+			return true
+		})
 	}
 	if len(kinds) < 2 {
-		t.Fatalf("found %d declared kinds in selector.go; the scan matched almost nothing and the coverage check would pass vacuously", len(kinds))
+		t.Fatalf("found %d declared kinds in %s; the scan matched almost nothing and the coverage check would pass vacuously", len(kinds), pkg.Dir())
 	}
 	return kinds
 }

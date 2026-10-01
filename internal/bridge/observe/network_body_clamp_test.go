@@ -3,12 +3,12 @@ package observe
 import (
 	"context"
 	"encoding/base64"
-	"os"
 	"strings"
 	"testing"
 	"unicode/utf8"
 
 	"github.com/pinchtab/pinchtab/internal/sanitize"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 // multiByteBody's cut offsets fall inside a 3-byte and a 4-byte character, so a
@@ -251,16 +251,9 @@ func TestPostDataIsCutToAByteExactPrefix(t *testing.T) {
 // the two body fields must not reach the ellipsis variant, and the metadata fields
 // must not lose it.
 func TestBodyClampsAndDisplayFieldsUseTheirOwnHelper(t *testing.T) {
-	raw, err := os.ReadFile("network.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	src := string(raw)
-
-	clamp := src[strings.Index(src, "func clampRetainedBody("):]
-	if end := strings.Index(clamp, "\nfunc "); end >= 0 {
-		clamp = clamp[:end]
-	}
+	pkg := srccensus.Load(t, ".", 10)
+	clamp := pkg.Source(pkg.MustFunc(t, "clampRetainedBody"))
+	src := pkg.FileSource(pkg.MustFunc(t, "normalizeNetworkEntry"))
 	if !strings.Contains(clamp, "sanitize.TruncateUTF8BytesExact(") {
 		t.Error("clampRetainedBody no longer cuts with the suffix-free helper")
 	}
@@ -299,8 +292,8 @@ func TestBodyClampsAndDisplayFieldsUseTheirOwnHelper(t *testing.T) {
 	// helper, which cannot see a site it does not know about — and an unlisted field
 	// taking the ellipsis by default is how the defect this file exists for arrived.
 	accounted := len(displayFields) + len(headerClamps) + 1 // the one payload clamp, which both the retained body and PostData go through
-	if sites := strings.Count(src, "sanitize.TruncateUTF8BytesWithEllipsis(") + strings.Count(src, "sanitize.TruncateUTF8BytesExact("); sites != accounted {
-		t.Errorf("network.go cuts a field at %d sites but this test classifies %d — a new field is picking a truncation policy nobody reviewed. Add it above: the ellipsis variant if a human reads it, the suffix-free one if it is machine-read and a marker would be fabricated content",
-			sites, accounted)
+	if sites := len(pkg.CallsAllowingNone("sanitize.TruncateUTF8BytesWithEllipsis")) + len(pkg.CallsAllowingNone("sanitize.TruncateUTF8BytesExact")); sites != accounted {
+		t.Errorf("%s cuts a field at %d sites but this test classifies %d — a new field is picking a truncation policy nobody reviewed. Add it above: the ellipsis variant if a human reads it, the suffix-free one if it is machine-read and a marker would be fabricated content",
+			pkg.Dir(), sites, accounted)
 	}
 }

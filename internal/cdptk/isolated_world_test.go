@@ -197,15 +197,16 @@ func itoa(n int) string {
 // frame-scoped evaluation silently moves to the top frame's document, which reads
 // as a selector that stopped matching rather than as a scope bug.
 func TestTheNamedFrameReachesTheWorldCreation(t *testing.T) {
-	fset := token.NewFileSet()
-	parsed, err := parser.ParseFile(fset, "isolated_world.go", nil, 0)
-	if err != nil {
-		t.Fatal(err)
+	pkg := srccensus.Load(t, ".", 5)
+	_, files := pkg.Syntax()
+	var owner *ast.FuncDecl
+	for _, file := range files {
+		if fn := findFuncDecl(file, "IsolatedContextID"); fn != nil {
+			owner = fn
+		}
 	}
-
-	owner := findFuncDecl(parsed, "IsolatedContextID")
 	if owner == nil {
-		t.Fatal("IsolatedContextID is gone from isolated_world.go; re-point this guard at whatever mints the isolated world rather than deleting it")
+		t.Fatalf("IsolatedContextID is gone from %s; re-point this guard at whatever mints the isolated world rather than deleting it", pkg.Dir())
 	}
 	param := owner.Type.Params.List[len(owner.Type.Params.List)-1].Names[0].Name
 

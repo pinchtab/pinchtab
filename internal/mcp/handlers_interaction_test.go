@@ -17,6 +17,7 @@ import (
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/scroll"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 	"github.com/spf13/cobra"
 )
 
@@ -1206,11 +1207,8 @@ func lineContaining(text, marker string) (string, bool) {
 // Criterion: one owner. The handler must carry neither its own keyword switch nor its own
 // magnitude literal, or the two surfaces can drift apart again exactly as they did.
 func TestScrollHandlerCarriesNoOwnDirectionVocabularyOrMagnitude(t *testing.T) {
-	source, err := os.ReadFile("handlers_interaction.go")
-	if err != nil {
-		t.Fatalf("read the handler: %v", err)
-	}
-	text := string(source)
+	pkg := srccensus.Load(t, ".", 15)
+	text := pkg.FileSource(pkg.MustFunc(t, "buildDirectionScroll"))
 
 	for _, keyword := range scroll.DirectionKeywords() {
 		if strings.Contains(text, `case "`+keyword+`"`) {

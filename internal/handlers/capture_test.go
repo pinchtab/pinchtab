@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
@@ -292,13 +292,10 @@ func TestCaptureSerialisesCheckedStateForCheckableControls(t *testing.T) {
 // where no browser is involved: the handler must read this exact parameter, or bounds are
 // computed regardless of what the query says and the unmeasured case is never exercised.
 func TestTheBoundsQueryKeyIsOneTheHandlerReads(t *testing.T) {
-	src, err := os.ReadFile("capture.go")
-	if err != nil {
-		t.Fatal(err)
-	}
+	src := captureSource(t)
 	needle := `q.Get("` + captureBoundsParam + `")`
-	if !strings.Contains(string(src), needle) {
-		t.Fatalf("capture.go does not read %s; the wire tests would drive a parameter the handler ignores, measure bounds anyway, and their unmeasured case would never run", needle)
+	if !strings.Contains(src, needle) {
+		t.Fatalf("the capture handler's file does not read %s; the wire tests would drive a parameter the handler ignores, measure bounds anyway, and their unmeasured case would never run", needle)
 	}
 }
 
@@ -307,13 +304,15 @@ func TestTheBoundsQueryKeyIsOneTheHandlerReads(t *testing.T) {
 // wire while the envelope embeds the snapshot nodes verbatim: a hand-built node
 // map could drop visible again with every observe-level test still green.
 func TestCaptureEnvelopeEmbedsSnapshotNodesVerbatim(t *testing.T) {
-	src, err := os.ReadFile("capture.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(src), `"nodes":     result.Nodes`) {
+	if !strings.Contains(captureSource(t), `"nodes":     result.Nodes`) {
 		t.Fatal("the capture envelope no longer embeds result.Nodes directly; re-mapping nodes into a literal drops whatever field the map forgets")
 	}
+}
+
+func captureSource(t *testing.T) string {
+	t.Helper()
+	pkg := srccensus.Load(t, ".", 80)
+	return pkg.FileSource(pkg.MustFunc(t, "HandleCapture"))
 }
 
 // visible drives GET /visible for a ref the capture just published, on the same
