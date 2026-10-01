@@ -612,7 +612,7 @@ func (b *Bridge) actionScroll(ctx context.Context, req ActionRequest) (map[strin
 		return nil, err
 	}
 	if nodeID > 0 {
-		return map[string]any{"scrolled": true}, bridgecdpops.ScrollByNodeID(ctx, nodeID)
+		return map[string]any{"scrolled": true}, cdptk.ScrollNodeIntoView(ctx, nodeID)
 	}
 
 	scrollX, scrollY, err := scrollDelta(req)

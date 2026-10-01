@@ -7,6 +7,7 @@ import (
 	"time"
 
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
+	"github.com/pinchtab/pinchtab/internal/cdptk"
 )
 
 var (
@@ -29,8 +30,8 @@ func SetResourceBlocking(ctx context.Context, patterns []string) error {
 // ScrollIntoViewAndGetBox scrolls the element into view and reports the box it
 // ended up at, in the same top-level viewport space /box and /capture report.
 func ScrollIntoViewAndGetBox(ctx context.Context, nodeID int64) (map[string]any, error) {
-	if err := bridgecdpops.ScrollIntoViewIfNeeded(ctx, nodeID); err != nil {
-		return nil, err
+	if err := cdptk.ScrollNodeIntoView(ctx, nodeID); err != nil {
+		return nil, fmt.Errorf("scrollIntoViewIfNeeded: %w", err)
 	}
 	box, ok := ElementBorderBox(ctx, nodeID)
 	if !ok {

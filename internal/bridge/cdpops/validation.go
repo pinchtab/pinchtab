@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/cdptk"
 )
 
 var (
@@ -42,9 +43,7 @@ const transparentRevealPoll = 50 * time.Millisecond
 // PointerPointForNode validates clickability assumptions and returns a
 // stable pointer coordinate for the backend node.
 func PointerPointForNode(ctx context.Context, backendNodeID int64, requireTopMost bool) (float64, float64, error) {
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.scrollIntoViewIfNeeded", map[string]any{"backendNodeId": backendNodeID}, nil)
-	})); err != nil {
+	if err := cdptk.ScrollNodeIntoView(ctx, backendNodeID); err != nil {
 		return 0, 0, fmt.Errorf("scroll into view: %w", err)
 	}
 

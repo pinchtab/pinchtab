@@ -193,9 +193,3 @@ func ReadInputValue(ctx context.Context, nodeID int64) (string, error) {
 	err := CallFunctionOnNode(ctx, nodeID, js, nil, &value)
 	return value, err
 }
-
-func ScrollByNodeID(ctx context.Context, nodeID int64) error {
-	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.scrollIntoViewIfNeeded", map[string]any{"backendNodeId": nodeID}, nil)
-	}))
-}

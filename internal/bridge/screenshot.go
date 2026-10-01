@@ -195,12 +195,7 @@ func CaptureScreenshot(ctx context.Context, opts ScreenshotOpts) ([]byte, error)
 // Handlers use this bridge-owned helper so CDP details stay out of the handler
 // layer.
 func ScreenshotClipForNode(ctx context.Context, nodeID int64) (*ScreenshotClip, error) {
-	// Bring target element into view before computing clip coordinates.
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.scrollIntoViewIfNeeded", map[string]any{
-			"backendNodeId": nodeID,
-		}, nil)
-	})); err != nil {
+	if err := cdptk.ScrollNodeIntoView(ctx, nodeID); err != nil {
 		return nil, fmt.Errorf("scroll into view: %w", err)
 	}
 
