@@ -150,3 +150,85 @@ func TestMetricsAvgLatencyZeroDispatches(t *testing.T) {
 		t.Errorf("expected 0 avg latency with no dispatches, got %.1f", snap.AvgDispatchLatency)
 	}
 }
+
+func TestMetricsWiredInSubmit(t *testing.T) {
+	s, executor := newTestScheduler(t)
+	defer executor.Close()
+
+	_, _ = s.Submit(SubmitRequest{
+		AgentID: "a1",
+		Action:  "click",
+		TabID:   "tab-1",
+	})
+
+	snap := s.GetMetrics()
+	if snap.TasksSubmitted != 1 {
+		t.Errorf("expected 1 submitted, got %d", snap.TasksSubmitted)
+	}
+	if snap.Agents["a1"].Submitted != 1 {
+		t.Errorf("expected a1 submitted=1, got %d", snap.Agents["a1"].Submitted)
+	}
+}
+
+func TestMetricsWiredInCancel(t *testing.T) {
+	s, executor := newTestScheduler(t)
+	defer executor.Close()
+
+	task, err := s.Submit(SubmitRequest{
+		AgentID: "a1",
+		Action:  "click",
+		TabID:   "tab-1",
+	})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+
+	if err := s.Cancel(task.ID); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+
+	snap := s.GetMetrics()
+	if snap.TasksCancelled != 1 {
+		t.Errorf("expected 1 cancelled, got %d", snap.TasksCancelled)
+	}
+}
+
+func TestMetricsWiredInDispatch(t *testing.T) {
+	s, executor := newTestScheduler(t)
+	defer executor.Close()
+
+	s.Start()
+	defer s.Stop()
+
+	_, err := s.Submit(SubmitRequest{
+		AgentID: "a1",
+		Action:  "click",
+		TabID:   "tab-1",
+		Ref:     "e1",
+	})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+
+	// Wait for dispatch to complete.
+	deadline := time.After(5 * time.Second)
+	for {
+		snap := s.GetMetrics()
+		if snap.TasksCompleted >= 1 || snap.TasksFailed >= 1 {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for task dispatch")
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+
+	snap := s.GetMetrics()
+	if snap.DispatchCount == 0 {
+		t.Error("dispatch count should be > 0 after task execution")
+	}
+	if snap.AvgDispatchLatency <= 0 {
+		t.Error("avg dispatch latency should be > 0")
+	}
+}
