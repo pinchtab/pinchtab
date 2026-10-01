@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/dom"
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
@@ -19,6 +20,13 @@ const trustedClickFixtureHTML = `<!doctype html><html><body>
   onclick="window.clicks=(window.clicks||0)+1;window.clickTrusted=event.isTrusted"
   ondblclick="window.dblclicks=(window.dblclicks||0)+1;window.dblTrusted=event.isTrusted">OK</button>
 </body></html>`
+
+// Without focus emulation Chromium acks a trusted dispatch to a hidden tab only
+// after its ~5s input-ack fallback, so the deadline must stay below that while
+// leaving a loaded machine far more room than the 250ms production step.
+// Navigation enables focus emulation and a screenshot switches it back off, so
+// each dispatch starts from the switched-off state.
+const trustedDispatchTestDeadline = 3 * time.Second
 
 func TestTrustedClickLandsOnATabManagerCreatedTab(t *testing.T) {
 	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
@@ -69,13 +77,18 @@ func TestTrustedClickLandsOnATabManagerCreatedTab(t *testing.T) {
 		{"click", bridgecdpops.ClickByNodeID, "window.clicks||0", "!!window.clickTrusted"},
 		{"double click", bridgecdpops.DoubleClickByNodeID, "window.dblclicks||0", "!!window.dblTrusted"},
 	} {
-		stepCtx, cancel := context.WithTimeout(tabCtx, trustedClickStepTimeout)
+		if err := chromedp.Run(tabCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+			return emulation.SetFocusEmulationEnabled(false).Do(ctx)
+		})); err != nil {
+			t.Fatal(err)
+		}
+		stepCtx, cancel := context.WithTimeout(tabCtx, trustedDispatchTestDeadline)
 		start := time.Now()
 		err := tc.click(stepCtx, nodeID)
 		elapsed := time.Since(start)
 		cancel()
 		if err != nil {
-			t.Fatalf("%s: trusted dispatch = %v after %v, want it to complete within %v", tc.name, err, elapsed, trustedClickStepTimeout)
+			t.Fatalf("%s: trusted dispatch = %v after %v, want it to complete within %v", tc.name, err, elapsed, trustedDispatchTestDeadline)
 		}
 
 		var count int
