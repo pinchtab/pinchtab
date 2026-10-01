@@ -75,7 +75,7 @@ func TestDryRunBuildsOnlyTheSuiteRunner(t *testing.T) {
 			}
 			out := stdout.String()
 			buildLine := ""
-			for _, line := range strings.Split(out, "\n") {
+			for line := range strings.SplitSeq(out, "\n") {
 				if strings.Contains(line, "compose") && strings.Contains(line, " build ") {
 					buildLine = line
 					break

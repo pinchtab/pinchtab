@@ -197,7 +197,7 @@ func TestAppendCommandLog(t *testing.T) {
 		t.Fatalf("got %d lines; want 2", len(lines))
 	}
 
-	var entry map[string]interface{}
+	var entry map[string]any
 	_ = json.Unmarshal([]byte(lines[0]), &entry)
 	if entry["command"] != "ls -la" {
 		t.Errorf("first command = %v; want 'ls -la'", entry["command"])

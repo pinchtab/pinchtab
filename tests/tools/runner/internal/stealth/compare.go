@@ -424,7 +424,7 @@ func renderHistoryMD(dir string, limit int) error {
 		return fmt.Errorf("read history.jsonl: %w", err)
 	}
 	var rows []HistoryEntry
-	for _, ln := range strings.Split(string(raw), "\n") {
+	for ln := range strings.SplitSeq(string(raw), "\n") {
 		ln = strings.TrimSpace(ln)
 		if ln == "" {
 			continue

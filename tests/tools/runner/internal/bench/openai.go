@@ -41,17 +41,17 @@ func (r *OpenAIRunner) Source() string       { return "openai-responses" }
 func (r *OpenAIRunner) Model() string        { return r.model }
 func (r *OpenAIRunner) Usage() UsageCounters { return r.usage }
 
-func (r *OpenAIRunner) ToolDefinitions() interface{} {
-	return []map[string]interface{}{
+func (r *OpenAIRunner) ToolDefinitions() any {
+	return []map[string]any{
 		{
 			"type":        "function",
 			"name":        "run_command",
 			"description": "Run a shell command in a persistent bash session rooted at tests/tools/. Use ./scripts/pt or ./scripts/ab directly.",
-			"parameters": map[string]interface{}{
+			"parameters": map[string]any{
 				"type": "object",
-				"properties": map[string]interface{}{
-					"command":         map[string]interface{}{"type": "string"},
-					"timeout_seconds": map[string]interface{}{"type": "integer", "minimum": 1, "maximum": 600},
+				"properties": map[string]any{
+					"command":         map[string]any{"type": "string"},
+					"timeout_seconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 600},
 				},
 				"required": []string{"command"},
 			},
@@ -59,19 +59,19 @@ func (r *OpenAIRunner) ToolDefinitions() interface{} {
 	}
 }
 
-func (r *OpenAIRunner) InitialConversation(userPrompt string) []interface{} {
-	return []interface{}{
-		map[string]interface{}{
+func (r *OpenAIRunner) InitialConversation(userPrompt string) []any {
+	return []any{
+		map[string]any{
 			"role": "user",
-			"content": []interface{}{
-				map[string]interface{}{"type": "input_text", "text": userPrompt},
+			"content": []any{
+				map[string]any{"type": "input_text", "text": userPrompt},
 			},
 		},
 	}
 }
 
-func (r *OpenAIRunner) Send(systemPrompt string, conversation []interface{}) (interface{}, error) {
-	body := map[string]interface{}{
+func (r *OpenAIRunner) Send(systemPrompt string, conversation []any) (any, error) {
+	body := map[string]any{
 		"model":             r.model,
 		"instructions":      systemPrompt,
 		"tools":             r.ToolDefinitions(),
@@ -92,8 +92,8 @@ func (r *OpenAIRunner) Send(systemPrompt string, conversation []interface{}) (in
 	return result, nil
 }
 
-func (r *OpenAIRunner) updateUsage(result map[string]interface{}) {
-	usage, _ := result["usage"].(map[string]interface{})
+func (r *OpenAIRunner) updateUsage(result map[string]any) {
+	usage, _ := result["usage"].(map[string]any)
 	if usage == nil {
 		return
 	}
@@ -101,7 +101,7 @@ func (r *OpenAIRunner) updateUsage(result map[string]interface{}) {
 
 	totalInput := toInt(usage["input_tokens"])
 	cached := 0
-	if details, ok := usage["input_tokens_details"].(map[string]interface{}); ok {
+	if details, ok := usage["input_tokens_details"].(map[string]any); ok {
 		cached = toInt(details["cached_tokens"])
 	}
 	r.usage.InputTokens += max(0, totalInput-cached)
@@ -109,17 +109,17 @@ func (r *OpenAIRunner) updateUsage(result map[string]interface{}) {
 	r.usage.CacheReadInputTokens += cached
 }
 
-func (r *OpenAIRunner) ExtractToolCalls(response interface{}, defaultTimeout time.Duration) []ToolCall {
-	resp, _ := response.(map[string]interface{})
-	output, _ := resp["output"].([]interface{})
+func (r *OpenAIRunner) ExtractToolCalls(response any, defaultTimeout time.Duration) []ToolCall {
+	resp, _ := response.(map[string]any)
+	output, _ := resp["output"].([]any)
 	var calls []ToolCall
 	for _, item := range output {
-		m, _ := item.(map[string]interface{})
+		m, _ := item.(map[string]any)
 		if m["type"] != "function_call" {
 			continue
 		}
 		argsStr, _ := m["arguments"].(string)
-		var args map[string]interface{}
+		var args map[string]any
 		if argsStr != "" {
 			// On parse failure args stays nil and the tool call is skipped below.
 			_ = json.Unmarshal([]byte(argsStr), &args)
@@ -145,12 +145,12 @@ func (r *OpenAIRunner) ExtractToolCalls(response interface{}, defaultTimeout tim
 	return calls
 }
 
-func (r *OpenAIRunner) AppendToolResults(conversation []interface{}, response interface{}, results []ToolExecutionResult) []interface{} {
-	resp, _ := response.(map[string]interface{})
-	output, _ := resp["output"].([]interface{})
+func (r *OpenAIRunner) AppendToolResults(conversation []any, response any, results []ToolExecutionResult) []any {
+	resp, _ := response.(map[string]any)
+	output, _ := resp["output"].([]any)
 	conversation = append(conversation, output...)
 	for _, res := range results {
-		conversation = append(conversation, map[string]interface{}{
+		conversation = append(conversation, map[string]any{
 			"type":    "function_call_output",
 			"call_id": res.ID,
 			"output":  res.Content,
@@ -159,23 +159,23 @@ func (r *OpenAIRunner) AppendToolResults(conversation []interface{}, response in
 	return conversation
 }
 
-func (r *OpenAIRunner) ExtractFinalText(response interface{}) string {
-	resp, _ := response.(map[string]interface{})
+func (r *OpenAIRunner) ExtractFinalText(response any) string {
+	resp, _ := response.(map[string]any)
 
 	if text, ok := resp["output_text"].(string); ok && text != "" {
 		return text
 	}
 
-	output, _ := resp["output"].([]interface{})
+	output, _ := resp["output"].([]any)
 	var texts []string
 	for _, item := range output {
-		m, _ := item.(map[string]interface{})
+		m, _ := item.(map[string]any)
 		if m["type"] != "message" {
 			continue
 		}
-		content, _ := m["content"].([]interface{})
+		content, _ := m["content"].([]any)
 		for _, part := range content {
-			p, _ := part.(map[string]interface{})
+			p, _ := part.(map[string]any)
 			ptype, _ := p["type"].(string)
 			if ptype == "output_text" || ptype == "text" {
 				if text, ok := p["text"].(string); ok && text != "" {

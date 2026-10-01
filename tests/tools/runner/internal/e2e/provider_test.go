@@ -282,7 +282,7 @@ func serviceBlock(t *testing.T, compose, service string) string {
 		t.Fatalf("service %s not found in compose:\n%s", service, compose)
 	}
 	var lines []string
-	for _, line := range strings.Split(compose[start+len(marker):], "\n") {
+	for line := range strings.SplitSeq(compose[start+len(marker):], "\n") {
 		if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "    ") {
 			break
 		}

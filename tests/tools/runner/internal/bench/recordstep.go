@@ -313,7 +313,7 @@ func readMsFile(path string) int64 {
 }
 
 func writeMsFile(path string, ms int64) {
-	_ = os.WriteFile(path, []byte(fmt.Sprintf("%d", ms)), 0644)
+	_ = os.WriteFile(path, fmt.Appendf(nil, "%d", ms), 0644)
 }
 
 func collectDockerStats(benchmarkType string) map[string]any {

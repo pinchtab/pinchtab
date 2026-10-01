@@ -558,7 +558,7 @@ func sanitizeTaskID(v string) string {
 }
 
 func extractFinalAnswer(text string) string {
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(strings.ToUpper(line), "FINAL_ANSWER:") {
 			return strings.TrimSpace(line[len("FINAL_ANSWER:"):])

@@ -117,11 +117,7 @@ func (ps *PersistentShell) Run(command string, timeout time.Duration) (output st
 			content := buffer.String()
 
 			// Look for the marker
-			if idx := strings.Index(content, markerPrefix); idx >= 0 {
-				// Found marker, extract output and exit code
-				output := content[:idx]
-				rest := content[idx+len(markerPrefix):]
-
+			if output, rest, ok := strings.Cut(content, markerPrefix); ok {
 				// Parse exit code (first number after marker)
 				var code int
 				_, _ = fmt.Sscanf(rest, "%d", &code)

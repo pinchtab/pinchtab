@@ -14,7 +14,7 @@ func ExampleClient_EnrichPage() {
 	client := pinchtabaudit.New("http://localhost:9867", "my-token")
 
 	page, err := client.EnrichPage(context.Background(), "https://example.com", &pinchtabaudit.PageOptions{
-		Screenshot: pinchtabaudit.Bool(false),
+		Screenshot: new(false),
 	})
 	if err != nil {
 		log.Fatal(err)

@@ -11,7 +11,7 @@ import (
 
 func TestOpenAIToolDefinitions(t *testing.T) {
 	r := NewOpenAIRunner("key", "gpt-5-mini", 4096, 0, true)
-	tools := r.ToolDefinitions().([]map[string]interface{})
+	tools := r.ToolDefinitions().([]map[string]any)
 	if len(tools) != 1 {
 		t.Fatalf("got %d tools; want 1", len(tools))
 	}
@@ -29,22 +29,22 @@ func TestOpenAIInitialConversation(t *testing.T) {
 	if len(conv) != 1 {
 		t.Fatalf("got %d messages; want 1", len(conv))
 	}
-	msg := conv[0].(map[string]interface{})
+	msg := conv[0].(map[string]any)
 	if msg["role"] != "user" {
 		t.Errorf("role = %v; want 'user'", msg["role"])
 	}
-	content := msg["content"].([]interface{})
+	content := msg["content"].([]any)
 	if len(content) != 1 {
 		t.Fatalf("got %d content parts; want 1", len(content))
 	}
-	part := content[0].(map[string]interface{})
+	part := content[0].(map[string]any)
 	if part["type"] != "input_text" {
 		t.Errorf("content type = %v; want 'input_text'", part["type"])
 	}
 }
 
 func TestOpenAISend(t *testing.T) {
-	var receivedBody map[string]interface{}
+	var receivedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Errorf("method = %s; want POST", r.Method)
@@ -58,16 +58,16 @@ func TestOpenAISend(t *testing.T) {
 		_ = json.Unmarshal(body, &receivedBody)
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"output": []interface{}{
-				map[string]interface{}{"type": "message", "content": []interface{}{
-					map[string]interface{}{"type": "output_text", "text": "Hello"},
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"output": []any{
+				map[string]any{"type": "message", "content": []any{
+					map[string]any{"type": "output_text", "text": "Hello"},
 				}},
 			},
-			"usage": map[string]interface{}{
+			"usage": map[string]any{
 				"input_tokens":  100,
 				"output_tokens": 50,
-				"input_tokens_details": map[string]interface{}{
+				"input_tokens_details": map[string]any{
 					"cached_tokens": 30,
 				},
 			},
@@ -109,14 +109,14 @@ func TestOpenAISend(t *testing.T) {
 
 func TestOpenAIExtractToolCalls(t *testing.T) {
 	r := NewOpenAIRunner("key", "model", 4096, 0, true)
-	response := map[string]interface{}{
-		"output": []interface{}{
-			map[string]interface{}{
+	response := map[string]any{
+		"output": []any{
+			map[string]any{
 				"type":      "function_call",
 				"call_id":   "call_123",
 				"arguments": `{"command": "ls -la", "timeout_seconds": 30}`,
 			},
-			map[string]interface{}{
+			map[string]any{
 				"type": "message",
 			},
 		},
@@ -141,7 +141,7 @@ func TestOpenAIExtractFinalText(t *testing.T) {
 	r := NewOpenAIRunner("key", "model", 4096, 0, true)
 
 	t.Run("output_text field", func(t *testing.T) {
-		response := map[string]interface{}{
+		response := map[string]any{
 			"output_text": "Direct output",
 		}
 		text := r.ExtractFinalText(response)
@@ -151,13 +151,13 @@ func TestOpenAIExtractFinalText(t *testing.T) {
 	})
 
 	t.Run("from output array", func(t *testing.T) {
-		response := map[string]interface{}{
-			"output": []interface{}{
-				map[string]interface{}{
+		response := map[string]any{
+			"output": []any{
+				map[string]any{
 					"type": "message",
-					"content": []interface{}{
-						map[string]interface{}{"type": "output_text", "text": "Hello"},
-						map[string]interface{}{"type": "text", "text": "World"},
+					"content": []any{
+						map[string]any{"type": "output_text", "text": "Hello"},
+						map[string]any{"type": "text", "text": "World"},
 					},
 				},
 			},
@@ -171,10 +171,10 @@ func TestOpenAIExtractFinalText(t *testing.T) {
 
 func TestOpenAIAppendToolResults(t *testing.T) {
 	r := NewOpenAIRunner("key", "model", 4096, 0, true)
-	conv := []interface{}{}
-	response := map[string]interface{}{
-		"output": []interface{}{
-			map[string]interface{}{"type": "function_call", "call_id": "123"},
+	conv := []any{}
+	response := map[string]any{
+		"output": []any{
+			map[string]any{"type": "function_call", "call_id": "123"},
 		},
 	}
 	results := []ToolExecutionResult{
@@ -186,7 +186,7 @@ func TestOpenAIAppendToolResults(t *testing.T) {
 		t.Fatalf("got %d items; want 2", len(conv))
 	}
 
-	funcOutput := conv[1].(map[string]interface{})
+	funcOutput := conv[1].(map[string]any)
 	if funcOutput["type"] != "function_call_output" {
 		t.Errorf("type = %v; want 'function_call_output'", funcOutput["type"])
 	}

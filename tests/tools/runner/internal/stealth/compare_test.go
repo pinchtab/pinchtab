@@ -206,7 +206,7 @@ func TestHistoryAppendsAndCapsAtLimit(t *testing.T) {
 	// Pre-seed history.jsonl with N existing entries to exercise the limit cap.
 	historyPath := filepath.Join(tmp, "history.jsonl")
 	var buf bytes.Buffer
-	for i := 0; i < historyRenderLimit+5; i++ {
+	for range historyRenderLimit + 5 {
 		entry := HistoryEntry{
 			RunID:            "old",
 			AppendedAt:       "t",

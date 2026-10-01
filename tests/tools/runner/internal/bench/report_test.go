@@ -38,8 +38,8 @@ func TestBuildProgressSummaryWithData(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "report.json")
 
-	report := map[string]interface{}{
-		"totals": map[string]interface{}{
+	report := map[string]any{
+		"totals": map[string]any{
 			"steps_answered":             5,
 			"steps_failed":               1,
 			"steps_skipped":              0,
@@ -48,7 +48,7 @@ func TestBuildProgressSummaryWithData(t *testing.T) {
 			"steps_verified_skipped":     0,
 			"steps_pending_verification": 0,
 		},
-		"steps": []map[string]interface{}{
+		"steps": []map[string]any{
 			{"id": "0.1", "status": "answered", "answer": "ok", "verification": map[string]string{"status": "pass"}},
 			{"id": "0.2", "status": "answered", "answer": "done"},
 			{"id": "1.1", "status": "failed", "notes": "error occurred"},
@@ -77,8 +77,8 @@ func TestReadProgress(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "report.json")
 
-	report := map[string]interface{}{
-		"totals": map[string]interface{}{
+	report := map[string]any{
+		"totals": map[string]any{
 			"steps_answered":        10,
 			"steps_failed":          2,
 			"steps_skipped":         1,

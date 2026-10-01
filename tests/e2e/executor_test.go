@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,7 +41,8 @@ func runProbeSuite(t *testing.T, scenarios map[string]string, order ...string) (
 	)
 	out, err := cmd.CombinedOutput()
 	code := 0
-	if exitErr, ok := err.(*exec.ExitError); ok {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
 		code = exitErr.ExitCode()
 	} else if err != nil {
 		t.Fatalf("running run.sh: %v\n%s", err, out)
@@ -172,7 +174,7 @@ end_test
 // duration between them varies per run, so the two halves are matched separately rather
 // than as one literal.
 func hasResultLine(out, status, name string) bool {
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		if strings.HasPrefix(line, "E2E_RESULT\t"+status+"\t") && strings.HasSuffix(strings.TrimRight(line, "\r"), name) {
 			return true
 		}

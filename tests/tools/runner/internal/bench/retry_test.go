@@ -2,6 +2,7 @@ package bench
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -151,7 +152,7 @@ func TestRetryContextCancellation(t *testing.T) {
 	_, err := DoWithRetry(ctx, cfg, func() (*http.Response, error) {
 		return http.Get(server.URL)
 	})
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Errorf("got %v; want context.Canceled", err)
 	}
 }

@@ -248,7 +248,7 @@ func resolveProviderList(raw string) []string {
 	}
 	seen := map[string]bool{}
 	var out []string
-	for _, p := range strings.Split(raw, ",") {
+	for p := range strings.SplitSeq(raw, ",") {
 		p = strings.TrimSpace(p)
 		if p == "" || seen[p] {
 			continue

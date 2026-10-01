@@ -251,7 +251,7 @@ func (r *Runner) selectedScenarioMeta(def suiteDef) ([]scenarioMeta, error) {
 	}
 
 	if r.args.Extra != "" {
-		for _, extra := range strings.Fields(r.args.Extra) {
+		for extra := range strings.FieldsSeq(r.args.Extra) {
 			name := filepath.Base(extra)
 			if meta, ok := catalog.find(group, name); ok {
 				if err := add(meta); err != nil {

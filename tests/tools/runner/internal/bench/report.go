@@ -68,10 +68,7 @@ func BuildProgressSummary(reportFile string) string {
 	totals := report.Totals
 	steps := report.Steps
 
-	startIdx := len(steps) - MaxSummarySteps
-	if startIdx < 0 {
-		startIdx = 0
-	}
+	startIdx := max(len(steps)-MaxSummarySteps, 0)
 	recentSteps := steps[startIdx:]
 
 	var lines []string

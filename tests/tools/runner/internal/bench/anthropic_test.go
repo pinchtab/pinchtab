@@ -3,6 +3,7 @@ package bench
 import (
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,7 +12,7 @@ import (
 
 func TestAnthropicToolDefinitions(t *testing.T) {
 	r := NewAnthropicRunner("key", "claude-haiku-4-5-20251001", 4096, 0, true)
-	tools := r.ToolDefinitions().([]map[string]interface{})
+	tools := r.ToolDefinitions().([]map[string]any)
 	if len(tools) != 1 {
 		t.Fatalf("got %d tools; want 1", len(tools))
 	}
@@ -26,20 +27,20 @@ func TestAnthropicInitialConversation(t *testing.T) {
 	if len(conv) != 1 {
 		t.Fatalf("got %d messages; want 1", len(conv))
 	}
-	msg := conv[0].(map[string]interface{})
+	msg := conv[0].(map[string]any)
 	if msg["role"] != "user" {
 		t.Errorf("role = %v; want 'user'", msg["role"])
 	}
 	// With prompt caching enabled, content is a block array so we can place
 	// cache_control on the text block.
-	content, ok := msg["content"].([]interface{})
+	content, ok := msg["content"].([]any)
 	if !ok {
 		t.Fatalf("content = %T; want []interface{}", msg["content"])
 	}
 	if len(content) != 1 {
 		t.Fatalf("got %d content blocks; want 1", len(content))
 	}
-	block, _ := content[0].(map[string]interface{})
+	block, _ := content[0].(map[string]any)
 	if block["type"] != "text" {
 		t.Errorf("block type = %v; want 'text'", block["type"])
 	}
@@ -55,9 +56,9 @@ func TestAnthropicInitialConversation_NoCaching(t *testing.T) {
 	// When caching is disabled, the block should not carry cache_control.
 	r := NewAnthropicRunner("key", "claude-haiku-4-5-20251001", 4096, 0, false)
 	conv := r.InitialConversation("test prompt")
-	msg := conv[0].(map[string]interface{})
-	content, _ := msg["content"].([]interface{})
-	block, _ := content[0].(map[string]interface{})
+	msg := conv[0].(map[string]any)
+	content, _ := msg["content"].([]any)
+	block, _ := content[0].(map[string]any)
 	if _, ok := block["cache_control"]; ok {
 		t.Error("cache_control present even though prompt caching is disabled")
 	}
@@ -65,20 +66,20 @@ func TestAnthropicInitialConversation_NoCaching(t *testing.T) {
 
 func TestAnthropicToolDefinitions_CachingMarker(t *testing.T) {
 	rOn := NewAnthropicRunner("key", "claude-haiku-4-5-20251001", 4096, 0, true)
-	toolsOn := rOn.ToolDefinitions().([]map[string]interface{})
+	toolsOn := rOn.ToolDefinitions().([]map[string]any)
 	if _, ok := toolsOn[len(toolsOn)-1]["cache_control"]; !ok {
 		t.Error("last tool missing cache_control when caching is enabled")
 	}
 
 	rOff := NewAnthropicRunner("key", "claude-haiku-4-5-20251001", 4096, 0, false)
-	toolsOff := rOff.ToolDefinitions().([]map[string]interface{})
+	toolsOff := rOff.ToolDefinitions().([]map[string]any)
 	if _, ok := toolsOff[len(toolsOff)-1]["cache_control"]; ok {
 		t.Error("last tool carries cache_control when caching is disabled")
 	}
 }
 
 func TestAnthropicSend(t *testing.T) {
-	var receivedBody map[string]interface{}
+	var receivedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Errorf("method = %s; want POST", r.Method)
@@ -94,11 +95,11 @@ func TestAnthropicSend(t *testing.T) {
 		_ = json.Unmarshal(body, &receivedBody)
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"content": []interface{}{
-				map[string]interface{}{"type": "text", "text": "Hello"},
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"content": []any{
+				map[string]any{"type": "text", "text": "Hello"},
 			},
-			"usage": map[string]interface{}{
+			"usage": map[string]any{
 				"input_tokens":  100,
 				"output_tokens": 50,
 			},
@@ -131,24 +132,24 @@ func TestAnthropicSend(t *testing.T) {
 	if _, ok := receivedBody["cache_control"]; ok {
 		t.Error("cache_control must not be at top level of request body")
 	}
-	tools, _ := receivedBody["tools"].([]interface{})
+	tools, _ := receivedBody["tools"].([]any)
 	if len(tools) == 0 {
 		t.Fatal("missing tools")
 	}
-	lastTool, _ := tools[len(tools)-1].(map[string]interface{})
+	lastTool, _ := tools[len(tools)-1].(map[string]any)
 	if _, ok := lastTool["cache_control"]; !ok {
 		t.Error("missing cache_control on last tool definition (breakpoint #1)")
 	}
-	messages, _ := receivedBody["messages"].([]interface{})
+	messages, _ := receivedBody["messages"].([]any)
 	if len(messages) == 0 {
 		t.Fatal("missing messages")
 	}
-	firstMsg, _ := messages[0].(map[string]interface{})
-	firstContent, _ := firstMsg["content"].([]interface{})
+	firstMsg, _ := messages[0].(map[string]any)
+	firstContent, _ := firstMsg["content"].([]any)
 	if len(firstContent) == 0 {
 		t.Fatal("first message has no content blocks — initial user message should be a block array for cache_control placement")
 	}
-	firstBlock, _ := firstContent[0].(map[string]interface{})
+	firstBlock, _ := firstContent[0].(map[string]any)
 	if _, ok := firstBlock["cache_control"]; !ok {
 		t.Error("missing cache_control on initial user message (breakpoint #2)")
 	}
@@ -171,22 +172,20 @@ func (t *testTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	for k, v := range req.Header {
-		newReq.Header[k] = v
-	}
+	maps.Copy(newReq.Header, req.Header)
 	return http.DefaultTransport.RoundTrip(newReq)
 }
 
 func TestAnthropicExtractToolCalls(t *testing.T) {
 	r := NewAnthropicRunner("key", "model", 4096, 0, true)
-	response := map[string]interface{}{
-		"content": []interface{}{
-			map[string]interface{}{
+	response := map[string]any{
+		"content": []any{
+			map[string]any{
 				"type":  "tool_use",
 				"id":    "toolu_123",
-				"input": map[string]interface{}{"command": "ls -la", "timeout_seconds": 30.0},
+				"input": map[string]any{"command": "ls -la", "timeout_seconds": 30.0},
 			},
-			map[string]interface{}{
+			map[string]any{
 				"type": "text",
 				"text": "Let me list files",
 			},
@@ -210,11 +209,11 @@ func TestAnthropicExtractToolCalls(t *testing.T) {
 
 func TestAnthropicExtractFinalText(t *testing.T) {
 	r := NewAnthropicRunner("key", "model", 4096, 0, true)
-	response := map[string]interface{}{
-		"content": []interface{}{
-			map[string]interface{}{"type": "text", "text": "Hello"},
-			map[string]interface{}{"type": "tool_use", "id": "123"},
-			map[string]interface{}{"type": "text", "text": "World"},
+	response := map[string]any{
+		"content": []any{
+			map[string]any{"type": "text", "text": "Hello"},
+			map[string]any{"type": "tool_use", "id": "123"},
+			map[string]any{"type": "text", "text": "World"},
 		},
 	}
 
@@ -226,10 +225,10 @@ func TestAnthropicExtractFinalText(t *testing.T) {
 
 func TestAnthropicAppendToolResults(t *testing.T) {
 	r := NewAnthropicRunner("key", "model", 4096, 0, true)
-	conv := []interface{}{}
-	response := map[string]interface{}{
-		"content": []interface{}{
-			map[string]interface{}{"type": "tool_use", "id": "123"},
+	conv := []any{}
+	response := map[string]any{
+		"content": []any{
+			map[string]any{"type": "tool_use", "id": "123"},
 		},
 	}
 	results := []ToolExecutionResult{
@@ -241,12 +240,12 @@ func TestAnthropicAppendToolResults(t *testing.T) {
 		t.Fatalf("got %d messages; want 2", len(conv))
 	}
 
-	assistant := conv[0].(map[string]interface{})
+	assistant := conv[0].(map[string]any)
 	if assistant["role"] != "assistant" {
 		t.Errorf("first message role = %v; want 'assistant'", assistant["role"])
 	}
 
-	user := conv[1].(map[string]interface{})
+	user := conv[1].(map[string]any)
 	if user["role"] != "user" {
 		t.Errorf("second message role = %v; want 'user'", user["role"])
 	}

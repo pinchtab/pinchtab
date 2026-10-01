@@ -5,9 +5,9 @@ import (
 )
 
 func TestCompactAnthropicNoOp(t *testing.T) {
-	conv := make([]interface{}, 8)
+	conv := make([]any, 8)
 	for i := range conv {
-		conv[i] = map[string]interface{}{"role": "user", "content": "msg"}
+		conv[i] = map[string]any{"role": "user", "content": "msg"}
 	}
 	result := CompactAnthropicConversation(conv, "summary")
 	if len(result) != 8 {
@@ -17,10 +17,10 @@ func TestCompactAnthropicNoOp(t *testing.T) {
 
 func TestCompactAnthropicTriggered(t *testing.T) {
 	// len=17 triggers compaction (> CompactAfterAnthropicMessages=14)
-	conv := make([]interface{}, 17)
-	conv[0] = map[string]interface{}{"role": "user", "content": "initial"}
+	conv := make([]any, 17)
+	conv[0] = map[string]any{"role": "user", "content": "initial"}
 	for i := 1; i < 17; i++ {
-		conv[i] = map[string]interface{}{"role": "assistant", "content": i}
+		conv[i] = map[string]any{"role": "assistant", "content": i}
 	}
 
 	result := CompactAnthropicConversation(conv, "summary text")
@@ -31,7 +31,7 @@ func TestCompactAnthropicTriggered(t *testing.T) {
 	}
 
 	// Summary is at position 1
-	summary := result[1].(map[string]interface{})
+	summary := result[1].(map[string]any)
 	if summary["role"] != "user" {
 		t.Errorf("summary role = %v; want user", summary["role"])
 	}
@@ -43,11 +43,11 @@ func TestCompactAnthropicTriggered(t *testing.T) {
 
 func TestCompactAnthropicBasic(t *testing.T) {
 	// Build a conversation that triggers compaction
-	conv := []interface{}{
-		map[string]interface{}{"role": "user", "content": "initial"},
+	conv := []any{
+		map[string]any{"role": "user", "content": "initial"},
 	}
-	for i := 0; i < 16; i++ {
-		conv = append(conv, map[string]interface{}{"role": "assistant", "content": i})
+	for i := range 16 {
+		conv = append(conv, map[string]any{"role": "assistant", "content": i})
 	}
 
 	result := CompactAnthropicConversation(conv, "progress")
@@ -58,22 +58,22 @@ func TestCompactAnthropicBasic(t *testing.T) {
 	}
 
 	// Head preserved
-	head := result[0].(map[string]interface{})
+	head := result[0].(map[string]any)
 	if head["content"] != "initial" {
 		t.Errorf("head content = %v; want 'initial'", head["content"])
 	}
 
 	// Summary at position 1
-	summary := result[1].(map[string]interface{})
+	summary := result[1].(map[string]any)
 	if summary["content"] != "progress" {
 		t.Errorf("summary content = %v; want 'progress'", summary["content"])
 	}
 }
 
 func TestCompactOpenAINoOp(t *testing.T) {
-	conv := make([]interface{}, 14)
+	conv := make([]any, 14)
 	for i := range conv {
-		conv[i] = map[string]interface{}{"type": "message"}
+		conv[i] = map[string]any{"type": "message"}
 	}
 	result := CompactOpenAIConversation(conv, "summary")
 	if len(result) != 14 {
@@ -82,10 +82,10 @@ func TestCompactOpenAINoOp(t *testing.T) {
 }
 
 func TestCompactOpenAITriggered(t *testing.T) {
-	conv := make([]interface{}, 20)
-	conv[0] = map[string]interface{}{"role": "user", "content": "initial"}
+	conv := make([]any, 20)
+	conv[0] = map[string]any{"role": "user", "content": "initial"}
 	for i := 1; i < 20; i++ {
-		conv[i] = map[string]interface{}{"type": "function_call", "id": i}
+		conv[i] = map[string]any{"type": "function_call", "id": i}
 	}
 
 	result := CompactOpenAIConversation(conv, "summary text")
@@ -94,22 +94,22 @@ func TestCompactOpenAITriggered(t *testing.T) {
 		t.Errorf("got %d; want 12 (head + summary + 10 recent)", len(result))
 	}
 
-	summary := result[1].(map[string]interface{})
-	content := summary["content"].([]interface{})
+	summary := result[1].(map[string]any)
+	content := summary["content"].([]any)
 	if len(content) != 1 {
 		t.Fatalf("summary content length = %d; want 1", len(content))
 	}
-	part := content[0].(map[string]interface{})
+	part := content[0].(map[string]any)
 	if part["text"] != "summary text" {
 		t.Errorf("summary text = %v", part["text"])
 	}
 }
 
 func TestCompactConversationRouting(t *testing.T) {
-	conv := make([]interface{}, 20)
-	conv[0] = map[string]interface{}{"role": "user", "content": "initial"}
+	conv := make([]any, 20)
+	conv[0] = map[string]any{"role": "user", "content": "initial"}
 	for i := 1; i < 20; i++ {
-		conv[i] = map[string]interface{}{"role": "assistant"}
+		conv[i] = map[string]any{"role": "assistant"}
 	}
 
 	anthropic := CompactConversation("anthropic", conv, "summary")

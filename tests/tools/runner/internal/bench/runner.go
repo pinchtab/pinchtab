@@ -26,11 +26,11 @@ type Runner interface {
 	Provider() string
 	Source() string
 	Model() string
-	ToolDefinitions() interface{}
-	InitialConversation(userPrompt string) []interface{}
-	Send(systemPrompt string, conversation []interface{}) (interface{}, error)
-	ExtractToolCalls(response interface{}, defaultTimeout time.Duration) []ToolCall
-	AppendToolResults(conversation []interface{}, response interface{}, results []ToolExecutionResult) []interface{}
-	ExtractFinalText(response interface{}) string
+	ToolDefinitions() any
+	InitialConversation(userPrompt string) []any
+	Send(systemPrompt string, conversation []any) (any, error)
+	ExtractToolCalls(response any, defaultTimeout time.Duration) []ToolCall
+	AppendToolResults(conversation []any, response any, results []ToolExecutionResult) []any
+	ExtractFinalText(response any) string
 	Usage() UsageCounters
 }

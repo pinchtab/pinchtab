@@ -76,7 +76,7 @@ type turnOutcome struct {
 	err          error  // stopAPIError
 	usageBefore  UsageCounters
 	turn         int
-	conversation []interface{}
+	conversation []any
 }
 
 // recordAPICall emits the per-call usage-delta accounting line (identical in both
@@ -93,7 +93,7 @@ func recordAPICall(out *OutputWriter, runner Runner, before UsageCounters) {
 // runTurnLoop runs the shared per-turn agent loop (delay → budget checks → send →
 // API accounting → tool execution → append → compact → optional hook) and returns
 // a neutral outcome the caller maps to its own result type.
-func runTurnLoop(cfg turnLoopConfig, runner Runner, shell *PersistentShell, out *OutputWriter, conversation []interface{}) turnOutcome {
+func runTurnLoop(cfg turnLoopConfig, runner Runner, shell *PersistentShell, out *OutputWriter, conversation []any) turnOutcome {
 	for turn := 1; turn <= cfg.maxTurns; turn++ {
 		if turn > 1 && cfg.turnDelayMs > 0 {
 			time.Sleep(time.Duration(cfg.turnDelayMs) * time.Millisecond)
@@ -305,7 +305,7 @@ func appendCommandLog(path, command string, exitCode int, output string) {
 	if path == "" {
 		return
 	}
-	entry := map[string]interface{}{
+	entry := map[string]any{
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 		"command":   command,
 		"exit_code": exitCode,

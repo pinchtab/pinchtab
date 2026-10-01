@@ -21,7 +21,7 @@ func isDockerfileName(name string) bool {
 func dockerfileInstructions(text string) []string {
 	var out []string
 	var cur strings.Builder
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if cur.Len() == 0 && (trimmed == "" || strings.HasPrefix(trimmed, "#")) {
 			continue

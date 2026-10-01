@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -198,12 +199,7 @@ func TestScenarioMetadataDefaultsAndManifestOverrides(t *testing.T) {
 }
 
 func hasString(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(values, want)
 }
 
 func assertNoLegacyReportEnv(t *testing.T, out string) {
@@ -626,7 +622,7 @@ func TestBringUpSharedStackCloakBuildsSupportImagesOnly(t *testing.T) {
 			t.Fatalf("dry-run output missing %q:\n%s", want, out)
 		}
 	}
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		if strings.Contains(line, " build ") && strings.Contains(line, " pinchtab") {
 			t.Fatalf("cloak provider must not rebuild pinchtab services:\n%s", out)
 		}
@@ -1193,7 +1189,7 @@ func dockerfileDefaultCommand(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("read Dockerfile: %v", err)
 	}
-	for _, line := range strings.Split(string(content), "\n") {
+	for line := range strings.SplitSeq(string(content), "\n") {
 		after, found := strings.CutPrefix(line, "CMD ")
 		if !found {
 			continue

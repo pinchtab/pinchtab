@@ -31,7 +31,7 @@ func parseComposePS(raw []byte) []serviceState {
 		return states
 	}
 	var states []serviceState
-	for _, line := range strings.Split(trimmed, "\n") {
+	for line := range strings.SplitSeq(trimmed, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

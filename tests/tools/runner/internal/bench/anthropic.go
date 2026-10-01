@@ -38,15 +38,15 @@ func (r *AnthropicRunner) Source() string       { return "anthropic-messages" }
 func (r *AnthropicRunner) Model() string        { return r.model }
 func (r *AnthropicRunner) Usage() UsageCounters { return r.usage }
 
-func (r *AnthropicRunner) ToolDefinitions() interface{} {
-	tool := map[string]interface{}{
+func (r *AnthropicRunner) ToolDefinitions() any {
+	tool := map[string]any{
 		"name":        "run_command",
 		"description": "Run a shell command in a persistent bash session rooted at tests/tools/. Use ./scripts/pt or ./scripts/ab directly.",
-		"input_schema": map[string]interface{}{
+		"input_schema": map[string]any{
 			"type": "object",
-			"properties": map[string]interface{}{
-				"command":         map[string]interface{}{"type": "string"},
-				"timeout_seconds": map[string]interface{}{"type": "integer", "minimum": 1, "maximum": 600},
+			"properties": map[string]any{
+				"command":         map[string]any{"type": "string"},
+				"timeout_seconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 600},
 			},
 			"required": []string{"command"},
 		},
@@ -58,12 +58,12 @@ func (r *AnthropicRunner) ToolDefinitions() interface{} {
 	if r.promptCaching {
 		tool["cache_control"] = map[string]string{"type": "ephemeral"}
 	}
-	return []map[string]interface{}{tool}
+	return []map[string]any{tool}
 }
 
-func (r *AnthropicRunner) InitialConversation(userPrompt string) []interface{} {
-	content := []interface{}{
-		map[string]interface{}{
+func (r *AnthropicRunner) InitialConversation(userPrompt string) []any {
+	content := []any{
+		map[string]any{
 			"type": "text",
 			"text": userPrompt,
 		},
@@ -74,22 +74,22 @@ func (r *AnthropicRunner) InitialConversation(userPrompt string) []interface{} {
 	// after the first. Placed on the content block (not the message) because
 	// Anthropic's cache_control lives on content blocks.
 	if r.promptCaching {
-		content[0].(map[string]interface{})["cache_control"] = map[string]string{"type": "ephemeral"}
+		content[0].(map[string]any)["cache_control"] = map[string]string{"type": "ephemeral"}
 	}
-	return []interface{}{
-		map[string]interface{}{
+	return []any{
+		map[string]any{
 			"role":    "user",
 			"content": content,
 		},
 	}
 }
 
-func (r *AnthropicRunner) Send(systemPrompt string, conversation []interface{}) (interface{}, error) {
+func (r *AnthropicRunner) Send(systemPrompt string, conversation []any) (any, error) {
 	// System prompt stays a plain string — the cache breakpoint on the last
 	// tool definition already captures the system+tools prefix. Anthropic
 	// computes cache keys over system first, then tools, then messages, so
 	// a marker on tools[last] covers both.
-	body := map[string]interface{}{
+	body := map[string]any{
 		"model":       r.model,
 		"max_tokens":  r.maxTokens,
 		"temperature": r.temperature,
@@ -109,8 +109,8 @@ func (r *AnthropicRunner) Send(systemPrompt string, conversation []interface{}) 
 	return result, nil
 }
 
-func (r *AnthropicRunner) updateUsage(result map[string]interface{}) {
-	usage, _ := result["usage"].(map[string]interface{})
+func (r *AnthropicRunner) updateUsage(result map[string]any) {
+	usage, _ := result["usage"].(map[string]any)
 	if usage == nil {
 		return
 	}
@@ -121,7 +121,7 @@ func (r *AnthropicRunner) updateUsage(result map[string]interface{}) {
 	r.usage.CacheReadInputTokens += toInt(usage["cache_read_input_tokens"])
 }
 
-func toInt(v interface{}) int {
+func toInt(v any) int {
 	switch n := v.(type) {
 	case float64:
 		return int(n)
@@ -132,16 +132,16 @@ func toInt(v interface{}) int {
 	}
 }
 
-func (r *AnthropicRunner) ExtractToolCalls(response interface{}, defaultTimeout time.Duration) []ToolCall {
-	resp, _ := response.(map[string]interface{})
-	content, _ := resp["content"].([]interface{})
+func (r *AnthropicRunner) ExtractToolCalls(response any, defaultTimeout time.Duration) []ToolCall {
+	resp, _ := response.(map[string]any)
+	content, _ := resp["content"].([]any)
 	var calls []ToolCall
 	for _, item := range content {
-		m, _ := item.(map[string]interface{})
+		m, _ := item.(map[string]any)
 		if m["type"] != "tool_use" {
 			continue
 		}
-		input, _ := m["input"].(map[string]interface{})
+		input, _ := m["input"].(map[string]any)
 		cmd, _ := input["command"].(string)
 		if cmd == "" {
 			continue
@@ -159,23 +159,23 @@ func (r *AnthropicRunner) ExtractToolCalls(response interface{}, defaultTimeout 
 	return calls
 }
 
-func (r *AnthropicRunner) AppendToolResults(conversation []interface{}, response interface{}, results []ToolExecutionResult) []interface{} {
-	resp, _ := response.(map[string]interface{})
-	conversation = append(conversation, map[string]interface{}{
+func (r *AnthropicRunner) AppendToolResults(conversation []any, response any, results []ToolExecutionResult) []any {
+	resp, _ := response.(map[string]any)
+	conversation = append(conversation, map[string]any{
 		"role":    "assistant",
 		"content": resp["content"],
 	})
 	if len(results) > 0 {
-		toolResults := make([]interface{}, len(results))
+		toolResults := make([]any, len(results))
 		for i, res := range results {
-			toolResults[i] = map[string]interface{}{
+			toolResults[i] = map[string]any{
 				"type":        "tool_result",
 				"tool_use_id": res.ID,
 				"is_error":    res.IsError,
 				"content":     res.Content,
 			}
 		}
-		conversation = append(conversation, map[string]interface{}{
+		conversation = append(conversation, map[string]any{
 			"role":    "user",
 			"content": toolResults,
 		})
@@ -183,12 +183,12 @@ func (r *AnthropicRunner) AppendToolResults(conversation []interface{}, response
 	return conversation
 }
 
-func (r *AnthropicRunner) ExtractFinalText(response interface{}) string {
-	resp, _ := response.(map[string]interface{})
-	content, _ := resp["content"].([]interface{})
+func (r *AnthropicRunner) ExtractFinalText(response any) string {
+	resp, _ := response.(map[string]any)
+	content, _ := resp["content"].([]any)
 	var texts []string
 	for _, item := range content {
-		m, _ := item.(map[string]interface{})
+		m, _ := item.(map[string]any)
 		if m["type"] != "text" {
 			continue
 		}

@@ -20,6 +20,8 @@ linters:
         - pattern: ^os\.(Getenv|LookupEnv)$
           msg: server packages read PINCHTAB_* settings through internal/config; client, CLI, browser and tooling env reads are excluded by path
   exclusions:
+    paths:
+      - dashboard/node_modules
     rules:
       - path: _test\.go
         linters:
@@ -33,4 +35,5 @@ linters:
         text: os\.(Getenv|LookupEnv)
 
 issues:
+  # modernize and errorlint are clean tree-wide; scripts/check.sh runs them in their own pass with this gate off.
   new-from-rev: origin/main

@@ -220,4 +220,6 @@ type RunOptions struct {
 }
 
 // Bool returns a pointer to v, for PageOptions fields.
-func Bool(v bool) *bool { return &v }
+//
+//go:fix inline
+func Bool(v bool) *bool { return new(v) }

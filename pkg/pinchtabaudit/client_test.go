@@ -37,7 +37,7 @@ func TestEnrichPage(t *testing.T) {
 	defer srv.Close()
 
 	client := New(srv.URL, "tok")
-	page, err := client.EnrichPage(context.Background(), "http://fixtures/clean.html", &PageOptions{Screenshot: Bool(false)})
+	page, err := client.EnrichPage(context.Background(), "http://fixtures/clean.html", &PageOptions{Screenshot: new(false)})
 	if err != nil {
 		t.Fatalf("EnrichPage: %v", err)
 	}

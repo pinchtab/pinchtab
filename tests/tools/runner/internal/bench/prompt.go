@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -218,12 +219,9 @@ func extractSkillSections(content string, includeSections []string) string {
 			inHeader = false
 			currentSection = strings.TrimPrefix(strings.TrimSuffix(line, " ---"), "--- ")
 			inIncludedSection = false
-			for _, sec := range includeSections {
-				if currentSection == sec {
-					inIncludedSection = true
-					result = append(result, "", line)
-					break
-				}
+			if slices.Contains(includeSections, currentSection) {
+				inIncludedSection = true
+				result = append(result, "", line)
 			}
 			continue
 		}

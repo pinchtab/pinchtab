@@ -126,7 +126,7 @@ func (o *OutputWriter) ToolResult(cmd string, exitCode int, output string, durat
 	}
 
 	lines := strings.Split(strings.TrimSpace(output), "\n")
-	preview := ""
+	var preview strings.Builder
 	maxPreviewLines := 2
 	if len(lines) > 0 {
 		for i := 0; i < len(lines) && i < maxPreviewLines; i++ {
@@ -135,16 +135,16 @@ func (o *OutputWriter) ToolResult(cmd string, exitCode int, output string, durat
 				line = line[:67] + "..."
 			}
 			if i > 0 {
-				preview += "\n       "
+				preview.WriteString("\n       ")
 			}
-			preview += line
+			preview.WriteString(line)
 		}
 		if len(lines) > maxPreviewLines {
-			preview += fmt.Sprintf(" %s(+%d lines)%s", colorDim, len(lines)-maxPreviewLines, colorReset)
+			fmt.Fprintf(&preview, " %s(+%d lines)%s", colorDim, len(lines)-maxPreviewLines, colorReset)
 		}
 	}
 
-	_, _ = fmt.Fprintf(o.w, "  %s %s %s[%v]%s\n", status, preview, colorDim, duration.Round(time.Millisecond), colorReset)
+	_, _ = fmt.Fprintf(o.w, "  %s %s %s[%v]%s\n", status, preview.String(), colorDim, duration.Round(time.Millisecond), colorReset)
 }
 
 func (o *OutputWriter) Progress(answered, verified, failed int) {

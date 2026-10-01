@@ -55,7 +55,7 @@ func loadScenarioFiles(t *testing.T) []scenarioFile {
 
 func functionsDefinedIn(body string) map[string]bool {
 	defined := map[string]bool{}
-	for _, line := range strings.Split(body, "\n") {
+	for line := range strings.SplitSeq(body, "\n") {
 		if m := funcOpensAtColumnZero.FindStringSubmatch(line); m != nil {
 			defined[m[1]] = true
 		}

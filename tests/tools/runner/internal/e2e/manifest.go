@@ -211,7 +211,7 @@ func validateScenarioMeta(meta scenarioMeta) error {
 func defaultScenarioTags(group, file, tier string) []string {
 	name := strings.TrimSuffix(file, ".sh")
 	tags := []string{group, tier}
-	for _, part := range strings.Split(name, "-") {
+	for part := range strings.SplitSeq(name, "-") {
 		if part != "" {
 			tags = append(tags, part)
 		}

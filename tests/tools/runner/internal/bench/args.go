@@ -227,7 +227,7 @@ var errHelp = errors.New("help requested")
 func parseGroups(raw string) ([]int, error) {
 	seen := make(map[int]struct{})
 	var out []int
-	for _, piece := range strings.Split(raw, ",") {
+	for piece := range strings.SplitSeq(raw, ",") {
 		piece = strings.TrimSpace(piece)
 		if piece == "" {
 			continue

@@ -91,6 +91,12 @@ if ! $LINT_CMD run; then
 fi
 ok "golangci-lint"
 
+if ! $LINT_CMD run --enable-only modernize,errorlint --new-from-rev= ./...; then
+  fail "golangci-lint (modernize, errorlint)" "These linters run without the new-from-rev gate: the whole tree must be clean."
+  exit 1
+fi
+ok "golangci-lint (modernize, errorlint)"
+
 section "Deadcode"
 
 if ! bash scripts/ci/deadcode.sh; then

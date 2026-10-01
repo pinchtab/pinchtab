@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -104,9 +105,9 @@ func parseIndexContent(dir, content string) (IndexFile, error) {
 }
 
 func stripCommentStart(line string) string {
-	idx := strings.Index(line, "<!--")
-	if idx >= 0 {
-		return line[idx+4:]
+	_, after, ok := strings.Cut(line, "<!--")
+	if ok {
+		return after
 	}
 	return line
 }
@@ -131,10 +132,5 @@ func ScanGroupFiles(dir string) ([]int, error) {
 }
 
 func (idx IndexFile) IsDisabled(group int) bool {
-	for _, d := range idx.Disabled {
-		if d == group {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(idx.Disabled, group)
 }

@@ -51,7 +51,7 @@ func runTabCleanup(t *testing.T, baseline, ok, current string) []string {
 		t.Fatalf("read close log: %v", err)
 	}
 	var closed []string
-	for _, line := range strings.Split(string(logged), "\n") {
+	for line := range strings.SplitSeq(string(logged), "\n") {
 		if rest, ok := strings.CutPrefix(line, "CLOSED "); ok {
 			closed = append(closed, strings.TrimSpace(rest))
 		}

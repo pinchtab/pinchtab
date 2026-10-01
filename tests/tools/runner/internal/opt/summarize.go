@@ -434,7 +434,7 @@ func countBaselineOps() int {
 	funcDefRe := regexp.MustCompile(`\(\)\s*\{`)
 
 	var total int
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		if funcDefRe.MatchString(line) {
 			continue
 		}

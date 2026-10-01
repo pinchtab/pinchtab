@@ -33,7 +33,7 @@ func main() {
 	defer cancel()
 
 	page, err := client.EnrichPage(ctx, flag.Arg(0), &pinchtabaudit.PageOptions{
-		Screenshot: pinchtabaudit.Bool(*screenshot),
+		Screenshot: new(*screenshot),
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "enrich: %v\n", err)

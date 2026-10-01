@@ -134,7 +134,7 @@ func parseDockerStatsLine(line string) (memorySample, bool) {
 
 func selectStackSamples(statsOutput string, stackIDs map[string]bool) []memorySample {
 	var out []memorySample
-	for _, line := range strings.Split(strings.TrimSpace(statsOutput), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(statsOutput), "\n") {
 		s, ok := parseDockerStatsLine(line)
 		if !ok || !containerIDMatches(s.ID, stackIDs) || !isPinchtabBrowserContainer(s.Name) {
 			continue
@@ -158,8 +158,8 @@ func containerIDMatches(statsID string, stackIDs map[string]bool) bool {
 
 func parseMemUsageMiB(field string) (float64, bool) {
 	used := field
-	if idx := strings.Index(field, "/"); idx >= 0 {
-		used = field[:idx]
+	if before, _, ok := strings.Cut(field, "/"); ok {
+		used = before
 	}
 	used = strings.TrimSpace(used)
 
