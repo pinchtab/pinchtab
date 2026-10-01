@@ -2,12 +2,12 @@ package bridge
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 
 	"github.com/chromedp/chromedp"
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
+	"github.com/pinchtab/pinchtab/internal/cdptk"
 )
 
 type nodeDOMMetadata struct {
@@ -74,27 +74,8 @@ func resolveNodeDOMMetadata(ctx context.Context, backendNodeID int64) (nodeDOMMe
 		}, nil)
 	}()
 
-	var callResult json.RawMessage
-	if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-		"functionDeclaration": domMetadataFn,
-		"objectId":            objectID,
-		"returnByValue":       true,
-	}, &callResult); err != nil {
-		return nodeDOMMetadata{}, false
-	}
-
-	var call struct {
-		Result struct {
-			Value json.RawMessage `json:"value"`
-		} `json:"result"`
-		ExceptionDetails json.RawMessage `json:"exceptionDetails"`
-	}
-	if err := json.Unmarshal(callResult, &call); err != nil || len(call.ExceptionDetails) > 0 || len(call.Result.Value) == 0 {
-		return nodeDOMMetadata{}, false
-	}
-
 	var meta nodeDOMMetadata
-	if err := json.Unmarshal(call.Result.Value, &meta); err != nil {
+	if err := cdptk.CallFunctionOn(ctx, objectID, domMetadataFn, nil, &meta); err != nil {
 		return nodeDOMMetadata{}, false
 	}
 	return meta, true

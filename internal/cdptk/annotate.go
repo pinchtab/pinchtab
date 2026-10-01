@@ -65,41 +65,22 @@ func AnnotationRectForNode(ctx context.Context, nodeID int64) (*AnnotationRect, 
 		return { x: x, y: y, w: rect.width, h: rect.height, frameError: frameError };
 	}`
 
-	var callResult json.RawMessage
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": boxFn,
-			"objectId":            objectID,
-			"returnByValue":       true,
-		}, &callResult)
-	})); err != nil {
-		return nil, err
-	}
 	var box struct {
-		Result struct {
-			Value struct {
-				X          float64 `json:"x"`
-				Y          float64 `json:"y"`
-				W          float64 `json:"w"`
-				H          float64 `json:"h"`
-				FrameError bool    `json:"frameError"`
-			} `json:"value"`
-		} `json:"result"`
+		X          float64 `json:"x"`
+		Y          float64 `json:"y"`
+		W          float64 `json:"w"`
+		H          float64 `json:"h"`
+		FrameError bool    `json:"frameError"`
 	}
-	if err := json.Unmarshal(callResult, &box); err != nil {
+	if err := CallFunctionOn(ctx, objectID, boxFn, nil, &box); err != nil {
 		return nil, err
 	}
-	if box.Result.Value.FrameError {
+	if box.FrameError {
 		// Cross-origin ancestor frame blocked coordinate projection. Skip the
 		// node rather than emitting wrong coordinates.
 		return nil, nil
 	}
-	return &AnnotationRect{
-		X: box.Result.Value.X,
-		Y: box.Result.Value.Y,
-		W: box.Result.Value.W,
-		H: box.Result.Value.H,
-	}, nil
+	return &AnnotationRect{X: box.X, Y: box.Y, W: box.W, H: box.H}, nil
 }
 
 // InjectAnnotationOverlay paints an absolute-positioned overlay div on top

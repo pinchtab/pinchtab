@@ -2,7 +2,6 @@ package bridge
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -235,32 +234,15 @@ func ScreenshotClipForNode(ctx context.Context, nodeID int64) (*ScreenshotClip, 
 		return { x, y, width: rect.width, height: rect.height };
 	}`
 
-	var callResult json.RawMessage
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": boxFn,
-			"objectId":            objectID,
-			"returnByValue":       true,
-		}, &callResult)
-	})); err != nil {
+	var box struct {
+		X      float64 `json:"x"`
+		Y      float64 `json:"y"`
+		Width  float64 `json:"width"`
+		Height float64 `json:"height"`
+	}
+	if err := cdptk.CallFunctionOn(ctx, objectID, boxFn, nil, &box); err != nil {
 		return nil, fmt.Errorf("read element box: %w", err)
 	}
-
-	var boxCall struct {
-		Result struct {
-			Value struct {
-				X      float64 `json:"x"`
-				Y      float64 `json:"y"`
-				Width  float64 `json:"width"`
-				Height float64 `json:"height"`
-			} `json:"value"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal(callResult, &boxCall); err != nil {
-		return nil, fmt.Errorf("parse element box: %w", err)
-	}
-
-	box := boxCall.Result.Value
 	if box.Width <= 0 || box.Height <= 0 {
 		return nil, fmt.Errorf("element box is empty (width=%.2f height=%.2f)", box.Width, box.Height)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -174,5 +175,56 @@ func TestPointerPointOcclusionUnchanged(t *testing.T) {
 	}
 	if _, _, err := bridgecdpops.PointerPointForNode(ctx, nodeID, true); err != nil {
 		t.Errorf("uncovered element: err = %v, want a clickable point", err)
+	}
+}
+
+// A probe that throws must say why. It once decoded the exception as a zero probe
+// and reported ErrElementHidden, sending callers after visibility when the script
+// itself had failed. A text node has no getBoundingClientRect, so the probe throws.
+func TestPointerPointSurfacesAProbeException(t *testing.T) {
+	ctx := newPointerFixture(t, `<body><button id="target">Accept</button></body>`)
+
+	buttonID, err := ResolveCSSToNodeID(ctx, "#target")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var textNodeID int64
+	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		var res struct {
+			Node struct {
+				Children []struct {
+					NodeType      int   `json:"nodeType"`
+					BackendNodeID int64 `json:"backendNodeId"`
+				} `json:"children"`
+			} `json:"node"`
+		}
+		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.describeNode", map[string]any{
+			"backendNodeId": buttonID,
+			"depth":         1,
+		}, &res); err != nil {
+			return err
+		}
+		for _, child := range res.Node.Children {
+			if child.NodeType == 3 {
+				textNodeID = child.BackendNodeID
+			}
+		}
+		return nil
+	})); err != nil {
+		t.Fatal(err)
+	}
+	if textNodeID == 0 {
+		t.Fatal("button has no text node child")
+	}
+
+	_, _, err = bridgecdpops.PointerPointForNode(ctx, textNodeID, false)
+	if err == nil {
+		t.Fatal("a probe that threw returned a pointer point")
+	}
+	if errors.Is(err, bridgecdpops.ErrElementHidden) {
+		t.Fatalf("a probe exception was reported as hidden: %v", err)
+	}
+	if !strings.Contains(err.Error(), "pointer probe") || !strings.Contains(err.Error(), "getBoundingClientRect is not a function") {
+		t.Errorf("error %q does not carry the probe's exception text", err)
 	}
 }

@@ -205,6 +205,73 @@ func EvaluateInIsolatedWorld(ctx context.Context, frameID, expression string, re
 	return json.Unmarshal(parsed.Result.Value, result)
 }
 
+// CallFunctionOn runs functionDecl with objectID as `this` and decodes the by-value
+// result into result when non-nil. It is the one Runtime.callFunctionOn reader: a
+// hand-rolled copy that skips exceptionDetails decodes a thrown script as a zero
+// value, so a probe that threw read as "not visible" and a box read as an empty
+// box. Here a throw is an error carrying the exception's own text.
+func CallFunctionOn(ctx context.Context, objectID, functionDecl string, args []map[string]any, result any) error {
+	params := map[string]any{
+		"functionDeclaration": functionDecl,
+		"objectId":            objectID,
+		"returnByValue":       true,
+	}
+	if len(args) > 0 {
+		params["arguments"] = args
+	}
+
+	var raw json.RawMessage
+	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", params, &raw)
+	})); err != nil {
+		return fmt.Errorf("call function on node: %w", err)
+	}
+
+	var parsed struct {
+		Result struct {
+			Value json.RawMessage `json:"value"`
+		} `json:"result"`
+		ExceptionDetails *exceptionDetails `json:"exceptionDetails,omitempty"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return fmt.Errorf("parse call result: %w", err)
+	}
+	if parsed.ExceptionDetails != nil {
+		return fmt.Errorf("call function on node: %s", parsed.ExceptionDetails.message())
+	}
+	if result == nil || len(parsed.Result.Value) == 0 {
+		return nil
+	}
+	return json.Unmarshal(parsed.Result.Value, result)
+}
+
+// exceptionDetails is the part of CDP's Runtime.ExceptionDetails a caller can act
+// on. Text alone is usually just "Uncaught"; the thrown error's message lives in
+// the exception's description.
+type exceptionDetails struct {
+	Text      string `json:"text"`
+	Exception *struct {
+		Description string `json:"description"`
+	} `json:"exception,omitempty"`
+}
+
+func (d *exceptionDetails) message() string {
+	desc := ""
+	if d.Exception != nil {
+		desc = d.Exception.Description
+	}
+	switch {
+	case d.Text != "" && desc != "":
+		return d.Text + ": " + desc
+	case desc != "":
+		return desc
+	case d.Text != "":
+		return d.Text
+	default:
+		return "script threw an exception"
+	}
+}
+
 // topFrameID reads the top frame's id, the frame IsolatedContextID falls back to
 // when the caller names none.
 func topFrameID(ctx context.Context) (string, error) {

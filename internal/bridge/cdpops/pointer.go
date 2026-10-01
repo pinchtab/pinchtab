@@ -11,6 +11,7 @@ import (
 	"github.com/chromedp/cdproto"
 	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/cdptk"
 )
 
 // Headless Chromium can hold synthetic mouseMoved dispatches for about five
@@ -362,7 +363,7 @@ func jsClickIfLink(ctx context.Context, nodeID int64) error {
 			el = el.parentElement;
 		}
 	}`
-	err = callFunctionOnObject(ctx, objectID, js, nil, nil)
+	err = cdptk.CallFunctionOn(ctx, objectID, js, nil, nil)
 	if linkContextGone(err) {
 		// The trusted press already followed the link and the old document's
 		// context is gone: the click landed, so there is nothing left to do.

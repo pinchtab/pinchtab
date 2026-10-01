@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/cdptk"
 )
 
 // SelectOption is one <option> of a <select>, as its value attribute and its
@@ -50,7 +51,7 @@ func FillByNodeID(ctx context.Context, nodeID int64, value string) error {
 				this.dispatchEvent(new Event('input', {bubbles: true}));
 				this.dispatchEvent(new Event('change', {bubbles: true}));
 			}`
-	return callFunctionOnObject(ctx, objectID, js, []map[string]any{{"value": value}}, nil)
+	return cdptk.CallFunctionOn(ctx, objectID, js, []map[string]any{{"value": value}}, nil)
 }
 
 func focusNode(ctx context.Context, nodeID int64) error {
@@ -142,7 +143,7 @@ func SelectByNodeID(ctx context.Context, nodeID int64, value string) error {
 				return { ok: true, matchedBy: matchedBy, value: match.value, text: (match.text || "").trim() };
 			}`
 	var raw json.RawMessage
-	if err := callFunctionOnObject(ctx, objectID, js, []map[string]any{{"value": value}}, &raw); err != nil {
+	if err := cdptk.CallFunctionOn(ctx, objectID, js, []map[string]any{{"value": value}}, &raw); err != nil {
 		return err
 	}
 	var outcome struct {

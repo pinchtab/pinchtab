@@ -2,7 +2,6 @@ package cdpops
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -143,25 +142,11 @@ func PointerPointForNode(ctx context.Context, backendNodeID int64, requireTopMos
 	}`
 
 	runProbe := func() (pointerProbe, error) {
-		var probeRaw json.RawMessage
-		if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-				"functionDeclaration": probeJS,
-				"objectId":            objectID,
-				"returnByValue":       true,
-			}, &probeRaw)
-		})); err != nil {
+		var probe pointerProbe
+		if err := cdptk.CallFunctionOn(ctx, objectID, probeJS, nil, &probe); err != nil {
 			return pointerProbe{}, fmt.Errorf("pointer probe: %w", err)
 		}
-		var callRes struct {
-			Result struct {
-				Value pointerProbe `json:"value"`
-			} `json:"result"`
-		}
-		if err := json.Unmarshal(probeRaw, &callRes); err != nil {
-			return pointerProbe{}, err
-		}
-		return callRes.Result.Value, nil
+		return probe, nil
 	}
 
 	probe, err := runProbe()

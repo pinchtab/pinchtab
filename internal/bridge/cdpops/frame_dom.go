@@ -66,45 +66,7 @@ func CallFunctionOnNode(ctx context.Context, backendNodeID int64, functionDecl s
 	if err != nil {
 		return err
 	}
-	return callFunctionOnObject(ctx, objectID, functionDecl, args, result)
-}
-
-func callFunctionOnObject(ctx context.Context, objectID, functionDecl string, args []map[string]any, result any) error {
-	params := map[string]any{
-		"functionDeclaration": functionDecl,
-		"objectId":            objectID,
-		"returnByValue":       true,
-	}
-	if len(args) > 0 {
-		params["arguments"] = args
-	}
-
-	var callResult json.RawMessage
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", params, &callResult)
-	})); err != nil {
-		return fmt.Errorf("call function on node: %w", err)
-	}
-
-	var callParsed struct {
-		Result struct {
-			Value json.RawMessage `json:"value"`
-		} `json:"result"`
-		ExceptionDetails *struct {
-			Text string `json:"text"`
-		} `json:"exceptionDetails,omitempty"`
-	}
-	if err := json.Unmarshal(callResult, &callParsed); err != nil {
-		return fmt.Errorf("parse call result: %w", err)
-	}
-	if callParsed.ExceptionDetails != nil && callParsed.ExceptionDetails.Text != "" {
-		return fmt.Errorf("call function on node: %s", callParsed.ExceptionDetails.Text)
-	}
-
-	if result == nil || len(callParsed.Result.Value) == 0 {
-		return nil
-	}
-	return json.Unmarshal(callParsed.Result.Value, result)
+	return cdptk.CallFunctionOn(ctx, objectID, functionDecl, args, result)
 }
 
 // DescribeNode fetches DOM.describeNode metadata for a backend node, falling
