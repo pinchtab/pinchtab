@@ -57,7 +57,7 @@ func (f frameFixture) iframeNodeID(t *testing.T) int64 {
 func newFrameFixture(t *testing.T) frameFixture {
 	t.Helper()
 
-	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Launch(t), 60*time.Second)
 	t.Cleanup(cancelTimeout)
 
 	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(frameFixtureHTML))
