@@ -12,6 +12,8 @@ import (
 	"github.com/pinchtab/pinchtab/internal/safelog"
 )
 
+// captureLaunchLog swaps the process-wide slog default, so its callers must not
+// call t.Parallel: a parallel test would log into, and race on, the buffer.
 func captureLaunchLog(t *testing.T, fn func()) string {
 	t.Helper()
 	var buf bytes.Buffer
@@ -32,8 +34,6 @@ func captureLaunchLog(t *testing.T, fn func()) string {
 // tried has to be on disk, unredacted, or the operator cannot tell a 0-byte install
 // from a foreign-architecture build.
 func TestLaunchFailureRecordsTheBinaryItExecdAndItsSize(t *testing.T) {
-	t.Parallel()
-
 	runner := &mockRunner{portAvail: true, runErr: errors.New("fork/exec: exec format error")}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
 	o.hooks.portAvailable = func(int) bool { return true }
@@ -72,8 +72,6 @@ func TestLaunchFailureRecordsTheBinaryItExecdAndItsSize(t *testing.T) {
 // A binary that is gone is a different fault from one that is malformed, and the log
 // has to tell them apart rather than going quiet on the stat.
 func TestLaunchFailureRecordsWhyTheBinaryCouldNotBeStatted(t *testing.T) {
-	t.Parallel()
-
 	runner := &mockRunner{portAvail: true, runErr: errors.New("fork/exec: no such file or directory")}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
 	o.hooks.portAvailable = func(int) bool { return true }
