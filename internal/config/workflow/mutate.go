@@ -55,7 +55,8 @@ func ValidateCurrentFile() (string, []error, []string, error) {
 		return configPath, nil, nil, fmt.Errorf("parse config: %w", err)
 	}
 
-	return configPath, config.ValidateFileConfig(fc), config.FileConfigAdvisories(fc), nil
+	advisories := append(config.RetiredFileConfigAdvisories(data), config.FileConfigAdvisories(fc)...)
+	return configPath, config.ValidateFileConfig(fc), advisories, nil
 }
 
 func InitDefaultConfig(path string) error {
