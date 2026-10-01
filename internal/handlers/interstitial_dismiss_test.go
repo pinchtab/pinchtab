@@ -6,19 +6,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 func TestKnownInterstitialDismissalIsCatalogAndModalScoped(t *testing.T) {
-	chromePath := testbrowser.Path(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Query().Get("case") {
 		case "known":
@@ -35,26 +32,12 @@ func TestKnownInterstitialDismissalIsCatalogAndModalScoped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile := testbrowser.ProfileDir(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(profile),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("host-resolver-rules", "MAP purview.microsoft.com 127.0.0.1"),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 20*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-		_ = os.RemoveAll(profile)
-	})
+	browser := testbrowser.Launch(t, chromedp.Flag("host-resolver-rules", "MAP purview.microsoft.com 127.0.0.1"))
+	ctx, cancelTimeout := context.WithTimeout(browser, 60*time.Second)
+	t.Cleanup(cancelTimeout)
 
 	cfg := &config.RuntimeConfig{ActionTimeout: 5 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
-	b := bridge.New(context.Background(), ctx, cfg)
+	b := browserBridge(ctx, cfg)
 	b.RegisterTab("tab-interstitial", ctx)
 	h := New(b, cfg, nil, nil, nil)
 	pageURL := func(testCase string) string {

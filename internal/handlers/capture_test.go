@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/srccensus"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
@@ -153,23 +152,10 @@ type captureFixture struct {
 
 func newCaptureFixture(t *testing.T) captureFixture {
 	t.Helper()
-	chromePath := testbrowser.Path(t)
 
 	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(capturePairFixtureHTML))
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 60*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancelTimeout)
 
 	var scrolled bool
 	if err := chromedp.Run(ctx,
@@ -184,7 +170,7 @@ func newCaptureFixture(t *testing.T) captureFixture {
 	}
 
 	cfg := &config.RuntimeConfig{ActionTimeout: 10 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
-	b := bridge.New(context.Background(), ctx, cfg)
+	b := browserBridge(ctx, cfg)
 	b.RegisterTab(capturePairTabID, ctx)
 
 	return captureFixture{handlers: New(b, cfg, nil, nil, nil)}

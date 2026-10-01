@@ -78,22 +78,8 @@ func (f orderFixture) settleForOrder() int64 {
 // descriptor still names the submit button.
 func staleSubmitHandlers(t *testing.T, f orderFixture) (*Handlers, context.Context, string) {
 	t.Helper()
-	chromePath := testbrowser.Path(t)
-	profile := testbrowser.ProfileDir(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(profile),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancelTimeout)
 
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(f.server.URL+"/"),
@@ -107,7 +93,7 @@ func staleSubmitHandlers(t *testing.T, f orderFixture) (*Handlers, context.Conte
 		DefaultBrowser: config.BrowserChrome,
 		StateDir:       t.TempDir(),
 	}
-	b := bridge.New(context.Background(), ctx, cfg)
+	b := browserBridge(ctx, cfg)
 	const tabID = "tab-stale-submit"
 	b.RegisterTab(tabID, ctx)
 	h := New(b, cfg, nil, nil, nil)

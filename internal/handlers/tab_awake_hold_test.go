@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/session"
@@ -20,21 +19,9 @@ import (
 
 func newFreezeIdleFixture(t *testing.T, delay time.Duration) (*bridge.Bridge, *Handlers) {
 	t.Helper()
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(testbrowser.Path(t)),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	t.Cleanup(cancelAlloc)
-	tabCtx, cancelTab := chromedp.NewContext(alloc)
-	t.Cleanup(cancelTab)
-	if err := chromedp.Run(tabCtx); err != nil {
-		t.Fatalf("start browser: %v", err)
-	}
+	tabCtx := testbrowser.Tab(t)
 	cfg := &config.RuntimeConfig{TabLifecyclePolicy: "freeze_idle", TabCloseDelay: delay, ActionTimeout: 10 * time.Second, AllowScreencast: true, StateDir: t.TempDir()}
-	b := bridge.New(context.Background(), tabCtx, cfg)
+	b := browserBridge(tabCtx, cfg)
 	b.RegisterTab("tabA", tabCtx)
 	return b, New(b, cfg, nil, nil, nil)
 }

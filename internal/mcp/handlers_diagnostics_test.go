@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/handlers"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
@@ -48,23 +46,10 @@ func TestErrorsToolReturnsSuccessCarryingTheErrorText(t *testing.T) {
 	}))
 	defer page.Close()
 
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(testbrowser.Path(t)),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	browserCtx, cancelBrowser := chromedp.NewContext(alloc)
-	browserCtx, cancelTimeout := context.WithTimeout(browserCtx, 30*time.Second)
+	browserCtx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
 	defer cancelTimeout()
-	defer cancelBrowser()
-	defer cancelAlloc()
-	if err := chromedp.Run(browserCtx); err != nil {
-		t.Fatalf("start test browser: %v", err)
-	}
 	cfg := &config.RuntimeConfig{ActionTimeout: 10 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
-	b := bridge.New(context.Background(), browserCtx, cfg)
+	b := browserBridge(browserCtx, cfg)
 	tabID, _, _, err := b.CreateTab(page.URL)
 	if err != nil {
 		t.Fatalf("create tab with throwing page: %v", err)

@@ -40,8 +40,11 @@ func ProfileDir(t testing.TB) string {
 	return dir
 }
 
-func removeProfileDir(t testing.TB, dir string) {
-	t.Helper()
+type logger interface {
+	Logf(format string, args ...any)
+}
+
+func removeProfileDir(t logger, dir string) {
 	var err error
 	for attempt := 0; attempt < removalAttempts; attempt++ {
 		if attempt > 0 {

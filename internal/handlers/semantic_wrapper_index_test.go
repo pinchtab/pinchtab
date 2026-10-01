@@ -120,21 +120,8 @@ func TestAWrapperOverASemanticFormWithNoMatchesStillReportsNoMatch(t *testing.T)
 // drifting again, and the base is what drifted — the semantic path goes through the
 // matcher's one-based nth while css goes through the browser-side zero-based resolver.
 func TestTheSameNthSelectsTheSameOrdinalOnBothPaths(t *testing.T) {
-	chromePath := testbrowser.Path(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancelTimeout)
 
 	html := `<button id="first">Save</button><button id="second">Save</button><button id="third">Save</button>`
 	if err := chromedp.Run(ctx,
@@ -145,7 +132,7 @@ func TestTheSameNthSelectsTheSameOrdinalOnBothPaths(t *testing.T) {
 	}
 
 	cfg := &config.RuntimeConfig{ActionTimeout: 10 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
-	b := bridge.New(context.Background(), ctx, cfg)
+	b := browserBridge(ctx, cfg)
 	b.RegisterTab("tab-nth", ctx)
 	h := New(b, cfg, nil, nil, nil)
 	h.Matcher = semantic.NewCombinedMatcher(semantic.NewHashingEmbedder(128))

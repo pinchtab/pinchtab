@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +11,6 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/heapsnap"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
@@ -157,18 +155,7 @@ func TestAFailedMemorySnapshotLeavesNoFile(t *testing.T) {
 
 func browserMemoryHandlers(t *testing.T, cfg *config.RuntimeConfig) *Handlers {
 	t.Helper()
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(testbrowser.Path(t)),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	t.Cleanup(func() {
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx := testbrowser.Tab(t)
 	page := `<html><body><script>window.keep = Array.from({length: 40}, () => [1, 2, 3]);</script></body></html>`
 	if err := chromedp.Run(ctx, chromedp.Navigate("data:text/html,"+page)); err != nil {
 		t.Fatal(err)
@@ -176,7 +163,7 @@ func browserMemoryHandlers(t *testing.T, cfg *config.RuntimeConfig) *Handlers {
 	cfg.ActionTimeout = 10 * time.Second
 	cfg.DefaultBrowser = config.BrowserChrome
 	cfg.StateDir = t.TempDir()
-	b := bridge.New(context.Background(), ctx, cfg)
+	b := browserBridge(ctx, cfg)
 	b.RegisterTab("tab-mem", ctx)
 	return New(b, cfg, nil, nil, nil)
 }

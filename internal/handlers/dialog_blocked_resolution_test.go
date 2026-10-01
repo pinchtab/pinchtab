@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -23,23 +22,8 @@ const pendingAlertTab = "tab-alert"
 
 func handlersOverAPendingAlert(t *testing.T) *Handlers {
 	t.Helper()
-	chromePath := testbrowser.Path(t)
-	profile := testbrowser.ProfileDir(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(profile),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 40*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-		_ = os.RemoveAll(profile)
-	})
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancelTimeout)
 	html := `<button id="b" onclick="alert('hi')">b</button><button id="c">c</button>`
 	if err := chromedp.Run(ctx, chromedp.Navigate("data:text/html;base64,"+base64.StdEncoding.EncodeToString([]byte(html)))); err != nil {
 		t.Fatal(err)
@@ -62,7 +46,7 @@ func handlersOverAPendingAlert(t *testing.T) *Handlers {
 		t.Fatal("the alert never opened")
 	}
 	cfg := &config.RuntimeConfig{ActionTimeout: time.Second, AllowMacro: true, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
-	b := bridge.New(context.Background(), ctx, cfg)
+	b := browserBridge(ctx, cfg)
 	b.RegisterTab(pendingAlertTab, ctx)
 	b.GetDialogManager().SetPending(pendingAlertTab, &bridge.DialogState{Type: "alert", Message: "hi"})
 	return New(b, cfg, nil, nil, nil)

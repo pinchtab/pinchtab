@@ -109,22 +109,9 @@ func runElementVisibleJS(t *testing.T, ctx context.Context, selector string) boo
 }
 
 func TestTheVisibleEndpointReadsThePositionCSSComputed(t *testing.T) {
-	chromePath := testbrowser.Path(t)
 
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancelTimeout)
 
 	url := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(visibleFixtureHTML))
 	if err := chromedp.Run(ctx, chromedp.Navigate(url)); err != nil {

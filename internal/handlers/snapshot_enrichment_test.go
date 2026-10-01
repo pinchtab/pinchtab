@@ -25,7 +25,6 @@ const enrichmentFixtureHTML = `<!doctype html><html><head><title>Signup</title><
 
 func newEnrichmentFixture(t *testing.T) (*Handlers, string) {
 	t.Helper()
-	chromePath := testbrowser.Path(t)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -33,27 +32,15 @@ func newEnrichmentFixture(t *testing.T) (*Handlers, string) {
 	}))
 	t.Cleanup(server.Close)
 
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancelTimeout)
 
 	if err := chromedp.Run(ctx, chromedp.Navigate(server.URL), chromedp.WaitVisible("#email", chromedp.ByID)); err != nil {
 		t.Fatal(err)
 	}
 
 	cfg := &config.RuntimeConfig{ActionTimeout: 10 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
-	b := bridge.New(context.Background(), ctx, cfg)
+	b := browserBridge(ctx, cfg)
 	b.RegisterTab("tab-enrich", ctx)
 	return New(b, cfg, nil, nil, nil), "tab-enrich"
 }

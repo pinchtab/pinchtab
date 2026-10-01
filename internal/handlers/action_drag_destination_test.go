@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -109,28 +108,13 @@ document.addEventListener('mouseup', e => {
 
 func newDragRecoveryFixture(t *testing.T) (context.Context, *bridge.Bridge, *Handlers) {
 	t.Helper()
-	chromePath := testbrowser.Path(t)
-	profile := testbrowser.ProfileDir(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(profile),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 40*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-		_ = os.RemoveAll(profile)
-	})
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancelTimeout)
 	if err := chromedp.Run(ctx, chromedp.Navigate("data:text/html;base64,"+base64.StdEncoding.EncodeToString([]byte(dragRecoveryFixtureHTML)))); err != nil {
 		t.Fatal(err)
 	}
 	cfg := &config.RuntimeConfig{ActionTimeout: 8 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
-	b := bridge.New(context.Background(), ctx, cfg)
+	b := browserBridge(ctx, cfg)
 	b.RegisterTab("tab-drag", ctx)
 	h := New(b, cfg, nil, nil, nil)
 	return ctx, b, h

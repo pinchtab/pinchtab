@@ -31,17 +31,7 @@ type sessionTabsFixture struct {
 
 func newSessionTabsFixture(t *testing.T) *sessionTabsFixture {
 	t.Helper()
-	chromePath := testbrowser.Path(t)
-	profile := testbrowser.ProfileDir(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(profile),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 60*time.Second)
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
 	// Not t.TempDir: closing a tab saves state from a goroutine, which can still be
 	// writing sessions.json when the testing package's RemoveAll runs.
 	stateDir, err := os.MkdirTemp("", "session-tabs-state-")
@@ -50,16 +40,13 @@ func newSessionTabsFixture(t *testing.T) *sessionTabsFixture {
 	}
 	t.Cleanup(func() {
 		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-		_ = os.RemoveAll(profile)
 		_ = os.RemoveAll(stateDir)
 	})
 	if err := chromedp.Run(ctx, chromedp.Navigate("about:blank")); err != nil {
 		t.Fatal(err)
 	}
 	cfg := &config.RuntimeConfig{ActionTimeout: 5 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: stateDir}
-	b := bridge.New(context.Background(), ctx, cfg)
+	b := browserBridge(ctx, cfg)
 	b.RegisterTab("seed", ctx)
 	return &sessionTabsFixture{t: t, b: b, h: New(b, cfg, nil, nil, nil)}
 }

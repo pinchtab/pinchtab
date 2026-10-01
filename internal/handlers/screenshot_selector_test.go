@@ -38,23 +38,10 @@ type screenshotFixture struct {
 
 func newScreenshotFixture(t *testing.T) screenshotFixture {
 	t.Helper()
-	chromePath := testbrowser.Path(t)
 
 	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(screenshotFixtureHTML))
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 60*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancelTimeout)
 
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(dataURL),
@@ -64,7 +51,7 @@ func newScreenshotFixture(t *testing.T) screenshotFixture {
 	}
 
 	cfg := &config.RuntimeConfig{ActionTimeout: 10 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
-	b := bridge.New(context.Background(), ctx, cfg)
+	b := browserBridge(ctx, cfg)
 	b.RegisterTab(screenshotTabID, ctx)
 
 	return screenshotFixture{handlers: New(b, cfg, nil, nil, nil), ctx: ctx}

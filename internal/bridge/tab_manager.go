@@ -22,10 +22,10 @@ const (
 	// browser is unhealthy (e.g. resource exhaustion) — fail fast instead of
 	// waiting tens of seconds.
 	tabCreateTimeout = 10 * time.Second
-	// tabCreateNavTimeout bounds the initial load of a freshly created tab. Kept
-	// well below the full navigate timeout so a wedged renderer (e.g. after an
+	// defaultTabCreateNavTimeout bounds the initial load of a freshly created tab.
+	// Kept well below the full navigate timeout so a wedged renderer (e.g. after an
 	// out-of-memory event) surfaces quickly rather than hanging ~60s.
-	tabCreateNavTimeout = 20 * time.Second
+	defaultTabCreateNavTimeout = 20 * time.Second
 )
 
 type TabSetupFunc func(ctx context.Context, tabID string) error
@@ -52,6 +52,7 @@ type TabManager struct {
 	mu                sync.RWMutex
 	freezeVeto        func(tabID string) bool
 	setFrozen         func(ctx context.Context, frozen bool) error
+	createNavTimeout  time.Duration
 
 	// pendingClicks tracks in-flight click actions that may open a popup.
 	// Keyed by the opener tab's raw CDP target ID. Read by the popup guard
@@ -75,7 +76,13 @@ func NewTabManager(browserCtx context.Context, cfg *config.RuntimeConfig, logSto
 		logStore:   logStore,
 		executor:   bridgetabs.NewTabExecutor(maxParallel),
 		setFrozen:  setTabFrozen,
+
+		createNavTimeout: defaultTabCreateNavTimeout,
 	}
+}
+
+func (tm *TabManager) SetTabCreateNavTimeout(d time.Duration) {
+	tm.createNavTimeout = d
 }
 
 func (tm *TabManager) SetDialogManager(dm *bridgetabs.DialogManager) {
@@ -263,7 +270,7 @@ func (tm *TabManager) createTab(url, browserContextID string) (string, context.C
 	}
 
 	if url != "" && url != "about:blank" {
-		navCtx, navCancel := context.WithTimeout(ctx, tabCreateNavTimeout)
+		navCtx, navCancel := context.WithTimeout(ctx, tm.createNavTimeout)
 		if err := chromedp.Run(navCtx, chromedp.Navigate(url)); err != nil {
 			navCancel()
 			cancel()
@@ -271,7 +278,7 @@ func (tm *TabManager) createTab(url, browserContextID string) (string, context.C
 				_ = target.CloseTarget(targetID).Do(execCtx)
 			}
 			if errors.Is(err, context.DeadlineExceeded) {
-				return "", nil, nil, fmt.Errorf("navigate new tab: page did not load within %s — the browser may be out of memory or overloaded (close tabs or restart the instance)", tabCreateNavTimeout)
+				return "", nil, nil, fmt.Errorf("navigate new tab: page did not load within %s — the browser may be out of memory or overloaded (close tabs or restart the instance)", tm.createNavTimeout)
 			}
 			return "", nil, nil, fmt.Errorf("navigate: %w", err)
 		}

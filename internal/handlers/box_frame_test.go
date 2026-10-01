@@ -56,22 +56,9 @@ func (f frameFixture) iframeNodeID(t *testing.T) int64 {
 
 func newFrameFixture(t *testing.T) frameFixture {
 	t.Helper()
-	chromePath := testbrowser.Path(t)
 
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancelTimeout)
 
 	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(frameFixtureHTML))
 	if err := chromedp.Run(ctx, chromedp.Navigate(dataURL), chromedp.WaitVisible("#f", chromedp.ByID)); err != nil {
@@ -79,7 +66,7 @@ func newFrameFixture(t *testing.T) frameFixture {
 	}
 
 	cfg := &config.RuntimeConfig{ActionTimeout: 5 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
-	b := bridge.New(context.Background(), ctx, cfg)
+	b := browserBridge(ctx, cfg)
 	b.RegisterTab("tab-frame", ctx)
 
 	rawNodes, err := bridge.FetchAXTree(ctx)
