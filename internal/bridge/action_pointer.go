@@ -34,6 +34,7 @@ type pointerOps struct {
 	clickFloatingFlyoutItem func(ctx context.Context, nodeID int64) (bool, error)
 	doubleClickByNodeID     func(ctx context.Context, nodeID int64) error
 	jsDoubleClickByBackend  func(ctx context.Context, nodeID int64) error
+	doubleClickByCoordinate func(ctx context.Context, x, y float64) error
 	waitNav                 func(ctx context.Context, delay time.Duration)
 	scrollViewportCenter    func(ctx context.Context) (float64, float64, error)
 }
@@ -55,6 +56,7 @@ func defaultPointerOps() *pointerOps {
 		clickFloatingFlyoutItem: clickFloatingFlyoutItem,
 		doubleClickByNodeID:     bridgecdpops.DoubleClickByNodeID,
 		jsDoubleClickByBackend:  bridgecdpops.JSDoubleClickByBackendNode,
+		doubleClickByCoordinate: bridgecdpops.DoubleClickByCoordinate,
 		waitNav:                 sleepForNav,
 		scrollViewportCenter:    viewportCenter,
 	}
@@ -289,7 +291,8 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 	defer func() { result = auto.settle(ctx, result, err) }()
 
 	if err := b.runWatchingDialogs(ctx, req, func(clickCtx context.Context) error {
-		return b.pointer().clickTarget(clickCtx, req, auto)
+		p := b.pointer()
+		return p.clickTarget(clickCtx, req, auto, p.clickGesture(req))
 	}); err != nil {
 		return nil, err
 	}
@@ -297,7 +300,32 @@ func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map
 	return map[string]any{"clicked": true}, nil
 }
 
-func (p *pointerOps) clickTarget(ctx context.Context, req ActionRequest, auto *autoSwitchSession) error {
+type pointerGesture struct {
+	onNode       func(ctx context.Context, nodeID int64) error
+	onPoint      func(ctx context.Context, x, y float64) error
+	onSubmitNode func(ctx context.Context, nodeID int64) error
+}
+
+func (p *pointerOps) clickGesture(req ActionRequest) pointerGesture {
+	return pointerGesture{
+		onNode: func(ctx context.Context, nodeID int64) error {
+			return p.clickByNodeIDWithMode(ctx, nodeID, req.Mode)
+		},
+		onPoint: func(ctx context.Context, x, y float64) error {
+			return p.clickByCoordinate(ctx, x, y, req.Modifiers)
+		},
+		onSubmitNode: p.jsClickByBackendNode,
+	}
+}
+
+func (p *pointerOps) doubleClickGesture() pointerGesture {
+	return pointerGesture{
+		onNode:  p.doubleClickByNodeIDWithJSFallback,
+		onPoint: p.doubleClickByCoordinate,
+	}
+}
+
+func (p *pointerOps) clickTarget(ctx context.Context, req ActionRequest, auto *autoSwitchSession, gesture pointerGesture) error {
 	if auto != nil {
 		auto.prepareWindowOpenCapture(ctx)
 	}
@@ -307,7 +335,7 @@ func (p *pointerOps) clickTarget(ctx context.Context, req ActionRequest, auto *a
 		}
 	}
 	switch {
-	case req.Submit:
+	case req.Submit && gesture.onSubmitNode != nil:
 		nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
 		if err != nil {
 			return err
@@ -318,19 +346,19 @@ func (p *pointerOps) clickTarget(ctx context.Context, req ActionRequest, auto *a
 		prepare(nodeID)
 		// One DOM click only. In particular, do not use the trusted-click
 		// timeout fallback: its second dispatch can double-submit a slow SPA.
-		return p.jsClickByBackendNode(ctx, nodeID)
+		return gesture.onSubmitNode(ctx, nodeID)
 	case req.Selector != "":
 		nodeID, err := ResolveCSSToNodeID(ctx, req.Selector)
 		if err != nil {
 			return err
 		}
 		prepare(nodeID)
-		return p.clickByNodeIDWithMode(ctx, nodeID, req.Mode)
+		return gesture.onNode(ctx, nodeID)
 	case req.NodeID > 0:
 		prepare(req.NodeID)
-		return p.clickByNodeIDWithMode(ctx, req.NodeID, req.Mode)
+		return gesture.onNode(ctx, req.NodeID)
 	case req.HasXY:
-		return p.clickByCoordinate(ctx, req.X, req.Y, req.Modifiers)
+		return gesture.onPoint(ctx, req.X, req.Y)
 	default:
 		return NewInvalidActionRequestError("need selector, ref, nodeId, or x/y coordinates")
 	}
@@ -400,33 +428,17 @@ func waitForArmedDialogSettle(ctx context.Context, dm *bridgetabs.DialogManager,
 }
 
 func (b *Bridge) actionDoubleClick(ctx context.Context, req ActionRequest) (result map[string]any, err error) {
+	scaleScreencastCoords(ctx, &req)
 	auto := b.beginAutoSwitch(req)
 	defer func() { result = auto.settle(ctx, result, err) }()
-	if req.Selector != "" {
-		nodeID, nodeErr := ResolveCSSToNodeID(ctx, req.Selector)
-		if nodeErr != nil {
-			return nil, nodeErr
-		}
-		if auto != nil {
-			auto.prepareNode(ctx, nodeID)
-		}
-		err = b.pointer().doubleClickByNodeIDWithJSFallback(ctx, nodeID)
-	} else if req.NodeID > 0 {
-		if auto != nil {
-			auto.prepareNode(ctx, req.NodeID)
-		}
-		err = b.pointer().doubleClickByNodeIDWithJSFallback(ctx, req.NodeID)
-	} else if req.HasXY {
-		if auto != nil {
-			auto.prepareWindowOpenCapture(ctx)
-		}
-		err = bridgecdpops.DoubleClickByCoordinate(ctx, req.X, req.Y)
-	} else {
-		return nil, NewInvalidActionRequestError("need selector, ref, nodeId, or x/y coordinates")
-	}
-	if err != nil {
+
+	p := b.pointer()
+	if err := b.runWatchingDialogs(ctx, req, func(clickCtx context.Context) error {
+		return p.clickTarget(clickCtx, req, auto, p.doubleClickGesture())
+	}); err != nil {
 		return nil, err
 	}
+	b.waitNavIfRequested(ctx, req)
 	return map[string]any{"doubleclicked": true}, nil
 }
 
