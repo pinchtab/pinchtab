@@ -191,31 +191,18 @@ func RemoveAnnotationOverlay(ctx context.Context) error {
 // result into T. A JS exception is reported as an error rather than decoding to
 // a zero value, which would otherwise read as a legitimate measurement.
 func EvaluateValue[T any](ctx context.Context, expression string) (T, error) {
-	var zero T
-	var raw json.RawMessage
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.evaluate", map[string]any{
-			"expression":    expression,
-			"returnByValue": true,
-		}, &raw)
-	})); err != nil {
-		return zero, err
+	var value T
+	obj, err := runScript(ctx, "Runtime.evaluate", map[string]any{
+		"expression":    expression,
+		"returnByValue": true,
+	})
+	if err != nil {
+		return value, fmt.Errorf("evaluate: %w", err)
 	}
-	var resp struct {
-		Result struct {
-			Value T `json:"value"`
-		} `json:"result"`
-		ExceptionDetails *struct {
-			Text string `json:"text"`
-		} `json:"exceptionDetails,omitempty"`
+	if err := obj.decode(&value); err != nil {
+		return value, err
 	}
-	if err := json.Unmarshal(raw, &resp); err != nil {
-		return zero, err
-	}
-	if resp.ExceptionDetails != nil {
-		return zero, fmt.Errorf("evaluate: %s", resp.ExceptionDetails.Text)
-	}
-	return resp.Result.Value, nil
+	return value, nil
 }
 
 type documentDimensions struct {
