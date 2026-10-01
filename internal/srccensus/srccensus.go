@@ -97,12 +97,12 @@ func Load(t testing.TB, dir string, minFiles int) *Package {
 		if err != nil {
 			t.Fatalf("cannot read %s, so this census would skip it silently: %v", path, err)
 		}
-		file, err := parser.ParseFile(pkg.fset, path, raw, 0)
+		file, err := parser.ParseFile(pkg.fset, path, raw, parser.ParseComments)
 		if err != nil {
 			t.Fatalf("cannot parse %s, so this census would skip it silently: %v", path, err)
 		}
 		pkg.files[filepath.Base(path)] = file
-		pkg.src[filepath.Base(path)] = raw
+		pkg.src[filepath.Base(path)] = blankComments(pkg.fset, file, raw)
 	}
 	if len(pkg.files) < minFiles {
 		t.Fatalf("parsed %d non-test files in %s, want at least %d; the census matched almost nothing and would pass vacuously", len(pkg.files), dir, minFiles)
@@ -448,6 +448,23 @@ func enclosingFunc(file *ast.File, pos token.Pos) string {
 		}
 	}
 	return name
+}
+
+// blankComments is why the text accessors return code only: a commented-out call must not
+// satisfy a census that asks for the call. Newlines survive so offsets and lines still hold.
+func blankComments(fset *token.FileSet, file *ast.File, raw []byte) []byte {
+	code := append([]byte(nil), raw...)
+	for _, group := range file.Comments {
+		for _, comment := range group.List {
+			start, end := fset.Position(comment.Pos()).Offset, fset.Position(comment.End()).Offset
+			for i := start; i < end; i++ {
+				if code[i] != '\n' {
+					code[i] = ' '
+				}
+			}
+		}
+	}
+	return code
 }
 
 func receiverType(fn *ast.FuncDecl) string {

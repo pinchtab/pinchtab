@@ -261,14 +261,13 @@ func TestNoHandlerSpellsASolverNameAsALiteral(t *testing.T) {
 
 	referencing := 0
 	for name, body := range srccensus.Load(t, ".", 80).Sources() {
-		src := codeWithoutCommentLines(body)
-		if strings.Contains(src, "coreautosolver.SemanticSolverName") ||
-			strings.Contains(src, "coreautosolver.CapsolverSolverName") ||
-			strings.Contains(src, "coreautosolver.TwoCaptchaSolverName") {
+		if strings.Contains(body, "coreautosolver.SemanticSolverName") ||
+			strings.Contains(body, "coreautosolver.CapsolverSolverName") ||
+			strings.Contains(body, "coreautosolver.TwoCaptchaSolverName") {
 			referencing++
 		}
 		for _, solver := range names {
-			if strings.Contains(src, `"`+solver+`"`) {
+			if strings.Contains(body, `"`+solver+`"`) {
 				t.Errorf("%s spells the solver name %q as a literal; use the constant that owns it (internal/autosolver) so the two cannot drift", name, solver)
 			}
 		}
@@ -277,21 +276,6 @@ func TestNoHandlerSpellsASolverNameAsALiteral(t *testing.T) {
 	if referencing == 0 {
 		t.Error("no file in this package references a solver-name constant; the ban above would pass vacuously on a package that stopped naming solvers at all")
 	}
-}
-
-// codeWithoutCommentLines drops whole-line comments so a doc example or a curl snippet
-// naming a solver is not read as code. A trailing comment is NOT stripped: cutting at
-// the first "//" would also cut inside a string holding a URL, and a solver name spelled
-// after one is still a spelling worth catching.
-func codeWithoutCommentLines(src string) string {
-	var kept []string
-	for _, line := range strings.Split(src, "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), "//") {
-			continue
-		}
-		kept = append(kept, line)
-	}
-	return strings.Join(kept, "\n")
 }
 
 func solveErrorPayload(t *testing.T, w *httptest.ResponseRecorder) (code, message string) {

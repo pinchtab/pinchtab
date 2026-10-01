@@ -111,6 +111,24 @@ func TestLoadFailsWhenThePackageYieldsFewerFilesThanTheGuardKnowsAbout(t *testin
 	}
 }
 
+func TestTextAccessorsBlankCommentsButKeepPositions(t *testing.T) {
+	file := "package p\n\n// owner() in a doc comment\nfunc f() {\n\t// owner()\n\t/* owner(\n\t) */ live()\n}\n"
+	pkg := Load(t, writePackage(t, map[string]string{"a.go": file}), 1)
+	fn := pkg.MustFunc(t, "f")
+
+	for accessor, text := range map[string]string{"Source": pkg.Source(fn), "FileSource": pkg.FileSource(fn), "Sources": pkg.Sources()["a.go"]} {
+		if strings.Contains(text, "owner(") {
+			t.Errorf("%s still carries a call that only appears in a comment: %q", accessor, text)
+		}
+		if !strings.Contains(text, "live()") {
+			t.Errorf("%s lost the live call beside the comment: %q", accessor, text)
+		}
+	}
+	if code := pkg.FileSource(fn); len(code) != len(file) || strings.Count(code, "\n") != strings.Count(file, "\n") || strings.Index(code, "live()") != strings.Index(file, "live()") {
+		t.Errorf("blanking moved the code: got %q from %q", code, file)
+	}
+}
+
 func TestSourcesCarriesEveryNonTestFileTextAsACopy(t *testing.T) {
 	dir := writePackage(t, map[string]string{
 		"a.go":      "package p\n\nfunc a() {}\n",
