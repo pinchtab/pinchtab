@@ -4,11 +4,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/autosolver"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 // This file guards the single-ownership of the autoSolver defaults. They used to be
@@ -214,33 +216,16 @@ func TestCoreEnabledDefaultMatchesTheConfigDefault(t *testing.T) {
 // owns that vocabulary, and this package's default list is where two of the three
 // copies used to restate it.
 func TestNoSolverNameLiteralsInThisPackage(t *testing.T) {
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	var offenders []string
-	var scanned int
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		body, err := os.ReadFile(name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		scanned++
+	for name, body := range srccensus.Load(t, ".", 20).Sources() {
 		for _, literal := range []string{`"` + autosolver.CloudflareSolverName + `"`, `"` + autosolver.SemanticSolverName + `"`} {
-			if strings.Contains(string(body), literal) {
+			if strings.Contains(body, literal) {
 				offenders = append(offenders, name+" contains "+literal)
 			}
 		}
 	}
-	if scanned == 0 {
-		t.Fatal("no production files scanned — this census would pass vacuously")
-	}
 	if len(offenders) > 0 {
+		slices.Sort(offenders)
 		t.Errorf("solver names must come from internal/autosolver's constants: %v", offenders)
 	}
 }

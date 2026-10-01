@@ -263,6 +263,16 @@ func (p *Package) Files() []string {
 	return names
 }
 
+// Sources maps each parsed file's base name to its text, for a textual census. The map
+// is a copy, so a guard cannot alter what later finders read.
+func (p *Package) Sources() map[string]string {
+	sources := make(map[string]string, len(p.src))
+	for name, raw := range p.src {
+		sources[name] = string(raw)
+	}
+	return sources
+}
+
 // Calls returns every call to want — either a bare "Fn" or a qualified "pkg.Fn" — and
 // fails when there are none. Use it for a rule that says "this must happen HERE and
 // nowhere else": a pattern that matches nothing means the rule has stopped applying to

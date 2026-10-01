@@ -1,13 +1,14 @@
 package orchestrator
 
 import (
-	"os"
-	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 // Shutdown must not leave a startup monitor running. A monitor writes instance
@@ -86,24 +87,9 @@ func TestSignalShutdownIsIdempotentAndNilSafe(t *testing.T) {
 func TestEveryMonitorGoesThroughStartMonitor(t *testing.T) {
 	bareGoMonitor := regexp.MustCompile(`go\s+o\.monitor\(`)
 
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("cannot read package dir, so this rule would check nothing: %v", err)
-	}
-
-	scanned := 0
 	var offenders []string
-	for _, e := range entries {
-		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		body, readErr := os.ReadFile(filepath.Join(".", name))
-		if readErr != nil {
-			t.Fatalf("read %s: %v", name, readErr)
-		}
-		scanned++
-		for _, line := range strings.Split(string(body), "\n") {
+	for name, body := range srccensus.Load(t, ".", 20).Sources() {
+		for line := range strings.SplitSeq(body, "\n") {
 			// Comments describe the shape; only code reintroduces it.
 			if strings.HasPrefix(strings.TrimSpace(line), "//") {
 				continue
@@ -115,10 +101,8 @@ func TestEveryMonitorGoesThroughStartMonitor(t *testing.T) {
 		}
 	}
 
-	if scanned < 20 {
-		t.Fatalf("scanned %d non-test sources, want at least 20; the walk matched almost nothing and this rule would pass vacuously", scanned)
-	}
 	if len(offenders) > 0 {
+		slices.Sort(offenders)
 		t.Fatalf("monitor started outside startMonitor in %s; use o.startMonitor(inst) so Shutdown can wait for it",
 			strings.Join(offenders, ", "))
 	}

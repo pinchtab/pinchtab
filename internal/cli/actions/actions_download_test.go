@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 func TestDownloadTruncatesPrintedBase64(t *testing.T) {
@@ -121,41 +123,24 @@ func TestTheSaveConfirmationIsTheSameSentenceEverywhere(t *testing.T) {
 func TestTheSaveConfirmationHasOneOwner(t *testing.T) {
 	const sentence = `"Saved %s (%d bytes)"`
 
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	var owner string
 	var others []string
-	var scanned int
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+	for name, body := range srccensus.Load(t, ".", 40).Sources() {
+		if !strings.Contains(body, sentence) {
 			continue
 		}
-		body, err := os.ReadFile(name) // #nosec G304 -- files listed from this package's own directory.
-		if err != nil {
-			t.Fatal(err)
-		}
-		scanned++
-		if !strings.Contains(string(body), sentence) {
-			continue
-		}
-		if strings.Contains(string(body), "func printSaved(") {
+		if strings.Contains(body, "func printSaved(") {
 			owner = name
 			continue
 		}
 		others = append(others, name)
 	}
 
-	if scanned < 2 {
-		t.Fatalf("scanned %d files; this census would pass vacuously", scanned)
-	}
 	if owner == "" {
 		t.Fatalf("no file declares printSaved alongside %s; the sentence has no owner, so this census guards nothing", sentence)
 	}
 	if len(others) > 0 {
+		slices.Sort(others)
 		t.Errorf("%s is open-coded in %v as well as its owner %s; route those through printSaved", sentence, others, owner)
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io/fs"
 	"log/slog"
-	"os"
 	"path"
 	"path/filepath"
 	"reflect"
@@ -154,32 +153,15 @@ func TestOnlySafelogInstallsTheProcessLogger(t *testing.T) {
 // The discard handler lived in internal/server, and a package-local test there could not
 // state why it must never come back: recording a run is safelog's job, not the server's.
 func TestTheServerNeverDiscardsLogOutput(t *testing.T) {
-	paths, err := filepath.Glob(filepath.Join("..", "server", "*.go"))
-	if err != nil {
-		t.Fatalf("cannot enumerate internal/server, so this guard would check nothing: %v", err)
-	}
-
-	scanned := 0
-	for _, sourcePath := range paths {
-		if strings.HasSuffix(sourcePath, "_test.go") {
-			continue
-		}
-		raw, err := os.ReadFile(sourcePath)
-		if err != nil {
-			t.Fatalf("cannot read %s, so this guard would skip it silently: %v", sourcePath, err)
-		}
-		scanned++
-		for i, line := range strings.Split(string(raw), "\n") {
+	for name, text := range srccensus.Load(t, filepath.Join("..", "server"), minServerSourceFiles).Sources() {
+		for i, line := range strings.Split(text, "\n") {
 			if strings.HasPrefix(strings.TrimSpace(line), "//") {
 				continue
 			}
 			if strings.Contains(line, "io."+"Discard") {
-				t.Errorf("internal/server/%s:%d discards log output; a run must record its requests and errors without a flag, and the level belongs in safelog", filepath.Base(sourcePath), i+1)
+				t.Errorf("internal/server/%s:%d discards log output; a run must record its requests and errors without a flag, and the level belongs in safelog", name, i+1)
 			}
 		}
-	}
-	if scanned < minServerSourceFiles {
-		t.Fatalf("scanned %d non-test files in internal/server, want at least %d; the guard matched almost nothing and would pass vacuously", scanned, minServerSourceFiles)
 	}
 }
 

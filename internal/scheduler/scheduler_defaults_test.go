@@ -1,13 +1,13 @@
 package scheduler
 
 import (
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 // New with an empty Config must land exactly on DefaultConfig. Anything else means a
@@ -59,24 +59,18 @@ func TestSchedulerDefaultsAreSpelledInOnePlace(t *testing.T) {
 	owner := filepath.Join("..", "config", "scheduler_defaults.go")
 	seen := map[string]int{}
 
-	for _, dir := range []string{".", filepath.Join("..", "config"), filepath.Join("..", "server")} {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			t.Fatalf("ReadDir(%s): %v", dir, err)
-		}
-		files := 0
-		for _, entry := range entries {
-			name := entry.Name()
-			if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-				continue
-			}
-			files++
-			path := filepath.Join(dir, name)
-			body, err := os.ReadFile(path) // #nosec G304 -- files walked from this repo's own tree.
-			if err != nil {
-				t.Fatalf("ReadFile(%s): %v", path, err)
-			}
-			for i, line := range strings.Split(string(body), "\n") {
+	scopes := []struct {
+		dir      string
+		minFiles int
+	}{
+		{".", 8},
+		{filepath.Join("..", "config"), 20},
+		{filepath.Join("..", "server"), 5},
+	}
+	for _, scope := range scopes {
+		for name, body := range srccensus.Load(t, scope.dir, scope.minFiles).Sources() {
+			path := filepath.Join(scope.dir, name)
+			for i, line := range strings.Split(body, "\n") {
 				trimmed := strings.TrimSpace(line)
 				if strings.HasPrefix(trimmed, "//") {
 					continue
@@ -98,9 +92,6 @@ func TestSchedulerDefaultsAreSpelledInOnePlace(t *testing.T) {
 				t.Errorf("%s:%d gives %s a literal default; the one owner is %s, and a second copy is free to drift from what config get reports:\n\t%s",
 					path, i+1, field, owner, trimmed)
 			}
-		}
-		if files == 0 {
-			t.Fatalf("no non-test Go files found in %s, so this census read nothing", dir)
 		}
 	}
 

@@ -7,13 +7,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 // A nodeId keeps selector resolution out of CDP so the endpoint can be driven with the
@@ -91,26 +92,15 @@ func TestAClickNamingNothingToClickIsACallerError(t *testing.T) {
 // the status while agreeing about the words. A new copy reds here by file and line, and the
 // count is checked against a floor so a renamed constant cannot pass the guard vacuously.
 func TestOneSiteSpellsTheSnapshotRemedy(t *testing.T) {
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatal(err)
-	}
 	var sites []string
-	for _, entry := range entries {
-		name := entry.Name()
-		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		src, readErr := os.ReadFile(name)
-		if readErr != nil {
-			t.Fatal(readErr)
-		}
-		for i, line := range strings.Split(string(src), "\n") {
+	for name, src := range srccensus.Load(t, ".", 80).Sources() {
+		for i, line := range strings.Split(src, "\n") {
 			if strings.Contains(line, `take a /snapshot first`) {
 				sites = append(sites, fmt.Sprintf("%s:%d %s", name, i+1, strings.TrimSpace(line)))
 			}
 		}
 	}
+	slices.Sort(sites)
 
 	if len(sites) != 1 {
 		t.Fatalf("the snapshot remedy is spelled at %d sites; one owner or they drift:\n  %s", len(sites), strings.Join(sites, "\n  "))

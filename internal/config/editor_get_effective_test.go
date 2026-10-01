@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/safelog"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 func writeConfigForGet(t *testing.T, body string) string {
@@ -236,35 +237,26 @@ func quoteJSON(value string) string {
 // where it gets its answer: joining the state dir with "profiles" a second time would
 // make config get agree with the runtime today and drift from it silently later.
 func TestTheProfilesPathRuleHasOneOwner(t *testing.T) {
+	scopes := []struct {
+		dir      string
+		minFiles int
+	}{
+		{".", 20},
+		{"workflow", 2},
+		{filepath.Join("..", "..", "cmd", "pinchtab"), 40},
+	}
 	owners := 0
-	for _, dir := range []string{".", "workflow", filepath.Join("..", "..", "cmd", "pinchtab")} {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			t.Fatalf("ReadDir(%s): %v", dir, err)
-		}
-		files := 0
-		for _, entry := range entries {
-			name := entry.Name()
-			if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-				continue
-			}
-			files++
-			src, err := os.ReadFile(filepath.Join(dir, name))
-			if err != nil {
-				t.Fatalf("ReadFile(%s): %v", name, err)
-			}
-			for _, line := range strings.Split(string(src), "\n") {
+	for _, scope := range scopes {
+		for name, src := range srccensus.Load(t, scope.dir, scope.minFiles).Sources() {
+			for line := range strings.SplitSeq(src, "\n") {
 				if strings.Contains(line, "//") {
 					continue
 				}
 				if strings.Contains(line, `filepath.Join(`) && strings.Contains(line, `"profiles"`) {
 					owners++
-					t.Logf("profiles path rule in %s/%s: %s", dir, name, strings.TrimSpace(line))
+					t.Logf("profiles path rule in %s/%s: %s", scope.dir, name, strings.TrimSpace(line))
 				}
 			}
-		}
-		if files == 0 {
-			t.Fatalf("no non-test Go files found in %s, so this census read nothing", dir)
 		}
 	}
 	if owners != 1 {

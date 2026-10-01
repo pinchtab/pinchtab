@@ -430,27 +430,6 @@ func TestTheCommandPackageSettlesTheLogLevelInOnePlace(t *testing.T) {
 	}
 }
 
-// The one-owner rule covers the whole command package, not just the file the
-// resolver lives in: cmd_server_ensure.go and cmd_server_background.go hold a
-// RuntimeConfig too, so a level assigned there would bypass the precedence
-// unseen.
-func commandSourceFiles(t *testing.T) []string {
-	t.Helper()
-
-	paths, err := filepath.Glob("*.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	out := make([]string, 0, len(paths))
-	for _, path := range paths {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
-		}
-		out = append(out, path)
-	}
-	return out
-}
-
 // captureRunLog installs the handler a real run installs, at the level a real run
 // starts from, so the load-then-resolve sequence below is the production one
 // rather than a level set up front.
@@ -570,26 +549,10 @@ func TestConfigPackageHoldsNoLogLevelPrecedence(t *testing.T) {
 	// the edit that reads most reasonable. Applying is what is forbidden —
 	// safelog.ParseLevel is validation and stays allowed, which is why this looks
 	// for SetLevel alone rather than for the package.
-	paths, err := filepath.Glob(filepath.Join(configDir, "*.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	scanned := 0
-	for _, path := range paths {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
+	for name, body := range configPkg.Sources() {
+		if strings.Contains(body, "SetLevel(") {
+			t.Errorf("internal/config/%s applies a log level; validating one with safelog.ParseLevel is fine, but resolveLogLevel is the only place that may decide and apply it", name)
 		}
-		body, err := os.ReadFile(path) // #nosec G304 -- files listed from the config package's own directory.
-		if err != nil {
-			t.Fatal(err)
-		}
-		scanned++
-		if strings.Contains(string(body), "SetLevel(") {
-			t.Errorf("internal/config/%s applies a log level; validating one with safelog.ParseLevel is fine, but resolveLogLevel is the only place that may decide and apply it", filepath.Base(path))
-		}
-	}
-	if scanned < 2 {
-		t.Fatalf("scanned %d files in internal/config; the census matched almost nothing and would pass vacuously", scanned)
 	}
 }
 
@@ -669,13 +632,7 @@ func TestDeferredDiagnosticsAreEmittedBeforeAnyExit(t *testing.T) {
 	// that already has one is the likeliest future addition, and stopping at the
 	// first match would inspect the old one and pass.
 	sites := 0
-	for _, path := range commandSourceFiles(t) {
-		raw, err := os.ReadFile(path) // #nosec G304 -- files listed from this package's own directory.
-		if err != nil {
-			t.Fatal(err)
-		}
-		src := string(raw)
-
+	for name, src := range srccensus.Load(t, ".", 40).Sources() {
 		for offset := 0; ; {
 			rel := strings.Index(src[offset:], load)
 			if rel < 0 {
@@ -683,7 +640,7 @@ func TestDeferredDiagnosticsAreEmittedBeforeAnyExit(t *testing.T) {
 			}
 			start := offset + rel
 			sites++
-			where := fmt.Sprintf("%s (prologue at byte %d)", filepath.Base(path), start)
+			where := fmt.Sprintf("%s (prologue at byte %d)", name, start)
 			offset = start + len(load)
 
 			emitAt := strings.Index(src[start:], emit)

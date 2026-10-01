@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/selector"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
 	"github.com/pinchtab/semantic"
 )
@@ -186,31 +186,14 @@ func TestTheSameNthSelectsTheSameOrdinalOnBothPaths(t *testing.T) {
 // get the converted index for free; a second adjustment here is how the two bases
 // drifted apart in the first place.
 func TestOnlyTheSelectorPackageTouchesTheWrapperIndex(t *testing.T) {
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	consumers, scanned := 0, 0
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		scanned++
-		src, err := os.ReadFile(name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		body := string(src)
+	consumers := 0
+	for name, body := range srccensus.Load(t, ".", 80).Sources() {
 		if strings.Contains(body, `"nth:`) {
 			t.Errorf("%s builds an nth: query itself; the index base is translated once, in internal/selector", name)
 		}
 		if strings.Contains(body, ".SemanticQuery()") {
 			consumers++
 		}
-	}
-	if scanned == 0 {
-		t.Fatal("no non-test files scanned, so this census read nothing")
 	}
 	if consumers < 2 {
 		t.Errorf("found %d SemanticQuery consumers, want at least 2 (the action path and count.go); a consumer that stopped routing through it would keep the old base", consumers)

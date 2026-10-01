@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
 	coreautosolver "github.com/pinchtab/pinchtab/internal/autosolver"
 	"github.com/pinchtab/pinchtab/internal/autosolver/catalog"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 func TestHandleListSolvers(t *testing.T) {
@@ -254,28 +254,14 @@ func TestDeriveChallengeType_NilPage(t *testing.T) {
 // in the package rather than the one file that happened to be dirty: a guard reading a
 // single file reports the rule as enforced while its siblings go unchecked.
 func TestNoHandlerSpellsASolverNameAsALiteral(t *testing.T) {
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	names := catalog.Names()
 	if len(names) < 2 {
 		t.Fatalf("catalog.Names() returned %v; the banned set is derived from it, so this guard would check almost nothing", names)
 	}
 
-	scanned, referencing := 0, 0
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		body, err := os.ReadFile(name) // #nosec G304 -- files listed from this package's own directory.
-		if err != nil {
-			t.Fatal(err)
-		}
-		scanned++
-		src := codeWithoutCommentLines(string(body))
+	referencing := 0
+	for name, body := range srccensus.Load(t, ".", 80).Sources() {
+		src := codeWithoutCommentLines(body)
 		if strings.Contains(src, "coreautosolver.SemanticSolverName") ||
 			strings.Contains(src, "coreautosolver.CapsolverSolverName") ||
 			strings.Contains(src, "coreautosolver.TwoCaptchaSolverName") {
@@ -288,9 +274,6 @@ func TestNoHandlerSpellsASolverNameAsALiteral(t *testing.T) {
 		}
 	}
 
-	if scanned < 2 {
-		t.Fatalf("scanned %d non-test files in this package; the census read nothing", scanned)
-	}
 	if referencing == 0 {
 		t.Error("no file in this package references a solver-name constant; the ban above would pass vacuously on a package that stopped naming solvers at all")
 	}

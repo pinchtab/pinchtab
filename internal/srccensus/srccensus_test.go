@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -107,6 +108,28 @@ func TestLoadFailsWhenThePackageYieldsFewerFilesThanTheGuardKnowsAbout(t *testin
 		if !strings.Contains(message, needle) {
 			t.Errorf("failure %q does not carry %q", message, needle)
 		}
+	}
+}
+
+func TestSourcesCarriesEveryNonTestFileTextAsACopy(t *testing.T) {
+	dir := writePackage(t, map[string]string{
+		"a.go":      "package p\n\nfunc a() {}\n",
+		"b.go":      "package p\n",
+		"a_test.go": "package p\n",
+		"notes.txt": "not go",
+	})
+	pkg := Load(t, dir, 2)
+
+	sources := pkg.Sources()
+	want := map[string]string{"a.go": "package p\n\nfunc a() {}\n", "b.go": "package p\n"}
+	if !maps.Equal(sources, want) {
+		t.Fatalf("Sources() = %q, want %q", sources, want)
+	}
+
+	sources["a.go"] = "edited"
+	delete(sources, "b.go")
+	if again := pkg.Sources(); !maps.Equal(again, want) {
+		t.Errorf("editing the returned map changed the package: Sources() = %q", again)
 	}
 }
 
