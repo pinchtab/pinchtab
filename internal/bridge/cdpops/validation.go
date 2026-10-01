@@ -184,7 +184,7 @@ func PointerPointForNode(ctx context.Context, backendNodeID int64, requireTopMos
 // node that stays transparent under the pointer is refused.
 func revealTransparentAncestor(ctx context.Context, probe pointerProbe, runProbe func() (pointerProbe, error)) (pointerProbe, error) {
 	moveCtx, cancel := context.WithTimeout(ctx, transparentRevealWindow)
-	_ = chromedp.Run(moveCtx, mouseEventAction(map[string]any{"type": "mouseMoved", "x": probe.X, "y": probe.Y}))
+	_ = chromedp.Run(moveCtx, MouseEventAction(map[string]any{"type": "mouseMoved", "x": probe.X, "y": probe.Y}))
 	cancel()
 
 	deadline := time.Now().Add(transparentRevealWindow)

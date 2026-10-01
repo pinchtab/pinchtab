@@ -30,13 +30,13 @@ const humanMouseStepTimeout = 500 * time.Millisecond
 // with humanMouseStepTimeout, returning ctx.Err() if the outer context was
 // cancelled and a synthetic timeout error if just the step exceeded its bound.
 func dispatchMouseMovedBounded(ctx context.Context, x, y float64) error {
+	ctx, err := bridgecdpops.EnableTrustedInput(ctx)
+	if err != nil {
+		return err
+	}
 	stepCtx, cancel := context.WithTimeout(ctx, humanMouseStepTimeout)
 	defer cancel()
-	return chromedp.Run(stepCtx,
-		chromedp.ActionFunc(func(c context.Context) error {
-			return input.DispatchMouseEvent(input.MouseMoved, x, y).Do(c)
-		}),
-	)
+	return chromedp.Run(stepCtx, bridgecdpops.MouseEventAction(map[string]any{"type": "mouseMoved", "x": x, "y": y}))
 }
 
 type lockedSource struct {
@@ -76,6 +76,7 @@ func (c *Config) getRand() *rand.Rand {
 }
 
 func MouseMove(ctx context.Context, fromX, fromY, toX, toY float64) error {
+	ctx = bridgecdpops.WithTrustedInput(ctx)
 	distance := math.Sqrt((toX-fromX)*(toX-fromX) + (toY-fromY)*(toY-fromY))
 	baseDuration := 100 + (distance/2000)*200
 	duration := baseDuration + float64(humanRand.Intn(100))
@@ -189,17 +190,19 @@ func sleepCtx(ctx context.Context, d time.Duration) error {
 }
 
 var dispatchMouseButtonAction = func(ctx context.Context, kind input.MouseType, x, y float64) error {
-	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return input.DispatchMouseEvent(kind, x, y).
-			WithButton(input.Left).
-			WithClickCount(1).
-			Do(ctx)
+	return chromedp.Run(ctx, bridgecdpops.MouseEventAction(map[string]any{
+		"type":       kind,
+		"x":          x,
+		"y":          y,
+		"button":     input.Left,
+		"clickCount": 1,
 	}))
 }
 
 // Click always follows an attempted press with a release on a context that survives ctx's
 // cancellation, so a cancelled click never leaves the button held down in the renderer.
 func Click(ctx context.Context, x, y float64) error {
+	ctx = bridgecdpops.WithTrustedInput(ctx)
 	if err := approachTargetAction(ctx, x, y); err != nil {
 		return err
 	}
@@ -248,6 +251,7 @@ var (
 // Hover is the humanized sibling of Click: the same random-start bezier
 // approach, then the plain hover dispatch instead of press/release.
 func Hover(ctx context.Context, x, y float64) error {
+	ctx = bridgecdpops.WithTrustedInput(ctx)
 	if err := approachTargetAction(ctx, x, y); err != nil {
 		return err
 	}
@@ -315,7 +319,7 @@ func TypeWithConfig(text string, fast bool, cfg *Config) []chromedp.Action {
 
 	chars := []rune(text)
 	for i, char := range chars {
-		actions = append(actions, chromedp.KeyEvent(string(char)))
+		actions = append(actions, bridgecdpops.TrustedInputAction(chromedp.KeyEvent(string(char))))
 		delay := baseDelay + rng.Intn(baseDelay/2)
 		if rng.Float64() < 0.05 {
 			delay += rng.Intn(500)
@@ -328,9 +332,9 @@ func TypeWithConfig(text string, fast bool, cfg *Config) []chromedp.Action {
 		if rng.Float64() < 0.03 && i < len(chars)-1 {
 			wrongChar := rune('a' + rng.Intn(26))
 			actions = append(actions,
-				chromedp.KeyEvent(string(wrongChar)),
+				bridgecdpops.TrustedInputAction(chromedp.KeyEvent(string(wrongChar))),
 				chromedp.Sleep(time.Duration(50+rng.Intn(100))*time.Millisecond),
-				chromedp.KeyEvent("\b"),
+				bridgecdpops.TrustedInputAction(chromedp.KeyEvent("\b")),
 				chromedp.Sleep(time.Duration(30+rng.Intn(70))*time.Millisecond),
 			)
 		}

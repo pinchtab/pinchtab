@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/chromedp/cdproto"
+	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/chromedp"
@@ -106,37 +108,88 @@ func validatePointerCoordinates(x, y float64) error {
 	return nil
 }
 
-// mouseEventAction returns a chromedp.Action that dispatches one
-// Input.dispatchMouseEvent with the given payload. Node-targeted click
-// sequences assemble several of these into a single chromedp.Run batch so the
-// trusted-CDP move/press/release steps stop being hand-rolled per call site.
-func mouseEventAction(payload map[string]any) chromedp.Action {
+// Chromium never delivers trusted Input.* events to an unfocused tab, which every
+// Target.createTarget(focus=false) tab is, and a screenshot switches emulation back off.
+type inputFocusKey struct{}
+
+type inputFocus struct {
+	mu      sync.Mutex
+	enabled bool
+}
+
+func WithTrustedInput(ctx context.Context) context.Context {
+	if _, ok := ctx.Value(inputFocusKey{}).(*inputFocus); ok {
+		return ctx
+	}
+	return context.WithValue(ctx, inputFocusKey{}, &inputFocus{})
+}
+
+func enableInputFocus(ctx context.Context) error {
+	focus, ok := ctx.Value(inputFocusKey{}).(*inputFocus)
+	if !ok {
+		return emulation.SetFocusEmulationEnabled(true).Do(ctx)
+	}
+	focus.mu.Lock()
+	defer focus.mu.Unlock()
+	if focus.enabled {
+		return nil
+	}
+	if err := emulation.SetFocusEmulationEnabled(true).Do(ctx); err != nil {
+		return err
+	}
+	focus.enabled = true
+	return nil
+}
+
+var enableInputFocusAction = chromedp.ActionFunc(enableInputFocus)
+
+func trustedInput(method string, params map[string]any) chromedp.Action {
 	return chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", payload, nil)
+		if err := enableInputFocus(ctx); err != nil {
+			return err
+		}
+		return cdp.Execute(ctx, method, params, nil)
 	})
 }
 
-// Chromium never acks, or delivers, a trusted Input.dispatchMouseEvent to a tab
-// that is not the focused one, which every Target.createTarget(focus=false) tab
-// is. Focus emulation makes the renderer accept input without raising the tab in
-// the operator's browser. Screenshots switch it off afterwards, so each trusted
-// dispatch re-enables it rather than relying on tab setup.
-var emulateInputFocus = chromedp.ActionFunc(func(ctx context.Context) error {
-	return emulation.SetFocusEmulationEnabled(true).Do(ctx)
-})
+func TrustedInputAction(action chromedp.Action) chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		if err := enableInputFocus(ctx); err != nil {
+			return err
+		}
+		return action.Do(ctx)
+	})
+}
+
+func MouseEventAction(payload map[string]any) chromedp.Action {
+	return trustedInput("Input.dispatchMouseEvent", payload)
+}
+
+func KeyEventAction(params map[string]any) chromedp.Action {
+	return trustedInput("Input.dispatchKeyEvent", params)
+}
+
+func InsertTextAction(text string) chromedp.Action {
+	return trustedInput("Input.insertText", map[string]any{"text": text})
+}
+
+func EnableTrustedInput(ctx context.Context) (context.Context, error) {
+	ctx = WithTrustedInput(ctx)
+	return ctx, chromedp.Run(ctx, enableInputFocusAction)
+}
 
 // mousePressReleaseActions returns the left-button press/release pair at (x,y)
 // for the given clickCount (1 = single click, 2 = double click), the part
 // shared verbatim by ClickByNodeID and DoubleClickByNodeID.
 func mousePressReleaseActions(x, y float64, clickCount int) []chromedp.Action {
 	return []chromedp.Action{
-		mouseEventAction(map[string]any{
+		MouseEventAction(map[string]any{
 			"type":       "mousePressed",
 			"button":     DefaultMouseButton,
 			"clickCount": clickCount,
 			"x":          x, "y": y,
 		}),
-		mouseEventAction(map[string]any{
+		MouseEventAction(map[string]any{
 			"type":       "mouseReleased",
 			"button":     DefaultMouseButton,
 			"clickCount": clickCount,
@@ -146,17 +199,22 @@ func mousePressReleaseActions(x, y float64, clickCount int) []chromedp.Action {
 }
 
 func dispatchMouseEvent(ctx context.Context, payload map[string]any) error {
-	return chromedp.Run(ctx, mouseEventAction(payload))
+	return chromedp.Run(ctx, MouseEventAction(payload))
 }
 
 func dispatchRealMouseMove(ctx context.Context, x, y float64, button input.MouseButton, buttons int64) error {
+	ctx, err := EnableTrustedInput(ctx)
+	if err != nil {
+		return err
+	}
 	stepCtx, cancel := context.WithTimeout(ctx, mouseMoveDispatchTimeout)
 	defer cancel()
-	return chromedp.Run(stepCtx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return input.DispatchMouseEvent(input.MouseMoved, x, y).
-			WithButton(button).
-			WithButtons(buttons).
-			Do(ctx)
+	return chromedp.Run(stepCtx, MouseEventAction(map[string]any{
+		"type":    "mouseMoved",
+		"x":       x,
+		"y":       y,
+		"button":  button,
+		"buttons": buttons,
 	}))
 }
 
@@ -345,8 +403,7 @@ func ClickByNodeID(ctx context.Context, nodeID int64) error {
 	}
 
 	actions := []chromedp.Action{
-		emulateInputFocus,
-		mouseEventAction(map[string]any{"type": "mouseMoved", "x": x, "y": y}),
+		MouseEventAction(map[string]any{"type": "mouseMoved", "x": x, "y": y}),
 	}
 	actions = append(actions, mousePressReleaseActions(x, y, 1)...)
 	// CDP mouse events don't trigger default browser navigation on <a>
@@ -355,7 +412,7 @@ func ClickByNodeID(ctx context.Context, nodeID int64) error {
 	actions = append(actions, chromedp.ActionFunc(func(ctx context.Context) error {
 		return jsClickIfLink(ctx, nodeID)
 	}))
-	return chromedp.Run(ctx, actions...)
+	return chromedp.Run(WithTrustedInput(ctx), actions...)
 }
 
 func jsClickIfLink(ctx context.Context, nodeID int64) error {
@@ -395,26 +452,7 @@ func DoubleClickByCoordinate(ctx context.Context, x, y float64) error {
 		return err
 	}
 
-	return chromedp.Run(ctx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
-				"type":       "mousePressed",
-				"button":     DefaultMouseButton,
-				"clickCount": 2,
-				"x":          x,
-				"y":          y,
-			}, nil)
-		}),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
-				"type":       "mouseReleased",
-				"button":     DefaultMouseButton,
-				"clickCount": 2,
-				"x":          x,
-				"y":          y,
-			}, nil)
-		}),
-	)
+	return chromedp.Run(WithTrustedInput(ctx), mousePressReleaseActions(x, y, 2)...)
 }
 
 func DoubleClickByNodeID(ctx context.Context, nodeID int64) error {
@@ -424,13 +462,12 @@ func DoubleClickByNodeID(ctx context.Context, nodeID int64) error {
 	}
 
 	actions := []chromedp.Action{
-		emulateInputFocus,
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", map[string]any{"backendNodeId": nodeID}, nil)
 		}),
 	}
 	actions = append(actions, mousePressReleaseActions(x, y, 2)...)
-	return chromedp.Run(ctx, actions...)
+	return chromedp.Run(WithTrustedInput(ctx), actions...)
 }
 
 func DragByNodeID(ctx context.Context, nodeID int64, dx, dy int, button string) error {
@@ -461,6 +498,7 @@ func heldButton(button string) (mouseButton, error) {
 // Chrome enters the HTML5 drag pipeline only on movement that reports the pressed button, so
 // the held mask on these moves is what fires dragstart, not how many of them there are.
 func DragBetweenPoints(ctx context.Context, x, y, endX, endY float64, button string) error {
+	ctx = WithTrustedInput(ctx)
 	dx := endX - x
 	dy := endY - y
 	dist := math.Sqrt(dx*dx + dy*dy)

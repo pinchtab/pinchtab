@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/chromedp/chromedp"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 )
 
 // namedKeyDefs maps friendly key names to CDP Input.dispatchKeyEvent parameters.
@@ -116,9 +117,7 @@ func dispatchNamedKeyEvent(ctx context.Context, key, eventType string) error {
 		params["windowsVirtualKeyCode"] = def.virtualKey
 		params["nativeVirtualKeyCode"] = def.virtualKey
 	}
-	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchKeyEvent", params, nil)
-	}))
+	return chromedp.Run(ctx, bridgecdpops.KeyEventAction(params))
 }
 
 // DispatchNamedKey dispatches key with the given CDP modifier bitmask
@@ -133,7 +132,7 @@ func DispatchNamedKey(ctx context.Context, key string, modifiers int) error {
 				return dispatchKeyChord(ctx, key, code, vk, "", modifiers, editingCommand(key, modifiers))
 			}
 		}
-		return chromedp.Run(ctx, chromedp.KeyEvent(key))
+		return chromedp.Run(ctx, bridgecdpops.TrustedInputAction(chromedp.KeyEvent(key)))
 	}
 
 	w3cKey := w3cKeyName(key)
@@ -179,13 +178,9 @@ func dispatchKeyChord(ctx context.Context, key, code string, vk int64, text stri
 	if text != "" {
 		downType = "keyDown"
 	}
-	return chromedp.Run(ctx,
-		chromedp.ActionFunc(func(c context.Context) error {
-			return chromedp.FromContext(c).Target.Execute(c, "Input.dispatchKeyEvent", params(downType, true), nil)
-		}),
-		chromedp.ActionFunc(func(c context.Context) error {
-			return chromedp.FromContext(c).Target.Execute(c, "Input.dispatchKeyEvent", params("keyUp", false), nil)
-		}),
+	return chromedp.Run(bridgecdpops.WithTrustedInput(ctx),
+		bridgecdpops.KeyEventAction(params(downType, true)),
+		bridgecdpops.KeyEventAction(params("keyUp", false)),
 	)
 }
 
@@ -194,6 +189,6 @@ func TypeByNodeID(ctx context.Context, nodeID int64, text string) error {
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", map[string]any{"backendNodeId": nodeID}, nil)
 		}),
-		chromedp.KeyEvent(text),
+		bridgecdpops.TrustedInputAction(chromedp.KeyEvent(text)),
 	)
 }

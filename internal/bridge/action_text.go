@@ -27,8 +27,8 @@ func (b *Bridge) actionType(ctx context.Context, req ActionRequest) (map[string]
 	}
 	if req.Selector != "" {
 		return textEntryResult("typed", req.Text), chromedp.Run(ctx,
-			chromedp.Click(req.Selector, chromedp.ByQuery),
-			chromedp.SendKeys(req.Selector, req.Text, chromedp.ByQuery),
+			bridgecdpops.TrustedInputAction(chromedp.Click(req.Selector, chromedp.ByQuery)),
+			bridgecdpops.TrustedInputAction(chromedp.SendKeys(req.Selector, req.Text, chromedp.ByQuery)),
 		)
 	}
 	if req.NodeID > 0 {
@@ -221,14 +221,14 @@ func (b *Bridge) keyboardTypePerChar(ctx context.Context, text string) (map[stri
 				params["windowsVirtualKeyCode"] = vk
 				params["nativeVirtualKeyCode"] = vk
 			}
-			if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchKeyEvent", params, nil); err != nil {
+			if err := bridgecdpops.KeyEventAction(params).Do(ctx); err != nil {
 				return err
 			}
 			paramsUp := map[string]any{
 				"type": "keyUp",
 				"key":  s,
 			}
-			if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchKeyEvent", paramsUp, nil); err != nil {
+			if err := bridgecdpops.KeyEventAction(paramsUp).Do(ctx); err != nil {
 				return err
 			}
 		}
@@ -264,11 +264,7 @@ func (b *Bridge) keyboardTypeBatched(ctx context.Context, text string) (map[stri
 		return nil, err
 	}
 
-	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.insertText", map[string]any{
-			"text": middle,
-		}, nil)
-	}))
+	err := chromedp.Run(ctx, bridgecdpops.InsertTextAction(middle))
 	if err != nil {
 		return nil, err
 	}
@@ -286,11 +282,7 @@ func (b *Bridge) actionKeyboardInsert(ctx context.Context, req ActionRequest) (m
 	if req.Text == "" {
 		return nil, fmt.Errorf("text required for keyboard-inserttext")
 	}
-	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.insertText", map[string]any{
-			"text": req.Text,
-		}, nil)
-	}))
+	err := chromedp.Run(ctx, bridgecdpops.InsertTextAction(req.Text))
 	if err != nil {
 		return nil, err
 	}

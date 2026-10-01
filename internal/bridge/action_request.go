@@ -350,7 +350,7 @@ func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionReque
 	nav := watchMainFrameNavigation(ctx)
 	defer nav.stop()
 
-	res, err := fn(ctx, req)
+	res, err := fn(bridgecdpops.WithTrustedInput(ctx), req)
 	if err != nil {
 		// The action's own navigation can destroy the context its last call ran in; it still landed.
 		if !executionContextGone(err) || !nav.awaitCommit(ctx) {
