@@ -37,25 +37,17 @@ const hijackFixtureHTML = `<body style="margin:0">
 
 func newHijackFixture(t *testing.T) context.Context {
 	t.Helper()
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(testbrowser.Path(t)),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	return openFixture(t, hijackFixtureHTML, "#target")
+}
 
-	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(hijackFixtureHTML))
+func openFixture(t *testing.T, html, visibleID string) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(testbrowser.Launch(t), 30*time.Second)
+	t.Cleanup(cancel)
+	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(html))
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(dataURL),
-		chromedp.WaitVisible("#target", chromedp.ByID),
+		chromedp.WaitVisible(visibleID, chromedp.ByID),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -138,29 +130,7 @@ const framedFixtureHTML = `<body style="margin:0">
 
 func newFramedFixture(t *testing.T) context.Context {
 	t.Helper()
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(testbrowser.Path(t)),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
-
-	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(framedFixtureHTML))
-	if err := chromedp.Run(ctx,
-		chromedp.Navigate(dataURL),
-		chromedp.WaitVisible("#f", chromedp.ByID),
-	); err != nil {
-		t.Fatal(err)
-	}
-	return ctx
+	return openFixture(t, framedFixtureHTML, "#f")
 }
 
 func innerFrameNodeID(t *testing.T, ctx context.Context) int64 {
