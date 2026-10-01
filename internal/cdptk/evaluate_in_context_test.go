@@ -39,3 +39,19 @@ func TestEvaluateInContextAwaitsAPromiseWhenAsked(t *testing.T) {
 		t.Errorf("decoded %q, want %q", got, "target")
 	}
 }
+
+func TestEvaluateForHandleErrorsOnAThrow(t *testing.T) {
+	ctx := newHijackFixture(t)
+	execID, err := cdptk.IsolatedContextID(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handle, err := cdptk.EvaluateForHandle(ctx, execID, `document.querySelector("[[bad")`)
+	if err == nil {
+		t.Fatalf("an invalid selector returned no error and handle %q", handle)
+	}
+	if !strings.Contains(err.Error(), "[[bad") {
+		t.Errorf("error %q does not carry the exception text", err)
+	}
+}

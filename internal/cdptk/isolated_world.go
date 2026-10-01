@@ -3,6 +3,7 @@ package cdptk
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/chromedp/chromedp"
@@ -175,78 +176,102 @@ func EvaluateInIsolatedWorld(ctx context.Context, frameID, expression string, re
 	return EvaluateInContext(ctx, execID, expression, true, result)
 }
 
-// EvaluateInContext is the one by-value Runtime.evaluate reader for an explicit
-// execution context. A thrown script is an error carrying the exception's own
-// text, not a zero value.
+// EvaluateInContext runs expression in the execution context execID and decodes
+// the by-value result into result when non-nil. A thrown script is an error
+// carrying the exception's own text, not a zero value.
 func EvaluateInContext(ctx context.Context, execID int64, expression string, awaitPromise bool, result any) error {
-	var raw json.RawMessage
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.evaluate", map[string]any{
-			"expression":    expression,
-			"contextId":     execID,
-			"returnByValue": true,
-			"awaitPromise":  awaitPromise,
-		}, &raw)
-	})); err != nil {
-		return err
+	obj, err := runScript(ctx, "Runtime.evaluate", evaluateParams(execID, expression, awaitPromise, true))
+	if err != nil {
+		return fmt.Errorf("evaluate: %w", err)
 	}
+	return obj.decode(result)
+}
 
-	var parsed struct {
-		Result struct {
-			Value json.RawMessage `json:"value"`
-		} `json:"result"`
-		ExceptionDetails *exceptionDetails `json:"exceptionDetails,omitempty"`
+// EvaluateForHandle runs expression in the execution context execID and returns
+// the object handle it yields, or "" when it yields null, undefined or a
+// primitive. A thrown script is an error, never the Error object's handle.
+func EvaluateForHandle(ctx context.Context, execID int64, expression string) (string, error) {
+	obj, err := runScript(ctx, "Runtime.evaluate", evaluateParams(execID, expression, false, false))
+	if err != nil {
+		return "", fmt.Errorf("evaluate: %w", err)
 	}
-	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return fmt.Errorf("evaluate parse: %w", err)
-	}
-	if parsed.ExceptionDetails != nil {
-		return fmt.Errorf("evaluate: %s", parsed.ExceptionDetails.message())
-	}
-	if result == nil || len(parsed.Result.Value) == 0 {
-		return nil
-	}
-	return json.Unmarshal(parsed.Result.Value, result)
+	return obj.ObjectID, nil
 }
 
 // CallFunctionOn runs functionDecl with objectID as `this` and decodes the by-value
-// result into result when non-nil. It is the one Runtime.callFunctionOn reader: a
-// hand-rolled copy that skips exceptionDetails decodes a thrown script as a zero
-// value, so a probe that threw read as "not visible" and a box read as an empty
-// box. Here a throw is an error carrying the exception's own text.
+// result into result when non-nil. A thrown script is an error carrying the
+// exception's own text, so a probe that threw never reads as a zero value.
 func CallFunctionOn(ctx context.Context, objectID, functionDecl string, args []map[string]any, result any) error {
+	obj, err := runScript(ctx, "Runtime.callFunctionOn", callParams(objectID, functionDecl, args, true))
+	if err != nil {
+		return fmt.Errorf("call function on node: %w", err)
+	}
+	return obj.decode(result)
+}
+
+// CallFunctionOnForHandle runs functionDecl with objectID as `this` and returns
+// the object handle it yields, or "" when it yields null, undefined or a
+// primitive. A thrown script is an error, never the Error object's handle.
+func CallFunctionOnForHandle(ctx context.Context, objectID, functionDecl string, args []map[string]any) (string, error) {
+	obj, err := runScript(ctx, "Runtime.callFunctionOn", callParams(objectID, functionDecl, args, false))
+	if err != nil {
+		return "", fmt.Errorf("call function on node: %w", err)
+	}
+	return obj.ObjectID, nil
+}
+
+func evaluateParams(execID int64, expression string, awaitPromise, byValue bool) map[string]any {
+	return map[string]any{
+		"expression":    expression,
+		"contextId":     execID,
+		"returnByValue": byValue,
+		"awaitPromise":  awaitPromise,
+	}
+}
+
+func callParams(objectID, functionDecl string, args []map[string]any, byValue bool) map[string]any {
 	params := map[string]any{
 		"functionDeclaration": functionDecl,
 		"objectId":            objectID,
-		"returnByValue":       true,
+		"returnByValue":       byValue,
 	}
 	if len(args) > 0 {
 		params["arguments"] = args
 	}
+	return params
+}
 
+type remoteObject struct {
+	ObjectID string          `json:"objectId"`
+	Value    json.RawMessage `json:"value"`
+}
+
+func (o remoteObject) decode(result any) error {
+	if result == nil || len(o.Value) == 0 {
+		return nil
+	}
+	return json.Unmarshal(o.Value, result)
+}
+
+func runScript(ctx context.Context, method string, params map[string]any) (remoteObject, error) {
 	var raw json.RawMessage
 	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", params, &raw)
+		return chromedp.FromContext(ctx).Target.Execute(ctx, method, params, &raw)
 	})); err != nil {
-		return fmt.Errorf("call function on node: %w", err)
+		return remoteObject{}, err
 	}
 
 	var parsed struct {
-		Result struct {
-			Value json.RawMessage `json:"value"`
-		} `json:"result"`
+		Result           remoteObject      `json:"result"`
 		ExceptionDetails *exceptionDetails `json:"exceptionDetails,omitempty"`
 	}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return fmt.Errorf("parse call result: %w", err)
+		return remoteObject{}, fmt.Errorf("parse result: %w", err)
 	}
 	if parsed.ExceptionDetails != nil {
-		return fmt.Errorf("call function on node: %s", parsed.ExceptionDetails.message())
+		return remoteObject{}, errors.New(parsed.ExceptionDetails.message())
 	}
-	if result == nil || len(parsed.Result.Value) == 0 {
-		return nil
-	}
-	return json.Unmarshal(parsed.Result.Value, result)
+	return parsed.Result, nil
 }
 
 // exceptionDetails is the part of CDP's Runtime.ExceptionDetails a caller can act

@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/chromedp/chromedp"
-
 	"github.com/pinchtab/pinchtab/internal/cdptk"
 )
 
@@ -25,27 +23,12 @@ func BackendNodeIDForSelector(ctx context.Context, frameID, selector string) (in
 		return 0, err
 	}
 
-	var raw json.RawMessage
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.evaluate", map[string]any{
-			"expression": fmt.Sprintf(`document.querySelector(%s)`, encodedSelector),
-			"contextId":  execID,
-		}, &raw)
-	})); err != nil {
+	objectID, err := cdptk.EvaluateForHandle(ctx, execID, fmt.Sprintf(`document.querySelector(%s)`, encodedSelector))
+	if err != nil {
 		return 0, err
 	}
-
-	var parsed struct {
-		Result struct {
-			ObjectID string `json:"objectId"`
-			Subtype  string `json:"subtype"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return 0, err
-	}
-	if parsed.Result.ObjectID == "" || parsed.Result.Subtype == "null" {
+	if objectID == "" {
 		return 0, nil
 	}
-	return backendNodeIDFromObjectID(ctx, parsed.Result.ObjectID)
+	return backendNodeIDFromObjectID(ctx, objectID)
 }

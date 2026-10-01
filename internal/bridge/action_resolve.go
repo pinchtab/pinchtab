@@ -37,39 +37,14 @@ func frameDocumentObjectID(ctx context.Context, frameID string) (string, error) 
 	if err != nil {
 		return "", err
 	}
-
-	params := map[string]any{
-		"expression":    "document",
-		"returnByValue": false,
-		"contextId":     execID,
-	}
-
-	var docResult json.RawMessage
-	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.evaluate", params, &docResult)
-	}))
+	objectID, err := cdptk.EvaluateForHandle(ctx, execID, "document")
 	if err != nil {
 		return "", fmt.Errorf("resolve document: %w", err)
 	}
-
-	var doc struct {
-		Result struct {
-			ObjectID string `json:"objectId"`
-		} `json:"result"`
-		ExceptionDetails *struct {
-			Text string `json:"text"`
-		} `json:"exceptionDetails,omitempty"`
-	}
-	if err := json.Unmarshal(docResult, &doc); err != nil {
-		return "", err
-	}
-	if doc.Result.ObjectID == "" {
-		if doc.ExceptionDetails != nil {
-			return "", fmt.Errorf("resolve document: %s", doc.ExceptionDetails.Text)
-		}
+	if objectID == "" {
 		return "", fmt.Errorf("document object not found")
 	}
-	return doc.Result.ObjectID, nil
+	return objectID, nil
 }
 
 func backendNodeIDFromObjectID(ctx context.Context, objectID string) (int64, error) {
@@ -123,34 +98,14 @@ func resolveNodeInFrame(ctx context.Context, frameID, functionDeclaration string
 		return 0, err
 	}
 
-	var callResult json.RawMessage
-	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": functionDeclaration,
-			"objectId":            docObjectID,
-			"arguments":           args,
-			"returnByValue":       false,
-		}, &callResult)
-	}))
+	objectID, err := cdptk.CallFunctionOnForHandle(ctx, docObjectID, functionDeclaration, args)
 	if err != nil {
 		return 0, err
 	}
-
-	var call struct {
-		Result struct {
-			Type     string `json:"type"`
-			Subtype  string `json:"subtype"`
-			ObjectID string `json:"objectId"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal(callResult, &call); err != nil {
-		return 0, err
-	}
-	if call.Result.ObjectID == "" || call.Result.Subtype == "null" || call.Result.Type == "undefined" {
+	if objectID == "" {
 		return 0, fmt.Errorf("%w", ErrSelectorNoMatch)
 	}
-
-	return backendNodeIDFromObjectID(ctx, call.Result.ObjectID)
+	return backendNodeIDFromObjectID(ctx, objectID)
 }
 
 // TopmostModalNodeIDInFrame returns the backend node ID of the visually
@@ -267,43 +222,14 @@ func resolveNodeWithinBackendNode(ctx context.Context, scopeBackendNodeID int64,
 		return 0, fmt.Errorf("resolve scope node: %w", err)
 	}
 
-	params := map[string]any{
-		"functionDeclaration": functionDeclaration,
-		"objectId":            scopeObjectID,
-		"returnByValue":       false,
-	}
-	if len(args) > 0 {
-		params["arguments"] = args
-	}
-
-	var callResult json.RawMessage
-	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", params, &callResult)
-	}))
+	objectID, err := cdptk.CallFunctionOnForHandle(ctx, scopeObjectID, functionDeclaration, args)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("scoped selector evaluation: %w", err)
 	}
-
-	var call struct {
-		Result struct {
-			Type     string `json:"type"`
-			Subtype  string `json:"subtype"`
-			ObjectID string `json:"objectId"`
-		} `json:"result"`
-		ExceptionDetails *struct {
-			Text string `json:"text"`
-		} `json:"exceptionDetails,omitempty"`
-	}
-	if err := json.Unmarshal(callResult, &call); err != nil {
-		return 0, err
-	}
-	if call.ExceptionDetails != nil {
-		return 0, fmt.Errorf("scoped selector evaluation: %s", call.ExceptionDetails.Text)
-	}
-	if call.Result.ObjectID == "" || call.Result.Subtype == "null" || call.Result.Type == "undefined" {
+	if objectID == "" {
 		return 0, fmt.Errorf("%w", ErrSelectorNoMatch)
 	}
-	return backendNodeIDFromObjectID(ctx, call.Result.ObjectID)
+	return backendNodeIDFromObjectID(ctx, objectID)
 }
 
 // BackendNodeWithinScope reports whether target is the scope node or one of
@@ -339,39 +265,15 @@ func resolveElementMetaInFrame(ctx context.Context, frameID, functionDeclaration
 		return FrameElementMeta{}, err
 	}
 
-	var callResult json.RawMessage
-	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": functionDeclaration,
-			"objectId":            docObjectID,
-			"arguments":           args,
-			"returnByValue":       true,
-		}, &callResult)
-	}))
-	if err != nil {
+	var meta *FrameElementMeta
+	if err := cdptk.CallFunctionOn(ctx, docObjectID, functionDeclaration, args, &meta); err != nil {
 		return FrameElementMeta{}, err
 	}
-
-	var call struct {
-		Result struct {
-			Type    string          `json:"type"`
-			Subtype string          `json:"subtype"`
-			Value   json.RawMessage `json:"value"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal(callResult, &call); err != nil {
-		return FrameElementMeta{}, err
-	}
-	if call.Result.Subtype == "null" || call.Result.Type == "undefined" || len(call.Result.Value) == 0 || string(call.Result.Value) == "null" {
+	if meta == nil {
 		return FrameElementMeta{}, fmt.Errorf("no element found")
 	}
-
-	var meta FrameElementMeta
-	if err := json.Unmarshal(call.Result.Value, &meta); err != nil {
-		return FrameElementMeta{}, err
-	}
 	meta.TagName = strings.ToLower(meta.TagName)
-	return meta, nil
+	return *meta, nil
 }
 
 // jsNormalizeHelper lowercases, collapses runs of whitespace to a single space,

@@ -2,13 +2,13 @@ package bridge
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/chromedp/chromedp"
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
+	"github.com/pinchtab/pinchtab/internal/cdptk"
 	"github.com/pinchtab/pinchtab/internal/readiness"
 )
 
@@ -36,27 +36,8 @@ type checkableState struct {
 }
 
 func readCheckableState(ctx context.Context, objectID string) (checkableState, error) {
-	var callResult json.RawMessage
-	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": checkableStateJS,
-			"objectId":            objectID,
-			"returnByValue":       true,
-		}, &callResult)
-	}))
-	if err != nil {
-		return checkableState{}, err
-	}
-	var response struct {
-		Result struct {
-			Value json.RawMessage `json:"value"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal(callResult, &response); err != nil {
-		return checkableState{}, err
-	}
 	var state checkableState
-	if err := json.Unmarshal(response.Result.Value, &state); err != nil {
+	if err := cdptk.CallFunctionOn(ctx, objectID, checkableStateJS, nil, &state); err != nil {
 		return checkableState{}, err
 	}
 	if state.Error != "" {

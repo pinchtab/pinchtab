@@ -42,3 +42,43 @@ func TestCallFunctionOnDecodesTheReturnedValue(t *testing.T) {
 		t.Errorf("decoded %q, want %q", got, "target!")
 	}
 }
+
+func TestCallFunctionOnForHandleErrorsOnAThrowInsteadOfReturningTheErrorHandle(t *testing.T) {
+	ctx := newHijackFixture(t)
+	objectID, err := cdptk.IsolatedNodeObjectID(ctx, targetNodeID(t, ctx))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handle, err := cdptk.CallFunctionOnForHandle(ctx, objectID, `function() { throw new Error("resolver exploded"); }`, nil)
+	if err == nil {
+		t.Fatalf("a throwing function returned no error and handle %q", handle)
+	}
+	if !strings.Contains(err.Error(), "resolver exploded") {
+		t.Errorf("error %q does not carry the exception text", err)
+	}
+}
+
+func TestCallFunctionOnForHandleReturnsEmptyForNull(t *testing.T) {
+	ctx := newHijackFixture(t)
+	objectID, err := cdptk.IsolatedNodeObjectID(ctx, targetNodeID(t, ctx))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handle, err := cdptk.CallFunctionOnForHandle(ctx, objectID, `function() { return this.querySelector(".absent"); }`, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handle != "" {
+		t.Errorf("null result gave handle %q, want empty", handle)
+	}
+
+	handle, err = cdptk.CallFunctionOnForHandle(ctx, objectID, `function() { return this; }`, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handle == "" {
+		t.Error("a node result gave no handle")
+	}
+}
