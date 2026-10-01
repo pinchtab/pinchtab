@@ -46,7 +46,7 @@ func runMultiStep(t *testing.T, path string, results []actionResult, extra map[s
 	if err != nil {
 		t.Fatalf("activity store: %v", err)
 	}
-	resetObservabilityForTests()
+	ResetObservabilityForTests()
 
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 	route := &browserops.RouteMetadata{}
@@ -228,7 +228,7 @@ func proxiedRun(t *testing.T, status int, code, message string) recordedRun {
 	previous := slog.Default()
 	slog.SetDefault(slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	t.Cleanup(func() { slog.SetDefault(previous) })
-	resetObservabilityForTests()
+	ResetObservabilityForTests()
 
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if code != "" {

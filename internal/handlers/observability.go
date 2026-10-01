@@ -112,10 +112,6 @@ func hasFailureDiagnostics() bool {
 // exported because the front-door chain lives in internal/server, and the
 // counters it must be proven to move are owned here.
 func ResetObservabilityForTests() {
-	resetObservabilityForTests()
-}
-
-func resetObservabilityForTests() {
 	atomic.StoreUint64(&metricRequestsTotal, 0)
 	atomic.StoreUint64(&metricRequestsFailed, 0)
 	atomic.StoreUint64(&metricRequestLatencyN, 0)

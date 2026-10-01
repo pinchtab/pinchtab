@@ -727,7 +727,7 @@ func TestHandleHealth_Response(t *testing.T) {
 }
 
 func TestHandleHealth_IncludesFailureAndCrashDiagnostics(t *testing.T) {
-	resetObservabilityForTests()
+	ResetObservabilityForTests()
 	bridge.ResetCrashMonitoringForTests()
 	recordFailureEvent(FailureEvent{
 		Time:      time.Now(),

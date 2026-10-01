@@ -58,7 +58,7 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 	filePath := r.URL.Query().Get("path")
 	raw := r.URL.Query().Get("raw") == "true"
 
-	// Re-check scheme before navigation (validateDownloadURL already enforces this,
+	// Re-check scheme before navigation (the download URL guard already enforces this,
 	// but inline check satisfies CodeQL SSRF analysis).
 	if parsed, err := url.Parse(dlURL); err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		httpx.Error(w, 400, fmt.Errorf("invalid download URL scheme"))

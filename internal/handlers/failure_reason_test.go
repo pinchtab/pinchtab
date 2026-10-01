@@ -32,7 +32,7 @@ func failingRequest(t *testing.T, handler http.HandlerFunc) (logOutput string, a
 	if err != nil {
 		t.Fatalf("activity store: %v", err)
 	}
-	resetObservabilityForTests()
+	ResetObservabilityForTests()
 
 	chain := activity.Middleware(store, "client", LoggingMiddleware(handler))
 	req := httptest.NewRequest(http.MethodPost, "/tabs/tab1/action", strings.NewReader(`{"kind":"click","ref":"e99"}`))

@@ -15,8 +15,8 @@ import (
 // the front door must not make the other layer invisible in turn: an instance
 // still reports its OWN traffic, and says so.
 func TestInstanceMetricsStillReportItsOwnTrafficAndLayer(t *testing.T) {
-	resetObservabilityForTests()
-	t.Cleanup(resetObservabilityForTests)
+	ResetObservabilityForTests()
+	t.Cleanup(ResetObservabilityForTests)
 
 	counted := LoggingMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -62,8 +62,8 @@ func TestInstanceMetricsStillReportItsOwnTrafficAndLayer(t *testing.T) {
 // usable for reproducing a server-mode problem. A shape that differs per mode is
 // the drift this card is closing.
 func TestBothModesExposeTheSameDiagnosticKeys(t *testing.T) {
-	resetObservabilityForTests()
-	t.Cleanup(resetObservabilityForTests)
+	ResetObservabilityForTests()
+	t.Cleanup(ResetObservabilityForTests)
 
 	frontDoor := DiagnosticsSnapshot(LayerFrontDoor)
 	instance := DiagnosticsSnapshot(LayerInstance)
@@ -84,10 +84,10 @@ func TestBothModesExposeTheSameDiagnosticKeys(t *testing.T) {
 }
 
 func TestEmptyDiagnosticsEnvelopeContainsNoNulls(t *testing.T) {
-	resetObservabilityForTests()
+	ResetObservabilityForTests()
 	bridge.ResetCrashMonitoringForTests()
 	t.Cleanup(func() {
-		resetObservabilityForTests()
+		ResetObservabilityForTests()
 		bridge.ResetCrashMonitoringForTests()
 	})
 

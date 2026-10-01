@@ -125,12 +125,6 @@ func validateDownloadRemoteIPAddress(raw string) error {
 	return nil
 }
 
-// validateDownloadURL blocks file://, internal hosts, private IPs, and cloud metadata.
-// Only public http/https URLs are allowed.
-func validateDownloadURL(rawURL string) error {
-	return newDownloadURLGuard(nil).Validate(rawURL)
-}
-
 func validateTabScopedDownloadURL(currentURL, requestedURL string) error {
 	currentParsed, err := url.Parse(strings.TrimSpace(currentURL))
 	if err != nil || currentParsed.Scheme == "" || currentParsed.Host == "" {

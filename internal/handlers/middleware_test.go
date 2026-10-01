@@ -830,7 +830,7 @@ func TestCorsMiddleware_AuthEnabledRejectsCrossOriginPreflight(t *testing.T) {
 }
 
 func TestLoggingMiddleware(t *testing.T) {
-	resetObservabilityForTests()
+	ResetObservabilityForTests()
 	handler := LoggingMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(201)
 	}))
@@ -845,7 +845,7 @@ func TestLoggingMiddleware(t *testing.T) {
 }
 
 func TestLoggingMiddleware_RecordsFailure(t *testing.T) {
-	resetObservabilityForTests()
+	ResetObservabilityForTests()
 	handler := RequestIDMiddleware(LoggingMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})))
