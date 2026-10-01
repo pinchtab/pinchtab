@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
@@ -125,8 +124,6 @@ func (o *Orchestrator) fetchCrashes(ctx context.Context, inst *InstanceInternal)
 	}
 	return result.Crashes, nil
 }
-
-var responsivenessProbeBudget = 3 * time.Second
 
 func (o *Orchestrator) probeTabs(ctx context.Context, inst *InstanceInternal) error {
 	resp, err := o.instanceGet(ctx, inst, "/tabs")

@@ -114,10 +114,8 @@ func TestAnEndedSessionAsksEverySpawnedInstanceToCloseItsTabs(t *testing.T) {
 }
 
 func TestAHangingInstanceNeitherStallsTheHookNorOutlivesTheCloseBudget(t *testing.T) {
-	previous := sessionTabsCloseBudget
-	sessionTabsCloseBudget = 200 * time.Millisecond
-	t.Cleanup(func() { sessionTabsCloseBudget = previous })
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.timings.sessionTabsCloseBudget = 200 * time.Millisecond
 	hanging := &closeRecorder{}
 	addInstanceOver(t, o, "inst_hang", hanging.handler(true), "")
 
@@ -127,8 +125,8 @@ func TestAHangingInstanceNeitherStallsTheHookNorOutlivesTheCloseBudget(t *testin
 		t.Fatalf("the hook took %v: the close must run off the dispatch goroutine", elapsed)
 	}
 	o.sessionCloses.Wait()
-	if elapsed := time.Since(started); elapsed < sessionTabsCloseBudget || elapsed > sessionTabsCloseBudget+300*time.Millisecond {
-		t.Fatalf("the close took %v against a hanging instance, want the %v budget", elapsed, sessionTabsCloseBudget)
+	if elapsed := time.Since(started); elapsed < o.timings.sessionTabsCloseBudget || elapsed > o.timings.sessionTabsCloseBudget+300*time.Millisecond {
+		t.Fatalf("the close took %v against a hanging instance, want the %v budget", elapsed, o.timings.sessionTabsCloseBudget)
 	}
 	if len(hanging.snapshot()) != 1 {
 		t.Fatal("the hanging instance was never asked")

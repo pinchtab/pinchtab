@@ -13,8 +13,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/session"
 )
 
-var sessionTabsCloseBudget = 10 * time.Second
-
 const (
 	sessionCloseSlots         = 4
 	sessionCloseShutdownGrace = 5 * time.Second
@@ -79,7 +77,7 @@ func (o *Orchestrator) closeEndedSessionTabs(parent context.Context, sessionID s
 	}
 	o.mu.RUnlock()
 
-	ctx, cancel := context.WithTimeout(parent, sessionTabsCloseBudget)
+	ctx, cancel := context.WithTimeout(parent, o.timings.sessionTabsCloseBudget)
 	defer cancel()
 	header := http.Header{}
 	header.Set(activity.HeaderPTSessionID, sessionID)

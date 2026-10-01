@@ -73,7 +73,7 @@ type instanceProbe struct {
 }
 
 func (o *Orchestrator) probeInstance(inst *InstanceInternal) instanceProbe {
-	ctx, cancel := context.WithTimeout(context.Background(), responsivenessProbeBudget)
+	ctx, cancel := context.WithTimeout(context.Background(), o.timings.responsivenessProbeBudget)
 	defer cancel()
 	var tabsErr error
 	done := make(chan struct{})
@@ -91,7 +91,7 @@ func (o *Orchestrator) probeInstance(inst *InstanceInternal) instanceProbe {
 	return instanceProbe{crashes: crashes, responsiveness: classifyResponsiveness(healthErr, tabsErr)}
 }
 
-var refreshJoinWait = 250 * time.Millisecond
+const refreshJoinWait = 250 * time.Millisecond
 
 // RefreshCrashes asks every live instance for its crash record and probes its
 // tabs route, so List can carry both and CrashSummary can merge the crashes.

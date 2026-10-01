@@ -31,8 +31,6 @@ const (
 
 const routeInstanceReadyWait = 30 * time.Second
 
-var routeInstanceReadyPollInterval = 500 * time.Millisecond
-
 // RouteForRequest resolves a shorthand request to a running instance URL,
 // launching the selected target when none is available. This centralizes the
 // target-aware auto-launch behavior used by strategies such as simple.
@@ -99,7 +97,7 @@ func (o *Orchestrator) waitForRequestRouteReady(inst *InstanceInternal, timeout 
 		client = http.DefaultClient
 	}
 
-	result, err := readiness.WaitUntil(context.Background(), timeout, routeInstanceReadyPollInterval,
+	result, err := readiness.WaitUntil(context.Background(), timeout, o.timings.routeReadyPoll,
 		func() (string, bool, error) {
 			if healthy, _ := o.probeHealthURL(context.Background(), client, inst, healthURL); healthy {
 				return url, true, nil

@@ -75,6 +75,8 @@ type Orchestrator struct {
 	// repeated dashboard visibility queries. Routing never reads it.
 	tabsCache        *TabsCache
 	portAllocator    *PortAllocator
+	timings          orchestratorTimings
+	hooks            orchestratorHooks
 	eventHandlers    []EventHandler
 	instanceMgr      *instance.Manager
 	live             config.Live
@@ -141,7 +143,31 @@ type AttachOptions struct {
 	Browser string
 }
 
-var waitForChildBridgeHealthyFunc = func(o *Orchestrator, inst *InstanceInternal, timeout time.Duration) error {
+type orchestratorTimings struct {
+	launchOutcomePoll         time.Duration
+	routeReadyPoll            time.Duration
+	sessionTabsCloseBudget    time.Duration
+	responsivenessProbeBudget time.Duration
+}
+
+func defaultOrchestratorTimings() orchestratorTimings {
+	return orchestratorTimings{
+		launchOutcomePoll:         50 * time.Millisecond,
+		routeReadyPoll:            500 * time.Millisecond,
+		sessionTabsCloseBudget:    10 * time.Second,
+		responsivenessProbeBudget: 3 * time.Second,
+	}
+}
+
+type orchestratorHooks struct {
+	waitForChildBridgeHealthy func(o *Orchestrator, inst *InstanceInternal, timeout time.Duration) error
+}
+
+func defaultOrchestratorHooks() orchestratorHooks {
+	return orchestratorHooks{waitForChildBridgeHealthy: waitForChildBridgeHealthyUntilShutdown}
+}
+
+func waitForChildBridgeHealthyUntilShutdown(o *Orchestrator, inst *InstanceInternal, timeout time.Duration) error {
 	ctx, cancel := o.shutdownScopedContext()
 	defer cancel()
 	return o.waitForChildBridgeHealthy(ctx, inst, timeout)
@@ -189,6 +215,8 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 		tabsCache:     NewTabsCache(0, nil),
 		portAllocator: NewPortAllocator(config.DefaultInstancePortStart, config.DefaultInstancePortEnd),
 		shutdownCh:    make(chan struct{}),
+		timings:       defaultOrchestratorTimings(),
+		hooks:         defaultOrchestratorHooks(),
 	}
 
 	orch.registerInstanceCleanupHook()

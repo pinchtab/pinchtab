@@ -441,12 +441,10 @@ func TestWrapShorthand_StaleBindingFallsThrough(t *testing.T) {
 func TestRouteForRequest_AutoLaunchReadinessPollAuthenticates(t *testing.T) {
 	alwaysAlive(t)
 	stubPortAvailability(t, func(int) bool { return true })
-	oldPoll := routeInstanceReadyPollInterval
-	routeInstanceReadyPollInterval = time.Millisecond
-	t.Cleanup(func() { routeInstanceReadyPollInterval = oldPoll })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.timings.routeReadyPoll = time.Millisecond
 	o.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		status := http.StatusUnauthorized
 		if req.Header.Get("Authorization") == "Bearer child-token" {

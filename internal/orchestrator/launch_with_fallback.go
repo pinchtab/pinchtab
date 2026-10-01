@@ -59,8 +59,6 @@ func (e *FallbackExhaustedError) Unwrap() error { return e.Cause }
 // launchWithFallbackTimeout covers the monitor's instanceStartupTimeout plus a margin.
 const launchWithFallbackTimeout = 60 * time.Second
 
-var launchOutcomePollInterval = 50 * time.Millisecond
-
 // ResolvedLaunchTarget is the target/provider pair the planner passes into a
 // launch attempt.
 type ResolvedLaunchTarget struct {
@@ -296,7 +294,7 @@ func (o *Orchestrator) waitForLaunchOutcome(instanceID string, timeout time.Dura
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	ticker := time.NewTicker(launchOutcomePollInterval)
+	ticker := time.NewTicker(o.timings.launchOutcomePoll)
 	defer ticker.Stop()
 
 	for {
@@ -330,8 +328,8 @@ func (o *Orchestrator) waitForLaunchOutcome(instanceID string, timeout time.Dura
 }
 
 // failedAttemptExitWait bounds how long fallback waits for a failed attempt's
-// process to exit before launching the next candidate. Var so tests can shrink it.
-var failedAttemptExitWait = 3 * time.Second
+// process to exit before launching the next candidate.
+const failedAttemptExitWait = 3 * time.Second
 
 // tearDownFailedAttempt logs but does not propagate errors so teardown never
 // blocks fallback indefinitely. It does wait (bounded) for the failed process

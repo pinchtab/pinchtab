@@ -154,11 +154,10 @@ func launchWithFallbackForTest(fl *fakeLauncher, candidates []string) (*PlannedL
 	}.LaunchWithFallback("prof", "9000", true, candidates, LaunchOptions{})
 }
 
-func fastPolling(t *testing.T) {
-	t.Helper()
-	prev := launchOutcomePollInterval
-	launchOutcomePollInterval = time.Millisecond
-	t.Cleanup(func() { launchOutcomePollInterval = prev })
+func fastLaunchPollTimings() orchestratorTimings {
+	timings := defaultOrchestratorTimings()
+	timings.launchOutcomePoll = time.Millisecond
+	return timings
 }
 
 func newFallbackTestOrch(t *testing.T) *Orchestrator {
@@ -166,6 +165,7 @@ func newFallbackTestOrch(t *testing.T) *Orchestrator {
 	o := withInstanceManager(&Orchestrator{
 		instances:     make(map[string]*InstanceInternal),
 		portAllocator: NewPortAllocator(9000, 9100),
+		timings:       fastLaunchPollTimings(),
 	})
 	o.LiveConfig().Publish(&config.RuntimeConfig{
 		DefaultBrowser: config.BrowserChrome,
@@ -180,7 +180,6 @@ func newFallbackTestOrch(t *testing.T) *Orchestrator {
 }
 
 func TestLaunchWithFallback_FirstCandidateSucceeds(t *testing.T) {
-	fastPolling(t)
 	fl := fakeLauncherFor([]scriptedOutcome{
 		{target: "chrome", succeed: true},
 	})
@@ -205,7 +204,6 @@ func TestLaunchWithFallback_FirstCandidateSucceeds(t *testing.T) {
 }
 
 func TestLaunchWithFallback_FirstFailsSecondSucceeds(t *testing.T) {
-	fastPolling(t)
 	fl := fakeLauncherFor([]scriptedOutcome{
 		{target: "chrome", failReason: ReasonBinaryMissing},
 		{target: "cloak", succeed: true},
@@ -232,7 +230,6 @@ func TestLaunchWithFallback_FirstFailsSecondSucceeds(t *testing.T) {
 }
 
 func TestLaunchWithFallback_StoresFallbackMetadataOnCanonicalInstance(t *testing.T) {
-	fastPolling(t)
 	o := newFallbackTestOrch(t)
 	_ = fakeLauncherForOrch(t, o, []scriptedOutcome{
 		{target: "chrome", failReason: ReasonBinaryMissing},
@@ -259,7 +256,6 @@ func TestLaunchWithFallback_StoresFallbackMetadataOnCanonicalInstance(t *testing
 }
 
 func TestLaunchUsesConfiguredFallbackOrder(t *testing.T) {
-	fastPolling(t)
 	o := newFallbackTestOrch(t)
 	republishCfg(o, func(c *config.RuntimeConfig) { c.FallbackOrder = []string{"cloak"} })
 	fl := fakeLauncherForOrch(t, o, []scriptedOutcome{
@@ -286,7 +282,6 @@ func TestLaunchUsesConfiguredFallbackOrder(t *testing.T) {
 }
 
 func TestLaunchWithFallback_AllFail_Exhaustion(t *testing.T) {
-	fastPolling(t)
 	fl := fakeLauncherFor([]scriptedOutcome{
 		{target: "chrome", failReason: ReasonStartupTimeout},
 		{target: "cloak", failReason: ReasonBinaryMissing},
@@ -317,7 +312,6 @@ func TestLaunchWithFallback_AllFail_Exhaustion(t *testing.T) {
 }
 
 func TestLaunchWithFallback_NonRecoverableAbortsImmediately(t *testing.T) {
-	fastPolling(t)
 	fl := fakeLauncherFor([]scriptedOutcome{
 		{target: "chrome", failReason: ReasonUnknown},
 		// Omitting a second entry triggers "unexpected extra call" if the loop continues.
@@ -345,7 +339,6 @@ func TestLaunchWithFallback_NonRecoverableAbortsImmediately(t *testing.T) {
 // A recoverable error while WAITING for the launch outcome (e.g. a startup
 // deadline) must advance to the next candidate, not abort the whole chain.
 func TestLaunchWithFallback_RecoverableWaitErrorContinues(t *testing.T) {
-	fastPolling(t)
 	fl := fakeLauncherFor([]scriptedOutcome{
 		{target: "chrome", errOnWait: fmt.Errorf("wait for chrome: %w", context.DeadlineExceeded)},
 		{target: "cloak", succeed: true},
@@ -375,7 +368,6 @@ func TestLaunchWithFallback_RecoverableWaitErrorContinues(t *testing.T) {
 // A non-recoverable wait error (instance vanished -> ReasonUnknown) must still
 // abort after one attempt rather than silently retrying.
 func TestLaunchWithFallback_NonRecoverableWaitErrorAborts(t *testing.T) {
-	fastPolling(t)
 	waitErr := errors.New("instance \"inst_fake_01\" disappeared from orchestrator map")
 	fl := fakeLauncherFor([]scriptedOutcome{
 		{target: "chrome", errOnWait: waitErr},
@@ -409,7 +401,6 @@ func TestLaunchWithFallback_NonRecoverableWaitErrorAborts(t *testing.T) {
 // and abort the chain. The target is deliberately named differently from the
 // provider so explicit-target-only resolution would fail.
 func TestLaunchWithTargetSelection_ResolvesProviderNameFallback(t *testing.T) {
-	fastPolling(t)
 	o := newFallbackTestOrch(t)
 	republishCfg(o, func(c *config.RuntimeConfig) {
 		c.Targets = config.BrowserTargetsConfig{
@@ -441,7 +432,6 @@ func TestLaunchWithTargetSelection_ResolvesProviderNameFallback(t *testing.T) {
 // A genuinely unknown fallback name must fail fast with *UnknownBrowserError
 // before any launch is attempted, not silently drop the fallback.
 func TestLaunchWithTargetSelection_UnknownFallbackIsHardError(t *testing.T) {
-	fastPolling(t)
 	o := newFallbackTestOrch(t)
 	fl := fakeLauncherForOrch(t, o, []scriptedOutcome{})
 
@@ -459,7 +449,6 @@ func TestLaunchWithTargetSelection_UnknownFallbackIsHardError(t *testing.T) {
 }
 
 func TestLaunchWithFallback_TearsDownFailedAttempt(t *testing.T) {
-	fastPolling(t)
 	fl := fakeLauncherFor([]scriptedOutcome{
 		{target: "chrome", failReason: ReasonProcessExited},
 		{target: "cloak", succeed: true},
@@ -525,7 +514,6 @@ func TestTearDownFailedAttempt_DetachesBeforeAsyncStop(t *testing.T) {
 }
 
 func TestLaunchWithFallback_UnknownCandidateIsHardError(t *testing.T) {
-	fastPolling(t)
 	fl := fakeLauncherFor([]scriptedOutcome{})
 
 	_, err := launchWithFallbackForTest(fl, []string{"does-not-exist", "chrome"})
@@ -541,7 +529,6 @@ func TestLaunchWithFallback_UnknownCandidateIsHardError(t *testing.T) {
 }
 
 func TestLaunchWithFallback_EmptyCandidateList(t *testing.T) {
-	fastPolling(t)
 	fl := fakeLauncherFor(nil)
 
 	_, err := launchWithFallbackForTest(fl, nil)
@@ -559,7 +546,6 @@ func TestLaunchWithFallback_EmptyCandidateList(t *testing.T) {
 }
 
 func TestLaunchWithFallback_DedupesCandidates(t *testing.T) {
-	fastPolling(t)
 	fl := fakeLauncherFor([]scriptedOutcome{
 		{target: "chrome", succeed: true},
 	})

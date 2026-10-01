@@ -254,6 +254,7 @@ func setupTargetsOrchestrator(t *testing.T) *Orchestrator {
 	stubPortAvailability(t, func(int) bool { return true })
 
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.timings = fastLaunchPollTimings()
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "chrome-local",
 		Targets: config.BrowserTargetsConfig{
@@ -415,9 +416,9 @@ func TestHandleAttachInstanceRejectsUnknownProvider(t *testing.T) {
 }
 
 func TestHandleAttachInstanceUsesDefaultBrowserTargetWhenOmitted(t *testing.T) {
-	stubAttachBridgeHealthy(t)
 	runner := &mockRunner{portAvail: true}
 	o := setupAttachTargetsOrchestrator(t, runner)
+	stubAttachBridgeHealthy(o)
 	republishCfg(o, func(c *config.RuntimeConfig) { c.DefaultTarget = "cloak-1" })
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/attach", strings.NewReader(`{
@@ -455,9 +456,9 @@ func TestHandleAttachInstanceUsesDefaultBrowserTargetWhenOmitted(t *testing.T) {
 }
 
 func TestHandleAttachInstanceExplicitBrowserTargetRoutes(t *testing.T) {
-	stubAttachBridgeHealthy(t)
 	runner := &mockRunner{portAvail: true}
 	o := setupAttachTargetsOrchestrator(t, runner)
+	stubAttachBridgeHealthy(o)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/attach", strings.NewReader(`{
 		"name":"attached-cloak",
@@ -623,6 +624,7 @@ func setupFallbackOrchestrator(t *testing.T) *Orchestrator {
 	stubPortAvailability(t, func(int) bool { return true })
 
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.timings = fastLaunchPollTimings()
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "chrome-local",
 		Targets: config.BrowserTargetsConfig{
@@ -636,7 +638,6 @@ func setupFallbackOrchestrator(t *testing.T) *Orchestrator {
 }
 
 func TestHandleStartInstance_RequestFallbackTargets_Wins(t *testing.T) {
-	fastPolling(t)
 	o := setupFallbackOrchestrator(t)
 	fl := fakeLauncherForOrch(t, o, []scriptedOutcome{
 		{target: "chrome-local", failReason: ReasonBinaryMissing},
@@ -676,7 +677,6 @@ func TestHandleStartInstance_RequestFallbackTargets_Wins(t *testing.T) {
 }
 
 func TestHandleStartInstance_ConfigFallbackOrder_UsedWhenRequestImplicit(t *testing.T) {
-	fastPolling(t)
 	o := setupFallbackOrchestrator(t)
 	fl := fakeLauncherForOrch(t, o, []scriptedOutcome{
 		{target: "chrome-local", failReason: ReasonBinaryMissing},
@@ -702,7 +702,6 @@ func TestHandleStartInstance_ConfigFallbackOrder_UsedWhenRequestImplicit(t *test
 }
 
 func TestHandleStartInstance_ExplicitBrowser_NeverCrossProviderFallback(t *testing.T) {
-	fastPolling(t)
 	o := setupFallbackOrchestrator(t)
 	fl := fakeLauncherForOrch(t, o, []scriptedOutcome{
 		{target: "chrome-local", failReason: ReasonBinaryMissing},
@@ -757,7 +756,6 @@ func TestHandleStartInstance_LegacyConfig_NoFallback(t *testing.T) {
 }
 
 func TestHandleStartInstance_Exhaustion_502(t *testing.T) {
-	fastPolling(t)
 	o := setupFallbackOrchestrator(t)
 	_ = fakeLauncherForOrch(t, o, []scriptedOutcome{
 		{target: "chrome-local", failReason: ReasonBinaryMissing},
@@ -805,7 +803,6 @@ func TestHandleStartInstance_Exhaustion_502(t *testing.T) {
 }
 
 func TestHandleLaunchByName_RequestFallbackTargets_Wins(t *testing.T) {
-	fastPolling(t)
 	o := setupFallbackOrchestrator(t)
 	fl := fakeLauncherForOrch(t, o, []scriptedOutcome{
 		{target: "chrome-local", failReason: ReasonBinaryMissing},
@@ -830,7 +827,6 @@ func TestHandleLaunchByName_RequestFallbackTargets_Wins(t *testing.T) {
 }
 
 func TestHandleLaunchByName_Exhaustion_502(t *testing.T) {
-	fastPolling(t)
 	o := setupFallbackOrchestrator(t)
 	_ = fakeLauncherForOrch(t, o, []scriptedOutcome{
 		{target: "chrome-local", failReason: ReasonBinaryMissing},

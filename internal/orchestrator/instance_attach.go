@@ -208,7 +208,7 @@ func (o *Orchestrator) AttachWithOptions(name, cdpURL string, opts AttachOptions
 	if healthTimeout <= 0 {
 		healthTimeout = 15 * time.Second
 	}
-	if err := waitForChildBridgeHealthyFunc(o, internal, healthTimeout); err != nil {
+	if err := o.hooks.waitForChildBridgeHealthy(o, internal, healthTimeout); err != nil {
 		tail := tailChildLog(logBuf, 20)
 		slog.Warn("CDP attach bridge did not become healthy in time; tearing down child bridge", "id", instanceID, "err", err, "childLogTail", tail)
 		if stopErr := o.Stop(instanceID); stopErr != nil {

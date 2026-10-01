@@ -442,22 +442,19 @@ func findSubstring(s, substr string) bool {
 	return false
 }
 
-func stubAttachBridgeHealthy(t *testing.T) {
-	t.Helper()
-	old := waitForChildBridgeHealthyFunc
-	waitForChildBridgeHealthyFunc = func(o *Orchestrator, inst *InstanceInternal, timeout time.Duration) error {
+func stubAttachBridgeHealthy(o *Orchestrator) {
+	o.hooks.waitForChildBridgeHealthy = func(o *Orchestrator, inst *InstanceInternal, timeout time.Duration) error {
 		o.mu.Lock()
 		inst.Status = "running"
 		o.mu.Unlock()
 		return nil
 	}
-	t.Cleanup(func() { waitForChildBridgeHealthyFunc = old })
 }
 
 func TestOrchestrator_Attach(t *testing.T) {
-	stubAttachBridgeHealthy(t)
 	runner := &mockRunner{portAvail: true, newCmd: newBlockingMockCmdFactory(t)}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	stubAttachBridgeHealthy(o)
 	allowAttachForTest(o, []string{"ws"}, []string{"localhost"})
 	o.attachHealthCheckTimeout = 50 * time.Millisecond
 
@@ -496,9 +493,9 @@ func TestOrchestrator_Attach(t *testing.T) {
 }
 
 func TestOrchestrator_Attach_SpawnsChildBridgeWithCDPFlags(t *testing.T) {
-	stubAttachBridgeHealthy(t)
 	runner := &mockRunner{portAvail: true, newCmd: newBlockingMockCmdFactory(t)}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	stubAttachBridgeHealthy(o)
 	allowAttachForTest(o, []string{"ws"}, []string{"127.0.0.1"})
 	o.attachHealthCheckTimeout = 30 * time.Millisecond
 
@@ -533,9 +530,9 @@ func TestOrchestrator_AttachWithProviderRejectsUnknownProvider(t *testing.T) {
 }
 
 func TestOrchestrator_Attach_PreservesCdpURLMetadata(t *testing.T) {
-	stubAttachBridgeHealthy(t)
 	runner := &mockRunner{portAvail: true, newCmd: newBlockingMockCmdFactory(t)}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	stubAttachBridgeHealthy(o)
 	allowAttachForTest(o, []string{"ws"}, []string{"127.0.0.1"})
 	o.attachHealthCheckTimeout = 30 * time.Millisecond
 
@@ -556,13 +553,13 @@ func TestOrchestrator_Attach_PreservesCdpURLMetadata(t *testing.T) {
 }
 
 func TestOrchestrator_Attach_DuplicateName(t *testing.T) {
-	stubAttachBridgeHealthy(t)
 	old := processAliveFunc
 	processAliveFunc = func(pid int) bool { return pid > 0 }
 	defer func() { processAliveFunc = old }()
 
 	runner := &mockRunner{portAvail: true, newCmd: newBlockingMockCmdFactory(t)}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	stubAttachBridgeHealthy(o)
 	allowAttachForTest(o, []string{"ws"}, []string{"localhost"})
 	o.attachHealthCheckTimeout = 50 * time.Millisecond
 
@@ -578,18 +575,15 @@ func TestOrchestrator_Attach_DuplicateName(t *testing.T) {
 }
 
 func TestOrchestrator_Attach_HealthFailureTearsDownChild(t *testing.T) {
-	oldHealth := waitForChildBridgeHealthyFunc
-	waitForChildBridgeHealthyFunc = func(o *Orchestrator, inst *InstanceInternal, timeout time.Duration) error {
-		return fmt.Errorf("boom")
-	}
-	defer func() { waitForChildBridgeHealthyFunc = oldHealth }()
-
 	oldAlive := processAliveFunc
 	processAliveFunc = func(pid int) bool { return false }
 	defer func() { processAliveFunc = oldAlive }()
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.waitForChildBridgeHealthy = func(*Orchestrator, *InstanceInternal, time.Duration) error {
+		return fmt.Errorf("boom")
+	}
 	allowAttachForTest(o, []string{"ws"}, []string{"localhost"})
 	o.attachHealthCheckTimeout = 30 * time.Millisecond
 
@@ -1254,9 +1248,9 @@ func TestLaunchWithOptions_TargetNamePromotesExactTarget(t *testing.T) {
 // M9 regression: a failed attach spawn must release the name reservation so
 // a retry with the same name succeeds.
 func TestAttach_FailedSpawnReleasesNameReservation(t *testing.T) {
-	stubAttachBridgeHealthy(t)
 	runner := &mockRunner{portAvail: true, runErr: errors.New("spawn failed")}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	stubAttachBridgeHealthy(o)
 	allowAttachForTest(o, []string{"ws"}, []string{"localhost"})
 	o.attachHealthCheckTimeout = 50 * time.Millisecond
 
@@ -1289,12 +1283,12 @@ func (r *slowAttachRunner) Run(ctx context.Context, binary string, args []string
 
 // M9 regression: concurrent same-name attaches spawn at most one child.
 func TestAttach_ConcurrentDuplicateNameSpawnsOneChild(t *testing.T) {
-	stubAttachBridgeHealthy(t)
 	runner := &slowAttachRunner{
 		mockRunner: mockRunner{portAvail: true, newCmd: newBlockingMockCmdFactory(t)},
 		delay:      50 * time.Millisecond,
 	}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	stubAttachBridgeHealthy(o)
 	allowAttachForTest(o, []string{"ws"}, []string{"localhost"})
 	o.attachHealthCheckTimeout = 50 * time.Millisecond
 

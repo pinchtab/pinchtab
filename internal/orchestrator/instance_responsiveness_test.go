@@ -25,12 +25,9 @@ func answerTabs(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(`{"tabs":[]}`))
 }
 
-func shortProbeBudget(t *testing.T) time.Duration {
-	t.Helper()
-	previous := responsivenessProbeBudget
-	responsivenessProbeBudget = 150 * time.Millisecond
-	t.Cleanup(func() { responsivenessProbeBudget = previous })
-	return responsivenessProbeBudget
+func shortProbeBudget(o *Orchestrator) time.Duration {
+	o.timings.responsivenessProbeBudget = 150 * time.Millisecond
+	return o.timings.responsivenessProbeBudget
 }
 
 func orchestratorOverStubChild(t *testing.T, handler http.Handler) (*Orchestrator, *mockRunner) {
@@ -73,8 +70,8 @@ func TestResponsivenessIsThreeDistinctValuesNeverSharingARepresentation(t *testi
 }
 
 func TestAnInstanceAnsweringHealthButNotTabsIsUnresponsiveAndStillRunning(t *testing.T) {
-	shortProbeBudget(t)
 	o, runner := orchestratorOverStubChild(t, stubChild(answerHealth, hangUntilClientGivesUp))
+	shortProbeBudget(o)
 	o.mu.RLock()
 	before := o.instances[stubInstanceID]
 	o.mu.RUnlock()
@@ -100,8 +97,8 @@ func TestAnInstanceAnsweringHealthButNotTabsIsUnresponsiveAndStillRunning(t *tes
 }
 
 func TestAnInstanceBlockingEveryRouteIsUnknownNotUnresponsive(t *testing.T) {
-	shortProbeBudget(t)
 	o, _ := orchestratorOverStubChild(t, stubChild(hangUntilClientGivesUp, hangUntilClientGivesUp))
+	shortProbeBudget(o)
 	o.RefreshCrashes()
 	if got := o.List()[0].Responsiveness; got != bridge.ResponsivenessUnknown {
 		t.Fatalf("responsiveness = %q, want unknown: its /health never answered either", got)
@@ -109,8 +106,8 @@ func TestAnInstanceBlockingEveryRouteIsUnknownNotUnresponsive(t *testing.T) {
 }
 
 func TestAnInstanceAnsweringBothRoutesIsResponsive(t *testing.T) {
-	shortProbeBudget(t)
 	o, _ := orchestratorOverStubChild(t, stubChild(answerHealth, answerTabs))
+	shortProbeBudget(o)
 	o.RefreshCrashes()
 	if got := o.List()[0].Responsiveness; got != bridge.ResponsivenessResponsive {
 		t.Fatalf("responsiveness = %q, want responsive", got)
@@ -118,8 +115,8 @@ func TestAnInstanceAnsweringBothRoutesIsResponsive(t *testing.T) {
 }
 
 func TestAStoppedInstanceReadsUnknownAgainAfterTheNextRefresh(t *testing.T) {
-	shortProbeBudget(t)
 	o, _ := orchestratorOverStubChild(t, stubChild(answerHealth, answerTabs))
+	shortProbeBudget(o)
 	o.RefreshCrashes()
 	o.mu.Lock()
 	o.instances[stubInstanceID].Status = "stopped"
@@ -131,8 +128,8 @@ func TestAStoppedInstanceReadsUnknownAgainAfterTheNextRefresh(t *testing.T) {
 }
 
 func TestTheProbeBudgetBoundsTheCrashSummaryLatency(t *testing.T) {
-	budget := shortProbeBudget(t)
 	o, _ := orchestratorOverStubChild(t, stubChild(answerHealth, hangUntilClientGivesUp))
+	budget := shortProbeBudget(o)
 	started := time.Now()
 	o.CrashSummary()
 	elapsed := time.Since(started)
@@ -156,9 +153,9 @@ func (c *capturingRecorder) Record(evt activity.Event) error {
 func (c *capturingRecorder) Query(activity.Filter) ([]activity.Event, error) { return nil, nil }
 
 func TestTheTabsProbeReachesTheChildAsOrchestratorActivityNotClientActivity(t *testing.T) {
-	shortProbeBudget(t)
 	rec := &capturingRecorder{}
 	o, _ := orchestratorOverStubChild(t, activity.Middleware(rec, "client", stubChild(answerHealth, answerTabs)))
+	shortProbeBudget(o)
 	o.RefreshCrashes()
 
 	rec.mu.Lock()
@@ -199,10 +196,8 @@ func addStubInstance(o *Orchestrator, id, url string) {
 }
 
 func TestAHangingTabsProbeReleasesTheRequestAtTheJoinWaitAndRecordsItsVerdictLater(t *testing.T) {
-	previous := responsivenessProbeBudget
-	responsivenessProbeBudget = 800 * time.Millisecond
-	t.Cleanup(func() { responsivenessProbeBudget = previous })
 	o, _ := orchestratorOverStubChild(t, stubChild(answerHealth, hangUntilClientGivesUp))
+	o.timings.responsivenessProbeBudget = 800 * time.Millisecond
 
 	started := time.Now()
 	o.CrashSummary()
@@ -220,9 +215,6 @@ func TestAHangingTabsProbeReleasesTheRequestAtTheJoinWaitAndRecordsItsVerdictLat
 }
 
 func TestConcurrentRefreshesShareOneFanOut(t *testing.T) {
-	previous := responsivenessProbeBudget
-	responsivenessProbeBudget = 800 * time.Millisecond
-	t.Cleanup(func() { responsivenessProbeBudget = previous })
 	var mu sync.Mutex
 	tabsHits := 0
 	o, _ := orchestratorOverStubChild(t, stubChild(answerHealth, func(w http.ResponseWriter, r *http.Request) {
@@ -231,6 +223,7 @@ func TestConcurrentRefreshesShareOneFanOut(t *testing.T) {
 		mu.Unlock()
 		hangUntilClientGivesUp(w, r)
 	}))
+	o.timings.responsivenessProbeBudget = 800 * time.Millisecond
 
 	o.RefreshCrashes()
 	o.RefreshCrashes()
@@ -244,10 +237,8 @@ func TestConcurrentRefreshesShareOneFanOut(t *testing.T) {
 
 func TestTheFanOutProbesInstancesInParallel(t *testing.T) {
 	budget := 300 * time.Millisecond
-	previous := responsivenessProbeBudget
-	responsivenessProbeBudget = budget
-	t.Cleanup(func() { responsivenessProbeBudget = previous })
 	o, _ := orchestratorOverStubChild(t, stubChild(answerHealth, hangUntilClientGivesUp))
+	o.timings.responsivenessProbeBudget = budget
 	o.mu.RLock()
 	url := o.instances[stubInstanceID].URL
 	o.mu.RUnlock()
@@ -267,13 +258,13 @@ func TestTheFanOutProbesInstancesInParallel(t *testing.T) {
 }
 
 func TestATabsProbeCutOffWithoutAnAnswerIsUnknownNotUnresponsive(t *testing.T) {
-	shortProbeBudget(t)
 	o, _ := orchestratorOverStubChild(t, stubChild(answerHealth, func(w http.ResponseWriter, _ *http.Request) {
 		conn, _, err := w.(http.Hijacker).Hijack()
 		if err == nil {
 			_ = conn.Close()
 		}
 	}))
+	shortProbeBudget(o)
 	o.RefreshCrashes()
 	awaitRefresh(t, o)
 	if got := o.List()[0].Responsiveness; got != bridge.ResponsivenessUnknown {
