@@ -90,10 +90,6 @@ func TestEveryMonitorGoesThroughStartMonitor(t *testing.T) {
 	var offenders []string
 	for name, body := range srccensus.Load(t, ".", 20).Sources() {
 		for line := range strings.SplitSeq(body, "\n") {
-			// Comments describe the shape; only code reintroduces it.
-			if strings.HasPrefix(strings.TrimSpace(line), "//") {
-				continue
-			}
 			if bareGoMonitor.MatchString(line) {
 				offenders = append(offenders, name)
 				break

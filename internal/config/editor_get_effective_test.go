@@ -249,9 +249,6 @@ func TestTheProfilesPathRuleHasOneOwner(t *testing.T) {
 	for _, scope := range scopes {
 		for name, src := range srccensus.Load(t, scope.dir, scope.minFiles).Sources() {
 			for line := range strings.SplitSeq(src, "\n") {
-				if strings.Contains(line, "//") {
-					continue
-				}
 				if strings.Contains(line, `filepath.Join(`) && strings.Contains(line, `"profiles"`) {
 					owners++
 					t.Logf("profiles path rule in %s/%s: %s", scope.dir, name, strings.TrimSpace(line))

@@ -72,9 +72,6 @@ func TestSchedulerDefaultsAreSpelledInOnePlace(t *testing.T) {
 			path := filepath.Join(scope.dir, name)
 			for i, line := range strings.Split(body, "\n") {
 				trimmed := strings.TrimSpace(line)
-				if strings.HasPrefix(trimmed, "//") {
-					continue
-				}
 				field := ""
 				if match := knobLiteralAssignment.FindStringSubmatch(trimmed); match != nil {
 					field = match[1]

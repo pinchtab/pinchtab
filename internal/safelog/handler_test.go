@@ -155,9 +155,6 @@ func TestOnlySafelogInstallsTheProcessLogger(t *testing.T) {
 func TestTheServerNeverDiscardsLogOutput(t *testing.T) {
 	for name, text := range srccensus.Load(t, filepath.Join("..", "server"), minServerSourceFiles).Sources() {
 		for i, line := range strings.Split(text, "\n") {
-			if strings.HasPrefix(strings.TrimSpace(line), "//") {
-				continue
-			}
 			if strings.Contains(line, "io."+"Discard") {
 				t.Errorf("internal/server/%s:%d discards log output; a run must record its requests and errors without a flag, and the level belongs in safelog", name, i+1)
 			}

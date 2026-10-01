@@ -1,10 +1,11 @@
 package observe
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 // The behavioural proof of this rule is browser-backed, and the lightweight CI run
@@ -15,10 +16,12 @@ import (
 func TestOneResponseBodyFetcherThatReportsTheCDPFlag(t *testing.T) {
 	const fetcher = "func GetResponseBody(ctx context.Context, requestID string) (string, bool, error)"
 
-	body := readRepoCode(t, "network.go")
+	observe := srccensus.Load(t, ".", 10)
+	owner := observe.MustFunc(t, "GetResponseBody")
+	body := observe.FileSource(owner)
 
 	if !strings.Contains(body, fetcher) {
-		t.Fatalf("network.go no longer declares %q; this census would guard nothing", fetcher)
+		t.Fatalf("%s no longer declares %q; this census would guard nothing", owner.File, fetcher)
 	}
 	if !strings.Contains(body, "base64Encoded = resp.Base64Encoded") {
 		t.Error("the fetcher no longer reads base64Encoded off the CDP result, so the flag is not the browser's answer")
@@ -37,8 +40,7 @@ func TestOneResponseBodyFetcherThatReportsTheCDPFlag(t *testing.T) {
 	// implementation reachable from handlers is how the two paths came to disagree about
 	// the same request in the first place.
 	var handlerCalls int
-	for _, name := range []string{"network.go", "network_export.go"} {
-		handlerBody := readRepoCode(t, filepath.Join("..", "..", "handlers", name))
+	for name, handlerBody := range srccensus.Load(t, filepath.Join("..", "..", "handlers"), 80).Sources() {
 		if strings.Contains(handlerBody, "GetResponseBodyDirect") {
 			t.Errorf("handlers/%s reaches GetResponseBodyDirect instead of the single fetcher", name)
 		}
@@ -59,7 +61,7 @@ func TestOneResponseBodyFetcherThatReportsTheCDPFlag(t *testing.T) {
 
 	// The same rule inside this package: one owner is not enough if a wrapper re-creates
 	// the old behaviour by throwing the flag away.
-	assertFlagNotDiscarded(t, "network.go", body)
+	assertFlagNotDiscarded(t, owner.File, body)
 }
 
 // assertFlagNotDiscarded bans a caller that takes the body and drops the flag. Routing
@@ -76,23 +78,4 @@ func assertFlagNotDiscarded(t *testing.T, label, code string) {
 			t.Errorf("%s discards the base64Encoded flag: %s", label, strings.TrimSpace(line))
 		}
 	}
-}
-
-// readRepoCode returns the file with comment lines dropped, so a doc comment naming the
-// banned shape does not trip a ban on it — the prose explaining why a form is wrong is
-// exactly where that form gets written down.
-func readRepoCode(t *testing.T, path string) string {
-	t.Helper()
-	raw, err := os.ReadFile(path) // #nosec G304 -- fixed paths inside this repo.
-	if err != nil {
-		t.Fatalf("cannot read %s, so this census guards nothing: %v", path, err)
-	}
-	var code []string
-	for _, line := range strings.Split(string(raw), "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), "//") {
-			continue
-		}
-		code = append(code, line)
-	}
-	return strings.Join(code, "\n")
 }

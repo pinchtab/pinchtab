@@ -74,7 +74,7 @@ func TestEveryRequestThisClientBuildsIsAuthorized(t *testing.T) {
 	dispatches := 0
 	for line := range strings.SplitSeq(source, "\n") {
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "//") || !strings.Contains(trimmed, "bc.client.Do(") {
+		if !strings.Contains(trimmed, "bc.client.Do(") {
 			continue
 		}
 		dispatches++
