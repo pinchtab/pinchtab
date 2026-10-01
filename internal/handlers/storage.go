@@ -1,10 +1,10 @@
 package handlers
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -162,23 +162,13 @@ func (h *Handlers) handleStorageDelete(w http.ResponseWriter, r *http.Request) {
 		Type  string `json:"type"`
 	}
 
-	// Read body to check if it's empty (optional for DELETE)
-	bodyBytes, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodySize))
-	if err != nil {
-		httpx.Error(w, 400, fmt.Errorf("read body: %w", err))
+	if !decodeOptionalJSON(w, r, &req) {
 		return
 	}
-
-	if len(bodyBytes) > 0 {
-		if err := json.Unmarshal(bodyBytes, &req); err != nil {
-			httpx.Error(w, 400, fmt.Errorf("decode: %w", err))
-			return
-		}
-	}
-
-	if req.Type == "" {
-		req.Type = "all"
-	}
+	query := r.URL.Query()
+	req.TabID = cmp.Or(req.TabID, query.Get("tabId"))
+	req.Key = cmp.Or(req.Key, query.Get("key"))
+	req.Type = cmp.Or(req.Type, query.Get("type"), "all")
 
 	if req.Type != "local" && req.Type != "session" && req.Type != "all" {
 		httpx.Error(w, 400, fmt.Errorf("type must be 'local', 'session', or 'all'"))

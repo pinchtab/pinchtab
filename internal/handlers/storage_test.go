@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -267,5 +268,69 @@ func TestOpenAPI_StorageModeledOnceWithMethodMetadata(t *testing.T) {
 		if _, ok := meta["x-pinchtab-enabled"]; !ok {
 			t.Fatalf("/storage.%s missing x-pinchtab-enabled", method)
 		}
+	}
+}
+
+type storageTabBridge struct {
+	mockBridge
+	requestedTab string
+}
+
+func (b *storageTabBridge) TabContext(tabID string) (*bridge.TabHandle, string, error) {
+	b.requestedTab = tabID
+	return b.mockBridge.TabContext(tabID)
+}
+
+func TestHandleStorageDelete_ReadsQueryWhenBodyOmitsFields(t *testing.T) {
+	tests := []struct {
+		name       string
+		target     string
+		body       string
+		wantScript string
+		wantTab    string
+	}{
+		{
+			name:       "query only removes one local key",
+			target:     "/storage?tabId=tab-q&type=local&key=k",
+			wantScript: buildStorageDeleteScript("local", "k"),
+			wantTab:    "tab-q",
+		},
+		{
+			name:       "body wins over query",
+			target:     "/storage?tabId=tab-q&type=local&key=k",
+			body:       `{"tabId":"tab-b","type":"session","key":"other"}`,
+			wantScript: buildStorageDeleteScript("session", "other"),
+			wantTab:    "tab-b",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			b := &storageTabBridge{}
+			h := New(b, &config.RuntimeConfig{AllowStateExport: true}, nil, nil, nil)
+			var ran string
+			h.evalJS = func(ctx context.Context, expr string, out *string) error {
+				ran = expr
+				*out = `{"success":true,"origin":"http://example.com"}`
+				return nil
+			}
+
+			r := httptest.NewRequest(http.MethodDelete, tc.target, strings.NewReader(tc.body))
+			w := httptest.NewRecorder()
+			h.HandleStorage(w, r)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+			if ran != tc.wantScript {
+				t.Errorf("ran script:\n%s\nwant:\n%s", ran, tc.wantScript)
+			}
+			if strings.Contains(ran, "clear()") {
+				t.Error("a keyed delete cleared storage")
+			}
+			if b.requestedTab != tc.wantTab {
+				t.Errorf("resolved tab %q, want %q", b.requestedTab, tc.wantTab)
+			}
+		})
 	}
 }
