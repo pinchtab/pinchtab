@@ -31,7 +31,7 @@ func TestASlowClickSucceedsWhileTheActionHasTimeLeft(t *testing.T) {
 		trusted func(context.Context, int64) error
 		js      func(context.Context, int64) error
 	}{
-		{name: "slow trusted click", trusted: takes(slow), js: hangs},
+		{name: "slow trusted click, slow JS fallback", trusted: takes(slow), js: takes(slow)},
 		{name: "stuck trusted click, slow JS fallback", trusted: hangs, js: takes(slow)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -43,6 +43,20 @@ func TestASlowClickSucceedsWhileTheActionHasTimeLeft(t *testing.T) {
 				t.Fatalf("withTrustedFallback() = %v, want the slow click to succeed", err)
 			}
 		})
+	}
+}
+
+func TestAStuckTrustedClickFallsBackWithoutWaitingOnTheActionBudget(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	if err := withTrustedFallback(ctx, 1, hangs, takes(0)); err != nil {
+		t.Fatalf("withTrustedFallback() = %v, want the JS fallback to land", err)
+	}
+	if elapsed := time.Since(start); elapsed > 4*trustedClickStepTimeout {
+		t.Fatalf("click took %v, want the fallback within about %v", elapsed, trustedClickStepTimeout)
 	}
 }
 

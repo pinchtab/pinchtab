@@ -71,14 +71,16 @@ func sleepForNav(ctx context.Context, delay time.Duration) {
 	_ = chromedp.Run(ctx, chromedp.Sleep(delay))
 }
 
-// Each step of the trusted click and its JS fallback gets a quarter of the
-// action time left, clamped. The floor survives a CPU-starved renderer; the
-// quarter share and the ceiling keep a dialog-blocked fallback returning well
-// before the action timeout.
+// In headless Chromium the trusted Input.dispatchMouseEvent click often never
+// completes, so its step stays short: a longer wait only delays every click
+// before the fallback lands. The JS fallback gets a quarter of the action time left,
+// clamped: the floor survives a CPU-starved renderer, and the share and ceiling
+// keep a dialog-blocked fallback returning well before the action timeout.
 const (
-	minClickStepBudget   = 250 * time.Millisecond
-	maxClickStepBudget   = 2500 * time.Millisecond
-	clickStepBudgetShare = 4
+	trustedClickStepTimeout = 250 * time.Millisecond
+	minClickStepBudget      = 250 * time.Millisecond
+	maxClickStepBudget      = 2500 * time.Millisecond
+	clickStepBudgetShare    = 4
 )
 
 func clickStepBudget(ctx context.Context) time.Duration {
@@ -94,7 +96,7 @@ func (p *pointerOps) clickByNodeIDWithJSFallback(ctx context.Context, nodeID int
 }
 
 func withTrustedFallback(ctx context.Context, nodeID int64, trusted, js func(context.Context, int64) error) error {
-	trustedCtx, cancel := context.WithTimeout(ctx, clickStepBudget(ctx))
+	trustedCtx, cancel := context.WithTimeout(ctx, trustedClickStepTimeout)
 	err := trusted(trustedCtx, nodeID)
 	cancel()
 	if err == nil {
