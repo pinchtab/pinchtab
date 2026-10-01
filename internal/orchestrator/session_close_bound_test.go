@@ -74,10 +74,8 @@ func TestABurstOfEndedSessionsKeepsTheCloseFanOutBounded(t *testing.T) {
 }
 
 func TestShutdownCancelsAnInFlightCloseBeforeStoppingTheInstances(t *testing.T) {
-	previous := registeredBridgeStopTimeout
-	registeredBridgeStopTimeout = 100 * time.Millisecond
-	t.Cleanup(func() { registeredBridgeStopTimeout = previous })
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.timings.registeredBridgeStop = 100 * time.Millisecond
 	closes := newBlockingCloses()
 	var stopAsked, cancelledBeforeStop, closeCancelled atomic.Bool
 	blockingClose := closes.handler()

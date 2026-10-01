@@ -10,8 +10,8 @@ import (
 )
 
 func TestFindInstanceByTab_KnownTabReturnsInstance(t *testing.T) {
-	alwaysAlive(t)
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/tabs" {
@@ -49,8 +49,8 @@ func TestFindInstanceByTab_KnownTabReturnsInstance(t *testing.T) {
 }
 
 func TestFindInstanceByTab_UnknownTabReturnsFalse(t *testing.T) {
-	alwaysAlive(t)
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/tabs" {

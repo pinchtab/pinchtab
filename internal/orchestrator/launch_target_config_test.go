@@ -44,6 +44,7 @@ func runtimeCfgWithTargets() *config.RuntimeConfig {
 }
 
 func TestBuildChildFileConfig_TargetSelectedLaunchPromotesTargetBlock(t *testing.T) {
+	t.Parallel()
 	cfg := runtimeCfgWithTargets()
 	o := fakeOrch(cfg)
 
@@ -79,6 +80,7 @@ func TestBuildChildFileConfig_TargetSelectedLaunchPromotesTargetBlock(t *testing
 }
 
 func TestBuildChildFileConfig_NoTargetSelected_UsesGlobalFields(t *testing.T) {
+	t.Parallel()
 	cfg := runtimeCfgWithTargets()
 	o := fakeOrch(cfg)
 
@@ -95,6 +97,7 @@ func TestBuildChildFileConfig_NoTargetSelected_UsesGlobalFields(t *testing.T) {
 }
 
 func TestBuildChildFileConfig_LegacyConfigByteStable(t *testing.T) {
+	t.Parallel()
 	cfg := &config.RuntimeConfig{
 		Port:              "9867",
 		DefaultBrowser:    config.BrowserChrome,
@@ -121,6 +124,7 @@ func TestBuildChildFileConfig_LegacyConfigByteStable(t *testing.T) {
 }
 
 func TestWriteAttachChildConfigPreservesRuntimeModeAndEngine(t *testing.T) {
+	t.Parallel()
 	cfg := &config.RuntimeConfig{
 		Port:                   "9867",
 		StateDir:               t.TempDir(),

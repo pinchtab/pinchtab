@@ -10,6 +10,7 @@ import (
 )
 
 func TestClassifyLaunchFailure(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		err  error
@@ -98,6 +99,7 @@ func TestClassifyLaunchFailure(t *testing.T) {
 }
 
 func TestClassifyLaunchFailure_AllReasonsCovered(t *testing.T) {
+	t.Parallel()
 	reasons := map[LaunchFailureReason]bool{
 		ReasonStartupTimeout:     false,
 		ReasonProcessExited:      false,

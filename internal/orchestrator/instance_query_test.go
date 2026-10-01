@@ -107,8 +107,8 @@ func shorthandRouteInstanceID(t *testing.T, o *Orchestrator) string {
 }
 
 func TestListOrdersInstancesByStartTimeThenIDWhateverTheMapOrder(t *testing.T) {
-	alwaysAlive(t)
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	alwaysAlive(o)
 	base := time.Now()
 	registerInstance(o, "inst_z", "running", "", base)
 	registerInstance(o, "inst_m", "running", "", base.Add(2*time.Second))
@@ -126,7 +126,6 @@ func TestListOrdersInstancesByStartTimeThenIDWhateverTheMapOrder(t *testing.T) {
 }
 
 func TestHealthDefaultInstanceIsTheInstanceShorthandRoutesUse(t *testing.T) {
-	alwaysAlive(t)
 	cases := []struct {
 		name string
 		cfg  *config.RuntimeConfig
@@ -144,6 +143,7 @@ func TestHealthDefaultInstanceIsTheInstanceShorthandRoutesUse(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+			alwaysAlive(o)
 			o.ApplyRuntimeConfig(tc.cfg)
 			o.client = okClient()
 			base := time.Now()
@@ -165,8 +165,8 @@ func TestHealthDefaultInstanceIsTheInstanceShorthandRoutesUse(t *testing.T) {
 }
 
 func TestHealthDefaultInstanceFallsBackToTheFirstListedWhenNoneIsRoutable(t *testing.T) {
-	alwaysAlive(t)
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	alwaysAlive(o)
 	o.client = okClient()
 	base := time.Now()
 	registerInstance(o, "inst_z", "starting", "", base)

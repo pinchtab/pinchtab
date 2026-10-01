@@ -281,7 +281,7 @@ func (o *Orchestrator) routeToInstanceID(w http.ResponseWriter, r *http.Request,
 	o.mu.RLock()
 	internal, ok := o.instances[instanceID]
 	o.mu.RUnlock()
-	if !ok || internal == nil || internal.Status != bridge.InstanceRunning || !instanceIsActive(internal) {
+	if !ok || internal == nil || internal.Status != bridge.InstanceRunning || !o.instanceIsActive(internal) {
 		if o.bindings != nil {
 			o.bindings.ClearInstance(instanceID)
 		}

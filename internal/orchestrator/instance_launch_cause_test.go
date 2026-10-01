@@ -32,12 +32,11 @@ func captureLaunchLog(t *testing.T, fn func()) string {
 // tried has to be on disk, unredacted, or the operator cannot tell a 0-byte install
 // from a foreign-architecture build.
 func TestLaunchFailureRecordsTheBinaryItExecdAndItsSize(t *testing.T) {
-	old := portAvailableFunc
-	portAvailableFunc = func(int) bool { return true }
-	defer func() { portAvailableFunc = old }()
+	t.Parallel()
 
 	runner := &mockRunner{portAvail: true, runErr: errors.New("fork/exec: exec format error")}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
 
 	// Point the launch binary at a truncated stand-in. resolveStableBinary prefers
 	// the RUNNING executable, which under `go test` is the test binary itself, so
@@ -73,12 +72,11 @@ func TestLaunchFailureRecordsTheBinaryItExecdAndItsSize(t *testing.T) {
 // A binary that is gone is a different fault from one that is malformed, and the log
 // has to tell them apart rather than going quiet on the stat.
 func TestLaunchFailureRecordsWhyTheBinaryCouldNotBeStatted(t *testing.T) {
-	old := portAvailableFunc
-	portAvailableFunc = func(int) bool { return true }
-	defer func() { portAvailableFunc = old }()
+	t.Parallel()
 
 	runner := &mockRunner{portAvail: true, runErr: errors.New("fork/exec: no such file or directory")}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
 	o.binary = filepath.Join(t.TempDir(), "pinchtab-that-is-gone")
 
 	logged := captureLaunchLog(t, func() { _, _ = o.Launch("test-prof", "9999", true, nil) })

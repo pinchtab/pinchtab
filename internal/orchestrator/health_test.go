@@ -457,9 +457,6 @@ func TestProbeChildInstanceReady_WarmsTabLifecycle(t *testing.T) {
 }
 
 func TestMonitor_DelaysRunningUntilWarmTabSucceeds(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
 
 	var tabAttempts int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -498,6 +495,7 @@ func TestMonitor_DelaysRunningUntilWarmTabSucceeds(t *testing.T) {
 	}
 
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{Bind: host})
 	o.client = srv.Client()
 
@@ -554,9 +552,6 @@ func TestMonitor_DelaysRunningUntilWarmTabSucceeds(t *testing.T) {
 // browser disconnected) must drive the instance to "stopped", not leave it
 // stuck at "running" or misreport it as "error".
 func TestMonitor_ChildExitAfterRunningTransitionsToStopped(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -588,6 +583,7 @@ func TestMonitor_ChildExitAfterRunningTransitionsToStopped(t *testing.T) {
 	}
 
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{Bind: host})
 	o.client = srv.Client()
 

@@ -127,8 +127,8 @@ func TestTabsCacheRequestAffectsTabs_GETIgnoredUnlessHeaderSurfaces(t *testing.T
 }
 
 func TestOrchestrator_InstanceTabsCachedReusesEntry(t *testing.T) {
-	alwaysAlive(t)
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

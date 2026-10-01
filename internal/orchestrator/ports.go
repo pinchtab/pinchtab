@@ -11,14 +11,13 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
-var portAvailableFunc = isPortAvailableInt
-
 type PortAllocator struct {
 	mu            sync.Mutex
 	start         int
 	end           int
 	allocated     map[int]bool
 	nextCandidate int
+	isAvailable   func(port int) bool
 }
 
 func NewPortAllocator(start, end int) *PortAllocator {
@@ -33,6 +32,7 @@ func NewPortAllocator(start, end int) *PortAllocator {
 		end:           end,
 		allocated:     make(map[int]bool),
 		nextCandidate: start,
+		isAvailable:   isPortAvailableInt,
 	}
 }
 
@@ -58,7 +58,7 @@ func (pa *PortAllocator) AllocatePort() (int, error) {
 			continue
 		}
 
-		if portAvailableFunc(candidate) {
+		if pa.isAvailable(candidate) {
 			pa.allocated[candidate] = true
 			slog.Debug("allocated port", "port", candidate)
 			return candidate, nil

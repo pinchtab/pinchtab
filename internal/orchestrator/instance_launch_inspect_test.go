@@ -23,9 +23,10 @@ func (b *blockingInspectRunner) InspectPort(string) PortInspection {
 }
 
 func TestSlowPortInspectionDoesNotHoldTheOrchestratorLock(t *testing.T) {
-	stubPortAvailability(t, func(int) bool { return true })
+	t.Parallel()
 	runner := &blockingInspectRunner{inspecting: make(chan struct{}), release: make(chan struct{})}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
 
 	launched := make(chan error, 1)
 	go func() {

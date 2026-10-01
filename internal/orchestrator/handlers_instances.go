@@ -41,7 +41,7 @@ func (o *Orchestrator) handleGetInstance(w http.ResponseWriter, r *http.Request)
 	}
 
 	copyInst := inst.Instance
-	active := instanceIsActive(inst)
+	active := o.instanceIsActive(inst)
 	o.mu.RUnlock()
 
 	copyInst.Status = effectiveInstanceStatus(copyInst.Status, active)
@@ -88,7 +88,7 @@ func (o *Orchestrator) handleRestartByInstanceID(w http.ResponseWriter, r *http.
 		httpx.Error(w, 404, fmt.Errorf("instance %q not found", id))
 		return
 	}
-	if !instanceIsActive(inst) || inst.Status != bridge.InstanceRunning {
+	if !o.instanceIsActive(inst) || inst.Status != bridge.InstanceRunning {
 		httpx.Error(w, 503, fmt.Errorf("instance %q is not running (status: %s)", id, inst.Status))
 		return
 	}
@@ -111,7 +111,7 @@ func (o *Orchestrator) handleStartByInstanceID(w http.ResponseWriter, r *http.Re
 		httpx.Error(w, 404, fmt.Errorf("instance %q not found", id))
 		return
 	}
-	active := instanceIsActive(inst)
+	active := o.instanceIsActive(inst)
 	port := inst.Port
 	profileName := inst.ProfileName
 	headless := inst.Headless
@@ -331,7 +331,7 @@ func (o *Orchestrator) handleInstanceTabs(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if inst.Status != bridge.InstanceRunning || !instanceIsActive(inst) {
+	if inst.Status != bridge.InstanceRunning || !o.instanceIsActive(inst) {
 		httpx.Error(w, 503, fmt.Errorf("instance %q is not running (status: %s)", id, inst.Status))
 		return
 	}

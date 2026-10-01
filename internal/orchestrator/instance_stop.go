@@ -18,14 +18,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/readiness"
 )
 
-var (
-	shutdownRequestTimeout      = 4 * time.Second
-	registeredBridgeStopTimeout = 5 * time.Second
-	gracefulProcessStopTimeout  = 5 * time.Second
-	termProcessStopTimeout      = 3 * time.Second
-	killProcessStopTimeout      = 2 * time.Second
-)
-
 func (o *Orchestrator) Stop(id string) error {
 	o.mu.Lock()
 	inst, ok := o.instances[id]
@@ -33,7 +25,7 @@ func (o *Orchestrator) Stop(id string) error {
 		o.mu.Unlock()
 		return fmt.Errorf("instance %q not found", id)
 	}
-	if inst.Status == bridge.InstanceStopped && !instanceIsActive(inst) {
+	if inst.Status == bridge.InstanceStopped && !o.instanceIsActive(inst) {
 		o.mu.Unlock()
 		o.markStopped(id)
 		return nil
@@ -79,14 +71,14 @@ func (o *Orchestrator) stopChildProcess(id string, inst *InstanceInternal) bool 
 
 	pid := inst.cmd.PID()
 	if pid > 0 {
-		if waitForProcessExit(context.Background(), pid, gracefulProcessStopTimeout) {
+		if o.waitForProcessExit(context.Background(), pid, o.timings.gracefulProcessStop) {
 			return true
 		}
 
 		if err := killProcessGroup(pid, sigTERM); err != nil {
 			slog.Warn("failed to send SIGTERM to instance", "id", id, "pid", pid, "err", err)
 		}
-		if waitForProcessExit(context.Background(), pid, termProcessStopTimeout) {
+		if o.waitForProcessExit(context.Background(), pid, o.timings.termProcessStop) {
 			return true
 		}
 
@@ -96,13 +88,13 @@ func (o *Orchestrator) stopChildProcess(id string, inst *InstanceInternal) bool 
 	}
 
 	inst.cmd.Cancel()
-	return pid <= 0 || waitForProcessExit(context.Background(), pid, killProcessStopTimeout)
+	return pid <= 0 || o.waitForProcessExit(context.Background(), pid, o.timings.killProcessStop)
 }
 
 // requestChildShutdown asks a child bridge to shut itself down. Failures are
 // the caller's cue to escalate, not an error to report.
 func (o *Orchestrator) requestChildShutdown(inst *InstanceInternal) {
-	reqCtx, cancel := context.WithTimeout(context.Background(), shutdownRequestTimeout)
+	reqCtx, cancel := context.WithTimeout(context.Background(), o.timings.shutdownRequest)
 	defer cancel()
 	targetURL, targetErr := o.instancePathURL(inst, "/shutdown", "")
 	if targetErr != nil {
@@ -123,7 +115,7 @@ func (o *Orchestrator) stopRegisteredBridge(inst *InstanceInternal) error {
 	if err != nil {
 		return fmt.Errorf("cannot stop registered bridge %q: %w", inst.ID, err)
 	}
-	requestCtx, cancel := context.WithTimeout(context.Background(), shutdownRequestTimeout)
+	requestCtx, cancel := context.WithTimeout(context.Background(), o.timings.shutdownRequest)
 	request, requestErr := http.NewRequestWithContext(requestCtx, http.MethodPost, shutdownURL.String(), nil)
 	if requestErr == nil {
 		o.applyInstanceAuth(request, inst)
@@ -140,7 +132,7 @@ func (o *Orchestrator) stopRegisteredBridge(inst *InstanceInternal) error {
 	}
 	cancel()
 
-	if o.waitForBridgeEndpointExit(context.Background(), inst, registeredBridgeStopTimeout) {
+	if o.waitForBridgeEndpointExit(context.Background(), inst, o.timings.registeredBridgeStop) {
 		return nil
 	}
 	if requestErr != nil {
@@ -172,7 +164,7 @@ func (o *Orchestrator) StopProfile(name string) error {
 	o.mu.RLock()
 	ids := make([]string, 0, 1)
 	for id, inst := range o.instances {
-		if inst.ProfileName == name && instanceIsActive(inst) {
+		if inst.ProfileName == name && o.instanceIsActive(inst) {
 			ids = append(ids, id)
 		}
 	}
@@ -280,7 +272,7 @@ func (o *Orchestrator) Shutdown() {
 	o.mu.RLock()
 	ids := make([]string, 0, len(o.instances))
 	for id, inst := range o.instances {
-		if instanceIsActive(inst) {
+		if o.instanceIsActive(inst) {
 			ids = append(ids, id)
 		}
 	}
@@ -307,7 +299,7 @@ func (o *Orchestrator) Shutdown() {
 	// which nothing else stops for them.
 	o.signalShutdown()
 	joinDetached("startup monitors", &o.monitors, monitorShutdownGrace)
-	joinDetached("failed-attempt teardowns", &o.detachedStops, detachedStopShutdownGrace)
+	joinDetached("failed-attempt teardowns", &o.detachedStops, o.timings.detachedStopShutdownGrace())
 	joinDetached("session tab closes", &o.sessionCloses, sessionCloseShutdownGrace)
 }
 
@@ -331,8 +323,9 @@ const monitorShutdownGrace = 5 * time.Second
 // teardowns. One runs stopChildProcess, whose own escalation is bounded by the
 // shutdown request plus the three process waits, so a teardown that is making
 // progress finishes inside this.
-var detachedStopShutdownGrace = shutdownRequestTimeout + gracefulProcessStopTimeout +
-	termProcessStopTimeout + killProcessStopTimeout + time.Second
+func (t orchestratorTimings) detachedStopShutdownGrace() time.Duration {
+	return t.shutdownRequest + t.gracefulProcessStop + t.termProcessStop + t.killProcessStop + time.Second
+}
 
 // waitGroupWithin reports whether wg finished inside d.
 func waitGroupWithin(wg *sync.WaitGroup, d time.Duration) bool {
@@ -363,7 +356,7 @@ func (o *Orchestrator) ForceShutdown() {
 	o.mu.RLock()
 	instances := make([]*InstanceInternal, 0, len(o.instances))
 	for _, inst := range o.instances {
-		if instanceIsActive(inst) {
+		if o.instanceIsActive(inst) {
 			instances = append(instances, inst)
 		}
 	}

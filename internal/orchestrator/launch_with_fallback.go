@@ -346,7 +346,7 @@ func (o *Orchestrator) tearDownFailedAttempt(instanceID string) {
 		o.stopDetachedFailedAttempt(instanceID, inst)
 	}()
 	if inst.cmd != nil {
-		if pid := inst.cmd.PID(); pid > 0 && !waitForProcessExit(context.Background(), pid, failedAttemptExitWait) {
+		if pid := inst.cmd.PID(); pid > 0 && !o.waitForProcessExit(context.Background(), pid, failedAttemptExitWait) {
 			slog.Warn("failed fallback attempt still running; next candidate may hit a locked profile", "id", instanceID, "pid", pid)
 		}
 	}
@@ -391,7 +391,7 @@ func (o *Orchestrator) stopDetachedFailedAttempt(instanceID string, inst *Instan
 func (o *Orchestrator) cleanupDetachedFailedAttemptProfile(profileName, browser string) {
 	o.mu.RLock()
 	for _, inst := range o.instances {
-		if inst != nil && inst.ProfileName == profileName && instanceIsActive(inst) {
+		if inst != nil && inst.ProfileName == profileName && o.instanceIsActive(inst) {
 			o.mu.RUnlock()
 			return
 		}

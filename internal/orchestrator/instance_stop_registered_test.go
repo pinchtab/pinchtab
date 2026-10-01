@@ -10,10 +10,6 @@ import (
 )
 
 func TestStopRegisteredBridgeRequiresEndpointExit(t *testing.T) {
-	original := registeredBridgeStopTimeout
-	registeredBridgeStopTimeout = 100 * time.Millisecond
-	t.Cleanup(func() { registeredBridgeStopTimeout = original })
-
 	for _, test := range []struct {
 		name        string
 		close       bool
@@ -41,6 +37,7 @@ func TestStopRegisteredBridgeRequiresEndpointExit(t *testing.T) {
 			defer server.Close()
 
 			o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+			o.timings.registeredBridgeStop = 100 * time.Millisecond
 			o.instances["registered"] = &InstanceInternal{
 				Instance: bridge.Instance{
 					ID: "registered", URL: server.URL, Status: "running",

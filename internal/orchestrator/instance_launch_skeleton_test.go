@@ -7,9 +7,10 @@ import (
 )
 
 func TestLaunchOfAnUnknownProfileSeedsChromiumPreferences(t *testing.T) {
-	stubPortAvailability(t, func(int) bool { return true })
+	t.Parallel()
 	baseDir := t.TempDir()
 	o := NewOrchestratorWithRunner(baseDir, &mockRunner{portAvail: true})
+	o.hooks.portAvailable = func(int) bool { return true }
 
 	inst, err := o.Launch("never-created", "", true, nil)
 	if err != nil {

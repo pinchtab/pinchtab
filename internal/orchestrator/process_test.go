@@ -103,12 +103,10 @@ func (m *mockRunner) InspectPort(port string) PortInspection {
 }
 
 func TestLaunch_Mocked(t *testing.T) {
-	old := portAvailableFunc
-	portAvailableFunc = func(int) bool { return true }
-	defer func() { portAvailableFunc = old }()
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
 
 	inst, err := o.Launch("test-prof", "9999", true, nil)
 	if err != nil {
@@ -127,12 +125,10 @@ func TestLaunch_Mocked(t *testing.T) {
 }
 
 func TestLaunch_PortConflict(t *testing.T) {
-	old := portAvailableFunc
-	portAvailableFunc = func(int) bool { return true }
-	defer func() { portAvailableFunc = old }()
 
 	runner := &mockRunner{portAvail: false}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
 
 	_, err := o.Launch("test-prof", "9999", true, nil)
 	if err == nil {
@@ -141,9 +137,6 @@ func TestLaunch_PortConflict(t *testing.T) {
 }
 
 func TestLaunch_PortConflictIncludesProcessDetails(t *testing.T) {
-	old := portAvailableFunc
-	portAvailableFunc = func(int) bool { return true }
-	defer func() { portAvailableFunc = old }()
 
 	runner := &mockRunner{portInfo: PortInspection{
 		Available: false,
@@ -151,6 +144,7 @@ func TestLaunch_PortConflictIncludesProcessDetails(t *testing.T) {
 		Command:   "pinchtab bridge",
 	}}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		InstancePortStart: 9900,
 		InstancePortEnd:   9902,
@@ -193,7 +187,7 @@ func TestInstanceIsActive(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := instanceIsActive(tt.inst); got != tt.active {
+			if got := NewOrchestrator(t.TempDir()).instanceIsActive(tt.inst); got != tt.active {
 				t.Errorf("instanceIsActive() = %v, want %v", got, tt.active)
 			}
 		})

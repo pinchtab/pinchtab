@@ -38,15 +38,6 @@ func envMap(items []string) map[string]string {
 	return out
 }
 
-func stubPortAvailability(t *testing.T, fn func(int) bool) {
-	t.Helper()
-	old := portAvailableFunc
-	portAvailableFunc = fn
-	t.Cleanup(func() {
-		portAvailableFunc = old
-	})
-}
-
 func allowAttachForTest(o *Orchestrator, schemes, hosts []string) {
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		AttachEnabled:      true,
@@ -56,13 +47,11 @@ func allowAttachForTest(o *Orchestrator, schemes, hosts []string) {
 }
 
 func TestOrchestrator_Launch_Lifecycle(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 
 	inst, err := o.Launch("profile1", "9001", true, nil)
 	if err != nil {
@@ -89,13 +78,11 @@ func TestOrchestrator_Launch_Lifecycle(t *testing.T) {
 
 func TestOrchestrator_ListAndStop(t *testing.T) {
 	alive := true
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return alive }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return alive }
 
 	inst, _ := o.Launch("p1", "9001", true, nil)
 
@@ -116,13 +103,11 @@ func TestOrchestrator_ListAndStop(t *testing.T) {
 }
 
 func TestOrchestrator_Launch_UsesConfiguredBindInInstanceURL(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{Bind: "192.168.1.50"})
 
 	inst, err := o.Launch("profile1", "9001", true, nil)
@@ -135,12 +120,10 @@ func TestOrchestrator_Launch_UsesConfiguredBindInInstanceURL(t *testing.T) {
 }
 
 func TestOrchestrator_StopProfile(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return true }
-	defer func() { processAliveFunc = old }()
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.processAlive = func(pid int) bool { return true }
 
 	o.mu.Lock()
 	instID := ids.InstanceID(ids.ProfileID("p1"), "p1")
@@ -156,7 +139,7 @@ func TestOrchestrator_StopProfile(t *testing.T) {
 	}
 	o.mu.Unlock()
 
-	processAliveFunc = func(pid int) bool { return false }
+	o.hooks.processAlive = func(pid int) bool { return false }
 
 	err := o.StopProfile("p1")
 	if err != nil {
@@ -170,13 +153,11 @@ func TestOrchestrator_StopProfile(t *testing.T) {
 }
 
 func TestOrchestrator_Launch_RejectsPathTraversal(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 
 	badNames := []struct {
 		name    string
@@ -209,13 +190,11 @@ func TestOrchestrator_Launch_RejectsPathTraversal(t *testing.T) {
 }
 
 func TestOrchestrator_Launch_AcceptsValidNames(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 
 	validNames := []string{
 		"simple",
@@ -255,13 +234,11 @@ func TestOrchestrator_Launch_RejectsInvalidPort(t *testing.T) {
 }
 
 func TestOrchestrator_Launch_ReservesDistinctBrowserDebugPort(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		Token:             "child-token",
 		InstancePortStart: 9900,
@@ -311,13 +288,11 @@ func TestOrchestrator_Launch_ReservesDistinctBrowserDebugPort(t *testing.T) {
 }
 
 func TestOrchestrator_Launch_ExplicitPortAlsoReservesDistinctBrowserDebugPort(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		InstancePortStart: 9910,
 		InstancePortEnd:   9913,
@@ -353,14 +328,12 @@ func TestOrchestrator_Launch_ExplicitPortAlsoReservesDistinctBrowserDebugPort(t 
 }
 
 func TestOrchestrator_Launch_DoesNotInjectSharedActivityStateDir(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	root := t.TempDir()
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(root, runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	sharedActivityStateDir := filepath.Join(root, "dashboard-state")
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		StateDir:          sharedActivityStateDir,
@@ -403,13 +376,11 @@ func TestOrchestrator_Launch_DoesNotInjectSharedActivityStateDir(t *testing.T) {
 }
 
 func TestOrchestrator_Stop_ReleasesBridgeAndBrowserDebugPorts(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return false }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return false }
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		InstancePortStart: 9920,
 		InstancePortEnd:   9923,
@@ -553,12 +524,10 @@ func TestOrchestrator_Attach_PreservesCdpURLMetadata(t *testing.T) {
 }
 
 func TestOrchestrator_Attach_DuplicateName(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
 
 	runner := &mockRunner{portAvail: true, newCmd: newBlockingMockCmdFactory(t)}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	stubAttachBridgeHealthy(o)
 	allowAttachForTest(o, []string{"ws"}, []string{"localhost"})
 	o.attachHealthCheckTimeout = 50 * time.Millisecond
@@ -575,12 +544,10 @@ func TestOrchestrator_Attach_DuplicateName(t *testing.T) {
 }
 
 func TestOrchestrator_Attach_HealthFailureTearsDownChild(t *testing.T) {
-	oldAlive := processAliveFunc
-	processAliveFunc = func(pid int) bool { return false }
-	defer func() { processAliveFunc = oldAlive }()
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.processAlive = func(pid int) bool { return false }
 	o.hooks.waitForChildBridgeHealthy = func(*Orchestrator, *InstanceInternal, time.Duration) error {
 		return fmt.Errorf("boom")
 	}
@@ -600,11 +567,9 @@ func TestOrchestrator_Attach_HealthFailureTearsDownChild(t *testing.T) {
 }
 
 func TestOrchestrator_FirstRunningURLForRequest_UsesBrowserTarget(t *testing.T) {
-	oldAlive := processAliveFunc
-	processAliveFunc = func(pid int) bool { return true }
-	defer func() { processAliveFunc = oldAlive }()
 
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.hooks.processAlive = func(pid int) bool { return true }
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "chrome",
 		Targets: config.BrowserTargetsConfig{
@@ -636,11 +601,9 @@ func TestOrchestrator_FirstRunningURLForRequest_UsesBrowserTarget(t *testing.T) 
 }
 
 func TestOrchestrator_FirstRunningURLForRequest_UsesDefaultTargetWhenOmitted(t *testing.T) {
-	oldAlive := processAliveFunc
-	processAliveFunc = func(pid int) bool { return true }
-	defer func() { processAliveFunc = oldAlive }()
 
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.hooks.processAlive = func(pid int) bool { return true }
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "cloak",
 		Targets: config.BrowserTargetsConfig{
@@ -1105,13 +1068,11 @@ func TestOrchestrator_RegisterHandlers_CacheRoutes(t *testing.T) {
 }
 
 func TestOrchestrator_LaunchWithOptions_BrowserFieldSet(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 
 	inst, err := o.LaunchWithOptions("browser-test", "9050", true, LaunchOptions{
 		Browser: "cloak",
@@ -1125,13 +1086,11 @@ func TestOrchestrator_LaunchWithOptions_BrowserFieldSet(t *testing.T) {
 }
 
 func TestOrchestrator_LaunchWithOptions_BrowserFieldEmpty(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 
 	inst, err := o.LaunchWithOptions("browser-empty", "9051", true, LaunchOptions{})
 	if err != nil {
@@ -1143,13 +1102,11 @@ func TestOrchestrator_LaunchWithOptions_BrowserFieldEmpty(t *testing.T) {
 }
 
 func TestOrchestrator_LaunchWithOptions_BrowserFieldInvalid(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 
 	_, err := o.LaunchWithOptions("browser-invalid", "9052", true, LaunchOptions{
 		Browser: "nonexistent-browser",
@@ -1204,13 +1161,11 @@ func TestOrchestrator_RegisterHandlers_LocksSensitiveRoutes(t *testing.T) {
 // promote that exact target's config into the child config — provider-based
 // re-derivation would pick the default target's binary.
 func TestLaunchWithOptions_TargetNamePromotesExactTarget(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	t.Cleanup(func() { processAliveFunc = old })
-	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		InstancePortStart: 9900,
 		InstancePortEnd:   9910,
@@ -1338,11 +1293,9 @@ func TestCleanupStoppedProfile_EmptyBrowserStillRunsCleanupHook(t *testing.T) {
 // L7(h): a browser-specific lookup must not fall back to instances of
 // unknown provenance (empty Browser field).
 func TestFirstRunningURLForBrowser_SkipsBrowserlessInstances(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	t.Cleanup(func() { processAliveFunc = old })
 
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	o.instances["legacy"] = &InstanceInternal{
 		Instance: bridge.Instance{ID: "legacy", Status: "running", Port: "9001"},
 		URL:      "http://localhost:9001",

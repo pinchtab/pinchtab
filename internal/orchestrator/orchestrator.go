@@ -148,6 +148,11 @@ type orchestratorTimings struct {
 	routeReadyPoll            time.Duration
 	sessionTabsCloseBudget    time.Duration
 	responsivenessProbeBudget time.Duration
+	shutdownRequest           time.Duration
+	registeredBridgeStop      time.Duration
+	gracefulProcessStop       time.Duration
+	termProcessStop           time.Duration
+	killProcessStop           time.Duration
 }
 
 func defaultOrchestratorTimings() orchestratorTimings {
@@ -156,15 +161,26 @@ func defaultOrchestratorTimings() orchestratorTimings {
 		routeReadyPoll:            500 * time.Millisecond,
 		sessionTabsCloseBudget:    10 * time.Second,
 		responsivenessProbeBudget: 3 * time.Second,
+		shutdownRequest:           4 * time.Second,
+		registeredBridgeStop:      5 * time.Second,
+		gracefulProcessStop:       5 * time.Second,
+		termProcessStop:           3 * time.Second,
+		killProcessStop:           2 * time.Second,
 	}
 }
 
 type orchestratorHooks struct {
 	waitForChildBridgeHealthy func(o *Orchestrator, inst *InstanceInternal, timeout time.Duration) error
+	processAlive              func(pid int) bool
+	portAvailable             func(port int) bool
 }
 
 func defaultOrchestratorHooks() orchestratorHooks {
-	return orchestratorHooks{waitForChildBridgeHealthy: waitForChildBridgeHealthyUntilShutdown}
+	return orchestratorHooks{
+		waitForChildBridgeHealthy: waitForChildBridgeHealthyUntilShutdown,
+		processAlive:              processAlive,
+		portAvailable:             isPortAvailableInt,
+	}
 }
 
 func waitForChildBridgeHealthyUntilShutdown(o *Orchestrator, inst *InstanceInternal, timeout time.Duration) error {
@@ -213,12 +229,12 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 		internalToken: generateInternalToken(),
 		bindings:      NewBindings(nil),
 		tabsCache:     NewTabsCache(0, nil),
-		portAllocator: NewPortAllocator(config.DefaultInstancePortStart, config.DefaultInstancePortEnd),
 		shutdownCh:    make(chan struct{}),
 		timings:       defaultOrchestratorTimings(),
 		hooks:         defaultOrchestratorHooks(),
 	}
 
+	orch.SetPortRange(config.DefaultInstancePortStart, config.DefaultInstancePortEnd)
 	orch.registerInstanceCleanupHook()
 	orch.initInstanceManager()
 
@@ -419,8 +435,16 @@ func (o *Orchestrator) AllowsMemory() bool {
 	return cfg != nil && cfg.AllowMemory
 }
 
-func (o *Orchestrator) SetPortRange(start, end int) {
+// newPortAllocator reads the port probe through o.hooks at call time, so a hook
+// set after construction still applies to every allocator SetPortRange builds.
+func (o *Orchestrator) newPortAllocator(start, end int) *PortAllocator {
 	allocator := NewPortAllocator(start, end)
+	allocator.isAvailable = func(port int) bool { return o.hooks.portAvailable(port) }
+	return allocator
+}
+
+func (o *Orchestrator) SetPortRange(start, end int) {
+	allocator := o.newPortAllocator(start, end)
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.portAllocator = allocator

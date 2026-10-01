@@ -15,13 +15,10 @@ import (
 	"github.com/pinchtab/pinchtab/internal/session"
 )
 
-// alwaysAlive replaces processAliveFunc so mockCmd-backed instances satisfy
-// instanceIsActive without depending on real process state.
-func alwaysAlive(t *testing.T) {
-	t.Helper()
-	orig := processAliveFunc
-	processAliveFunc = func(int) bool { return true }
-	t.Cleanup(func() { processAliveFunc = orig })
+// alwaysAlive makes mockCmd-backed instances satisfy instanceIsActive without
+// depending on real process state.
+func alwaysAlive(o *Orchestrator) {
+	o.hooks.processAlive = func(int) bool { return true }
 }
 
 // newBackendInstance spins up an httptest server that records the request
@@ -47,11 +44,12 @@ func newBackendInstance(t *testing.T, o *Orchestrator, instanceID string) (*http
 }
 
 func TestRouteForRequest_AutoLaunchesRequestedBrowserTarget(t *testing.T) {
-	alwaysAlive(t)
-	stubPortAvailability(t, func(int) bool { return true })
+	t.Parallel()
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	alwaysAlive(o)
+	o.hooks.portAvailable = func(int) bool { return true }
 	o.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
@@ -90,8 +88,9 @@ func TestRouteForRequest_AutoLaunchesRequestedBrowserTarget(t *testing.T) {
 }
 
 func TestRouteForRequest_RejectsUnknownBrowser(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 	newBackendInstance(t, o, "inst_chrome")
 	o.instances["inst_chrome"].Browser = config.BrowserChrome
 
@@ -111,8 +110,9 @@ func TestRouteForRequest_RejectsUnknownBrowser(t *testing.T) {
 // nil-list call it was rejected. The routing then resolves via the normal
 // (NormalizeBrowser) path to a running instance.
 func TestRouteForRequest_AcceptsOperatorConfiguredBrowser(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		BrowsersAvailable: []string{"chrome", "custombrowser"},
 	})
@@ -131,10 +131,11 @@ func TestRouteForRequest_AcceptsOperatorConfiguredBrowser(t *testing.T) {
 }
 
 func TestRouteForRequest_AcceptsValidBrowsers(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	for _, browser := range []string{"chrome", "cloak", "ghost-chrome"} {
 		t.Run(browser, func(t *testing.T) {
 			o := NewOrchestrator(t.TempDir())
+			alwaysAlive(o)
 			_, _ = newBackendInstance(t, o, "inst_"+browser)
 			o.instances["inst_"+browser].Browser = browser
 			o.instanceMgr.TrackInstance(&o.instances["inst_"+browser].Instance)
@@ -152,8 +153,9 @@ func TestRouteForRequest_AcceptsValidBrowsers(t *testing.T) {
 }
 
 func TestWrapShorthand_TabOwnerWins(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 	_, pathA := newBackendInstance(t, o, "inst_a")
 	_, pathB := newBackendInstance(t, o, "inst_b")
 
@@ -188,8 +190,9 @@ func TestWrapShorthand_TabOwnerWins(t *testing.T) {
 }
 
 func TestWrapShorthand_TabOwnerBrowserTargetConflict(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "chrome",
 		Targets: config.BrowserTargetsConfig{
@@ -223,8 +226,9 @@ func TestWrapShorthand_TabOwnerBrowserTargetConflict(t *testing.T) {
 }
 
 func TestWrapShorthand_TabNotFoundMultipleInstancesIs404(t *testing.T) {
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
-	alwaysAlive(t)
+	alwaysAlive(o)
 	newBackendInstance(t, o, "inst_a")
 	newBackendInstance(t, o, "inst_b")
 
@@ -242,8 +246,9 @@ func TestWrapShorthand_TabNotFoundMultipleInstancesIs404(t *testing.T) {
 }
 
 func TestWrapShorthand_TabNotFoundSingleInstanceFallsThrough(t *testing.T) {
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
-	alwaysAlive(t)
+	alwaysAlive(o)
 	_, gotPath := newBackendInstance(t, o, "inst_only")
 
 	wrapped := o.WrapShorthand(func(w http.ResponseWriter, r *http.Request) {
@@ -263,8 +268,9 @@ func TestWrapShorthand_TabNotFoundSingleInstanceFallsThrough(t *testing.T) {
 }
 
 func TestWrapShorthand_BrowserTargetBypassesMismatchedIdentityBinding(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "chrome",
 		Targets: config.BrowserTargetsConfig{
@@ -299,8 +305,9 @@ func TestWrapShorthand_BrowserTargetBypassesMismatchedIdentityBinding(t *testing
 }
 
 func TestWrapShorthand_SessionBindingHonoredOnTrustedHop(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 	newBackendInstance(t, o, "inst_a")
 	_, pathB := newBackendInstance(t, o, "inst_b")
 
@@ -325,8 +332,9 @@ func TestWrapShorthand_SessionBindingHonoredOnTrustedHop(t *testing.T) {
 }
 
 func TestWrapShorthand_SessionBindingHonoredFromAuthenticatedContext(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 	newBackendInstance(t, o, "inst_a")
 	_, pathB := newBackendInstance(t, o, "inst_b")
 
@@ -350,8 +358,9 @@ func TestWrapShorthand_SessionBindingHonoredFromAuthenticatedContext(t *testing.
 }
 
 func TestWrapShorthand_SessionHeaderIgnoredWithoutTrust(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 	newBackendInstance(t, o, "inst_a")
 	newBackendInstance(t, o, "inst_b")
 
@@ -378,8 +387,9 @@ func TestWrapShorthand_SessionHeaderIgnoredWithoutTrust(t *testing.T) {
 }
 
 func TestWrapShorthand_AgentBindingHonored(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 	newBackendInstance(t, o, "inst_a")
 	_, pathB := newBackendInstance(t, o, "inst_b")
 
@@ -403,8 +413,9 @@ func TestWrapShorthand_AgentBindingHonored(t *testing.T) {
 }
 
 func TestWrapShorthand_StaleBindingFallsThrough(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 	_, pathA := newBackendInstance(t, o, "inst_a")
 
 	// Bind to an instance that no longer exists.
@@ -439,11 +450,12 @@ func TestWrapShorthand_StaleBindingFallsThrough(t *testing.T) {
 // inherit Server.Token and an unauthenticated poll loops on 401 until the
 // route times out with 503.
 func TestRouteForRequest_AutoLaunchReadinessPollAuthenticates(t *testing.T) {
-	alwaysAlive(t)
-	stubPortAvailability(t, func(int) bool { return true })
+	t.Parallel()
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	alwaysAlive(o)
+	o.hooks.portAvailable = func(int) bool { return true }
 	o.timings.routeReadyPoll = time.Millisecond
 	o.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		status := http.StatusUnauthorized

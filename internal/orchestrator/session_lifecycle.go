@@ -71,7 +71,7 @@ func (o *Orchestrator) closeEndedSessionTabs(parent context.Context, sessionID s
 	o.mu.RLock()
 	var targets []*InstanceInternal
 	for _, inst := range o.instances {
-		if inst.Status == bridge.InstanceRunning && instanceIsActive(inst) && o.hopIsTrusted(inst) {
+		if inst.Status == bridge.InstanceRunning && o.instanceIsActive(inst) && o.hopIsTrusted(inst) {
 			targets = append(targets, inst)
 		}
 	}

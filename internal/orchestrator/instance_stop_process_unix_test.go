@@ -13,21 +13,6 @@ import (
 )
 
 func TestStopReapsOwnedBridgeProcessGroup(t *testing.T) {
-	originalRequest := shutdownRequestTimeout
-	originalGrace := gracefulProcessStopTimeout
-	originalTerm := termProcessStopTimeout
-	originalKill := killProcessStopTimeout
-	shutdownRequestTimeout = 50 * time.Millisecond
-	gracefulProcessStopTimeout = 50 * time.Millisecond
-	termProcessStopTimeout = 100 * time.Millisecond
-	killProcessStopTimeout = time.Second
-	t.Cleanup(func() {
-		shutdownRequestTimeout = originalRequest
-		gracefulProcessStopTimeout = originalGrace
-		termProcessStopTimeout = originalTerm
-		killProcessStopTimeout = originalKill
-	})
-
 	runner := &LocalRunner{}
 	cmd, err := runner.Run(
 		context.Background(), "/bin/sh",
@@ -48,6 +33,10 @@ func TestStopReapsOwnedBridgeProcessGroup(t *testing.T) {
 	}()
 
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.timings.shutdownRequest = 50 * time.Millisecond
+	o.timings.gracefulProcessStop = 50 * time.Millisecond
+	o.timings.termProcessStop = 100 * time.Millisecond
+	o.timings.killProcessStop = time.Second
 	o.instances["owned"] = &InstanceInternal{
 		Instance: bridge.Instance{
 			ID: "owned", URL: "http://127.0.0.1:1", Status: "running",
@@ -64,7 +53,7 @@ func TestStopReapsOwnedBridgeProcessGroup(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("owned bridge process was not reaped")
 	}
-	if isProcessAlive(cmd.PID()) {
+	if processAlive(cmd.PID()) {
 		t.Fatalf("owned bridge PID %d is still alive", cmd.PID())
 	}
 	if _, present := o.instances["owned"]; present {

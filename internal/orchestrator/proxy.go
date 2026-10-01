@@ -174,7 +174,7 @@ func (o *Orchestrator) findRunningInstanceByTabID(tabID string) (*InstanceIntern
 	o.mu.RLock()
 	instances := make([]*InstanceInternal, 0, len(o.instances))
 	for _, inst := range o.instances {
-		if inst.Status == bridge.InstanceRunning && instanceIsActive(inst) {
+		if inst.Status == bridge.InstanceRunning && o.instanceIsActive(inst) {
 			instances = append(instances, inst)
 		}
 	}
@@ -520,7 +520,7 @@ func (o *Orchestrator) singleRunningInstance() *InstanceInternal {
 
 	var only *InstanceInternal
 	for _, inst := range o.instances {
-		if inst.Status != bridge.InstanceRunning || !instanceIsActive(inst) {
+		if inst.Status != bridge.InstanceRunning || !o.instanceIsActive(inst) {
 			continue
 		}
 		if only != nil {

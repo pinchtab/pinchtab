@@ -12,32 +12,26 @@ import (
 	"github.com/pinchtab/pinchtab/internal/readiness"
 )
 
-func instanceIsActive(inst *InstanceInternal) bool {
+func (o *Orchestrator) instanceIsActive(inst *InstanceInternal) bool {
 	if inst == nil {
 		return false
 	}
 	if inst.cmd != nil {
-		return isProcessAlive(inst.cmd.PID())
+		return o.hooks.processAlive(inst.cmd.PID())
 	}
 	return inst.Status.IsActive()
 }
 
 const processExitPollInterval = 150 * time.Millisecond
 
-func waitForProcessExit(ctx context.Context, pid int, timeout time.Duration) bool {
+func (o *Orchestrator) waitForProcessExit(ctx context.Context, pid int, timeout time.Duration) bool {
 	if pid <= 0 {
 		return true
 	}
 	_, err := readiness.WaitUntil(ctx, timeout, processExitPollInterval, func() (struct{}, bool, error) {
-		return struct{}{}, !isProcessAlive(pid), nil
+		return struct{}{}, !o.hooks.processAlive(pid), nil
 	})
-	return err == nil || !isProcessAlive(pid)
-}
-
-var processAliveFunc = processAlive
-
-func isProcessAlive(pid int) bool {
-	return processAliveFunc(pid)
+	return err == nil || !o.hooks.processAlive(pid)
 }
 
 func isPortAvailable(port string) bool {

@@ -27,13 +27,11 @@ func (g *gatedRunner) Run(context.Context, string, []string, []string, io.Writer
 func (g *gatedRunner) InspectPort(string) PortInspection { return PortInspection{Available: true} }
 
 func TestConcurrentSameProfileLaunchRefusesTheSecondWhileTheFirstSpawns(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	t.Cleanup(func() { processAliveFunc = old })
-	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &gatedRunner{entered: make(chan struct{}, 2), release: make(chan struct{})}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	t.Cleanup(func() {
 		for _, inst := range o.List() {
 			_ = o.Stop(inst.ID)
@@ -78,13 +76,11 @@ func TestConcurrentSameProfileLaunchRefusesTheSecondWhileTheFirstSpawns(t *testi
 }
 
 func TestStopDuringLaunchSpawnIsRefusedAndLaunchPublishes(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	t.Cleanup(func() { processAliveFunc = old })
-	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &gatedRunner{entered: make(chan struct{}, 1), release: make(chan struct{})}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 
 	launched := make(chan error, 1)
 	go func() {
@@ -117,8 +113,8 @@ func TestStopDuringLaunchSpawnIsRefusedAndLaunchPublishes(t *testing.T) {
 }
 
 func TestFailedRelaunchKeepsThePreviousErrorRecord(t *testing.T) {
-	stubPortAvailability(t, func(int) bool { return true })
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true, runErr: errors.New("exec format error")})
+	o.hooks.portAvailable = func(int) bool { return true }
 
 	previousID := ids.InstanceID(ids.ProfileID("relaunch"), "relaunch")
 	previous := &InstanceInternal{Instance: bridge.Instance{ID: previousID, ProfileName: "relaunch", Status: "error", Error: "chrome crashed"}}

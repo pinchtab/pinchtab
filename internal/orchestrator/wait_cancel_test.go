@@ -57,12 +57,11 @@ func assertStopsWithinOneInterval(t *testing.T, interval time.Duration, wait fun
 }
 
 func TestWaitForProcessExitStopsOnCancellation(t *testing.T) {
-	orig := processAliveFunc
-	t.Cleanup(func() { processAliveFunc = orig })
-	processAliveFunc = func(int) bool { return true }
+	o := NewOrchestrator(t.TempDir())
+	o.hooks.processAlive = func(int) bool { return true }
 
 	assertStopsWithinOneInterval(t, processExitPollInterval, func(ctx context.Context) {
-		if waitForProcessExit(ctx, 4242, time.Minute) {
+		if o.waitForProcessExit(ctx, 4242, time.Minute) {
 			t.Error("a still-running process was reported as exited")
 		}
 	})

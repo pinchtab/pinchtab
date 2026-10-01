@@ -48,10 +48,10 @@ func (o *Orchestrator) Launch(name, port string, headless bool, extensionPaths [
 
 func (o *Orchestrator) activeInstanceConflict(name, port string) error {
 	for _, inst := range o.instances {
-		if inst.Port == port && instanceIsActive(inst) {
+		if inst.Port == port && o.instanceIsActive(inst) {
 			return fmt.Errorf("port %s already in use by instance %q", port, inst.ProfileName)
 		}
-		if inst.ProfileName == name && instanceIsActive(inst) {
+		if inst.ProfileName == name && o.instanceIsActive(inst) {
 			return fmt.Errorf("profile %q already has an active instance (%s)", name, inst.Status)
 		}
 	}

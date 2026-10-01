@@ -14,14 +14,12 @@ import (
 )
 
 func TestHandleStartByID_TargetsConfigDefault_EchoesValues(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	t.Cleanup(func() { processAliveFunc = old })
-	stubPortAvailability(t, func(int) bool { return true })
 
 	baseDir := t.TempDir()
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(baseDir, runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "cloak-1",
 		Targets: config.BrowserTargetsConfig{

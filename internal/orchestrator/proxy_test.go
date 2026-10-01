@@ -31,11 +31,9 @@ func TestFindRunningInstanceByTabID_SeesTransientTabs(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			orig := processAliveFunc
-			processAliveFunc = func(int) bool { return true }
-			defer func() { processAliveFunc = orig }()
 
 			o := NewOrchestrator(t.TempDir())
+			o.hooks.processAlive = func(int) bool { return true }
 			addInstance := func(id string, tabURL func(port string) string) {
 				var port atomic.Value
 				backend, p := startLocalHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -151,9 +149,7 @@ func TestProxyTabRequest_FallsBackToOnlyRunningInstance(t *testing.T) {
 	req.SetPathValue("id", "ABC123")
 	w := httptest.NewRecorder()
 
-	orig := processAliveFunc
-	processAliveFunc = func(pid int) bool { return true }
-	defer func() { processAliveFunc = orig }()
+	o.hooks.processAlive = func(pid int) bool { return true }
 
 	o.proxyTabRequest(w, req)
 
@@ -268,9 +264,7 @@ func TestSingleRunningInstance_MultipleInstancesReturnsNil(t *testing.T) {
 	o.instances["inst_1"] = &InstanceInternal{Instance: bridge.Instance{ID: "inst_1", Status: "running"}, cmd: &mockCmd{pid: 1, isAlive: true}}
 	o.instances["inst_2"] = &InstanceInternal{Instance: bridge.Instance{ID: "inst_2", Status: "running"}, cmd: &mockCmd{pid: 2, isAlive: true}}
 
-	orig := processAliveFunc
-	processAliveFunc = func(pid int) bool { return true }
-	defer func() { processAliveFunc = orig }()
+	o.hooks.processAlive = func(pid int) bool { return true }
 
 	if got := o.singleRunningInstance(); got != nil {
 		t.Fatalf("expected nil, got %v", got.ID)
@@ -282,9 +276,7 @@ func TestSingleRunningInstance_IgnoresStopped(t *testing.T) {
 	o.instances["inst_1"] = &InstanceInternal{Instance: bridge.Instance{ID: "inst_1", Status: "running"}, cmd: &mockCmd{pid: 1, isAlive: true}}
 	o.instances["inst_2"] = &InstanceInternal{Instance: bridge.Instance{ID: "inst_2", Status: "stopped"}}
 
-	orig := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid == 1 }
-	defer func() { processAliveFunc = orig }()
+	o.hooks.processAlive = func(pid int) bool { return pid == 1 }
 
 	got := o.singleRunningInstance()
 	if got == nil || got.ID != "inst_1" {

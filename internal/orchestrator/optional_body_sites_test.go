@@ -10,14 +10,12 @@ import (
 )
 
 func TestEveryOptionalBodyOrchestratorSiteDecodesTheSameWay(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	t.Cleanup(func() { processAliveFunc = old })
-	stubPortAvailability(t, func(int) bool { return true })
 
 	withProfile := func(t *testing.T) *Orchestrator {
 		baseDir := t.TempDir()
 		o := NewOrchestratorWithRunner(baseDir, &mockRunner{portAvail: true})
+		o.hooks.portAvailable = func(int) bool { return true }
+		o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 		pm := profiles.NewProfileManager(baseDir)
 		if err := pm.CreateWithMeta("work", profiles.ProfileMeta{}); err != nil {
 			t.Fatal(err)

@@ -29,7 +29,7 @@ func (o *Orchestrator) attachExternalInstance(name string, inst bridge.Instance,
 
 	o.mu.Lock()
 	for _, existing := range o.instances {
-		if existing.ProfileName == name && instanceIsActive(existing) {
+		if existing.ProfileName == name && o.instanceIsActive(existing) {
 			if existing.Attached && inst.AttachType == "bridge" && existing.AttachType == "bridge" {
 				if existing.authToken != "" && subtle.ConstantTimeCompare([]byte(existing.authToken), []byte(authToken)) != 1 {
 					o.mu.Unlock()
@@ -113,7 +113,7 @@ func (o *Orchestrator) AttachWithOptions(name, cdpURL string, opts AttachOptions
 
 	o.mu.Lock()
 	for _, existing := range o.instances {
-		if existing.ProfileName == name && instanceIsActive(existing) {
+		if existing.ProfileName == name && o.instanceIsActive(existing) {
 			o.mu.Unlock()
 			return nil, fmt.Errorf("instance with name %q already exists", name)
 		}
@@ -313,7 +313,7 @@ func (o *Orchestrator) hasActiveAttachedBridge(name string) bool {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	for _, existing := range o.instances {
-		if existing.ProfileName == name && instanceIsActive(existing) && existing.Attached && existing.AttachType == "bridge" {
+		if existing.ProfileName == name && o.instanceIsActive(existing) && existing.Attached && existing.AttachType == "bridge" {
 			return true
 		}
 	}

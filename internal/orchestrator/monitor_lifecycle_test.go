@@ -20,12 +20,10 @@ import (
 // becomes healthy, the probe loop would otherwise poll for the full 45s; the
 // point of shutdownCh is that the loop notices and returns.
 func TestShutdownStopsAndJoinsStartupMonitors(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	t.Cleanup(func() { processAliveFunc = old })
-	stubPortAvailability(t, func(int) bool { return true })
 
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	if _, err := o.LaunchWithOptions("monitor-lifecycle", "9071", true, LaunchOptions{}); err != nil {
 		t.Fatalf("LaunchWithOptions: %v", err)
 	}

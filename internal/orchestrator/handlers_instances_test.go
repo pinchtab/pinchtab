@@ -91,14 +91,12 @@ func TestHandleStartInstanceMissingProfileNamesTheCreateRemedy(t *testing.T) {
 }
 
 func TestHandleLaunchByNameAliasesStartSemantics(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	baseDir := t.TempDir()
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(baseDir, runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	pm := profiles.NewProfileManager(baseDir)
 	if err := pm.CreateWithMeta("work", profiles.ProfileMeta{}); err != nil {
 		t.Fatalf("CreateWithMeta: %v", err)
@@ -165,13 +163,11 @@ func TestHandleLaunchByNameRejectsExtensionPaths(t *testing.T) {
 }
 
 func TestHandleStartInstance_AppliesSecurityPolicyOverride(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	runner := &mockRunner{portAvail: true}
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		AllowedDomains: []string{"127.0.0.1", "localhost"},
 	})
@@ -248,12 +244,10 @@ func TestHandleStartInstance_RejectsInvalidSecurityPolicyOverride(t *testing.T) 
 
 func setupTargetsOrchestrator(t *testing.T) *Orchestrator {
 	t.Helper()
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	t.Cleanup(func() { processAliveFunc = old })
-	stubPortAvailability(t, func(int) bool { return true })
 
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	o.timings = fastLaunchPollTimings()
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "chrome-local",
@@ -266,12 +260,10 @@ func setupTargetsOrchestrator(t *testing.T) *Orchestrator {
 }
 
 func TestHandleStartInstance_LegacyConfigEmptyBody_NoTargetFields(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/start", strings.NewReader(``))
 	req.ContentLength = 0
@@ -329,12 +321,10 @@ func TestHandleStartInstance_TargetsConfigBadBrowser_Rejects400(t *testing.T) {
 }
 
 func TestHandleLaunchByName_LegacyConfigEmptyBody_NoTargetFields(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/launch", strings.NewReader(``))
 	req.ContentLength = 0
@@ -595,14 +585,12 @@ func TestHandleAttachBridgeUsesDefaultBrowserTarget(t *testing.T) {
 
 func setupAttachTargetsOrchestrator(t *testing.T, runner *mockRunner) *Orchestrator {
 	t.Helper()
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	t.Cleanup(func() { processAliveFunc = old })
 	if runner.newCmd == nil {
 		runner.newCmd = newBlockingMockCmdFactory(t)
 	}
 
 	o := NewOrchestratorWithRunner(t.TempDir(), runner)
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		AttachEnabled:      true,
 		AttachAllowHosts:   []string{"127.0.0.1"},
@@ -618,12 +606,10 @@ func setupAttachTargetsOrchestrator(t *testing.T, runner *mockRunner) *Orchestra
 
 func setupFallbackOrchestrator(t *testing.T) *Orchestrator {
 	t.Helper()
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	t.Cleanup(func() { processAliveFunc = old })
-	stubPortAvailability(t, func(int) bool { return true })
 
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	o.timings = fastLaunchPollTimings()
 	o.ApplyRuntimeConfig(&config.RuntimeConfig{
 		DefaultTarget: "chrome-local",
@@ -736,12 +722,10 @@ func TestHandleStartInstance_ExplicitBrowser_NeverCrossProviderFallback(t *testi
 }
 
 func TestHandleStartInstance_LegacyConfig_NoFallback(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	o.fallbackLauncher = fakeLauncherFor(nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/start", strings.NewReader(``))
@@ -852,12 +836,10 @@ func TestHandleLaunchByName_Exhaustion_502(t *testing.T) {
 // M1 regression: an explicit unknown browser on a legacy (no-targets) config
 // must 400 instead of silently launching chrome via NormalizeBrowser coercion.
 func TestHandleStartInstance_UnknownBrowser_LegacyConfig_400(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/start", strings.NewReader(`{"browser":"firefox"}`))
 	w := httptest.NewRecorder()
@@ -874,12 +856,10 @@ func TestHandleStartInstance_UnknownBrowser_LegacyConfig_400(t *testing.T) {
 
 // Known providers (any case) must still resolve on legacy configs.
 func TestHandleStartInstance_KnownBrowser_LegacyConfig_OK(t *testing.T) {
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	defer func() { processAliveFunc = old }()
-	stubPortAvailability(t, func(int) bool { return true })
 
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/start", strings.NewReader(`{"browser":"chrome"}`))
 	w := httptest.NewRecorder()

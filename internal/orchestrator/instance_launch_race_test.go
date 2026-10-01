@@ -20,16 +20,14 @@ import (
 //
 // Fails under -race before the snapshot in LaunchWithOptions; passes after.
 func TestLaunchReturnsAValueTheMonitorCannotWrite(t *testing.T) {
+	t.Parallel()
 	if !raceDetectorEnabled {
 		t.Skip("verifies nothing without the race detector; run with -race")
 	}
 
-	old := processAliveFunc
-	processAliveFunc = func(pid int) bool { return pid > 0 }
-	t.Cleanup(func() { processAliveFunc = old })
-	stubPortAvailability(t, func(int) bool { return true })
-
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
+	o.hooks.portAvailable = func(int) bool { return true }
+	o.hooks.processAlive = func(pid int) bool { return pid > 0 }
 	t.Cleanup(func() {
 		for _, inst := range o.List() {
 			_ = o.Stop(inst.ID)

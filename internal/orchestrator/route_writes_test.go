@@ -17,8 +17,9 @@ func instWithURL(id, url string) bridge.Instance {
 }
 
 func TestWrapShorthand_AgentBindingWrittenOnSuccess(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 	_, gotPath := newBackendInstance(t, o, "inst_only")
 
 	wrapped := o.WrapShorthand(func(w http.ResponseWriter, r *http.Request) {
@@ -43,8 +44,9 @@ func TestWrapShorthand_AgentBindingWrittenOnSuccess(t *testing.T) {
 }
 
 func TestWrapShorthand_SessionBindingWrittenOnTrustedSuccess(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 	_, gotPath := newBackendInstance(t, o, "inst_only")
 
 	wrapped := o.WrapShorthand(func(w http.ResponseWriter, r *http.Request) {
@@ -69,8 +71,9 @@ func TestWrapShorthand_SessionBindingWrittenOnTrustedSuccess(t *testing.T) {
 }
 
 func TestWrapShorthand_SessionBindingWrittenFromAuthenticatedContext(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 	_, gotPath := newBackendInstance(t, o, "inst_only")
 
 	wrapped := o.WrapShorthand(func(w http.ResponseWriter, r *http.Request) {
@@ -94,8 +97,9 @@ func TestWrapShorthand_SessionBindingWrittenFromAuthenticatedContext(t *testing.
 }
 
 func TestWrapShorthand_SessionBindingNotWrittenWithoutTrust(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 	newBackendInstance(t, o, "inst_only")
 
 	wrapped := o.WrapShorthand(func(w http.ResponseWriter, r *http.Request) {
@@ -113,8 +117,9 @@ func TestWrapShorthand_SessionBindingNotWrittenWithoutTrust(t *testing.T) {
 }
 
 func TestWrapShorthand_TabOwnerRouteRebindsIdentityOnSuccess(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 	newBackendInstance(t, o, "inst_a")
 	_, pathB := newBackendInstance(t, o, "inst_b")
 
@@ -145,8 +150,9 @@ func TestWrapShorthand_TabOwnerRouteRebindsIdentityOnSuccess(t *testing.T) {
 }
 
 func TestWrapShorthand_StrictRejectsCrossInstance(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 	o.SetStrictCrossInstanceTab(true)
 	newBackendInstance(t, o, "inst_a")
 	_, pathB := newBackendInstance(t, o, "inst_b")
@@ -178,8 +184,9 @@ func TestWrapShorthand_StrictRejectsCrossInstance(t *testing.T) {
 }
 
 func TestWrapShorthand_StrictAllowsSameInstance(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 	o.SetStrictCrossInstanceTab(true)
 	_, gotPath := newBackendInstance(t, o, "inst_a")
 
@@ -204,8 +211,9 @@ func TestWrapShorthand_StrictAllowsSameInstance(t *testing.T) {
 }
 
 func TestWrapShorthand_BindingNotWrittenOnFailure(t *testing.T) {
-	alwaysAlive(t)
+	t.Parallel()
 	o := NewOrchestrator(t.TempDir())
+	alwaysAlive(o)
 
 	// Backend that always fails.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
