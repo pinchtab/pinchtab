@@ -104,7 +104,7 @@ func postClickAction(t *testing.T, h *Handlers, tabID, ref, vocabToken string) (
 }
 
 func waitRefCacheCleared(h *Handlers, tabID string) bool {
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		if h.Bridge.GetRefCache(tabID) == nil {
 			return true
 		}

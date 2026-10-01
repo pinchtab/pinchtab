@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -448,9 +449,7 @@ func TestScrollDirectionAtATargetKeepsBothItsRoutingAndASuppliedZero(t *testing.
 			defer srv.Close()
 
 			args := map[string]any{"direction": "down", "pixels": float64(0)}
-			for k, v := range tc.target {
-				args[k] = v
-			}
+			maps.Copy(args, tc.target)
 			body, _ := resultJSON(t, callTool(t, "pinchtab_scroll", args, srv))["body"].(map[string]any)
 
 			if got, _ := body["kind"].(string); got != tc.wantKind {
@@ -568,13 +567,9 @@ func actionArgs(tool string, extra map[string]any) map[string]any {
 		if entry.tool != tool {
 			continue
 		}
-		for name, value := range entry.requiredArgs {
-			args[name] = value
-		}
+		maps.Copy(args, entry.requiredArgs)
 	}
-	for name, value := range extra {
-		args[name] = value
-	}
+	maps.Copy(args, extra)
 	return args
 }
 
@@ -1094,9 +1089,7 @@ func TestScrollDirectionAtAnElementStaysOnTheWheel(t *testing.T) {
 			defer srv.Close()
 
 			args := map[string]any{"direction": "up"}
-			for k, v := range tc.target {
-				args[k] = v
-			}
+			maps.Copy(args, tc.target)
 			body, _ := resultJSON(t, callTool(t, "pinchtab_scroll", args, srv))["body"].(map[string]any)
 
 			if got, _ := body["kind"].(string); got != "mouse-wheel" {
@@ -1196,7 +1189,7 @@ func TestTheAgentFacingScrollDocsStateTheOwnersMagnitudeAndDirections(t *testing
 }
 
 func lineContaining(text, marker string) (string, bool) {
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		if strings.Contains(line, marker) {
 			return line, true
 		}

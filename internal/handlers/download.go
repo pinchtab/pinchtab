@@ -83,7 +83,7 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 		IsDomainAllowed: func(rawURL string) bool {
 			return validator.isDomainAllowed(rawURL)
 		},
-		ParseContentLength: func(headers map[string]interface{}) (int64, bool) {
+		ParseContentLength: func(headers map[string]any) (int64, bool) {
 			return parseContentLengthHeaderGeneric(headers)
 		},
 	})

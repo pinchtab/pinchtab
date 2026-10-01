@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -228,13 +229,7 @@ func TestHandleSolve_PathUnknownSolver(t *testing.T) {
 func TestCloudflareSolverRegistered(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 	names := h.availableAutoSolverNames()
-	found := false
-	for _, n := range names {
-		if n == "cloudflare" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(names, "cloudflare")
 	if !found {
 		t.Errorf("cloudflare solver not registered: %v", names)
 	}

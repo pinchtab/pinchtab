@@ -84,20 +84,19 @@ func documentedClickResult(t *testing.T, doc string) map[string]any {
 	t.Helper()
 
 	const fence = "```json"
-	start := strings.Index(doc, fence)
-	if start < 0 {
+	_, block, ok := strings.Cut(doc, fence)
+	if !ok {
 		t.Fatalf("%s has no json example of a navigating click; this guard reads the contract from that block and would pass vacuously without it", clickDocPath)
 	}
-	block := doc[start+len(fence):]
-	end := strings.Index(block, "```")
-	if end < 0 {
+	block, _, ok = strings.Cut(block, "```")
+	if !ok {
 		t.Fatalf("%s has an unterminated json block", clickDocPath)
 	}
 
 	var payload struct {
 		Result map[string]any `json:"result"`
 	}
-	if err := json.Unmarshal([]byte(block[:end]), &payload); err != nil {
+	if err := json.Unmarshal([]byte(block), &payload); err != nil {
 		t.Fatalf("the json example in %s does not parse, so the contract cannot be read from it: %v", clickDocPath, err)
 	}
 	return payload.Result

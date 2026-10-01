@@ -21,7 +21,7 @@ func TestInstanceMetricsStillReportItsOwnTrafficAndLayer(t *testing.T) {
 	counted := LoggingMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		counted.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/boom", nil))
 	}
 

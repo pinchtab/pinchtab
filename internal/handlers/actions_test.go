@@ -997,7 +997,7 @@ func TestActionQueryDecodesScrollDeltasAndTheirPresence(t *testing.T) {
 // that excuses a field here is what makes the GET form refuse it, so the two cannot drift.
 // Delete an entry and this guard demands the field decode identically on both forms.
 func TestActionQueryAndBodyDecodeToTheSameRequest(t *testing.T) {
-	fields := reflect.VisibleFields(reflect.TypeOf(bridge.ActionRequest{}))
+	fields := reflect.VisibleFields(reflect.TypeFor[bridge.ActionRequest]())
 	if len(fields) == 0 {
 		t.Fatal("ActionRequest declares no fields; this parity guard would pass vacuously")
 	}
@@ -1172,7 +1172,7 @@ func TestActionQueryRefusesAMisspelledOrMiscasedParameter(t *testing.T) {
 // refusal. Recorded-undecodable keys keep their own refusal, which says where they do work.
 func TestActionQueryAcceptsEveryFieldTheRequestTypeDeclares(t *testing.T) {
 	checked := 0
-	for _, field := range reflect.VisibleFields(reflect.TypeOf(bridge.ActionRequest{})) {
+	for _, field := range reflect.VisibleFields(reflect.TypeFor[bridge.ActionRequest]()) {
 		key, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		if key == "" || key == "-" {
 			continue
@@ -1282,7 +1282,7 @@ func TestAFieldAddedToTheRecordRefusesWithNoSecondEdit(t *testing.T) {
 }
 
 func declaresActionJSONKey(key string) bool {
-	for _, field := range reflect.VisibleFields(reflect.TypeOf(bridge.ActionRequest{})) {
+	for _, field := range reflect.VisibleFields(reflect.TypeFor[bridge.ActionRequest]()) {
 		if name, _, _ := strings.Cut(field.Tag.Get("json"), ","); name == key {
 			return true
 		}

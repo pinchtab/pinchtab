@@ -496,10 +496,10 @@ func TestTruncateCharsLine_NeverSplitsTableRow(t *testing.T) {
 		t.Fatalf("result is empty; the header rows fit within 60 chars and must survive")
 	}
 	sourceLines := map[string]bool{}
-	for _, line := range strings.Split(body, "\n") {
+	for line := range strings.SplitSeq(body, "\n") {
 		sourceLines[line] = true
 	}
-	for _, line := range strings.Split(cut, "\n") {
+	for line := range strings.SplitSeq(cut, "\n") {
 		if !sourceLines[line] {
 			t.Fatalf("returned line %q is not a whole source line; a table row was split:\n%s", line, cut)
 		}
@@ -640,7 +640,7 @@ func TestWriteTextResponse_MarkdownMaxCharsCutsOnLineBoundary(t *testing.T) {
 		t.Fatalf("truncated = %v, want true", envelope["truncated"])
 	}
 	text, _ := envelope["text"].(string)
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		if !strings.Contains(body, line) {
 			t.Fatalf("returned line %q is not a whole source line", line)
 		}

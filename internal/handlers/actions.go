@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -242,7 +244,7 @@ var actionQueryKeys = actionRequestJSONKeys()
 
 func actionRequestJSONKeys() map[string]struct{} {
 	keys := make(map[string]struct{})
-	for _, field := range reflect.VisibleFields(reflect.TypeOf(bridge.ActionRequest{})) {
+	for _, field := range reflect.VisibleFields(reflect.TypeFor[bridge.ActionRequest]()) {
 		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		if name != "" && name != "-" {
 			keys[name] = struct{}{}
@@ -779,12 +781,7 @@ func (h *Handlers) actionKindKnown(kind string) bool {
 	if len(available) == 0 {
 		return true
 	}
-	for _, k := range available {
-		if k == kind {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(available, kind)
 }
 
 func (h *Handlers) writeUnknownActionKind(w http.ResponseWriter, kind string) {
@@ -1017,9 +1014,7 @@ func (h *Handlers) writeMultiStepActionResult(
 		"failed":     failed,
 		"route":      route,
 	}
-	for k, v := range extra {
-		resp[k] = v
-	}
+	maps.Copy(resp, extra)
 	httpx.JSON(w, 200, resp)
 }
 

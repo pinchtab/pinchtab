@@ -25,7 +25,7 @@ func (h *Handlers) resolveElementNodeID(ctx context.Context, tabID, sel string) 
 		// faults, unsupported selector kinds, and internal routing errors must
 		// stay 5xx so real bridge failures don't masquerade as a missing element.
 		if errors.Is(err, bridge.ErrSelectorNoMatch) {
-			return 0, fmt.Errorf("%w: %q: %v", ErrElementNotFound, sel, err)
+			return 0, fmt.Errorf("%w: %q: %w", ErrElementNotFound, sel, err)
 		}
 		return 0, err
 	}

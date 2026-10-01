@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -114,8 +115,8 @@ func TestResolveEffectiveConfig_AmbiguousBrowser(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected AmbiguousBrowserError, got nil")
 	}
-	ambErr, ok := err.(*config.AmbiguousBrowserError)
-	if !ok {
+	var ambErr *config.AmbiguousBrowserError
+	if !errors.As(err, &ambErr) {
 		t.Fatalf("expected *AmbiguousBrowserError, got %T: %v", err, err)
 	}
 	if ambErr.Browser != "cloak" {

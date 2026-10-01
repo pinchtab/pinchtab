@@ -80,8 +80,7 @@ func postSubmitRequest(t *testing.T, h *Handlers, body string) *httptest.Respons
 }
 
 func TestHandleClickSubmitTimeoutUsesFreshTabContextAndReportsDialogClose(t *testing.T) {
-	parentCtx, parentCancel := context.WithCancel(context.Background())
-	defer parentCancel()
+	parentCtx := t.Context()
 	b := newSubmitActionBridge(parentCtx)
 	b.executeActionFn = func(ctx context.Context, _ string, _ bridge.ActionRequest) (map[string]any, error) {
 		<-ctx.Done()
@@ -225,8 +224,7 @@ func TestPollClickSubmitCancellationAndUnobservableStateAreErrors(t *testing.T) 
 }
 
 func TestHandleClickSubmitPostDispatchErrorIsNotRetryable(t *testing.T) {
-	parentCtx, parentCancel := context.WithCancel(context.Background())
-	defer parentCancel()
+	parentCtx := t.Context()
 	b := newSubmitActionBridge(parentCtx)
 	b.executeActionFn = func(context.Context, string, bridge.ActionRequest) (map[string]any, error) {
 		return nil, bridge.ErrElementStale
@@ -259,8 +257,7 @@ func TestHandleClickSubmitPostDispatchErrorIsNotRetryable(t *testing.T) {
 }
 
 func TestHandleClickSubmitNativeDialogKeepsDialogBlockingContract(t *testing.T) {
-	parentCtx, parentCancel := context.WithCancel(context.Background())
-	defer parentCancel()
+	parentCtx := t.Context()
 	b := newSubmitActionBridge(parentCtx)
 	b.executeActionFn = func(ctx context.Context, _ string, _ bridge.ActionRequest) (map[string]any, error) {
 		b.GetDialogManager().SetPending("tab1", &bridge.DialogState{Type: "confirm", Message: "Continue?"})

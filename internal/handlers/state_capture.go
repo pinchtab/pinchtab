@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
 	"os"
 	"time"
@@ -21,7 +22,7 @@ type currentBrowserStateResponse struct {
 	Origins  []string                       `json:"origins"`
 	Cookies  any                            `json:"cookies"`
 	Storage  map[string]state.OriginStorage `json:"storage"`
-	Metadata map[string]interface{}         `json:"metadata,omitempty"`
+	Metadata map[string]any                 `json:"metadata,omitempty"`
 }
 
 type capturedBrowserState struct {
@@ -185,7 +186,7 @@ func (h *Handlers) restoreOriginStorage(ctx context.Context, originStorage state
 	return n, nil
 }
 
-func (h *Handlers) captureBrowserState(ctx context.Context, resolvedTabID string, extraMetadata map[string]interface{}) (*capturedBrowserState, error) {
+func (h *Handlers) captureBrowserState(ctx context.Context, resolvedTabID string, extraMetadata map[string]any) (*capturedBrowserState, error) {
 	tCtx, tCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer tCancel()
 
@@ -277,7 +278,7 @@ func (h *Handlers) captureBrowserState(ctx context.Context, resolvedTabID string
 		}
 	}
 
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"url":       storageResult.URL,
 		"title":     storageResult.Title,
 		"origin":    storageResult.Origin,
@@ -286,9 +287,7 @@ func (h *Handlers) captureBrowserState(ctx context.Context, resolvedTabID string
 	if storageResult.Error != "" {
 		metadata["storageError"] = storageResult.Error
 	}
-	for k, v := range extraMetadata {
-		metadata[k] = v
-	}
+	maps.Copy(metadata, extraMetadata)
 
 	return &capturedBrowserState{
 		tabID: resolvedTabID,

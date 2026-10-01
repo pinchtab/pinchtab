@@ -3,6 +3,7 @@ package mcp
 import (
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -95,9 +96,7 @@ func TestEveryBrowserToolForwardsInTheQuery(t *testing.T) {
 			defer srv.Close()
 
 			call := map[string]any{"browser": "cloak"}
-			for k, v := range args {
-				call[k] = v
-			}
+			maps.Copy(call, args)
 			callTool(t, tool.Name, call, srv)
 
 			if seen.path == "" {

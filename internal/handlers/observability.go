@@ -3,7 +3,6 @@ package handlers
 import (
 	"net/http"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
@@ -82,7 +81,7 @@ func FailureSnapshot(layer string) map[string]any {
 
 	return map[string]any{
 		"layer":          layer,
-		"requestsFailed": atomic.LoadUint64(&metricRequestsFailed),
+		"requestsFailed": metricRequestsFailed.Load(),
 		"recent":         events,
 	}
 }
@@ -105,18 +104,18 @@ func hasFailureDiagnostics() bool {
 	failureMu.Lock()
 	recentCount := len(recentFailures)
 	failureMu.Unlock()
-	return atomic.LoadUint64(&metricRequestsFailed) > 0 || recentCount > 0
+	return metricRequestsFailed.Load() > 0 || recentCount > 0
 }
 
 // ResetObservabilityForTests clears the process counters and failure log. It is
 // exported because the front-door chain lives in internal/server, and the
 // counters it must be proven to move are owned here.
 func ResetObservabilityForTests() {
-	atomic.StoreUint64(&metricRequestsTotal, 0)
-	atomic.StoreUint64(&metricRequestsFailed, 0)
-	atomic.StoreUint64(&metricRequestLatencyN, 0)
-	atomic.StoreUint64(&metricRateLimited, 0)
-	atomic.StoreUint64(&metricStaleRefRetries, 0)
+	metricRequestsTotal.Store(0)
+	metricRequestsFailed.Store(0)
+	metricRequestLatencyN.Store(0)
+	metricRateLimited.Store(0)
+	metricStaleRefRetries.Store(0)
 	failureMu.Lock()
 	recentFailures = nil
 	failureMu.Unlock()

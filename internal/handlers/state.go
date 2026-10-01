@@ -69,10 +69,10 @@ func (h *Handlers) stateEncryptionKey() string {
 }
 
 type stateSaveRequest struct {
-	Name     string                 `json:"name"`
-	Encrypt  bool                   `json:"encrypt"`
-	TabID    string                 `json:"tabId"`
-	Metadata map[string]interface{} `json:"metadata"`
+	Name     string         `json:"name"`
+	Encrypt  bool           `json:"encrypt"`
+	TabID    string         `json:"tabId"`
+	Metadata map[string]any `json:"metadata"`
 }
 
 // HandleStateSave captures the current browser state and writes it to disk.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -292,19 +293,11 @@ func (h *Handlers) availableAutoSolverNames() []string {
 }
 
 func (h *Handlers) isAvailableAutoSolver(name string) bool {
-	for _, n := range h.availableAutoSolverNames() {
-		if n == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(h.availableAutoSolverNames(), name)
 }
 
 func estimateAutoSolverRunTimeout(cfg coreautosolver.Config) time.Duration {
-	attempts := cfg.MaxAttempts
-	if attempts < 1 {
-		attempts = 1
-	}
+	attempts := max(cfg.MaxAttempts, 1)
 
 	timeout := time.Duration(attempts) * cfg.SolverTimeout
 	if attempts > 1 {

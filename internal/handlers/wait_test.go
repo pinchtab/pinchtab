@@ -109,10 +109,10 @@ func TestWaitRequest_TimeoutClamping(t *testing.T) {
 		wantMs  int
 	}{
 		{"default", nil, 10000},
-		{"custom", intPtr(5000), 5000},
-		{"too low", intPtr(10), 100},
-		{"too high", intPtr(60000), 30000},
-		{"max boundary", intPtr(30000), 30000},
+		{"custom", new(5000), 5000},
+		{"too low", new(10), 100},
+		{"too high", new(60000), 30000},
+		{"max boundary", new(30000), 30000},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -138,7 +138,7 @@ func TestWaitRequest_Mode(t *testing.T) {
 		{"url", waitRequest{URL: "**/dash"}, "url"},
 		{"load", waitRequest{Load: "networkidle"}, "load"},
 		{"fn", waitRequest{Fn: "true"}, "fn"},
-		{"ms", waitRequest{Ms: intPtr(100)}, "ms"},
+		{"ms", waitRequest{Ms: new(100)}, "ms"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -482,8 +482,4 @@ func TestWaitRouteRegistered(t *testing.T) {
 	if w.Code != 200 {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
-}
-
-func intPtr(v int) *int {
-	return &v
 }

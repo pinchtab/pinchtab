@@ -311,7 +311,7 @@ func TestValidateTabScopedDownloadURL(t *testing.T) {
 }
 
 func TestParseContentLengthHeader(t *testing.T) {
-	headers := map[string]interface{}{
+	headers := map[string]any{
 		"Content-Length": "12345",
 	}
 	size, ok := parseContentLengthHeader(headers)

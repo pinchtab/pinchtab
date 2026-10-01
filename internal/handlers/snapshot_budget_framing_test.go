@@ -13,7 +13,7 @@ import (
 // is exactly the case where a header is not a rounding error.
 func framingProbeNodes(count int) []bridge.A11yNode {
 	nodes := make([]bridge.A11yNode, 0, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		nodes = append(nodes, bridge.A11yNode{
 			Ref:  fmt.Sprintf("e%d", i),
 			Role: []string{"heading", "link", "button", "textbox"}[i%4],

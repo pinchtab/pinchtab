@@ -2,11 +2,10 @@ package handlers
 
 import (
 	"runtime"
-	"sync/atomic"
 )
 
 func recordStaleRefRetry() {
-	atomic.AddUint64(&metricStaleRefRetries, 1)
+	metricStaleRefRetries.Add(1)
 }
 
 func RateBucketHostCount() int {
@@ -14,9 +13,9 @@ func RateBucketHostCount() int {
 }
 
 func SnapshotMetrics() map[string]any {
-	total := atomic.LoadUint64(&metricRequestsTotal)
-	failed := atomic.LoadUint64(&metricRequestsFailed)
-	latencySum := atomic.LoadUint64(&metricRequestLatencyN)
+	total := metricRequestsTotal.Load()
+	failed := metricRequestsFailed.Load()
+	latencySum := metricRequestLatencyN.Load()
 	avgMs := 0.0
 	if total > 0 {
 		avgMs = float64(latencySum) / float64(total)
@@ -30,8 +29,8 @@ func SnapshotMetrics() map[string]any {
 		"requestsTotal":   total,
 		"requestsFailed":  failed,
 		"avgLatencyMs":    avgMs,
-		"rateLimited":     atomic.LoadUint64(&metricRateLimited),
-		"staleRefRetries": atomic.LoadUint64(&metricStaleRefRetries),
+		"rateLimited":     metricRateLimited.Load(),
+		"staleRefRetries": metricStaleRefRetries.Load(),
 		"rateBucketHosts": bucketHosts,
 		"goHeapAllocMB":   float64(memStats.HeapAlloc) / (1024 * 1024),
 		"goHeapSysMB":     float64(memStats.HeapSys) / (1024 * 1024),

@@ -40,10 +40,7 @@ func encodeGIFToFile(tmpDir, outputPath string, fps int, scale float64) (string,
 		return "", err
 	}
 
-	delay := 100 / fps
-	if delay < 1 {
-		delay = 1
-	}
+	delay := max(100/fps, 1)
 
 	outFile, err := os.OpenFile(outputPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {

@@ -24,11 +24,11 @@ import (
 )
 
 var (
-	metricRequestsTotal   uint64
-	metricRequestsFailed  uint64
-	metricRequestLatencyN uint64
-	metricRateLimited     uint64
-	metricStaleRefRetries uint64
+	metricRequestsTotal   atomic.Uint64
+	metricRequestsFailed  atomic.Uint64
+	metricRequestLatencyN atomic.Uint64
+	metricRateLimited     atomic.Uint64
+	metricStaleRefRetries atomic.Uint64
 )
 
 const (
@@ -146,11 +146,11 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		sw := &httpx.StatusWriter{ResponseWriter: w, Code: 200, StripFailureHeaders: !IsTrustedInternalProxy(r)}
 		next.ServeHTTP(sw, r)
 		ms := uint64(time.Since(start).Milliseconds())
-		atomic.AddUint64(&metricRequestsTotal, 1)
-		atomic.AddUint64(&metricRequestLatencyN, ms)
+		metricRequestsTotal.Add(1)
+		metricRequestLatencyN.Add(ms)
 		failed := requestFailed(sw)
 		if failed {
-			atomic.AddUint64(&metricRequestsFailed, 1)
+			metricRequestsFailed.Add(1)
 			recordFailureEvent(FailureEvent{
 				Time:      time.Now(),
 				RequestID: w.Header().Get(httpx.RequestIDHeader),

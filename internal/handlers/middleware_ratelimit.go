@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/authn"
@@ -42,7 +41,7 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 		host := authn.ClientIP(r)
 		if isLongLivedStreamRequest(r) {
 			if !acquireStreamConnection(host) {
-				atomic.AddUint64(&metricRateLimited, 1)
+				metricRateLimited.Add(1)
 				httpx.ErrorCode(w, 429, "stream_limit_reached", "too many concurrent streaming connections", true, map[string]any{
 					"maxConcurrent": maxConcurrentStreamRequestsPerHost,
 				})
@@ -54,7 +53,7 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 		}
 
 		if allowed, retryAfter := requestLimiter.Take(host); !allowed {
-			atomic.AddUint64(&metricRateLimited, 1)
+			metricRateLimited.Add(1)
 			w.Header().Set("Retry-After", strconv.Itoa(int((retryAfter+time.Second-1)/time.Second)))
 			httpx.ErrorCode(w, 429, "rate_limited", "too many requests", true, map[string]any{"windowSec": int(rateLimitWindow.Seconds()), "max": rateLimitMaxReq})
 			return

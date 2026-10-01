@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -194,7 +195,7 @@ func TestTheGETFormCarriesAndEnforcesTheToken(t *testing.T) {
 // happen, yields a distinct non-empty token.
 func TestEachMintedTokenIsDistinctAndNonEmpty(t *testing.T) {
 	seen := map[string]bool{}
-	for i := 0; i < 64; i++ {
+	for range 64 {
 		tok := bridge.MintVocabToken()
 		if tok == "" {
 			t.Fatal("MintVocabToken returned an empty token; an empty cache token disables the guard")
@@ -373,10 +374,8 @@ func (g packageCallGraph) pathTo(from string, targets ...string) []string {
 	seen := map[string]bool{from: true}
 	var walk func(string) []string
 	walk = func(name string) []string {
-		for _, target := range targets {
-			if name == target {
-				return []string{name}
-			}
+		if slices.Contains(targets, name) {
+			return []string{name}
 		}
 		for next := range g.refs[name] {
 			if seen[next] {

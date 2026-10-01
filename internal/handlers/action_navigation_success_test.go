@@ -35,7 +35,7 @@ func TestASuccessfulNavigatingClickIsInNoFailureField(t *testing.T) {
 	h := New(mb, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
 	handler := LoggingMiddleware(http.HandlerFunc(h.HandleAction))
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		req := httptest.NewRequest("POST", "/action", bytes.NewReader([]byte(`{"kind":"click","ref":"e1","nodeId":42,"tabId":"tab1"}`)))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()

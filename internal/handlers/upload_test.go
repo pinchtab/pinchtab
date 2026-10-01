@@ -236,7 +236,7 @@ func TestHandleUpload_RejectsTooManyFiles(t *testing.T) {
 
 	var body bytes.Buffer
 	body.WriteString(`{"files":[`)
-	for i := 0; i < config.DefaultUploadMaxFiles+1; i++ {
+	for i := range config.DefaultUploadMaxFiles + 1 {
 		if i > 0 {
 			body.WriteByte(',')
 		}

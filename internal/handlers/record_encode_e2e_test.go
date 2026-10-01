@@ -18,11 +18,11 @@ import (
 // dir, matching the names ffmpeg expects (see encodeFFmpegToFile).
 func writeTestFrames(t *testing.T, dir string, n, w, h int) {
 	t.Helper()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		img := image.NewRGBA(image.Rect(0, 0, w, h))
 		shade := uint8((i * 40) % 256)
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
+		for y := range h {
+			for x := range w {
 				img.Set(x, y, color.RGBA{R: shade, G: uint8(x % 256), B: uint8(y % 256), A: 255})
 			}
 		}

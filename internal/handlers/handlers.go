@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"strconv"
 	"time"
@@ -182,9 +183,7 @@ func (h *Handlers) annotateBrowserCrash(message string, details map[string]any) 
 // that says what the caller should do about it.
 func crashAnnotation(message string, details map[string]any, crash bridge.CrashEvent, remedy string) (string, map[string]any) {
 	annotated := make(map[string]any, len(details)+3)
-	for k, v := range details {
-		annotated[k] = v
-	}
+	maps.Copy(annotated, details)
 	annotated["browserCrashed"] = true
 	annotated["browserCrashReason"] = crash.Reason
 	annotated["hint"] = fmt.Sprintf("the browser crashed (%s at %s) — %s", crash.Reason, crash.Time.Format(time.RFC3339), remedy)
@@ -269,10 +268,7 @@ func (h *Handlers) writeBridgeUnavailable(w http.ResponseWriter, err error) bool
 	if !draining {
 		retryAfter = time.Second
 	}
-	seconds := int((retryAfter + time.Second - 1) / time.Second)
-	if seconds < 1 {
-		seconds = 1
-	}
+	seconds := max(int((retryAfter+time.Second-1)/time.Second), 1)
 	w.Header().Set("Retry-After", strconv.Itoa(seconds))
 	httpx.ErrorCode(w, http.StatusServiceUnavailable, "browser_draining", err.Error(), true, map[string]any{"retryAfterSeconds": seconds})
 	return true

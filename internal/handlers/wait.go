@@ -150,13 +150,7 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 		if _, tabID, err := h.tabContext(r, req.TabID); err == nil && h.refuseIfDialogBlocked(w, tabID) {
 			return
 		}
-		ms := *req.Ms
-		if ms < 0 {
-			ms = 0
-		}
-		if ms > maxFixedWaitMS {
-			ms = maxFixedWaitMS
-		}
+		ms := min(max(*req.Ms, 0), maxFixedWaitMS)
 		select {
 		case <-time.After(time.Duration(ms) * time.Millisecond):
 			httpx.JSON(w, 200, waitResponse{

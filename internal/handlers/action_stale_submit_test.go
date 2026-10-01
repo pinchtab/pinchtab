@@ -374,14 +374,14 @@ type navigatingBridge struct {
 	refCache     *bridge.RefCache
 	actionErr    error
 	actionResult map[string]any
-	dispatches   int64
+	dispatches   atomic.Int64
 }
 
 func (m *navigatingBridge) GetRefCache(string) *bridge.RefCache  { return m.refCache }
 func (m *navigatingBridge) SetRefCache(string, *bridge.RefCache) {}
 
 func (m *navigatingBridge) ExecuteAction(context.Context, string, bridge.ActionRequest) (map[string]any, error) {
-	atomic.AddInt64(&m.dispatches, 1)
+	m.dispatches.Add(1)
 	return m.actionResult, m.actionErr
 }
 
@@ -431,7 +431,7 @@ func TestAnActionThatNavigatedIsNotDispatchedTwice(t *testing.T) {
 			if result[bridge.ResultLandedURL] != "https://b.example/" {
 				t.Errorf("the landed url did not reach the caller: %v", result)
 			}
-			if got := atomic.LoadInt64(&mb.dispatches); got != 1 {
+			if got := mb.dispatches.Load(); got != 1 {
 				t.Errorf("%d dispatches for one request; re-matching a ref against the page the caller's own action navigated to is a second, unrequested action on the user's browser", got)
 			}
 			if rr != nil {
@@ -459,7 +459,7 @@ func TestANavigationClassifiedFailureThatNeverDispatchedStillHeals(t *testing.T)
 			if err == nil {
 				t.Fatalf("%s reported success", name)
 			}
-			if got := atomic.LoadInt64(&mb.dispatches); got < 2 {
+			if got := mb.dispatches.Load(); got < 2 {
 				t.Errorf("%d dispatch(es) for %s; recovery must still heal a failure whose action never took effect", got, name)
 			}
 		})

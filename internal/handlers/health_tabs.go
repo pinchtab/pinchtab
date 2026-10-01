@@ -47,10 +47,7 @@ func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if draining, retryAfter := h.bridgeRestartStatus(); draining {
-		seconds := int((retryAfter + time.Second - 1) / time.Second)
-		if seconds < 1 {
-			seconds = 1
-		}
+		seconds := max(int((retryAfter+time.Second-1)/time.Second), 1)
 		w.Header().Set("Retry-After", fmt.Sprintf("%d", seconds))
 		httpx.JSONError(w, http.StatusServiceUnavailable, "browser_draining",
 			fmt.Sprintf("browser is restarting; retry after %ds", seconds),
@@ -170,10 +167,7 @@ func (h *Handlers) HandleTabs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if draining, retryAfter := h.bridgeRestartStatus(); draining {
-		seconds := int((retryAfter + time.Second - 1) / time.Second)
-		if seconds < 1 {
-			seconds = 1
-		}
+		seconds := max(int((retryAfter+time.Second-1)/time.Second), 1)
 		w.Header().Set("Retry-After", fmt.Sprintf("%d", seconds))
 		httpx.ErrorCode(w, http.StatusServiceUnavailable, "browser_draining", bridge.ErrBrowserDraining.Error(), true, map[string]any{"retryAfterSeconds": seconds})
 		return

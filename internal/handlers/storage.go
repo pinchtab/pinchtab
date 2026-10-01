@@ -63,7 +63,7 @@ func (h *Handlers) runStorageOp(w http.ResponseWriter, r *http.Request, tabID, s
 		return
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal([]byte(resultJSON), &result); err != nil {
 		httpx.Error(w, 500, fmt.Errorf("parse storage %s result: %w", opLabel, err))
 		return

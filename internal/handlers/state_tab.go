@@ -18,7 +18,7 @@ type tabStateResponse struct {
 	URL           string       `json:"url,omitempty"`
 	Title         string       `json:"title,omitempty"`
 	DialogPresent bool         `json:"dialogPresent"`
-	Dialog        interface{}  `json:"dialog,omitempty"`
+	Dialog        any          `json:"dialog,omitempty"`
 	Load          tabLoadState `json:"load"`
 	Actionability string       `json:"actionability"`
 }

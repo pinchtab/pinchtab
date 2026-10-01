@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -404,12 +405,7 @@ func addTo(m map[string]map[string]bool, outer, inner string) {
 }
 
 func contains(haystack []string, needle string) bool {
-	for _, item := range haystack {
-		if item == needle {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(haystack, needle)
 }
 
 func intersect(a, b []string) []string {
@@ -448,9 +444,8 @@ func findFuncDecl(t *testing.T, pkg *srccensus.Package, name string) *ast.FuncDe
 
 func actionRequestFieldsByJSONKey() map[string]string {
 	out := map[string]string{}
-	typ := reflect.TypeOf(bridge.ActionRequest{})
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
+	typ := reflect.TypeFor[bridge.ActionRequest]()
+	for field := range typ.Fields() {
 		tag := strings.Split(field.Tag.Get("json"), ",")[0]
 		if tag == "" || tag == "-" {
 			continue
@@ -618,10 +613,8 @@ func readByAnyDispatchableKind(readsByKind map[string]map[string]bool, kinds []s
 
 func anyKindPosts(keysByKind map[string]payloadCase, key string) bool {
 	for _, entry := range keysByKind {
-		for _, posted := range entry.keys {
-			if posted == key {
-				return true
-			}
+		if slices.Contains(entry.keys, key) {
+			return true
 		}
 	}
 	return false

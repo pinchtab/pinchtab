@@ -1023,7 +1023,7 @@ func TestRateLimitMiddleware_RateLimitsHealthAndMetrics(t *testing.T) {
 	}))
 	for _, p := range []string{"/health", "/metrics"} {
 		resetRateLimitStateForTests()
-		for i := 0; i < rateLimitMaxReq; i++ {
+		for i := range rateLimitMaxReq {
 			req := httptest.NewRequest("GET", p, nil)
 			req.RemoteAddr = "127.0.0.1:12345"
 			w := httptest.NewRecorder()
@@ -1083,7 +1083,7 @@ func TestRateLimitMiddleware_LimitsConcurrentStreamingEndpointsPerHost(t *testin
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	for i := 0; i < maxConcurrentStreamRequestsPerHost; i++ {
+	for range maxConcurrentStreamRequestsPerHost {
 		go func() {
 			req := httptest.NewRequest(http.MethodGet, "/api/events", nil)
 			req.RemoteAddr = "127.0.0.1:12345"
@@ -1093,7 +1093,7 @@ func TestRateLimitMiddleware_LimitsConcurrentStreamingEndpointsPerHost(t *testin
 		}()
 	}
 
-	for i := 0; i < maxConcurrentStreamRequestsPerHost; i++ {
+	for i := range maxConcurrentStreamRequestsPerHost {
 		select {
 		case <-entered:
 		case <-time.After(2 * time.Second):
@@ -1111,7 +1111,7 @@ func TestRateLimitMiddleware_LimitsConcurrentStreamingEndpointsPerHost(t *testin
 
 	close(release)
 
-	for i := 0; i < maxConcurrentStreamRequestsPerHost; i++ {
+	for i := range maxConcurrentStreamRequestsPerHost {
 		select {
 		case code := <-results:
 			if code != http.StatusOK {

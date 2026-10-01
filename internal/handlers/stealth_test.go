@@ -315,7 +315,7 @@ func TestGenerateFingerprintRandomStaysWindowsOrMac(t *testing.T) {
 	h := Handlers{Config: &config.RuntimeConfig{BrowserVersion: "144.0.7559.133"}}
 	linuxUA := stealth.ChromeUserAgent(stealth.PlatformLinux, stealth.ReducedBrowserVersion("144.0.7559.133"))
 
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		fp, err := h.generateFingerprint(fingerprintRequest{OS: "random"})
 		if err != nil {
 			t.Fatalf("generateFingerprint: %v", err)
@@ -456,7 +456,7 @@ func TestRandomOSNeverReachesTheRefusalPath(t *testing.T) {
 	h := Handlers{Config: &config.RuntimeConfig{BrowserVersion: "144.0.7559.133"}}
 
 	seen := map[string]bool{}
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		fp, err := h.generateFingerprint(fingerprintRequest{OS: "random"})
 		if err != nil {
 			t.Fatalf("os=random was refused: %v", err)
@@ -493,7 +493,7 @@ func TestRandomOSResolvesToAnOSThatHoldsTheRequestedBrowser(t *testing.T) {
 		{browser: "edge", wantUA: stealth.EdgeUserAgent(windowsChrome, reduced), wantPlatform: "Win32"},
 	} {
 		t.Run(tc.browser, func(t *testing.T) {
-			for i := 0; i < 200; i++ {
+			for i := range 200 {
 				fp, err := h.generateFingerprint(fingerprintRequest{OS: "random", Browser: tc.browser})
 				if err != nil {
 					t.Fatalf("draw %d: os=random browser=%s was refused: %v", i, tc.browser, err)
@@ -517,7 +517,7 @@ func TestRandomOSResolvesToAnOSThatHoldsTheRequestedBrowser(t *testing.T) {
 func TestRandomOSStillRefusesABrowserNoRowHolds(t *testing.T) {
 	h := Handlers{Config: &config.RuntimeConfig{BrowserVersion: "144.0.7559.133"}}
 
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		fp, err := h.generateFingerprint(fingerprintRequest{OS: "random", Browser: "firefox"})
 		if err == nil {
 			t.Fatalf("draw %d: os=random browser=firefox was accepted with userAgent %q", i, fp.UserAgent)
@@ -549,7 +549,7 @@ func TestRandomOSKeepsBothArmsForABrowserBothRowsHold(t *testing.T) {
 	h := Handlers{Config: &config.RuntimeConfig{BrowserVersion: "144.0.7559.133"}}
 
 	seen := map[string]int{}
-	for i := 0; i < 400; i++ {
+	for range 400 {
 		fp, err := h.generateFingerprint(fingerprintRequest{OS: "random", Browser: "chrome"})
 		if err != nil {
 			t.Fatalf("os=random browser=chrome was refused: %v", err)
@@ -669,7 +669,7 @@ func TestRandomOSResolvesABrowserOnlyAnUnweightedRowHolds(t *testing.T) {
 	h := Handlers{Config: &config.RuntimeConfig{BrowserVersion: "144.0.7559.133"}}
 	matrix := probeMatrix(t, &h, "firefox", "linux")
 
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		picked, ok := resolveRandomFingerprintOS(matrix, "firefox")
 		if !ok {
 			t.Fatalf("draw %d: os=random refused firefox although linux/firefox exists; the refusal would list a pair the caller cannot reach", i)
@@ -689,7 +689,7 @@ func TestRandomOSFallbackPicksUniformlyAmongUnweightedRows(t *testing.T) {
 
 	const draws = 1200
 	seen := map[string]int{}
-	for i := 0; i < draws; i++ {
+	for i := range draws {
 		picked, ok := resolveRandomFingerprintOS(matrix, "firefox")
 		if !ok {
 			t.Fatalf("draw %d: firefox refused although two rows hold it", i)
@@ -717,7 +717,7 @@ func TestRandomOSIgnoresUnweightedRowsWhenAWeightedRowHoldsTheBrowser(t *testing
 	matrix := h.fingerprintMatrix()
 	matrix["linux"]["edge"] = fingerprint{UserAgent: "probe-linux-edge"}
 
-	for i := 0; i < 400; i++ {
+	for i := range 400 {
 		for _, browser := range []string{"chrome", "edge"} {
 			picked, ok := resolveRandomFingerprintOS(matrix, browser)
 			if !ok {
@@ -739,7 +739,7 @@ func TestFingerprintOSCandidatesAreStableAndEquallyWeightedInTheFallback(t *test
 	matrix := probeMatrix(t, &h, "firefox", "linux", "freebsd", "openbsd")
 	want := []string{"freebsd", "linux", "openbsd"}
 
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		candidates := fingerprintOSCandidates(matrix, "firefox")
 		got := make([]string, 0, len(candidates))
 		for _, candidate := range candidates {
@@ -788,7 +788,7 @@ func TestEveryBrowserTheMatrixHoldsIsReachableThroughRandom(t *testing.T) {
 
 	for browser := range browsers {
 		t.Run(browser, func(t *testing.T) {
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				if _, ok := resolveRandomFingerprintOS(matrix, browser); !ok {
 					t.Fatalf("draw %d: os=random refused %q although %v hold it; the refusal would list those pairs as available while refusing the browser in them",
 						i, browser, holders[browser])

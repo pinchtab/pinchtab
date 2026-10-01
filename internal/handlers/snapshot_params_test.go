@@ -483,7 +483,7 @@ func ignoredFromEnvelope(t *testing.T, body string, unmarshal func([]byte, any) 
 
 func ignoredFromComment(t *testing.T, body string) []string {
 	t.Helper()
-	for _, line := range strings.Split(body, "\n") {
+	for line := range strings.SplitSeq(body, "\n") {
 		if rest, found := strings.CutPrefix(line, "# ignored params: "); found {
 			return strings.Split(rest, ", ")
 		}

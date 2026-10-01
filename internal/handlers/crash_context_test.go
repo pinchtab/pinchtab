@@ -138,8 +138,7 @@ func TestCrashFromAPreviousGenerationDoesNotAnnotate(t *testing.T) {
 	b, _ := newCrashContextBridge(t)
 	h := crashHandlers(t, b)
 
-	deadCtx, cancelDead := context.WithCancel(context.Background())
-	defer cancelDead()
+	deadCtx := t.Context()
 	bridge.RecordCrashForContextTests(deadCtx, bridge.CrashEvent{Reason: "killed"})
 
 	body := decodeErrorBody(t, screenshotResponse(t, h))
@@ -163,8 +162,7 @@ func TestRestartedBrowserStopsReportingTheOldCrash(t *testing.T) {
 		t.Fatalf("error = %q, want the crash reported while it is current", message)
 	}
 
-	restarted, cancelRestarted := context.WithCancel(context.Background())
-	defer cancelRestarted()
+	restarted := t.Context()
 	b.browserCtx = restarted
 
 	recovered := decodeErrorBody(t, screenshotResponse(t, h))

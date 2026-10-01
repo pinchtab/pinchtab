@@ -105,8 +105,7 @@ func captureNothing(context.Context, int) ([]byte, error) {
 
 func TestRecorderStart_AlreadyRecording(t *testing.T) {
 	rec := &recorder{captureFrame: captureNothing}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := rec.start(ctx, "tab1", "", "gif", 5, 80, 1.0); err != nil {
 		t.Fatalf("first start: %v", err)
@@ -164,8 +163,7 @@ func TestHandleRecordStatus_Inactive(t *testing.T) {
 
 func TestRecorderStatus_Active(t *testing.T) {
 	rec := &recorder{captureFrame: captureNothing}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := rec.start(ctx, "tab1", "", "gif", 5, 80, 1.0); err != nil {
 		t.Fatalf("start: %v", err)
@@ -218,8 +216,7 @@ func TestHandleRecordStart_ClampsInputs(t *testing.T) {
 
 func TestRecorderStop_OwnerMismatch(t *testing.T) {
 	rec := &recorder{captureFrame: captureNothing}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := rec.start(ctx, "tab1", "agent-1", "gif", 5, 80, 1.0); err != nil {
 		t.Fatal(err)
@@ -235,8 +232,7 @@ func TestRecorderStop_OwnerMismatch(t *testing.T) {
 
 func TestRecorderStop_OwnerMatch(t *testing.T) {
 	rec := &recorder{captureFrame: captureNothing}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := rec.start(ctx, "tab1", "agent-1", "gif", 5, 80, 1.0); err != nil {
 		t.Fatal(err)
@@ -259,8 +255,7 @@ func TestRecorderStopImmediatelyAfterStartWaitsForTheFirstFrame(t *testing.T) {
 	rec := &recorder{captureFrame: func(context.Context, int) ([]byte, error) {
 		return []byte("jpeg-bytes"), nil
 	}}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := rec.start(ctx, "tab1", "", "gif", 5, 80, 1.0); err != nil {
 		t.Fatal(err)
@@ -287,8 +282,7 @@ func TestRecorderStopDoesNotWaitOnceAFrameExists(t *testing.T) {
 		}
 		return []byte("jpeg-bytes"), nil
 	}}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// 1 fps, so the wait this test must not observe would be a full second.
 	if err := rec.start(ctx, "tab1", "", "gif", 1, 80, 1.0); err != nil {
@@ -334,8 +328,7 @@ func TestNoFramesRefusalNamesTheElapsedTimeTheRateAndTheFrameCost(t *testing.T) 
 	rec := &recorder{captureFrame: func(context.Context, int) ([]byte, error) {
 		return nil, fmt.Errorf("this capture never succeeds")
 	}}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	if err := rec.start(ctx, "tab1", "", "gif", 5, 80, 1.0); err != nil {
 		t.Fatal(err)
 	}
@@ -375,8 +368,7 @@ func TestRecorderStop_CountsFrameCapturedAfterStopSignal(t *testing.T) {
 		return []byte("jpeg-bytes"), nil
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// High fps so a ticker tick fires (starting the gated capture) almost at once.
 	if err := rec.start(ctx, "tab1", "", "gif", 1000, 80, 1.0); err != nil {
@@ -421,8 +413,7 @@ func TestRecorderStop_CountsFrameCapturedAfterStopSignal(t *testing.T) {
 
 func TestRecorderStop_NoOwnerCanStopAnonymous(t *testing.T) {
 	rec := &recorder{captureFrame: captureNothing}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := rec.start(ctx, "tab1", "", "gif", 5, 80, 1.0); err != nil {
 		t.Fatal(err)
@@ -536,8 +527,7 @@ func TestRecorderStatus_Aborted(t *testing.T) {
 
 func TestRecorderStatus_IdleAfterStop(t *testing.T) {
 	rec := &recorder{captureFrame: captureNothing}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := rec.start(ctx, "tab1", "", "gif", 5, 80, 1.0); err != nil {
 		t.Fatalf("start: %v", err)

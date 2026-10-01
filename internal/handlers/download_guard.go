@@ -182,7 +182,7 @@ func downloadTooLargeError(size int64, maxBytes int) error {
 	return fmt.Errorf("%w: received %d bytes, max %d", errDownloadTooLarge, size, maxBytes)
 }
 
-func parseContentLengthHeader(headers map[string]interface{}) (int64, bool) {
+func parseContentLengthHeader(headers map[string]any) (int64, bool) {
 	for key, raw := range headers {
 		if !strings.EqualFold(strings.TrimSpace(key), "Content-Length") {
 			continue
@@ -201,7 +201,7 @@ func parseContentLengthHeader(headers map[string]interface{}) (int64, bool) {
 }
 
 // parseContentLengthHeaderGeneric is a type-compatible alias for bridge callbacks.
-func parseContentLengthHeaderGeneric(headers map[string]interface{}) (int64, bool) {
+func parseContentLengthHeaderGeneric(headers map[string]any) (int64, bool) {
 	return parseContentLengthHeader(headers)
 }
 

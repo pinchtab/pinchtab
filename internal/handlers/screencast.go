@@ -45,10 +45,7 @@ func (h *Handlers) HandleScreencast(w http.ResponseWriter, r *http.Request) {
 	// requested fps and makes interactive control feel unresponsive (issue: dashboard
 	// Live tab too laggy to type into).
 	everyNth := queryParamInt(r, "everyNthFrame", 1)
-	fps := queryParamInt(r, "fps", 1)
-	if fps > 30 {
-		fps = 30
-	}
+	fps := min(queryParamInt(r, "fps", 1), 30)
 
 	conn, _, _, err := ws.UpgradeHTTP(r, w)
 	if err != nil {

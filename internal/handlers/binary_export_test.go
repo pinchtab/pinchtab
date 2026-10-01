@@ -58,10 +58,10 @@ func TestConcurrentSavesProduceDistinctFiles(t *testing.T) {
 	var start sync.WaitGroup
 	var done sync.WaitGroup
 	start.Add(1)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		// Distinct lengths so a file holding the wrong capture is detectable by size
 		// alone, which is the mismatch the card measured.
-		contents[i] = []byte(fmt.Sprintf("capture-%d%s", i, string(make([]byte, i))))
+		contents[i] = fmt.Appendf(nil, "capture-%d%s", i, string(make([]byte, i)))
 		done.Add(1)
 		go func(i int) {
 			defer done.Done()
@@ -73,7 +73,7 @@ func TestConcurrentSavesProduceDistinctFiles(t *testing.T) {
 	done.Wait()
 
 	seen := map[string]int{}
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if errs[i] != nil {
 			t.Fatalf("save %d: %v", i, errs[i])
 		}

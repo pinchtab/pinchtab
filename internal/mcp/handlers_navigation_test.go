@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -963,9 +964,7 @@ func TestSnapAndBrowserTogetherRouteBothRequestsToTheNamedInstance(t *testing.T)
 			srv, seen := historyRecorder(t)
 
 			args := map[string]any{"browser": "cloak", "snap": true}
-			for k, v := range tc.args {
-				args[k] = v
-			}
+			maps.Copy(args, tc.args)
 			result := callTool(t, tc.tool, args, srv)
 			if result.IsError {
 				t.Fatalf("%s failed: %s", tc.tool, resultText(t, result))

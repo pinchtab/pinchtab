@@ -335,7 +335,7 @@ func TestCurrentTabStore_EvictsInTouchOrderWithoutSleeping(t *testing.T) {
 	}
 
 	// Exactly the last `capacity` writes survive; everything older is gone.
-	for i := 0; i < total-capacity; i++ {
+	for i := range total - capacity {
 		if _, ok := store.Get(scopes[i]); ok {
 			t.Fatalf("scope %d should have been evicted; only the newest %d survive", i, capacity)
 		}

@@ -202,7 +202,7 @@ func TestNonStreamRequestSpawnsNoStreamGoroutine(t *testing.T) {
 	handler.ServeHTTP(httptest.NewRecorder(), newReq())
 	runtime.Gosched()
 	baseline := runtime.NumGoroutine()
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		handler.ServeHTTP(httptest.NewRecorder(), newReq())
 	}
 

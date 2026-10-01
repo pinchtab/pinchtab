@@ -152,7 +152,7 @@ func TestInspectScanCorpus_SelectsOnlyDisclosingKinds(t *testing.T) {
 func TestStyleValuesCorpusIsDeterministic(t *testing.T) {
 	styles := map[string]any{"z-index": "10", "color": "red", "content": `"x"`, "display": "none"}
 	first := styleValuesCorpus(styles)
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		if got := styleValuesCorpus(styles); got != first {
 			t.Fatalf("corpus varies between calls:\n%q\n%q", first, got)
 		}

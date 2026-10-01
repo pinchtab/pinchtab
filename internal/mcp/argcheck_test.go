@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/token"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -478,9 +479,7 @@ func TestNoActionToolIsSentATypedArgumentItDoesNotDeclare(t *testing.T) {
 	// so the probe value is one the accessor would actually read.
 	typeOf := map[string]string{}
 	for _, tc := range actionToolTargets {
-		for name, kind := range schemaArgTypesOnce()[tc.tool] {
-			typeOf[name] = kind
-		}
+		maps.Copy(typeOf, schemaArgTypesOnce()[tc.tool])
 	}
 
 	const sentinel = 424242.0
@@ -697,9 +696,7 @@ func TestWaitSendsTimeoutMsAndItsDeprecatedAliasAsTheWaitBudget(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv, _ := upstreamRecorder(t)
 			args := map[string]any{"for": "selector", "value": "#nope"}
-			for name, value := range tc.args {
-				args[name] = value
-			}
+			maps.Copy(args, tc.args)
 			result := callTool(t, "pinchtab_wait", args, srv)
 			if result.IsError {
 				t.Fatalf("%v was refused: %s", tc.args, resultText(t, result))

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -95,13 +96,7 @@ func TestEndpointSecurityState_IncludesStorageMutations(t *testing.T) {
 
 	want := []string{"GET /storage", "POST /storage", "DELETE /storage"}
 	for _, p := range want {
-		found := false
-		for _, have := range state.Paths {
-			if have == p {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(state.Paths, p)
 		if !found {
 			t.Fatalf("expected %q in stateExport paths, got %v", p, state.Paths)
 		}
