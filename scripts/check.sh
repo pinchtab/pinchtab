@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # check.sh — Local pre-push checks matching GitHub Actions CI
-# Runs: format → vet → build → lint
+# Runs: format → vet → build → lint → deadcode
 
 cd "$(dirname "$0")/.."
 
@@ -90,6 +90,14 @@ if ! $LINT_CMD run; then
   exit 1
 fi
 ok "golangci-lint"
+
+section "Deadcode"
+
+if ! bash scripts/ci/deadcode.sh; then
+  fail "deadcode"
+  exit 1
+fi
+ok "deadcode"
 
 # ── Summary ──────────────────────────────────────────────────────────
 
