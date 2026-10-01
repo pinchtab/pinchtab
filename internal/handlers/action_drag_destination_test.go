@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -100,10 +101,13 @@ func newDragRecoveryFixture(t *testing.T) (context.Context, *bridge.Bridge, *Han
 	t.Helper()
 	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
 	t.Cleanup(cancelTimeout)
-	if err := chromedp.Run(ctx, chromedp.Navigate("data:text/html;base64,"+base64.StdEncoding.EncodeToString([]byte(dragRecoveryFixtureHTML)))); err != nil {
+	if err := chromedp.Run(ctx,
+		chromedp.ActionFunc(func(ctx context.Context) error { return page.BringToFront().Do(ctx) }),
+		chromedp.Navigate("data:text/html;base64,"+base64.StdEncoding.EncodeToString([]byte(dragRecoveryFixtureHTML))),
+	); err != nil {
 		t.Fatal(err)
 	}
-	cfg := &config.RuntimeConfig{ActionTimeout: 45 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
+	cfg := &config.RuntimeConfig{ActionTimeout: 30 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
 	b := browserBridge(ctx, cfg)
 	b.RegisterTab("tab-drag", ctx)
 	h := New(b, cfg, nil, nil, nil)
