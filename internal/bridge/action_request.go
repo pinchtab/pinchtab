@@ -3,11 +3,17 @@ package bridge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 
+	"github.com/chromedp/cdproto"
+	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/chromedp"
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 )
 
@@ -341,9 +347,18 @@ func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionReque
 		beforeURL = u
 	}
 
+	nav := watchMainFrameNavigation(ctx)
+	defer nav.stop()
+
 	res, err := fn(ctx, req)
 	if err != nil {
-		return nil, classifyActionError(err)
+		// The action's own navigation can destroy the context its last call ran in; it still landed.
+		if !executionContextGone(err) || !nav.awaitCommit(ctx) {
+			return nil, classifyActionError(err)
+		}
+		res = actionResultFor(kind)
+	} else {
+		nav.awaitCommit(ctx)
 	}
 
 	if beforeURL != "" {
@@ -378,6 +393,107 @@ func withNavigationOutcome(res map[string]any, before, after string) map[string]
 	res[ResultPreviousURL] = before
 	res[ResultRefsStale] = true
 	return res
+}
+
+// A starved browser starts a renderer-requested navigation late, so a URL read
+// straight after the dispatch is answered by the old document.
+const navigationCommitWait = 2 * time.Second
+
+type navigationWatch struct {
+	stop      func()
+	started   chan struct{}
+	settled   chan struct{}
+	committed chan struct{}
+	startOnce sync.Once
+	settle    sync.Once
+	commit    sync.Once
+}
+
+func watchMainFrameNavigation(ctx context.Context) *navigationWatch {
+	w := &navigationWatch{
+		stop:      func() {},
+		started:   make(chan struct{}),
+		settled:   make(chan struct{}),
+		committed: make(chan struct{}),
+	}
+	c := chromedp.FromContext(ctx)
+	if c == nil || c.Target == nil {
+		return w
+	}
+	mainFrame := string(c.Target.TargetID)
+	listenCtx, cancel := context.WithCancel(ctx)
+	w.stop = cancel
+	chromedp.ListenTarget(listenCtx, func(ev any) {
+		switch ev := ev.(type) {
+		case *page.EventFrameRequestedNavigation:
+			if string(ev.FrameID) == mainFrame && ev.Disposition == page.ClientNavigationDispositionCurrentTab {
+				w.startOnce.Do(func() { close(w.started) })
+			}
+		case *page.EventFrameStartedNavigating:
+			if string(ev.FrameID) == mainFrame && crossDocumentNavigation(ev.NavigationType) {
+				w.startOnce.Do(func() { close(w.started) })
+			}
+		case *page.EventFrameStoppedLoading:
+			if string(ev.FrameID) == mainFrame {
+				w.settle.Do(func() { close(w.settled) })
+			}
+		case *page.EventFrameNavigated:
+			if ev.Frame != nil && ev.Frame.ParentID == "" {
+				w.startOnce.Do(func() { close(w.started) })
+				w.commit.Do(func() { close(w.committed) })
+			}
+		}
+	})
+	return w
+}
+
+func crossDocumentNavigation(kind page.FrameStartedNavigatingNavigationType) bool {
+	return kind != page.FrameStartedNavigatingNavigationTypeSameDocument &&
+		kind != page.FrameStartedNavigatingNavigationTypeHistorySameDocument
+}
+
+// A navigation that never commits (a 204, a download) ends the wait when loading stops.
+func (w *navigationWatch) awaitCommit(ctx context.Context) bool {
+	select {
+	case <-w.committed:
+		return true
+	case <-w.started:
+	default:
+		return false
+	}
+	timer := time.NewTimer(navigationCommitWait)
+	defer timer.Stop()
+	select {
+	case <-w.committed:
+		return true
+	case <-w.settled:
+	case <-timer.C:
+	case <-ctx.Done():
+	}
+	select {
+	case <-w.committed:
+		return true
+	default:
+		return false
+	}
+}
+
+func executionContextGone(err error) bool {
+	var protocolErr *cdproto.Error
+	return errors.As(err, &protocolErr) && protocolErr.Code == -32000 &&
+		(protocolErr.Message == "Cannot find context with specified id" ||
+			protocolErr.Message == "Execution context was destroyed.")
+}
+
+func actionResultFor(kind string) map[string]any {
+	switch kind {
+	case ActionClick:
+		return map[string]any{"clicked": true}
+	case ActionDoubleClick:
+		return map[string]any{"doubleclicked": true}
+	default:
+		return map[string]any{}
+	}
 }
 
 func (b *Bridge) AvailableActions() []string {

@@ -6,9 +6,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -17,6 +20,7 @@ import (
 
 const clickNavFirstPage = `<!doctype html><html><head><title>First</title></head><body>
 <a id="go" href="/second">go to second</a>
+<a id="slow" href="/slow-second">go slowly to second</a>
 </body></html>`
 
 const clickNavSecondPage = `<!doctype html><html><head><title>Second</title></head><body>
@@ -28,6 +32,11 @@ func clickNavHandlers(t *testing.T) (*Handlers, string) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/second", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(clickNavSecondPage))
+	})
+	mux.HandleFunc("/slow-second", func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(500 * time.Millisecond)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(clickNavSecondPage))
 	})
@@ -140,4 +149,84 @@ func TestAClickInducedNavigationInvalidatesTheRefCache(t *testing.T) {
 	if tokenW.Code != http.StatusNotFound || tokenBody["code"] != "ref_not_found" {
 		t.Fatalf("token-echoing re-click: status=%d code=%v, want 404 ref_not_found: %s", tokenW.Code, tokenBody["code"], tokenW.Body.String())
 	}
+}
+
+func postSelectorClick(t *testing.T, h *Handlers, tabID, selector string) (*httptest.ResponseRecorder, map[string]any) {
+	t.Helper()
+	body := `{"kind":"click","selector":"` + selector + `","tabId":"` + tabID + `"}`
+	w := httptest.NewRecorder()
+	h.HandleAction(w, httptest.NewRequest("POST", "/action", strings.NewReader(body)))
+	var out map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &out)
+	return w, out
+}
+
+func requireClickNavigatedTo(t *testing.T, w *httptest.ResponseRecorder, body map[string]any, path string) {
+	t.Helper()
+	if w.Code != http.StatusOK {
+		t.Fatalf("the navigating click returned %d, want 200: %s", w.Code, w.Body.String())
+	}
+	result, _ := body["result"].(map[string]any)
+	if result == nil || result[bridge.ResultNavigated] != true || result["clicked"] != true {
+		t.Fatalf("the navigating click did not report clicked+navigated: %v", body)
+	}
+	if landed, _ := result[bridge.ResultLandedURL].(string); !strings.HasSuffix(landed, path) {
+		t.Fatalf("the navigating click landed on %q, want a url ending %q", landed, path)
+	}
+}
+
+// Stands in for a timed-out trusted click whose JS fallback runs after its own navigation.
+func TestAClickWhoseNavigationDestroysTheContextReportsTheNavigation(t *testing.T) {
+	h, tabID := clickNavHandlers(t)
+	h.Bridge.(*bridge.Bridge).Actions[bridge.ActionClick] = func(ctx context.Context, _ bridge.ActionRequest) (map[string]any, error) {
+		var link *runtime.RemoteObject
+		if err := chromedp.Run(ctx, chromedp.Evaluate(`document.getElementById('go')`, &link)); err != nil {
+			return nil, err
+		}
+		if err := chromedp.Run(ctx,
+			chromedp.Evaluate(`document.getElementById('go').click()`, nil),
+			chromedp.WaitVisible("h1", chromedp.ByQuery),
+		); err != nil {
+			return nil, err
+		}
+		return nil, chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+			_, _, err := runtime.CallFunctionOn(`function() { this.click(); }`).WithObjectID(link.ObjectID).Do(ctx)
+			return err
+		}))
+	}
+
+	w, body := postSelectorClick(t, h, tabID, "#go")
+	requireClickNavigatedTo(t, w, body, "/second")
+}
+
+// The browser holds DevTools commands during a navigation it has started, so a live
+// URL read waits it out; a starved browser starts late and the old document answers.
+// Reading the last committed URL makes that race deterministic.
+func TestAClickWhoseNavigationCommitsLateReportsTheNavigation(t *testing.T) {
+	h, tabID := clickNavHandlers(t)
+	b := h.Bridge.(*bridge.Bridge)
+	tabCtx, _, err := b.TabContext(tabID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var start string
+	if err := chromedp.Run(tabCtx, chromedp.Location(&start)); err != nil {
+		t.Fatal(err)
+	}
+	var committed atomic.Value
+	committed.Store(start)
+	chromedp.ListenTarget(tabCtx, func(ev any) {
+		if nav, ok := ev.(*page.EventFrameNavigated); ok && nav.Frame != nil && nav.Frame.ParentID == "" {
+			committed.Store(nav.Frame.URL)
+		}
+	})
+	b.URLReader = func(context.Context) (string, error) {
+		return committed.Load().(string), nil
+	}
+	b.Actions[bridge.ActionClick] = func(ctx context.Context, _ bridge.ActionRequest) (map[string]any, error) {
+		return map[string]any{"clicked": true}, chromedp.Run(ctx, chromedp.Evaluate(`document.getElementById('slow').click()`, nil))
+	}
+
+	w, body := postSelectorClick(t, h, tabID, "#slow")
+	requireClickNavigatedTo(t, w, body, "/slow-second")
 }
