@@ -36,10 +36,10 @@ func TestValidateFileConfig_Valid(t *testing.T) {
 			Strategy:         "simple",
 			AllocationPolicy: "fcfs",
 			Restart: MultiInstanceRestartConfig{
-				MaxRestarts:    intPtr(20),
-				InitBackoffSec: intPtr(2),
-				MaxBackoffSec:  intPtr(60),
-				StableAfterSec: intPtr(300),
+				MaxRestarts:    new(20),
+				InitBackoffSec: new(2),
+				MaxBackoffSec:  new(60),
+				StableAfterSec: new(300),
 			},
 		},
 		Timeouts: TimeoutsConfig{
@@ -63,42 +63,42 @@ func TestValidateFileConfig_RestartPolicy(t *testing.T) {
 		{
 			name: "bounded",
 			restart: MultiInstanceRestartConfig{
-				MaxRestarts:    intPtr(10),
-				InitBackoffSec: intPtr(2),
-				MaxBackoffSec:  intPtr(60),
-				StableAfterSec: intPtr(300),
+				MaxRestarts:    new(10),
+				InitBackoffSec: new(2),
+				MaxBackoffSec:  new(60),
+				StableAfterSec: new(300),
 			},
 			wantErr: false,
 		},
 		{
 			name: "unlimited",
 			restart: MultiInstanceRestartConfig{
-				MaxRestarts:    intPtr(-1),
-				InitBackoffSec: intPtr(2),
-				MaxBackoffSec:  intPtr(60),
-				StableAfterSec: intPtr(300),
+				MaxRestarts:    new(-1),
+				InitBackoffSec: new(2),
+				MaxBackoffSec:  new(60),
+				StableAfterSec: new(300),
 			},
 			wantErr: false,
 		},
 		{
 			name: "zero max restarts valid (no restarts)",
 			restart: MultiInstanceRestartConfig{
-				MaxRestarts: intPtr(0),
+				MaxRestarts: new(0),
 			},
 			wantErr: false,
 		},
 		{
 			name: "negative max restarts invalid (except -1)",
 			restart: MultiInstanceRestartConfig{
-				MaxRestarts: intPtr(-2),
+				MaxRestarts: new(-2),
 			},
 			wantErr: true,
 		},
 		{
 			name: "max backoff lower than init invalid",
 			restart: MultiInstanceRestartConfig{
-				InitBackoffSec: intPtr(10),
-				MaxBackoffSec:  intPtr(5),
+				InitBackoffSec: new(10),
+				MaxBackoffSec:  new(5),
 			},
 			wantErr: true,
 		},
@@ -117,8 +117,6 @@ func TestValidateFileConfig_RestartPolicy(t *testing.T) {
 		})
 	}
 }
-
-func intPtr(v int) *int { return &v }
 
 func TestValidateFileConfig_InvalidPort(t *testing.T) {
 	tests := []struct {
@@ -363,9 +361,9 @@ func TestValidateFileConfig_InvalidActivityRetentionDays(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "nil", value: nil, wantErr: false},
-		{name: "positive", value: intPtr(30), wantErr: false},
-		{name: "zero", value: intPtr(0), wantErr: true},
-		{name: "negative", value: intPtr(-1), wantErr: true},
+		{name: "positive", value: new(30), wantErr: false},
+		{name: "zero", value: new(0), wantErr: true},
+		{name: "negative", value: new(-1), wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -830,39 +828,39 @@ func TestValidateFileConfig_TransferLimits(t *testing.T) {
 		{
 			name: "valid limits",
 			apply: func(s *SecurityConfig) {
-				s.DownloadMaxBytes = intPtr(DefaultDownloadMaxBytes)
-				s.UploadMaxRequestBytes = intPtr(DefaultUploadMaxRequestBytes)
-				s.UploadMaxFiles = intPtr(DefaultUploadMaxFiles)
-				s.UploadMaxFileBytes = intPtr(DefaultUploadMaxFileBytes)
-				s.UploadMaxTotalBytes = intPtr(DefaultUploadMaxTotalBytes)
+				s.DownloadMaxBytes = new(DefaultDownloadMaxBytes)
+				s.UploadMaxRequestBytes = new(DefaultUploadMaxRequestBytes)
+				s.UploadMaxFiles = new(DefaultUploadMaxFiles)
+				s.UploadMaxFileBytes = new(DefaultUploadMaxFileBytes)
+				s.UploadMaxTotalBytes = new(DefaultUploadMaxTotalBytes)
 			},
 		},
 		{
 			name: "download max bytes too large",
 			apply: func(s *SecurityConfig) {
-				s.DownloadMaxBytes = intPtr(MaxDownloadMaxBytes + 1)
+				s.DownloadMaxBytes = new(MaxDownloadMaxBytes + 1)
 			},
 			wantErr: "security.downloadMaxBytes",
 		},
 		{
 			name: "upload max files invalid",
 			apply: func(s *SecurityConfig) {
-				s.UploadMaxFiles = intPtr(0)
+				s.UploadMaxFiles = new(0)
 			},
 			wantErr: "security.uploadMaxFiles",
 		},
 		{
 			name: "upload max file bytes too large",
 			apply: func(s *SecurityConfig) {
-				s.UploadMaxFileBytes = intPtr(MaxUploadMaxFileBytes + 1)
+				s.UploadMaxFileBytes = new(MaxUploadMaxFileBytes + 1)
 			},
 			wantErr: "security.uploadMaxFileBytes",
 		},
 		{
 			name: "upload max file bytes exceeds total",
 			apply: func(s *SecurityConfig) {
-				s.UploadMaxFileBytes = intPtr(8 << 20)
-				s.UploadMaxTotalBytes = intPtr(4 << 20)
+				s.UploadMaxFileBytes = new(8 << 20)
+				s.UploadMaxTotalBytes = new(4 << 20)
 			},
 			wantErr: "security.uploadMaxFileBytes/uploadMaxTotalBytes",
 		},
@@ -910,9 +908,9 @@ func TestValidateFileConfig_AutoSolverValidation(t *testing.T) {
 		t.Fatal("expected autosolver validation errors, got none")
 	}
 
-	joined := ""
+	var joined strings.Builder
 	for _, err := range errs {
-		joined += err.Error() + "\n"
+		joined.WriteString(err.Error() + "\n")
 	}
 
 	for _, want := range []string{
@@ -921,8 +919,8 @@ func TestValidateFileConfig_AutoSolverValidation(t *testing.T) {
 		"autoSolver.retryBaseDelayMs/retryMaxDelayMs",
 		"autoSolver.solvers",
 	} {
-		if !strings.Contains(joined, want) {
-			t.Fatalf("expected error containing %q, got:\n%s", want, joined)
+		if !strings.Contains(joined.String(), want) {
+			t.Fatalf("expected error containing %q, got:\n%s", want, joined.String())
 		}
 	}
 }
@@ -1032,7 +1030,6 @@ func TestValidateFileConfig_TabPolicyBlock(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			fc := &FileConfig{
 				InstanceDefaults: InstanceDefaultsConfig{TabPolicy: &tt.tp},

@@ -16,7 +16,7 @@ import (
 // no edit here: every declared field is set through the editor, marshaled the way a save
 // does it, and read back out of the JSON.
 func TestEverySchedulerKeySurvivesTheWireTwin(t *testing.T) {
-	fields := reflect.VisibleFields(reflect.TypeOf(SchedulerFileConfig{}))
+	fields := reflect.VisibleFields(reflect.TypeFor[SchedulerFileConfig]())
 	if len(fields) == 0 {
 		t.Fatal("SchedulerFileConfig declares no fields; this guard would pass vacuously")
 	}

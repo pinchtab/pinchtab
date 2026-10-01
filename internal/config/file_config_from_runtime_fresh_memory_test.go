@@ -83,7 +83,7 @@ func emptyRuntimeReferences(path string, v reflect.Value) []string {
 func aliasProbeRuntimeConfig(t *testing.T) *RuntimeConfig {
 	t.Helper()
 	cfg := populatedRuntimeConfig(t)
-	cfg.CookieSecure = ptr(true)
+	cfg.CookieSecure = new(true)
 	cfg.AllowedDomains = []string{"allowed.example"}
 	cfg.Proxy.BypassList = []string{"bypass.example"}
 	cfg.Proxy.Geo = &BrowserProxyGeoConfig{Timezone: "Europe/Rome", Locale: "it-IT", WebRTCIP: "203.0.113.9", CountryISO: "IT"}

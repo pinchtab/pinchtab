@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 )
 
 // PatchConfigJSON merges a JSON object into FileConfig.
@@ -12,12 +13,12 @@ func PatchConfigJSON(fc *FileConfig, jsonPatch string) error {
 		return fmt.Errorf("failed to serialize current config: %w", err)
 	}
 
-	var currentMap map[string]interface{}
+	var currentMap map[string]any
 	if err := json.Unmarshal(current, &currentMap); err != nil {
 		return fmt.Errorf("failed to parse current config: %w", err)
 	}
 
-	var patchMap map[string]interface{}
+	var patchMap map[string]any
 	if err := json.Unmarshal([]byte(jsonPatch), &patchMap); err != nil {
 		return fmt.Errorf("invalid JSON patch: %w", err)
 	}
@@ -36,14 +37,12 @@ func PatchConfigJSON(fc *FileConfig, jsonPatch string) error {
 	return nil
 }
 
-func deepMerge(dst, src map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
-	for k, v := range dst {
-		result[k] = v
-	}
+func deepMerge(dst, src map[string]any) map[string]any {
+	result := make(map[string]any)
+	maps.Copy(result, dst)
 	for k, v := range src {
-		if srcMap, ok := v.(map[string]interface{}); ok {
-			if dstMap, ok := result[k].(map[string]interface{}); ok {
+		if srcMap, ok := v.(map[string]any); ok {
+			if dstMap, ok := result[k].(map[string]any); ok {
 				result[k] = deepMerge(dstMap, srcMap)
 				continue
 			}

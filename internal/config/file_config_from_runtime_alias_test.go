@@ -72,7 +72,7 @@ func TestSectionBuildersNeverTakeTheAddressOfARuntimeField(t *testing.T) {
 			}
 			if sel, ok := u.X.(*ast.SelectorExpr); ok {
 				if root, ok := sel.X.(*ast.Ident); ok && root.Name == cfgName {
-					t.Errorf("%s: %s takes the address of a runtime field; copy the value through ptr instead", fset.Position(u.Pos()), fn.Name.Name)
+					t.Errorf("%s: %s takes the address of a runtime field; copy the value through new(...) instead", fset.Position(u.Pos()), fn.Name.Name)
 				}
 			}
 			return true

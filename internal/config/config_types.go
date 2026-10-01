@@ -149,8 +149,8 @@ type RuntimeConfig struct {
 }
 
 type SessionsRuntimeConfig struct {
-	Dashboard DashboardSessionRuntimeConfig `json:"dashboard,omitempty"`
-	Agent     AgentSessionRuntimeConfig     `json:"agent,omitempty"`
+	Dashboard DashboardSessionRuntimeConfig `json:"dashboard"`
+	Agent     AgentSessionRuntimeConfig     `json:"agent"`
 }
 
 type AgentSessionRuntimeConfig struct {
@@ -240,7 +240,7 @@ type AutoSolverFormCreds struct {
 }
 
 type ObservabilityConfig struct {
-	Activity ActivityConfig `json:"activity,omitempty"`
+	Activity ActivityConfig `json:"activity"`
 }
 
 type ActivityConfig struct {
@@ -248,7 +248,7 @@ type ActivityConfig struct {
 	SessionIdleSec int                  `json:"sessionIdleSec,omitempty"`
 	RetentionDays  int                  `json:"retentionDays,omitempty"`
 	StateDir       string               `json:"stateDir,omitempty"`
-	Events         ActivityEventsConfig `json:"events,omitempty"`
+	Events         ActivityEventsConfig `json:"events"`
 }
 
 type ActivityEventsConfig struct {
@@ -265,18 +265,18 @@ type ActivityEventsConfig struct {
 type FileConfig struct {
 	Schema           string                  `json:"$schema,omitempty"`
 	ConfigVersion    string                  `json:"configVersion,omitempty"`
-	Server           ServerConfig            `json:"server,omitempty"`
-	Browser          BrowserConfig           `json:"browser,omitempty"`
-	InstanceDefaults InstanceDefaultsConfig  `json:"instanceDefaults,omitempty"`
-	Security         SecurityConfig          `json:"security,omitempty"`
-	Profiles         ProfilesConfig          `json:"profiles,omitempty"`
-	MultiInstance    MultiInstanceConfig     `json:"multiInstance,omitempty"`
-	Timeouts         TimeoutsConfig          `json:"timeouts,omitempty"`
-	Scheduler        SchedulerFileConfig     `json:"scheduler,omitempty"`
-	Observability    ObservabilityFileConfig `json:"observability,omitempty"`
-	Sessions         SessionsFileConfig      `json:"sessions,omitempty"`
-	AutoSolver       AutoSolverFileConfig    `json:"autoSolver,omitempty"`
-	Browsers         BrowsersConfig          `json:"browsers,omitempty"`
+	Server           ServerConfig            `json:"server"`
+	Browser          BrowserConfig           `json:"browser"`
+	InstanceDefaults InstanceDefaultsConfig  `json:"instanceDefaults"`
+	Security         SecurityConfig          `json:"security"`
+	Profiles         ProfilesConfig          `json:"profiles"`
+	MultiInstance    MultiInstanceConfig     `json:"multiInstance"`
+	Timeouts         TimeoutsConfig          `json:"timeouts"`
+	Scheduler        SchedulerFileConfig     `json:"scheduler"`
+	Observability    ObservabilityFileConfig `json:"observability"`
+	Sessions         SessionsFileConfig      `json:"sessions"`
+	AutoSolver       AutoSolverFileConfig    `json:"autoSolver"`
+	Browsers         BrowsersConfig          `json:"browsers"`
 }
 
 type ServerConfig struct {
@@ -296,8 +296,8 @@ type ServerConfig struct {
 }
 
 type SessionsFileConfig struct {
-	Dashboard DashboardSessionFileConfig `json:"dashboard,omitempty"`
-	Agent     AgentSessionFileConfig     `json:"agent,omitempty"`
+	Dashboard DashboardSessionFileConfig `json:"dashboard"`
+	Agent     AgentSessionFileConfig     `json:"agent"`
 }
 
 // DefaultAgentSessionsEnabled is the effective value of sessions.agent.enabled
@@ -343,10 +343,10 @@ type BrowserConfig struct {
 	BrowserBinary     string             `json:"binary,omitempty"`
 	BrowserDebugPort  *int               `json:"remoteDebuggingPort,omitempty"`
 	BrowserExtraFlags string             `json:"extraFlags,omitempty"`
-	Cloak             CloakBrowserConfig `json:"cloak,omitempty"`
+	Cloak             CloakBrowserConfig `json:"cloak"`
 	ExtensionPaths    []string           `json:"extensionPaths,omitempty"`
 
-	Proxy BrowserProxyConfig `json:"proxy,omitempty"`
+	Proxy BrowserProxyConfig `json:"proxy"`
 
 	DefaultTarget string               `json:"defaultTarget,omitempty"`
 	FallbackOrder []string             `json:"fallbackOrder,omitempty"`
@@ -361,9 +361,9 @@ type BrowserTargetConfig struct {
 	Provider   string             `json:"provider,omitempty"`
 	Binary     string             `json:"binary,omitempty"`
 	ExtraFlags string             `json:"extraFlags,omitempty"`
-	Cloak      CloakBrowserConfig `json:"cloak,omitempty"`
+	Cloak      CloakBrowserConfig `json:"cloak"`
 	// Proxy, when Server is non-empty, replaces the global BrowserConfig.Proxy entirely (no merge).
-	Proxy BrowserProxyConfig `json:"proxy,omitempty"`
+	Proxy BrowserProxyConfig `json:"proxy"`
 }
 
 type CloakBrowserConfig struct {
@@ -403,8 +403,8 @@ type BrowsersConfig struct {
 type BrowserItemConfig struct {
 	Binary     string             `json:"binary,omitempty"`
 	ExtraFlags string             `json:"extraFlags,omitempty"`
-	Cloak      CloakBrowserConfig `json:"cloak,omitempty"`
-	Proxy      BrowserProxyConfig `json:"proxy,omitempty"`
+	Cloak      CloakBrowserConfig `json:"cloak"`
+	Proxy      BrowserProxyConfig `json:"proxy"`
 }
 
 type InstanceDefaultsConfig struct {
@@ -478,7 +478,7 @@ type SecurityConfig struct {
 	TrustedProxyCIDRs      []string     `json:"trustedProxyCIDRs,omitempty"`
 	TrustedResolveCIDRs    []string     `json:"trustedResolveCIDRs,omitempty"`
 	TrustLoopbackProxy     *bool        `json:"trustLoopbackProxy,omitempty"`
-	Attach                 AttachConfig `json:"attach,omitempty"`
+	Attach                 AttachConfig `json:"attach"`
 	IDPI                   *IDPIConfig  `json:"idpi,omitempty"`
 }
 
@@ -502,7 +502,7 @@ type MultiInstanceConfig struct {
 	AllocationPolicy  string                     `json:"allocationPolicy,omitempty"`
 	InstancePortStart *int                       `json:"instancePortStart,omitempty"`
 	InstancePortEnd   *int                       `json:"instancePortEnd,omitempty"`
-	Restart           MultiInstanceRestartConfig `json:"restart,omitempty"`
+	Restart           MultiInstanceRestartConfig `json:"restart"`
 }
 
 // MultiInstanceRestartConfig controls restart-managed strategy recovery behavior.
@@ -540,7 +540,7 @@ type SchedulerFileConfig struct {
 }
 
 type ObservabilityFileConfig struct {
-	Activity ActivityFileConfig `json:"activity,omitempty"`
+	Activity ActivityFileConfig `json:"activity"`
 }
 
 type ActivityFileConfig struct {
@@ -548,7 +548,7 @@ type ActivityFileConfig struct {
 	SessionIdleSec *int                     `json:"sessionIdleSec,omitempty"`
 	RetentionDays  *int                     `json:"retentionDays,omitempty"`
 	StateDir       string                   `json:"stateDir,omitempty"`
-	Events         ActivityEventsFileConfig `json:"events,omitempty"`
+	Events         ActivityEventsFileConfig `json:"events"`
 }
 
 type ActivityEventsFileConfig struct {
@@ -574,8 +574,8 @@ type AutoSolverFileConfig struct {
 	Solvers           []string                  `json:"solvers,omitempty"`
 	LLMProvider       string                    `json:"llmProvider,omitempty"`
 	LLMFallback       *bool                     `json:"llmFallback,omitempty"`
-	External          AutoSolverExtConf         `json:"external,omitempty"`
-	Credentials       AutoSolverCredentialsConf `json:"credentials,omitempty"`
+	External          AutoSolverExtConf         `json:"external"`
+	Credentials       AutoSolverCredentialsConf `json:"credentials"`
 }
 
 // AutoSolverExtConf holds external solver API keys.
@@ -588,9 +588,9 @@ type AutoSolverExtConf struct {
 // All fields are write-only from the dashboard's perspective: GET /api/config
 // returns them blanked, PUT preserves the on-disk values when blank.
 type AutoSolverCredentialsConf struct {
-	Login  AutoSolverLoginConf  `json:"login,omitempty"`
-	Signup AutoSolverSignupConf `json:"signup,omitempty"`
-	Form   AutoSolverFormConf   `json:"form,omitempty"`
+	Login  AutoSolverLoginConf  `json:"login"`
+	Signup AutoSolverSignupConf `json:"signup"`
+	Form   AutoSolverFormConf   `json:"form"`
 }
 
 type AutoSolverLoginConf struct {

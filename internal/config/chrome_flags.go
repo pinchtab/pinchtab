@@ -73,7 +73,7 @@ func splitChromeFlag(flag string) (name, value string) {
 }
 
 func disablesSiteIsolation(value string) bool {
-	for _, feature := range strings.Split(strings.ToLower(value), ",") {
+	for feature := range strings.SplitSeq(strings.ToLower(value), ",") {
 		feature = strings.TrimSpace(feature)
 		switch feature {
 		case "siteperprocess", "site-per-process", "isolateorigins", "isolate-origins":

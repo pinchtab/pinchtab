@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -22,12 +23,7 @@ func writeConfigFixture(t *testing.T, body string) string {
 }
 
 func hasString(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(values, want)
 }
 
 // The detection this replaces was dead code: encoding/json hands the whole
@@ -115,7 +111,7 @@ func TestAliasExemptionsAreDerivedFromTheNormalisersOwnTypes(t *testing.T) {
 		t.Fatal("no alias paths derived; the exemption set is empty and this test guards nothing")
 	}
 
-	declared := declaredPaths("", reflect.TypeOf(aliasRawConfig{}))
+	declared := declaredPaths("", reflect.TypeFor[aliasRawConfig]())
 	if len(declared) != len(exempt) {
 		t.Errorf("exempt set %v does not match the alias types' declared paths %v", exempt, declared)
 	}

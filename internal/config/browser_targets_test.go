@@ -568,7 +568,7 @@ func TestResolveExplicitBrowserTarget_ConfigDoesNotAliasOriginal(t *testing.T) {
 				},
 				Cloak: CloakBrowserConfig{
 					FingerprintSeed: "target",
-					StorageQuotaMB:  intPtr(256),
+					StorageQuotaMB:  new(256),
 				},
 			},
 			"backup": {Provider: BrowserChrome},
@@ -605,7 +605,7 @@ func TestResolveExplicitBrowserTarget_ConfigDoesNotAliasOriginal(t *testing.T) {
 	target := got.Targets["proxy"]
 	target.Proxy.BypassList[0] = "mutated-target-map"
 	target.Proxy.Geo.Timezone = "Asia/Tokyo"
-	target.Cloak.StorageQuotaMB = intPtr(512)
+	target.Cloak.StorageQuotaMB = new(512)
 	got.Targets["proxy"] = target
 
 	if cfg.CookieSecure == nil || !*cfg.CookieSecure {
@@ -1037,8 +1037,8 @@ func TestApplyTargetOverride_CloakOverlap_TargetWins(t *testing.T) {
 			Provider: BrowserCloak,
 			Cloak: CloakBrowserConfig{
 				FingerprintSeed:           "target-seed",
-				StorageQuotaMB:            intPtr(2048),
-				DisableDefaultStealthArgs: boolPtr(true),
+				StorageQuotaMB:            new(2048),
+				DisableDefaultStealthArgs: new(true),
 			},
 		},
 	}

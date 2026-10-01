@@ -158,14 +158,14 @@ func TestTheSessionsEditorAddressesEveryDeclaredField(t *testing.T) {
 		prefix string
 		typ    reflect.Type
 	}{
-		{"sessions.agent.", reflect.TypeOf(AgentSessionFileConfig{})},
-		{"sessions.dashboard.", reflect.TypeOf(DashboardSessionFileConfig{})},
+		{"sessions.agent.", reflect.TypeFor[AgentSessionFileConfig]()},
+		{"sessions.dashboard.", reflect.TypeFor[DashboardSessionFileConfig]()},
 	} {
 		if section.typ.NumField() == 0 {
 			t.Fatalf("%s declares no fields; this census is reading the wrong type", section.prefix)
 		}
-		for i := 0; i < section.typ.NumField(); i++ {
-			name, _, _ := strings.Cut(section.typ.Field(i).Tag.Get("json"), ",")
+		for field := range section.typ.Fields() {
+			name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 			if name == "" || name == "-" {
 				continue
 			}
@@ -186,7 +186,7 @@ func TestTheSessionsEditorAddressesEveryDeclaredField(t *testing.T) {
 func TestTheSessionsEditorRefusesAKeyTheSectionDoesNotDeclare(t *testing.T) {
 	fc := &FileConfig{}
 
-	if _, ok := reflect.TypeOf(DashboardSessionFileConfig{}).FieldByName("Enabled"); ok {
+	if _, ok := reflect.TypeFor[DashboardSessionFileConfig]().FieldByName("Enabled"); ok {
 		t.Fatal("DashboardSessionFileConfig now declares Enabled; this test pins its ABSENCE, so either the field is real and the editor should address it, or it was added by mistake")
 	}
 	if _, err := GetConfigValue(fc, "sessions.dashboard.enabled"); err == nil {

@@ -93,12 +93,12 @@ func TestValidateBrowserProxy_TableDriven(t *testing.T) {
 					t.Fatalf("expected validation error, got none")
 				}
 				if tt.wantSub != "" {
-					joined := ""
+					var joined strings.Builder
 					for _, e := range errs {
-						joined += e.Error() + "\n"
+						joined.WriteString(e.Error() + "\n")
 					}
-					if !strings.Contains(joined, tt.wantSub) {
-						t.Errorf("expected error to contain %q, got: %s", tt.wantSub, joined)
+					if !strings.Contains(joined.String(), tt.wantSub) {
+						t.Errorf("expected error to contain %q, got: %s", tt.wantSub, joined.String())
 					}
 				}
 				return
@@ -732,12 +732,12 @@ func TestProxyValidationRunsForAServerlessBlock(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			errs := ValidateBrowserProxy("browser.proxy", tc.proxy)
 
-			joined := ""
+			var joined strings.Builder
 			for _, err := range errs {
-				joined += err.Error() + "\n"
+				joined.WriteString(err.Error() + "\n")
 			}
-			if !strings.Contains(joined, tc.want) {
-				t.Errorf("a serverless block skipped its own validation: errors = %q, want one containing %q", joined, tc.want)
+			if !strings.Contains(joined.String(), tc.want) {
+				t.Errorf("a serverless block skipped its own validation: errors = %q, want one containing %q", joined.String(), tc.want)
 			}
 			for _, err := range errs {
 				if strings.Contains(err.Error(), "proxy server is empty") {

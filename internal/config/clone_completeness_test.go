@@ -62,8 +62,8 @@ func fillReferences(v reflect.Value) int {
 		return 1 + fillReferences(v.Elem())
 	case reflect.Struct:
 		filled := 0
-		for i := range v.NumField() {
-			filled += fillReferences(v.Field(i))
+		for _, field := range v.Fields() {
+			filled += fillReferences(field)
 		}
 		return filled
 	case reflect.String:

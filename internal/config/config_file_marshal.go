@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"maps"
 	"strings"
 	"time"
 
@@ -15,12 +16,8 @@ func copyStringSlice(items []string) []string {
 	return append([]string(nil), items...)
 }
 
-func ptr[T any](v T) *T {
-	return &v
-}
-
 func secondsPtr(d time.Duration) *int {
-	return ptr(int(d / time.Second))
+	return new(int(d / time.Second))
 }
 
 func intPtrIfPositive(v int) *int {
@@ -159,9 +156,7 @@ func browsersConfigJSONFromFile(bc BrowsersConfig) *BrowsersConfig {
 	}
 	if len(bc.Config) > 0 {
 		out.Config = make(map[string]BrowserItemConfig, len(bc.Config))
-		for k, v := range bc.Config {
-			out.Config[k] = v
-		}
+		maps.Copy(out.Config, bc.Config)
 	}
 	return out
 }
@@ -362,9 +357,9 @@ func serverConfigFromRuntime(cfg *RuntimeConfig) ServerConfig {
 		StateDir:                  cfg.StateDir,
 		LogLevel:                  cfg.LogLevel,
 		NetworkBufferSize:         intPtrIfPositive(cfg.NetworkBufferSize),
-		RetainNetworkBodies:       ptr(cfg.RetainNetworkBodies),
-		RetainNetworkBodyMaxBytes: ptr(cfg.RetainNetworkBodyMaxBytes),
-		TrustProxyHeaders:         ptr(cfg.TrustProxyHeaders),
+		RetainNetworkBodies:       new(cfg.RetainNetworkBodies),
+		RetainNetworkBodyMaxBytes: new(cfg.RetainNetworkBodyMaxBytes),
+		TrustProxyHeaders:         new(cfg.TrustProxyHeaders),
 		CookieSecure:              cloneBoolPtr(cfg.CookieSecure),
 	}
 }
@@ -391,21 +386,21 @@ func instanceDefaultsFromRuntime(cfg *RuntimeConfig) InstanceDefaultsConfig {
 	}
 	return InstanceDefaultsConfig{
 		Mode:                   mode,
-		NoRestore:              ptr(cfg.NoRestore),
+		NoRestore:              new(cfg.NoRestore),
 		Timezone:               cfg.Timezone,
-		BlockImages:            ptr(cfg.BlockImages),
-		BlockMedia:             ptr(cfg.BlockMedia),
-		BlockAds:               ptr(cfg.BlockAds),
-		MaxTabs:                ptr(cfg.MaxTabs),
-		MaxParallelTabs:        ptr(cfg.MaxParallelTabs),
+		BlockImages:            new(cfg.BlockImages),
+		BlockMedia:             new(cfg.BlockMedia),
+		BlockAds:               new(cfg.BlockAds),
+		MaxTabs:                new(cfg.MaxTabs),
+		MaxParallelTabs:        new(cfg.MaxParallelTabs),
 		UserAgent:              cfg.UserAgent,
-		NoAnimations:           ptr(cfg.NoAnimations),
-		CaptureAllowActivation: ptr(cfg.CaptureAllowActivation),
-		Humanize:               ptr(cfg.Humanize),
+		NoAnimations:           new(cfg.NoAnimations),
+		CaptureAllowActivation: new(cfg.CaptureAllowActivation),
+		Humanize:               new(cfg.Humanize),
 		StealthLevel:           cfg.StealthLevel,
 		TabEvictionPolicy:      cfg.TabEvictionPolicy,
 		TabPolicy:              tabPolicyDefaultsFromRuntime(cfg),
-		DialogAutoAccept:       ptr(cfg.DialogAutoAccept),
+		DialogAutoAccept:       new(cfg.DialogAutoAccept),
 	}
 }
 
@@ -413,34 +408,34 @@ func securityConfigFromRuntime(cfg *RuntimeConfig) SecurityConfig {
 	idpi := cfg.IDPI
 	idpi.CustomPatterns = cloneStringSlice(cfg.IDPI.CustomPatterns)
 	return SecurityConfig{
-		AllowEvaluate:          ptr(cfg.AllowEvaluate),
-		AllowMacro:             ptr(cfg.AllowMacro),
-		AllowScreencast:        ptr(cfg.AllowScreencast),
-		AllowDownload:          ptr(cfg.AllowDownload),
-		AllowCookies:           ptr(cfg.AllowCookies),
-		AllowNetworkIntercept:  ptr(cfg.AllowNetworkIntercept),
-		AllowMemory:            ptr(cfg.AllowMemory),
-		AllowFileScheme:        ptr(cfg.AllowFileScheme),
+		AllowEvaluate:          new(cfg.AllowEvaluate),
+		AllowMacro:             new(cfg.AllowMacro),
+		AllowScreencast:        new(cfg.AllowScreencast),
+		AllowDownload:          new(cfg.AllowDownload),
+		AllowCookies:           new(cfg.AllowCookies),
+		AllowNetworkIntercept:  new(cfg.AllowNetworkIntercept),
+		AllowMemory:            new(cfg.AllowMemory),
+		AllowFileScheme:        new(cfg.AllowFileScheme),
 		AllowedDomains:         cloneStringSlice(cfg.AllowedDomains),
 		DownloadAllowedDomains: cloneStringSlice(cfg.DownloadAllowedDomains),
-		DownloadMaxBytes:       ptr(cfg.EffectiveDownloadMaxBytes()),
-		MemorySnapshotMaxBytes: ptr(cfg.EffectiveMemorySnapshotMaxBytes()),
-		AllowUpload:            ptr(cfg.AllowUpload),
-		AllowClipboard:         ptr(cfg.AllowClipboard),
-		AllowStateExport:       ptr(cfg.AllowStateExport),
-		UploadMaxRequestBytes:  ptr(cfg.EffectiveUploadMaxRequestBytes()),
-		UploadMaxFiles:         ptr(cfg.EffectiveUploadMaxFiles()),
-		UploadMaxFileBytes:     ptr(cfg.EffectiveUploadMaxFileBytes()),
-		UploadMaxTotalBytes:    ptr(cfg.EffectiveUploadMaxTotalBytes()),
-		MaxRedirects:           ptr(cfg.MaxRedirects),
+		DownloadMaxBytes:       new(cfg.EffectiveDownloadMaxBytes()),
+		MemorySnapshotMaxBytes: new(cfg.EffectiveMemorySnapshotMaxBytes()),
+		AllowUpload:            new(cfg.AllowUpload),
+		AllowClipboard:         new(cfg.AllowClipboard),
+		AllowStateExport:       new(cfg.AllowStateExport),
+		UploadMaxRequestBytes:  new(cfg.EffectiveUploadMaxRequestBytes()),
+		UploadMaxFiles:         new(cfg.EffectiveUploadMaxFiles()),
+		UploadMaxFileBytes:     new(cfg.EffectiveUploadMaxFileBytes()),
+		UploadMaxTotalBytes:    new(cfg.EffectiveUploadMaxTotalBytes()),
+		MaxRedirects:           new(cfg.MaxRedirects),
 		TrustedProxyCIDRs:      cloneStringSlice(cfg.TrustedProxyCIDRs),
 		TrustedResolveCIDRs:    cloneStringSlice(cfg.TrustedResolveCIDRs),
-		TrustLoopbackProxy:     ptr(cfg.TrustLoopbackProxy),
+		TrustLoopbackProxy:     new(cfg.TrustLoopbackProxy),
 		Attach: AttachConfig{
-			Enabled:          ptr(cfg.AttachEnabled),
+			Enabled:          new(cfg.AttachEnabled),
 			AllowHosts:       cloneStringSlice(cfg.AttachAllowHosts),
 			AllowSchemes:     cloneStringSlice(cfg.AttachAllowSchemes),
-			ForwardProxyAuth: ptr(cfg.AttachForwardProxyAuth),
+			ForwardProxyAuth: new(cfg.AttachForwardProxyAuth),
 		},
 		IDPI: &idpi,
 	}
@@ -450,7 +445,7 @@ func profilesConfigFromRuntime(cfg *RuntimeConfig) ProfilesConfig {
 	return ProfilesConfig{
 		BaseDir:        cfg.ProfilesBaseDir,
 		DefaultProfile: cfg.DefaultProfile,
-		QuarantineKeep: ptr(cfg.ProfileQuarantineKeep),
+		QuarantineKeep: new(cfg.ProfileQuarantineKeep),
 	}
 }
 
@@ -458,10 +453,10 @@ func multiInstanceConfigFromRuntime(cfg *RuntimeConfig) MultiInstanceConfig {
 	return MultiInstanceConfig{
 		Strategy:          cfg.Strategy,
 		AllocationPolicy:  cfg.AllocationPolicy,
-		InstancePortStart: ptr(cfg.InstancePortStart),
-		InstancePortEnd:   ptr(cfg.InstancePortEnd),
+		InstancePortStart: new(cfg.InstancePortStart),
+		InstancePortEnd:   new(cfg.InstancePortEnd),
 		Restart: MultiInstanceRestartConfig{
-			MaxRestarts:    ptr(cfg.RestartMaxRestarts),
+			MaxRestarts:    new(cfg.RestartMaxRestarts),
 			InitBackoffSec: secondsPtr(cfg.RestartInitBackoff),
 			MaxBackoffSec:  secondsPtr(cfg.RestartMaxBackoff),
 			StableAfterSec: secondsPtr(cfg.RestartStableAfter),
@@ -482,17 +477,17 @@ func observabilityConfigFromRuntime(cfg *RuntimeConfig) ObservabilityFileConfig 
 	activity := cfg.Observability.Activity
 	return ObservabilityFileConfig{
 		Activity: ActivityFileConfig{
-			Enabled:        ptr(activity.Enabled),
-			SessionIdleSec: ptr(activity.SessionIdleSec),
-			RetentionDays:  ptr(activity.RetentionDays),
+			Enabled:        new(activity.Enabled),
+			SessionIdleSec: new(activity.SessionIdleSec),
+			RetentionDays:  new(activity.RetentionDays),
 			Events: ActivityEventsFileConfig{
-				Dashboard:    ptr(activity.Events.Dashboard),
-				Server:       ptr(activity.Events.Server),
-				Bridge:       ptr(activity.Events.Bridge),
-				Orchestrator: ptr(activity.Events.Orchestrator),
-				Scheduler:    ptr(activity.Events.Scheduler),
-				MCP:          ptr(activity.Events.MCP),
-				Other:        ptr(activity.Events.Other),
+				Dashboard:    new(activity.Events.Dashboard),
+				Server:       new(activity.Events.Server),
+				Bridge:       new(activity.Events.Bridge),
+				Orchestrator: new(activity.Events.Orchestrator),
+				Scheduler:    new(activity.Events.Scheduler),
+				MCP:          new(activity.Events.MCP),
+				Other:        new(activity.Events.Other),
 			},
 		},
 	}
@@ -503,15 +498,15 @@ func sessionsConfigFromRuntime(cfg *RuntimeConfig) SessionsFileConfig {
 	agent := cfg.Sessions.Agent
 	return SessionsFileConfig{
 		Dashboard: DashboardSessionFileConfig{
-			Persist:                       ptr(dashboard.Persist),
+			Persist:                       new(dashboard.Persist),
 			IdleTimeoutSec:                secondsPtr(dashboard.IdleTimeout),
 			MaxLifetimeSec:                secondsPtr(dashboard.MaxLifetime),
 			ElevationWindowSec:            secondsPtr(dashboard.ElevationWindow),
-			PersistElevationAcrossRestart: ptr(dashboard.PersistElevationAcrossRestart),
-			RequireElevation:              ptr(dashboard.RequireElevation),
+			PersistElevationAcrossRestart: new(dashboard.PersistElevationAcrossRestart),
+			RequireElevation:              new(dashboard.RequireElevation),
 		},
 		Agent: AgentSessionFileConfig{
-			Enabled:        ptr(agent.Enabled),
+			Enabled:        new(agent.Enabled),
 			Mode:           agent.Mode,
 			IdleTimeoutSec: secondsPtr(agent.IdleTimeout),
 			MaxLifetimeSec: secondsPtr(agent.MaxLifetime),
@@ -522,17 +517,17 @@ func sessionsConfigFromRuntime(cfg *RuntimeConfig) SessionsFileConfig {
 func autoSolverConfigFromRuntime(cfg *RuntimeConfig) AutoSolverFileConfig {
 	a := cfg.AutoSolver
 	return AutoSolverFileConfig{
-		Enabled:           ptr(a.Enabled),
-		AutoTrigger:       ptr(a.AutoTrigger),
-		TriggerOnNavigate: ptr(a.TriggerOnNavigate),
-		TriggerOnAction:   ptr(a.TriggerOnAction),
-		MaxAttempts:       ptr(a.MaxAttempts),
-		SolverTimeoutSec:  ptr(a.SolverTimeoutSec),
-		RetryBaseDelayMs:  ptr(a.RetryBaseDelayMs),
-		RetryMaxDelayMs:   ptr(a.RetryMaxDelayMs),
+		Enabled:           new(a.Enabled),
+		AutoTrigger:       new(a.AutoTrigger),
+		TriggerOnNavigate: new(a.TriggerOnNavigate),
+		TriggerOnAction:   new(a.TriggerOnAction),
+		MaxAttempts:       new(a.MaxAttempts),
+		SolverTimeoutSec:  new(a.SolverTimeoutSec),
+		RetryBaseDelayMs:  new(a.RetryBaseDelayMs),
+		RetryMaxDelayMs:   new(a.RetryMaxDelayMs),
 		Solvers:           cloneStringSlice(a.Solvers),
 		LLMProvider:       a.LLMProvider,
-		LLMFallback:       ptr(a.LLMFallback),
+		LLMFallback:       new(a.LLMFallback),
 		External: AutoSolverExtConf{
 			CapsolverKey:  a.CapsolverKey,
 			TwoCaptchaKey: a.TwoCaptchaKey,

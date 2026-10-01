@@ -328,7 +328,7 @@ func TestConvertLegacyConfig(t *testing.T) {
 		Port:          "7777",
 		Headless:      &h,
 		MaxTabs:       &maxTabs,
-		AllowEvaluate: boolPtr(true),
+		AllowEvaluate: new(true),
 		TimeoutSec:    45,
 		NavigateSec:   90,
 	}
@@ -387,7 +387,7 @@ func TestFreezeIdleRoundTripsThroughFileConfigFromRuntime(t *testing.T) {
 		wantDelay *int
 	}{
 		{"default delay", 5 * time.Minute, nil},
-		{"custom delay", 90 * time.Second, intPtr(90)},
+		{"custom delay", 90 * time.Second, new(90)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rt := &RuntimeConfig{TabLifecyclePolicy: "freeze_idle", TabCloseDelay: tc.delay}
@@ -669,6 +669,7 @@ func TestFileConfigFromRuntime_DefaultBrowserVerbatim(t *testing.T) {
 	}
 }
 
+//go:fix inline
 func boolPtr(b bool) *bool {
-	return &b
+	return new(b)
 }

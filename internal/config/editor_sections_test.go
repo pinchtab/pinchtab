@@ -141,12 +141,12 @@ func TestEveryKeyGatedSolverConfigKeyResolves(t *testing.T) {
 
 func declaredFileConfigSections(t *testing.T) []string {
 	t.Helper()
-	typ := reflect.TypeOf(FileConfig{})
+	typ := reflect.TypeFor[FileConfig]()
 	names := make([]string, 0, typ.NumField())
-	for i := 0; i < typ.NumField(); i++ {
-		tag := typ.Field(i).Tag.Get("json")
+	for field := range typ.Fields() {
+		tag := field.Tag.Get("json")
 		if tag == "" || tag == "-" {
-			t.Errorf("FileConfig field %s has no json tag, so it cannot be addressed by path", typ.Field(i).Name)
+			t.Errorf("FileConfig field %s has no json tag, so it cannot be addressed by path", field.Name)
 			continue
 		}
 		names = append(names, strings.Split(tag, ",")[0])
@@ -308,10 +308,10 @@ func declaredSectionLeaves(t *testing.T) []sectionLeaf {
 	t.Helper()
 
 	fields := map[string]reflect.Type{}
-	typ := reflect.TypeOf(FileConfig{})
-	for i := 0; i < typ.NumField(); i++ {
-		name := strings.Split(typ.Field(i).Tag.Get("json"), ",")[0]
-		fields[name] = typ.Field(i).Type
+	typ := reflect.TypeFor[FileConfig]()
+	for field := range typ.Fields() {
+		name := strings.Split(field.Tag.Get("json"), ",")[0]
+		fields[name] = field.Type
 	}
 
 	var leaves []sectionLeaf
@@ -374,13 +374,13 @@ func appendLeafPaths(t *testing.T, prefix string, typ reflect.Type, leaves *[]se
 	}
 	switch typ.Kind() {
 	case reflect.Struct:
-		for i := 0; i < typ.NumField(); i++ {
-			tag := typ.Field(i).Tag.Get("json")
+		for field := range typ.Fields() {
+			tag := field.Tag.Get("json")
 			if tag == "" || tag == "-" {
-				t.Errorf("%s.%s has no json tag, so it cannot be addressed by path", prefix, typ.Field(i).Name)
+				t.Errorf("%s.%s has no json tag, so it cannot be addressed by path", prefix, field.Name)
 				continue
 			}
-			appendLeafPaths(t, prefix+"."+strings.Split(tag, ",")[0], typ.Field(i).Type, leaves)
+			appendLeafPaths(t, prefix+"."+strings.Split(tag, ",")[0], field.Type, leaves)
 		}
 	case reflect.Map:
 		appendLeafPaths(t, prefix+".probe", typ.Elem(), leaves)

@@ -37,7 +37,7 @@ func UnknownFileConfigKeys(data []byte) []string {
 	if err := json.Unmarshal(data, &root); err != nil {
 		return nil
 	}
-	keys := collectUnknownKeys("", root, reflect.TypeOf(FileConfig{}), acceptedUndeclaredFileConfigPaths())
+	keys := collectUnknownKeys("", root, reflect.TypeFor[FileConfig](), acceptedUndeclaredFileConfigPaths())
 	sort.Strings(keys)
 	return keys
 }
@@ -105,8 +105,7 @@ func jsonFieldByName(structType reflect.Type, name string) (reflect.StructField,
 	}
 	var fallback reflect.StructField
 	found := false
-	for i := 0; i < structType.NumField(); i++ {
-		field := structType.Field(i)
+	for field := range structType.Fields() {
 		if field.PkgPath != "" {
 			continue
 		}
@@ -151,7 +150,7 @@ func derefType(t reflect.Type) reflect.Type {
 // reported as a typo on every config that uses it.
 func aliasFileConfigPaths() map[string]bool {
 	exempt := map[string]bool{}
-	for _, path := range declaredPaths("", reflect.TypeOf(aliasRawConfig{})) {
+	for _, path := range declaredPaths("", reflect.TypeFor[aliasRawConfig]()) {
 		exempt[path] = true
 	}
 	return exempt
@@ -171,8 +170,7 @@ func declaredPaths(prefix string, structType reflect.Type) []string {
 		return nil
 	}
 	var paths []string
-	for i := 0; i < structType.NumField(); i++ {
-		field := structType.Field(i)
+	for field := range structType.Fields() {
 		if field.PkgPath != "" || jsonTagName(field) == "-" {
 			continue
 		}

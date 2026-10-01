@@ -175,7 +175,7 @@ func TestEveryAutoSolverFieldIsAccountedFor(t *testing.T) {
 	}
 
 	runtime := runtimeAutoSolverDefaults(t)
-	typ := reflect.TypeOf(AutoSolverConfig{})
+	typ := reflect.TypeFor[AutoSolverConfig]()
 	value := reflect.ValueOf(runtime)
 	if typ.NumField() == 0 {
 		t.Fatal("AutoSolverConfig has no fields — this census would pass vacuously")

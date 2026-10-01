@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -254,12 +255,7 @@ func TestLoadConfigDefaultSolvers(t *testing.T) {
 	cfg := Load()
 
 	has := func(name string) bool {
-		for _, s := range cfg.AutoSolver.Solvers {
-			if s == name {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(cfg.AutoSolver.Solvers, name)
 	}
 
 	for _, want := range []string{"cloudflare", "semantic"} {

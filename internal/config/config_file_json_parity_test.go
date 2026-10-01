@@ -34,8 +34,8 @@ var wireTwinExemptions = map[string]string{
 // precisely because a human maintained the second copy by hand, and a hand-written list
 // of what to check fails the same way.
 func TestTheWireTwinCarriesEveryDeclaredField(t *testing.T) {
-	declared := jsonLeafPaths(reflect.TypeOf(FileConfig{}))
-	onWire := jsonLeafPaths(reflect.TypeOf(fileConfigJSON{}))
+	declared := jsonLeafPaths(reflect.TypeFor[FileConfig]())
+	onWire := jsonLeafPaths(reflect.TypeFor[fileConfigJSON]())
 
 	if len(declared) < declaredJSONPathFloor {
 		t.Fatalf("walked %d leaf paths on FileConfig, want at least %d; the walk stopped descending and this parity check would pass vacuously", len(declared), declaredJSONPathFloor)
@@ -74,8 +74,8 @@ func TestTheWireTwinCarriesEveryDeclaredField(t *testing.T) {
 // above. The derived check proves the CLASS is closed; this proves the instance, so a
 // walk that silently stopped covering sessions cannot leave it green.
 func TestTheAgentSessionBlockReachesTheWire(t *testing.T) {
-	declared := jsonLeafPaths(reflect.TypeOf(FileConfig{}))
-	onWire := jsonLeafPaths(reflect.TypeOf(fileConfigJSON{}))
+	declared := jsonLeafPaths(reflect.TypeFor[FileConfig]())
+	onWire := jsonLeafPaths(reflect.TypeFor[fileConfigJSON]())
 
 	for _, path := range []string{
 		"sessions.agent.enabled",
@@ -136,12 +136,7 @@ func TestAnExplicitEmptyAllowlistSurvivesMarshal(t *testing.T) {
 type jsonPathSet []string
 
 func (s jsonPathSet) has(path string) bool {
-	for _, p := range s {
-		if p == path {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s, path)
 }
 
 func jsonLeafPaths(t reflect.Type) jsonPathSet {
@@ -177,8 +172,7 @@ func walkJSONLeaves(t reflect.Type, visit func(path string, field reflect.Struct
 		if t.Kind() != reflect.Struct {
 			return
 		}
-		for i := 0; i < t.NumField(); i++ {
-			field := t.Field(i)
+		for field := range t.Fields() {
 			if !field.IsExported() {
 				continue
 			}

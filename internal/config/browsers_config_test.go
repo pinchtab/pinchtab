@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -340,13 +341,7 @@ func TestBrowsersBlock_GhostChromeLoaded(t *testing.T) {
 	if len(cfg.BrowsersAvailable) != 2 {
 		t.Fatalf("BrowsersAvailable = %v, want [chrome ghost-chrome]", cfg.BrowsersAvailable)
 	}
-	found := false
-	for _, name := range cfg.BrowsersAvailable {
-		if name == "ghost-chrome" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(cfg.BrowsersAvailable, "ghost-chrome")
 	if !found {
 		t.Errorf("BrowsersAvailable = %v, missing ghost-chrome", cfg.BrowsersAvailable)
 	}

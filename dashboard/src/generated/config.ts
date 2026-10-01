@@ -177,8 +177,8 @@ export interface RuntimeConfig {
   AutoSolver: AutoSolverConfig;
 }
 export interface SessionsRuntimeConfig {
-  dashboard?: DashboardSessionRuntimeConfig;
-  agent?: AgentSessionRuntimeConfig;
+  dashboard: DashboardSessionRuntimeConfig;
+  agent: AgentSessionRuntimeConfig;
 }
 export interface AgentSessionRuntimeConfig {
   enabled?: boolean;
@@ -266,14 +266,14 @@ export interface AutoSolverFormCreds {
   Email: string;
 }
 export interface ObservabilityConfig {
-  activity?: ActivityConfig;
+  activity: ActivityConfig;
 }
 export interface ActivityConfig {
   enabled?: boolean;
   sessionIdleSec?: number /* int */;
   retentionDays?: number /* int */;
   stateDir?: string;
-  events?: ActivityEventsConfig;
+  events: ActivityEventsConfig;
 }
 export interface ActivityEventsConfig {
   dashboard?: boolean;
@@ -290,18 +290,18 @@ export interface ActivityEventsConfig {
 export interface FileConfig {
   $schema?: string;
   configVersion?: string;
-  server?: ServerConfig;
-  browser?: BrowserConfig;
-  instanceDefaults?: InstanceDefaultsConfig;
-  security?: SecurityConfig;
-  profiles?: ProfilesConfig;
-  multiInstance?: MultiInstanceConfig;
-  timeouts?: TimeoutsConfig;
-  scheduler?: SchedulerFileConfig;
-  observability?: ObservabilityFileConfig;
-  sessions?: SessionsFileConfig;
-  autoSolver?: AutoSolverFileConfig;
-  browsers?: BrowsersConfig;
+  server: ServerConfig;
+  browser: BrowserConfig;
+  instanceDefaults: InstanceDefaultsConfig;
+  security: SecurityConfig;
+  profiles: ProfilesConfig;
+  multiInstance: MultiInstanceConfig;
+  timeouts: TimeoutsConfig;
+  scheduler: SchedulerFileConfig;
+  observability: ObservabilityFileConfig;
+  sessions: SessionsFileConfig;
+  autoSolver: AutoSolverFileConfig;
+  browsers: BrowsersConfig;
 }
 export interface ServerConfig {
   port?: string;
@@ -321,8 +321,8 @@ export interface ServerConfig {
   cookieSecure?: boolean;
 }
 export interface SessionsFileConfig {
-  dashboard?: DashboardSessionFileConfig;
-  agent?: AgentSessionFileConfig;
+  dashboard: DashboardSessionFileConfig;
+  agent: AgentSessionFileConfig;
 }
 /**
  * DefaultAgentSessionsEnabled is the effective value of sessions.agent.enabled
@@ -352,9 +352,9 @@ export interface BrowserConfig {
   binary?: string;
   remoteDebuggingPort?: number /* int */;
   extraFlags?: string;
-  cloak?: CloakBrowserConfig;
+  cloak: CloakBrowserConfig;
   extensionPaths?: string[];
-  proxy?: BrowserProxyConfig;
+  proxy: BrowserProxyConfig;
   defaultTarget?: string;
   fallbackOrder?: string[];
   targets?: BrowserTargetsConfig;
@@ -370,11 +370,11 @@ export interface BrowserTargetConfig {
   provider?: string;
   binary?: string;
   extraFlags?: string;
-  cloak?: CloakBrowserConfig;
+  cloak: CloakBrowserConfig;
   /**
    * Proxy, when Server is non-empty, replaces the global BrowserConfig.Proxy entirely (no merge).
    */
-  proxy?: BrowserProxyConfig;
+  proxy: BrowserProxyConfig;
 }
 export interface CloakBrowserConfig {
   fingerprintSeed?: string;
@@ -414,8 +414,8 @@ export interface BrowsersConfig {
 export interface BrowserItemConfig {
   binary?: string;
   extraFlags?: string;
-  cloak?: CloakBrowserConfig;
-  proxy?: BrowserProxyConfig;
+  cloak: CloakBrowserConfig;
+  proxy: BrowserProxyConfig;
 }
 export interface InstanceDefaultsConfig {
   mode?: string;
@@ -489,7 +489,7 @@ export interface SecurityConfig {
   trustedProxyCIDRs?: string[];
   trustedResolveCIDRs?: string[];
   trustLoopbackProxy?: boolean;
-  attach?: AttachConfig;
+  attach: AttachConfig;
   idpi?: IDPIConfig;
 }
 export interface MultiInstanceConfig {
@@ -497,7 +497,7 @@ export interface MultiInstanceConfig {
   allocationPolicy?: string;
   instancePortStart?: number /* int */;
   instancePortEnd?: number /* int */;
-  restart?: MultiInstanceRestartConfig;
+  restart: MultiInstanceRestartConfig;
 }
 /**
  * MultiInstanceRestartConfig controls restart-managed strategy recovery behavior.
@@ -532,14 +532,14 @@ export interface SchedulerFileConfig {
   maxBatchSize?: number /* int */;
 }
 export interface ObservabilityFileConfig {
-  activity?: ActivityFileConfig;
+  activity: ActivityFileConfig;
 }
 export interface ActivityFileConfig {
   enabled?: boolean;
   sessionIdleSec?: number /* int */;
   retentionDays?: number /* int */;
   stateDir?: string;
-  events?: ActivityEventsFileConfig;
+  events: ActivityEventsFileConfig;
 }
 export interface ActivityEventsFileConfig {
   dashboard?: boolean;
@@ -565,8 +565,8 @@ export interface AutoSolverFileConfig {
   solvers?: string[];
   llmProvider?: string;
   llmFallback?: boolean;
-  external?: AutoSolverExtConf;
-  credentials?: AutoSolverCredentialsConf;
+  external: AutoSolverExtConf;
+  credentials: AutoSolverCredentialsConf;
 }
 /**
  * AutoSolverExtConf holds external solver API keys.
@@ -581,9 +581,9 @@ export interface AutoSolverExtConf {
  * returns them blanked, PUT preserves the on-disk values when blank.
  */
 export interface AutoSolverCredentialsConf {
-  login?: AutoSolverLoginConf;
-  signup?: AutoSolverSignupConf;
-  form?: AutoSolverFormConf;
+  login: AutoSolverLoginConf;
+  signup: AutoSolverSignupConf;
+  form: AutoSolverFormConf;
 }
 export interface AutoSolverLoginConf {
   user?: string;

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -183,7 +184,7 @@ func addressableConfigPaths(t *testing.T) []string {
 
 	fc := DefaultFileConfig()
 	var out []string
-	for _, path := range configLeafPaths(reflect.TypeOf(FileConfig{}), "") {
+	for _, path := range configLeafPaths(reflect.TypeFor[FileConfig](), "") {
 		if _, err := GetConfigValue(&fc, path); err != nil {
 			continue
 		}
@@ -194,8 +195,7 @@ func addressableConfigPaths(t *testing.T) []string {
 
 func configLeafPaths(typ reflect.Type, prefix string) []string {
 	var out []string
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
+	for field := range typ.Fields() {
 		if !field.IsExported() {
 			continue
 		}
@@ -221,12 +221,7 @@ func configLeafPaths(typ reflect.Type, prefix string) []string {
 }
 
 func slicesContains(haystack []string, needle string) bool {
-	for _, item := range haystack {
-		if item == needle {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(haystack, needle)
 }
 
 func quoteJSON(value string) string {

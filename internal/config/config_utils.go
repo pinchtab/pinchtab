@@ -140,7 +140,7 @@ func IsFirstRun(cfg *FileConfig) bool {
 func CompareVersions(a, b string) int {
 	aParts := splitVersion(a)
 	bParts := splitVersion(b)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if aParts[i] < bParts[i] {
 			return -1
 		}

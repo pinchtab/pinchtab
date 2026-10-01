@@ -1,8 +1,10 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -174,7 +176,8 @@ func validateTargetExtraFlags(targetName, raw string) []error {
 	out := make([]error, 0, len(flagErrs))
 	field := fmt.Sprintf("browser.targets.%s.extraFlags", targetName)
 	for _, err := range flagErrs {
-		if ve, ok := err.(ValidationError); ok {
+		var ve ValidationError
+		if errors.As(err, &ve) {
 			ve.Field = field
 			out = append(out, ve)
 			continue
@@ -348,10 +351,8 @@ func MatchBrowserToTarget(cfg *RuntimeConfig, browser string) (target string, ma
 		return "", matches
 	default:
 		dt := ResolveDefaultTarget(cfg)
-		for _, m := range matches {
-			if m == dt {
-				return dt, matches
-			}
+		if slices.Contains(matches, dt) {
+			return dt, matches
 		}
 		return "", matches
 	}
