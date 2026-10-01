@@ -20,7 +20,7 @@ var clipboardReadCmd = &cobra.Command{
 	Use:   "read",
 	Short: "Read clipboard text",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			clipboardRead(rt)
 		})
 	},
@@ -31,7 +31,7 @@ var clipboardWriteCmd = &cobra.Command{
 	Short: "Write text to clipboard",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			clipboardWrite(rt, args)
 		})
 	},
@@ -42,7 +42,7 @@ var clipboardCopyCmd = &cobra.Command{
 	Short: "Copy text to clipboard (alias for write)",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			clipboardWrite(rt, args)
 		})
 	},
@@ -52,7 +52,7 @@ var clipboardPasteCmd = &cobra.Command{
 	Use:   "paste",
 	Short: "Paste clipboard text (alias for read)",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			clipboardRead(rt)
 		})
 	},

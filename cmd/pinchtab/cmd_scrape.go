@@ -2,6 +2,7 @@ package main
 
 import (
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -31,7 +32,7 @@ Pages that fail in both engines do not fail the run: the command still
 exits 0 and the failing page's report entry carries an "error" field.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runCLIWithError(func(rt cliRuntime) error {
+		return runCLIWithError(func(rt apiclient.Conn) error {
 			return browseractions.Scrape(rt, cmd, args[0])
 		})
 	},

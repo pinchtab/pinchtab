@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"strconv"
 	"strings"
 
@@ -17,7 +18,7 @@ func newOptionalRefActionCmd(use, short, action string) *cobra.Command {
 		Short: short,
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			runCLI(func(rt cliRuntime) {
+			runCLI(func(rt apiclient.Conn) {
 				browseractions.Action(rt, action, optionalArg(args), cmd)
 			})
 		},
@@ -30,7 +31,7 @@ func newSimpleActionCmd(use, short, action string, argsValidator cobra.Positiona
 		Short: short,
 		Args:  argsValidator,
 		Run: func(cmd *cobra.Command, args []string) {
-			runCLI(func(rt cliRuntime) {
+			runCLI(func(rt apiclient.Conn) {
 				browseractions.ActionSimple(rt, action, args, cmd)
 			})
 		},
@@ -43,7 +44,7 @@ func newRequiredRefActionCmd(use, short, action string) *cobra.Command {
 		Short: short,
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			runCLI(func(rt cliRuntime) {
+			runCLI(func(rt apiclient.Conn) {
 				browseractions.Action(rt, action, args[0], cmd)
 			})
 		},
@@ -56,7 +57,7 @@ func newMouseActionCmd(use, short, action string, argsValidator cobra.Positional
 		Short: short,
 		Args:  argsValidator,
 		Run: func(cmd *cobra.Command, args []string) {
-			runCLI(func(rt cliRuntime) {
+			runCLI(func(rt apiclient.Conn) {
 				browseractions.MouseAction(rt, action, args, cmd)
 			})
 		},
@@ -109,7 +110,7 @@ dragstart and the destination receives drop.
       {"kind":"drag","selector":"...","dragX":N,"dragY":N}.`,
 	Args: cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Drag(rt, args, cmd)
 		})
 	},
@@ -145,7 +146,7 @@ Precedence: integer and direction keywords win over selector parsing so that
 'up'/'down' are treated as directions, not as CSS tag selectors.`,
 	Args: scrollArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.ActionSimple(rt, "scroll", args, cmd)
 		})
 	},
@@ -225,7 +226,7 @@ var dialogAcceptCmd = &cobra.Command{
 	Short: "Accept (OK) the current dialog",
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Dialog(rt, "accept", optionalArg(args), cmd)
 		})
 	},
@@ -235,7 +236,7 @@ var dialogDismissCmd = &cobra.Command{
 	Use:   "dismiss",
 	Short: "Dismiss (Cancel) the current dialog",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Dialog(rt, "dismiss", "", cmd)
 		})
 	},

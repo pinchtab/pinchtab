@@ -2,6 +2,7 @@ package main
 
 import (
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +19,7 @@ against request URLs as a substring (no wildcards) or as a glob ('*', '?').
 Use 'pinchtab network unroute' to remove a rule.`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.NetworkRoute(rt, cmd, args[0])
 		})
 	},
@@ -33,7 +34,7 @@ var networkUnrouteCmd = &cobra.Command{
 		if len(args) > 0 {
 			pattern = args[0]
 		}
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.NetworkUnroute(rt, cmd, pattern)
 		})
 	},
@@ -48,7 +49,7 @@ rule's body instead of the real server. Rules survive navigation, so a tab you d
 set up can be mocking or blocking traffic; an empty list means it does neither.`,
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.NetworkRules(rt, cmd)
 		})
 	},

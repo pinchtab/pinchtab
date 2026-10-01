@@ -2,6 +2,7 @@ package main
 
 import (
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +28,7 @@ failing element maps to a snapshot ref, that ref — so you can act on it with
 rule-id allowlist).`,
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.A11yAudit(rt, cmd)
 		})
 	},

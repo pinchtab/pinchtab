@@ -2,6 +2,7 @@ package main
 
 import (
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +17,7 @@ var cookiesGetCmd = &cobra.Command{
 	Short: "Get cookies for the current page",
 	Long:  "Read the cookies visible to a tab's current URL, with values. Use --name for one cookie, --url to read another origin.",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.CookiesGet(rt, cmd)
 		})
 	},
@@ -31,7 +32,7 @@ pass --url to target another origin. An empty value is honoured, blanking the
 cookie without deleting it.`,
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.CookiesSet(rt, cmd, args[0], args[1])
 		})
 	},
@@ -45,7 +46,7 @@ scoped to one tab or one domain — there is no per-cookie removal verb. Nothing
 the CLI restores them; re-set what you need with cookies set, or reload a saved
 state with state load.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.CookiesClear(rt, cmd)
 		})
 	},

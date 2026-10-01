@@ -62,7 +62,7 @@ func init() {
 				output.Hint(cli.NoSessionHint)
 				os.Exit(1)
 			}
-			runCLI(func(rt cliRuntime) {
+			runCLI(func(rt apiclient.Conn) {
 				rt.Get("/sessions/me", nil)
 			})
 		},
@@ -72,7 +72,7 @@ func init() {
 		Use:   "list",
 		Short: "List all agent sessions",
 		Run: func(cmd *cobra.Command, args []string) {
-			runCLI(func(rt cliRuntime) {
+			runCLI(func(rt apiclient.Conn) {
 				rt.Get("/sessions", nil)
 			})
 		},
@@ -116,7 +116,7 @@ func init() {
 			// Auto-start the control plane first: the documented "create a session
 			// before any browser command" order otherwise fails cold on a fresh
 			// machine (only browser commands start the server).
-			runCLIEnsuringServerNoBrowser("session create", func(rt cliRuntime) {
+			runCLIEnsuringServerNoBrowser("session create", func(rt apiclient.Conn) {
 				if jsonOutput {
 					rt.Post("/sessions", body)
 					return
@@ -151,7 +151,7 @@ func init() {
 		Short: "Revoke an agent session",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			runCLI(func(rt cliRuntime) {
+			runCLI(func(rt apiclient.Conn) {
 				rt.Post("/sessions/"+args[0]+"/revoke", nil)
 			})
 		},

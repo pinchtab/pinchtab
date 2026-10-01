@@ -65,7 +65,7 @@ func TestARemoteServerWithNoEnvCredentialRefusesBeforeAnyRequest(t *testing.T) {
 	interceptExit(t)
 	cfg := &config.RuntimeConfig{Port: "9867", Token: "local-secret"}
 
-	stderr := expectRefusalExit(t, func() { newCLIRuntime(cfg) })
+	stderr := expectRefusalExit(t, func() { newCLIConn(cfg) })
 
 	for _, want := range []string{remote, "PINCHTAB_TOKEN", "server.token"} {
 		if !strings.Contains(stderr, want) {

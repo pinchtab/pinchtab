@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
 	"github.com/pinchtab/pinchtab/internal/urls"
@@ -17,7 +18,7 @@ var snapCmd = &cobra.Command{
 		if len(args) > 0 && stringFlag(cmd, "selector") == "" {
 			selector = args[0]
 		}
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Snapshot(rt, cmd, selector)
 		})
 	},
@@ -28,7 +29,7 @@ var frameCmd = &cobra.Command{
 	Short: "Show or set the current frame scope",
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Frame(rt, args, cmd)
 		})
 	},
@@ -38,7 +39,7 @@ var screenshotCmd = &cobra.Command{
 	Use:   "screenshot",
 	Short: "Take a screenshot",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Screenshot(rt, cmd)
 		})
 	},
@@ -48,7 +49,7 @@ var annotateCmd = &cobra.Command{
 	Use:   "annotate",
 	Short: "Inject a persistent, clickable annotation overlay on the live page (--clear to remove)",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Annotate(rt, cmd)
 		})
 	},
@@ -59,7 +60,7 @@ var captureCmd = &cobra.Command{
 	Aliases: []string{"cap"},
 	Short:   "Paired screenshot + accessibility snapshot from the same DOM epoch",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Capture(rt, cmd)
 		})
 	},
@@ -70,7 +71,7 @@ var evalCmd = &cobra.Command{
 	Short: "Evaluate JavaScript",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Evaluate(rt, args, cmd)
 		})
 	},
@@ -80,7 +81,7 @@ var pdfCmd = &cobra.Command{
 	Use:   "pdf",
 	Short: "Export the current page as PDF",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.PDF(rt, cmd)
 		})
 	},
@@ -91,7 +92,7 @@ var textCmd = &cobra.Command{
 	Short: "Extract page text",
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Text(rt, cmd, args)
 		})
 	},
@@ -101,7 +102,7 @@ var titleCmd = &cobra.Command{
 	Use:   "title",
 	Short: "Get the current tab title",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Title(rt, cmd)
 		})
 	},
@@ -111,7 +112,7 @@ var urlCmd = &cobra.Command{
 	Use:   "url",
 	Short: "Get the current tab URL",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.URL(rt, cmd)
 		})
 	},
@@ -122,7 +123,7 @@ var htmlCmd = &cobra.Command{
 	Short: "Get document or element HTML",
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.HTML(rt, cmd, args)
 		})
 	},
@@ -133,7 +134,7 @@ var stylesCmd = &cobra.Command{
 	Short: "Get computed styles for the root element or a matched element",
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Styles(rt, cmd, args)
 		})
 	},
@@ -144,7 +145,7 @@ var valueCmd = &cobra.Command{
 	Short: "Get the current value of a form element by ref",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Value(rt, cmd, args)
 		})
 	},
@@ -155,7 +156,7 @@ var attrCmd = &cobra.Command{
 	Short: "Get the value of an HTML attribute by ref",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Attr(rt, cmd, args)
 		})
 	},
@@ -166,7 +167,7 @@ var boxCmd = &cobra.Command{
 	Short: "Get the bounding box of an element by ref",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Box(rt, cmd, args)
 		})
 	},
@@ -181,7 +182,7 @@ is still rendered. Use --json to also read onScreen, the viewport-intersection
 answer that the capture snapshot's per-node visible field publishes.`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Visible(rt, cmd, args)
 		})
 	},
@@ -192,7 +193,7 @@ var enabledCmd = &cobra.Command{
 	Short: "Check if an element is enabled by ref",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Enabled(rt, cmd, args)
 		})
 	},
@@ -203,7 +204,7 @@ var checkedCmd = &cobra.Command{
 	Short: "Check if an element is checked by ref",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Checked(rt, cmd, args)
 		})
 	},
@@ -214,7 +215,7 @@ var countCmd = &cobra.Command{
 	Short: "Count elements matching a CSS selector",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Count(rt, cmd, args)
 		})
 	},
@@ -226,7 +227,7 @@ var downloadCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		args[0] = urls.Normalize(args[0])
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Download(rt, args, stringFlag(cmd, "output"), stringFlag(cmd, "tab"))
 		})
 	},
@@ -237,7 +238,7 @@ var uploadCmd = &cobra.Command{
 	Short: "Upload a file to a file input element",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Upload(rt, args, stringFlag(cmd, "selector"), stringFlag(cmd, "tab"))
 		})
 	},
@@ -248,7 +249,7 @@ var findCmd = &cobra.Command{
 	Short: "Find elements by natural language query",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Find(rt, args[0], cmd)
 		})
 	},
@@ -259,7 +260,7 @@ var extractCmd = &cobra.Command{
 	Short: "Extract schema-typed data from the page as JSON",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Extract(rt, cmd)
 		})
 	},
@@ -270,7 +271,7 @@ var waitCmd = &cobra.Command{
 	Short: "Wait for element, text, URL, network idle, JS expression, or fixed duration",
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Wait(rt, args, cmd)
 		})
 	},
@@ -281,7 +282,7 @@ var networkCmd = &cobra.Command{
 	Short: "List or inspect network requests",
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Network(rt, cmd, args)
 		})
 	},

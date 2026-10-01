@@ -532,7 +532,7 @@ func TestLandingReportDegradesWithoutAURL(t *testing.T) {
 // no landed-URL line added.
 func TestJSONOutputIsTheRawResponseForAllFour(t *testing.T) {
 	const response = `{"tabId":"ABC123","url":"https://example.com/landed"}`
-	// DoPost pretty-prints the decoded body, so that is what --json must equal.
+	// Conn.Post pretty-prints the decoded body, so that is what --json must equal.
 	const want = "{\n  \"tabId\": \"ABC123\",\n  \"url\": \"https://example.com/landed\"\n}"
 
 	t.Run("navigate", func(t *testing.T) {

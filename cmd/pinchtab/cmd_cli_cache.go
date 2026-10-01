@@ -2,6 +2,7 @@ package main
 
 import (
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +17,7 @@ var cacheClearCmd = &cobra.Command{
 	Short: "Clear browser HTTP cache",
 	Long:  "Clear the browser's HTTP disk cache. This affects all origins and ensures fresh resources are fetched on subsequent navigations.",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.CacheClear(rt, cmd)
 		})
 	},
@@ -27,7 +28,7 @@ var cacheStatusCmd = &cobra.Command{
 	Short: "Check cache status",
 	Long:  "Check if the browser cache can be cleared.",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.CacheStatus(rt, cmd)
 		})
 	},

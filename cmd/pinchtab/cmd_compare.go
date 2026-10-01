@@ -2,6 +2,7 @@ package main
 
 import (
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +28,7 @@ differ. Pass --fail-on-diff to exit non-zero when any visual or data diff
 exists (CI gate).`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runCLIWithError(func(rt cliRuntime) error {
+		return runCLIWithError(func(rt apiclient.Conn) error {
 			return browseractions.Compare(rt, cmd, args[0], args[1])
 		})
 	},

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
 	"github.com/spf13/cobra"
@@ -20,7 +21,7 @@ var storageGetCmd = &cobra.Command{
 	Args:  optionalOperand("key"),
 	Run: func(cmd *cobra.Command, args []string) {
 		key := operandOrFlag(cmd, args, "key")
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.StorageGet(rt, cmd, key)
 		})
 	},
@@ -32,7 +33,7 @@ var storageSetCmd = &cobra.Command{
 	Long:  "Write a single key/value pair to localStorage or sessionStorage. Use --type local|session (default: local).",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.StorageSet(rt, cmd, args[0], args[1])
 		})
 	},
@@ -45,7 +46,7 @@ var storageDeleteCmd = &cobra.Command{
 	Args:  requiredOperand("key", `to wipe the whole store use "pinchtab storage clear"`),
 	Run: func(cmd *cobra.Command, args []string) {
 		key := operandOrFlag(cmd, args, "key")
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.StorageDelete(rt, cmd, key)
 		})
 	},
@@ -56,7 +57,7 @@ var storageClearCmd = &cobra.Command{
 	Short: "Clear storage",
 	Long:  "Clear localStorage, sessionStorage, or both. Use --type local|session to clear one, or --all to clear both in a single call.",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.StorageClear(rt, cmd)
 		})
 	},

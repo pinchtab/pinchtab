@@ -2,6 +2,7 @@ package main
 
 import (
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +17,7 @@ lists its top constructors and duplicate strings, and compare reports what grew
 between two snapshots. All three need security.allowMemory,
 because a heap snapshot holds every string on the page, tokens included.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Memory(rt, cmd)
 		})
 	},
@@ -31,7 +32,7 @@ to 'pinchtab memory summary'. --out copies the file to a local path when the ser
 shares this machine's filesystem. The file loads in Chrome DevTools (Memory panel).`,
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.MemorySnapshot(rt, cmd)
 		})
 	},
@@ -43,7 +44,7 @@ var memorySummaryCmd = &cobra.Command{
 	Long:  "Summarize a saved heap snapshot: top constructors by self size and by count, total node and edge counts, and the largest duplicate strings.",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.MemorySummary(rt, cmd, args[0])
 		})
 	},
@@ -59,7 +60,7 @@ listed constructor's retained size in head from a dominator tree, which costs me
 and time proportional to the snapshot's edges.`,
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.MemoryCompare(rt, cmd, args[0], args[1])
 		})
 	},

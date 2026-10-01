@@ -2,6 +2,7 @@ package main
 
 import (
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +16,7 @@ var recordStartCmd = &cobra.Command{
 	Short: "Start recording (.webm, .mp4, .gif)",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.RecordStart(rt, cmd, args)
 		})
 	},
@@ -25,7 +26,7 @@ var recordStopCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop recording and save",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.RecordStop(rt)
 		})
 	},
@@ -35,7 +36,7 @@ var recordStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Check recording status",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.RecordStatus(rt)
 		})
 	},

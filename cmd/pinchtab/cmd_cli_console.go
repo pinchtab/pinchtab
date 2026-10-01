@@ -2,6 +2,7 @@ package main
 
 import (
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -10,7 +11,7 @@ var consoleCmd = &cobra.Command{
 	Short: "View browser console logs",
 	Long:  "View browser console.log/warn/error/info messages from the current or specified tab.",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Console(rt, cmd)
 		})
 	},
@@ -21,7 +22,7 @@ var errorsCmd = &cobra.Command{
 	Short: "View browser uncaught errors",
 	Long:  "View uncaught JavaScript exceptions from the current or specified tab.",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Errors(rt, cmd)
 		})
 	},

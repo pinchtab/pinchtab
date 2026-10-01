@@ -2,6 +2,7 @@ package main
 
 import (
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -12,7 +13,7 @@ var stateCmd = &cobra.Command{
 	Short: "Show current browser state or manage saved state",
 	Long:  "Show current browser state for the current tab, or save, load, and manage persistent browser state (cookies, localStorage, sessionStorage).",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.StateCurrent(rt, cmd)
 		})
 	},
@@ -23,7 +24,7 @@ var stateListCmd = &cobra.Command{
 	Short: "List saved state files",
 	Long:  "List all saved state files in the state directory.",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.StateList(rt)
 		})
 	},
@@ -36,7 +37,7 @@ var stateSaveCmd = &cobra.Command{
 	Args:  optionalOperand("name"),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := operandOrFlag(cmd, args, "name")
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.StateSave(rt, cmd, name)
 		})
 	},
@@ -49,7 +50,7 @@ var stateLoadCmd = &cobra.Command{
 	Args:  requiredOperand("name", stateListRemedy),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := operandOrFlag(cmd, args, "name")
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.StateLoad(rt, cmd, name)
 		})
 	},
@@ -62,7 +63,7 @@ var stateShowCmd = &cobra.Command{
 	Args:  requiredOperand("name", stateListRemedy),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := operandOrFlag(cmd, args, "name")
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.StateShow(rt, name)
 		})
 	},
@@ -75,7 +76,7 @@ var stateDeleteCmd = &cobra.Command{
 	Args:  requiredOperand("name", stateListRemedy),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := operandOrFlag(cmd, args, "name")
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.StateDelete(rt, name)
 		})
 	},
@@ -86,7 +87,7 @@ var stateCleanCmd = &cobra.Command{
 	Short: "Remove old state files",
 	Long:  "Delete state files older than a given number of hours (default: 24). Requires security.allowStateExport=true.",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.StateClean(rt, cmd)
 		})
 	},

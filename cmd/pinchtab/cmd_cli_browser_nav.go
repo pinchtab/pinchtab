@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"strings"
 
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
@@ -16,7 +17,7 @@ var quickCmd = &cobra.Command{
 	Args:       cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		args[0] = urls.Normalize(args[0])
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Quick(rt, args)
 		})
 	},
@@ -29,7 +30,7 @@ var navCmd = &cobra.Command{
 	Args:    cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		url := urls.Normalize(args[0])
-		runCLIEnsuringServer("nav", func(rt cliRuntime) {
+		runCLIEnsuringServer("nav", func(rt apiclient.Conn) {
 			tabID := browseractions.Navigate(rt, url, cmd)
 			WriteTabStateFile(tabID)
 		})
@@ -40,7 +41,7 @@ var backCmd = &cobra.Command{
 	Use:   "back",
 	Short: "Go back in browser history",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Back(rt, cmd)
 		})
 	},
@@ -50,7 +51,7 @@ var forwardCmd = &cobra.Command{
 	Use:   "forward",
 	Short: "Go forward in browser history",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Forward(rt, cmd)
 		})
 	},
@@ -60,7 +61,7 @@ var reloadCmd = &cobra.Command{
 	Use:   "reload",
 	Short: "Reload current page",
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.Reload(rt, cmd)
 		})
 	},
@@ -72,7 +73,7 @@ var tabsCmd = &cobra.Command{
 	Short:   "List tabs, or focus a tab by ID",
 	Args:    cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			if len(args) == 0 {
 				browseractions.TabList(rt, cmd)
 				return
@@ -98,7 +99,7 @@ func newTabCloseCmd() *cobra.Command {
 		Short: "Close a tab by ID",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			runCLI(func(rt cliRuntime) {
+			runCLI(func(rt apiclient.Conn) {
 				browseractions.TabClose(rt, args[0], cmd)
 				ClearTabStateFileIfCurrent(args[0])
 			})
@@ -133,7 +134,7 @@ func newTabHandoffCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			runCLI(func(rt cliRuntime) {
+			runCLI(func(rt apiclient.Conn) {
 				browseractions.TabHandoff(rt, tabID, reason, timeoutMS, cmd)
 			})
 			return nil
@@ -155,7 +156,7 @@ func newTabResumeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			runCLI(func(rt cliRuntime) {
+			runCLI(func(rt apiclient.Conn) {
 				browseractions.TabResume(rt, tabID, status, cmd)
 			})
 			return nil
@@ -176,7 +177,7 @@ func newTabHandoffStatusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			runCLI(func(rt cliRuntime) {
+			runCLI(func(rt apiclient.Conn) {
 				browseractions.TabHandoffStatus(rt, tabID, cmd)
 			})
 			return nil

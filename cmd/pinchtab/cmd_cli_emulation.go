@@ -2,6 +2,7 @@ package main
 
 import (
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +18,7 @@ var setViewportCmd = &cobra.Command{
 	Long:  "Set the browser viewport dimensions using CDP emulation. Accepts optional --dpr and --mobile flags.",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.SetViewport(rt, cmd, args)
 		})
 	},
@@ -35,7 +36,7 @@ south of the equator are written the same way as anywhere else:
   pinchtab set geo -33.8 151.2 --tab <id>    # Sydney`,
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.SetGeolocation(rt, cmd, args)
 		})
 	},
@@ -47,7 +48,7 @@ var setOfflineCmd = &cobra.Command{
 	Long:  "Enable or disable network offline emulation using CDP network.EmulateNetworkConditions.",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.SetOffline(rt, cmd, args)
 		})
 	},
@@ -59,7 +60,7 @@ var setHeadersCmd = &cobra.Command{
 	Long:  "Set extra HTTP headers using CDP network.SetExtraHTTPHeaders. Pass a JSON object as a single argument. An empty object {} clears extra headers.",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.SetHeaders(rt, cmd, args)
 		})
 	},
@@ -71,7 +72,7 @@ var setCredentialsCmd = &cobra.Command{
 	Long:  "Set HTTP basic auth credentials using CDP Fetch domain. The browser will automatically respond to 401/407 auth challenges.",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.SetCredentials(rt, cmd, args)
 		})
 	},
@@ -83,7 +84,7 @@ var setMediaCmd = &cobra.Command{
 	Long:  "Emulate a CSS media feature using CDP emulation.SetEmulatedMedia. Example: pinchtab set media prefers-color-scheme dark",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
+		runCLI(func(rt apiclient.Conn) {
 			browseractions.SetMedia(rt, cmd, args)
 		})
 	},

@@ -19,21 +19,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type cliRuntime = apiclient.Conn
-
-func runCLI(fn func(cliRuntime)) {
+func runCLI(fn func(apiclient.Conn)) {
 	runCLIWith(loadConfig(), fn)
 }
 
-func runCLIWithError(fn func(cliRuntime) error) error {
-	return fn(newCLIRuntime(loadConfig()))
+func runCLIWithError(fn func(apiclient.Conn) error) error {
+	return fn(newCLIConn(loadConfig()))
 }
 
-func runCLIWith(cfg *config.RuntimeConfig, fn func(cliRuntime)) {
-	fn(newCLIRuntime(cfg))
+func runCLIWith(cfg *config.RuntimeConfig, fn func(apiclient.Conn)) {
+	fn(newCLIConn(cfg))
 }
 
-func runCLIEnsuringServer(command string, fn func(cliRuntime)) {
+func runCLIEnsuringServer(command string, fn func(apiclient.Conn)) {
 	runCLIWithServerCheck(loadConfig(), command, fn)
 }
 
@@ -42,9 +40,9 @@ func runCLIEnsuringServer(command string, fn func(cliRuntime)) {
 // instance (e.g. session create). Without this, the documented "create a session
 // first" step fails cold with a raw "connection refused" on a fresh machine, since
 // only browser commands auto-start the server.
-func runCLIEnsuringServerNoBrowser(command string, fn func(cliRuntime)) {
+func runCLIEnsuringServerNoBrowser(command string, fn func(apiclient.Conn)) {
 	cfg := loadConfig()
-	rt := newCLIRuntime(cfg)
+	rt := newCLIConn(cfg)
 	if err := ensureServerForCLI(cfg, rt.Base, rt.Token, command); err != nil {
 		fmt.Fprintf(os.Stderr, "pinchtab: %v\n", err)
 		os.Exit(1)
@@ -52,8 +50,8 @@ func runCLIEnsuringServerNoBrowser(command string, fn func(cliRuntime)) {
 	fn(rt)
 }
 
-func runCLIWithServerCheck(cfg *config.RuntimeConfig, command string, fn func(cliRuntime)) {
-	rt := newCLIRuntime(cfg)
+func runCLIWithServerCheck(cfg *config.RuntimeConfig, command string, fn func(apiclient.Conn)) {
+	rt := newCLIConn(cfg)
 	// Only preflight when this command would auto-start the local server. For a
 	// remote --server the browser lives on that host, so local discovery is moot.
 	if canAutoStartServerForCLI(cfg, rt.Base) {
@@ -100,9 +98,9 @@ func preflightBrowserBinary(cfg *config.RuntimeConfig) error {
 	return nil
 }
 
-func newCLIRuntime(cfg *config.RuntimeConfig) cliRuntime {
+func newCLIConn(cfg *config.RuntimeConfig) apiclient.Conn {
 	base := resolveCLIBase(cfg)
-	return cliRuntime{
+	return apiclient.Conn{
 		Client: newCLIHTTPClient(resolveCLIAgentID()),
 		Base:   base,
 		Token:  tokenForBaseOrExit(cfg, base),

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 
 	browseractions "github.com/pinchtab/pinchtab/internal/cli/actions"
 	"github.com/spf13/cobra"
@@ -34,7 +35,7 @@ the failing page's report entry carries an "error" field.`,
 		if len(args) > 0 {
 			target = args[0]
 		}
-		return runCLIWithError(func(rt cliRuntime) error {
+		return runCLIWithError(func(rt apiclient.Conn) error {
 			return browseractions.Audit(rt, cmd, target)
 		})
 	},

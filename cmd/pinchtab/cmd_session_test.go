@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -37,8 +38,8 @@ func newSessionServer(response string, status int) *sessionServer {
 
 func (s *sessionServer) close() { s.server.Close() }
 
-func (s *sessionServer) rt() cliRuntime {
-	return cliRuntime{
+func (s *sessionServer) rt() apiclient.Conn {
+	return apiclient.Conn{
 		Client: &http.Client{},
 		Base:   s.server.URL,
 		Token:  "test-token",
@@ -166,7 +167,7 @@ func TestSessionCLI_Info_SendsSessionAuthHeader(t *testing.T) {
 
 	const sessionToken = "ses_mytoken"
 	captureStdout(t, func() {
-		rt := cliRuntime{
+		rt := apiclient.Conn{
 			Client: &http.Client{},
 			Base:   srv.server.URL,
 			Token:  sessionToken,
