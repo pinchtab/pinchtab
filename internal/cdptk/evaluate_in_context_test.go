@@ -55,3 +55,15 @@ func TestEvaluateForHandleErrorsOnAThrow(t *testing.T) {
 		t.Errorf("error %q does not carry the exception text", err)
 	}
 }
+
+func TestEvaluateValueSurfacesAThrownException(t *testing.T) {
+	ctx := newHijackFixture(t)
+
+	got, err := cdptk.EvaluateValue[float64](ctx, `(() => { throw new Error("measure exploded"); })()`)
+	if err == nil {
+		t.Fatalf("a throwing expression returned no error and decoded %v", got)
+	}
+	if !strings.Contains(err.Error(), "measure exploded") {
+		t.Errorf("error %q does not carry the exception text", err)
+	}
+}
