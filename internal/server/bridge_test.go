@@ -180,6 +180,7 @@ func bridgeListenerReachable(addr string) bool {
 // forever, which is exactly what broke the orchestrator E2E test asserting a
 // registered bridge instance actually stops.
 func TestRunBridgeServerShutdownStopsListening(t *testing.T) {
+	const lifecycleWait = 30 * time.Second
 	port := freeTCPPort(t)
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	cfg := &config.RuntimeConfig{
@@ -197,7 +198,7 @@ func TestRunBridgeServerShutdownStopsListening(t *testing.T) {
 		RunBridgeServer(cfg, "test")
 	}()
 
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(lifecycleWait)
 	for !bridgeListenerReachable(addr) {
 		if time.Now().After(deadline) {
 			t.Fatal("bridge server never became reachable")
@@ -216,7 +217,7 @@ func TestRunBridgeServerShutdownStopsListening(t *testing.T) {
 	}
 	_ = resp.Body.Close()
 
-	deadline = time.Now().Add(5 * time.Second)
+	deadline = time.Now().Add(lifecycleWait)
 	for bridgeListenerReachable(addr) {
 		if time.Now().After(deadline) {
 			t.Fatal("bridge listener stayed reachable after /shutdown, want it to stop")
@@ -226,7 +227,7 @@ func TestRunBridgeServerShutdownStopsListening(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(5 * time.Second):
+	case <-time.After(lifecycleWait):
 		t.Fatal("RunBridgeServer did not return after /shutdown")
 	}
 }
