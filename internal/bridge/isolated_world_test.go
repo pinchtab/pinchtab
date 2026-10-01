@@ -72,21 +72,11 @@ func nodeDescription(t *testing.T, ctx context.Context, backendNodeID int64) str
 	if err != nil {
 		t.Fatalf("describe node %d: %v", backendNodeID, err)
 	}
-	var call struct {
-		Result struct {
-			Value string `json:"value"`
-		} `json:"result"`
-	}
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": `function(){ return this.tagName.toLowerCase() + (this.id ? "#" + this.id : ""); }`,
-			"objectId":            objectID,
-			"returnByValue":       true,
-		}, &call)
-	})); err != nil {
+	var desc string
+	if err := cdptk.CallFunctionOn(ctx, objectID, `function(){ return this.tagName.toLowerCase() + (this.id ? "#" + this.id : ""); }`, nil, &desc); err != nil {
 		t.Fatalf("describe node %d: %v", backendNodeID, err)
 	}
-	return call.Result.Value
+	return desc
 }
 
 // The page redefines the very methods the dialog-scoped resolver calls. A
