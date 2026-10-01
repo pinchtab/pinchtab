@@ -56,6 +56,10 @@ func ValidateCurrentFile() (string, []error, []string, error) {
 	}
 
 	advisories := append(config.RetiredFileConfigAdvisories(data), config.FileConfigAdvisories(fc)...)
+	if keys := config.UnknownFileConfigKeys(data); len(keys) > 0 {
+		unknown := &config.UnknownConfigKeysError{Keys: keys}
+		advisories = append(advisories, unknown.Error()+" will be ignored")
+	}
 	return configPath, config.ValidateFileConfig(fc), advisories, nil
 }
 

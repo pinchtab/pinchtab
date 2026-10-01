@@ -52,3 +52,36 @@ func TestValidateCurrentFileWarnsOnRetiredKeys(t *testing.T) {
 		t.Fatalf("advisories = %q, want the allocationPolicy retirement advisory", advisories)
 	}
 }
+
+func TestValidateCurrentFileWarnsOnUnknownKeys(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{"unknown nested key", `{"multiInstance": {"strategy": "simple", "bogusKey": 1}}`, `unrecognized config key "multiInstance.bogusKey" will be ignored`},
+		{"clean file", `{"multiInstance": {"strategy": "simple"}}`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			configPath := filepath.Join(t.TempDir(), "config.json")
+			if err := os.WriteFile(configPath, []byte(tc.body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PINCHTAB_CONFIG", configPath)
+
+			_, _, advisories, err := ValidateCurrentFile()
+			if err != nil {
+				t.Fatalf("ValidateCurrentFile() error = %v", err)
+			}
+			unrecognized := slices.DeleteFunc(slices.Clone(advisories), func(a string) bool {
+				return !strings.HasPrefix(a, "unrecognized config key")
+			})
+			if tc.want == "" && len(unrecognized) != 0 {
+				t.Fatalf("advisories = %q, want no unrecognized-key advisory", advisories)
+			}
+			if tc.want != "" && !slices.Contains(unrecognized, tc.want) {
+				t.Fatalf("advisories = %q, want %q", advisories, tc.want)
+			}
+		})
+	}
+}
