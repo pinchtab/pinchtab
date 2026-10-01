@@ -23,8 +23,7 @@ import (
 // An external test package: internal/testbrowser reaches cdptk through
 // internal/browsers/chrome, so an in-package test importing it would cycle.
 
-// The page redefines the method both clip builders read. In the main world it
-// answers them; an isolated-world handle never sees it.
+// The page redefines getBoundingClientRect. In the main world it answers it; an isolated-world handle never sees it.
 const hijackFixtureHTML = `<body style="margin:0">
 <div id="target" style="position:absolute;left:40px;top:60px;width:120px;height:60px;background:#000"></div>
 <script>
@@ -105,30 +104,8 @@ func targetNodeID(t *testing.T, ctx context.Context) int64 {
 	return nodeID
 }
 
-// The cdptk analogue of TestScreenshotClipResistsMainWorldSubstitution: the clip
-// origin must come from the element, not from the rectangle page script forges.
-func TestClipForNodeResistsMainWorldSubstitution(t *testing.T) {
-	ctx := newHijackFixture(t)
-	nodeID := targetNodeID(t, ctx)
-
-	clip, err := cdptk.ClipForNode(ctx, nodeID, true)
-	if err != nil {
-		t.Fatalf("ClipForNode: %v", err)
-	}
-
-	// The forged rect is the one value the page can produce; anything else means
-	// the read happened somewhere the page could not reach.
-	if clip.X == 999 || clip.Y == 999 || (clip.Width == 100 && clip.Height == 50) {
-		t.Errorf("clip %+v matches the rectangle page script forged; the origin was read in the main world", clip)
-	}
-	if clip.Width != 120 || clip.Height != 60 {
-		t.Errorf("clip %+v does not match the element's real 120x60 box", clip)
-	}
-}
-
-// The same boundary on the annotation rect: its frame walk reads
-// getBoundingClientRect too, and its output places the overlay boxes a vision
-// model is told to read.
+// The annotation rect places the overlay boxes a vision model is told to read,
+// so it must come from the element, not from the rectangle page script forges.
 func TestAnnotationRectForNodeResistsMainWorldSubstitution(t *testing.T) {
 	ctx := newHijackFixture(t)
 	nodeID := targetNodeID(t, ctx)
@@ -247,29 +224,7 @@ func innerFrameNodeID(t *testing.T, ctx context.Context) int64 {
 }
 
 // An isolated-world handle runs in the TOP frame's world, where a bare `window`
-// has an empty frameElement chain — so the frame walk must start from the node's
-// own view or every frame offset is silently dropped.
-func TestClipForNodeAppliesFrameOffset(t *testing.T) {
-	ctx := newFramedFixture(t)
-
-	clip, err := cdptk.ClipForNode(ctx, innerFrameNodeID(t, ctx), true)
-	if err != nil {
-		t.Fatalf("clip for in-frame element: %v", err)
-	}
-
-	const wantX, wantY, wantW, wantH = 410, 320, 80, 40
-	if clip.X != wantX || clip.Y != wantY {
-		t.Errorf("in-frame clip origin = (%.0f,%.0f), want (%d,%d) — frame offset not applied (frame-local origin is (10,20))",
-			clip.X, clip.Y, wantX, wantY)
-	}
-	if clip.Width != wantW || clip.Height != wantH {
-		t.Errorf("in-frame clip size = %.0fx%.0f, want %dx%d", clip.Width, clip.Height, wantW, wantH)
-	}
-}
-
-// The same isolated-world frame-walk trap as the clip builder, on the path that
-// actually has production callers: the annotate handler places the overlay boxes
-// a vision model is told to read, so a frame-local rect misplaces every one.
+// has an empty frameElement chain, so a frame-local rect misplaces every overlay box.
 func TestAnnotationRectForNodeAppliesFrameOffset(t *testing.T) {
 	ctx := newFramedFixture(t)
 

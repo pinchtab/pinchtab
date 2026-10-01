@@ -8,9 +8,6 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-// ScrollNodeIntoView ensures the target backend node is visible before we
-// read its rect. Mirrors what the non-annotated selector path does in
-// ClipForNode.
 func ScrollNodeIntoView(ctx context.Context, nodeID int64) error {
 	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.scrollIntoViewIfNeeded", map[string]any{
