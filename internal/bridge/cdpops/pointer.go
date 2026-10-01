@@ -17,11 +17,11 @@ import (
 	"github.com/pinchtab/pinchtab/internal/cdptk"
 )
 
-// Headless Chromium can hold synthetic mouseMoved dispatches for about five
-// seconds waiting for renderer/compositor ack. Bound the real CDP move and
-// fall back to DOM mouse events so hover/move tests and simple automation
-// stay responsive.
-const mouseMoveDispatchTimeout = 50 * time.Millisecond
+const (
+	mouseMoveBudgetFloor   = 50 * time.Millisecond
+	mouseMoveBudgetCeiling = time.Second
+	mouseMoveBudgetShare   = 10
+)
 
 // DefaultMouseButton is what an unspecified button means. An unspecified button is a
 // default; an unrecognised NAME is a caller error, and the two used to share this answer.
@@ -203,13 +203,7 @@ func dispatchMouseEvent(ctx context.Context, payload map[string]any) error {
 }
 
 func dispatchRealMouseMove(ctx context.Context, x, y float64, button input.MouseButton, buttons int64) error {
-	ctx, err := EnableTrustedInput(ctx)
-	if err != nil {
-		return err
-	}
-	stepCtx, cancel := context.WithTimeout(ctx, mouseMoveDispatchTimeout)
-	defer cancel()
-	return chromedp.Run(stepCtx, MouseEventAction(map[string]any{
+	return chromedp.Run(ctx, MouseEventAction(map[string]any{
 		"type":    "mouseMoved",
 		"x":       x,
 		"y":       y,
@@ -228,8 +222,19 @@ var (
 	dispatchMouseEventFunc = dispatchMouseEvent
 )
 
-func dispatchMouseMove(ctx context.Context, x, y float64, button input.MouseButton, buttons int64) error {
-	err := dispatchRealMouseMoveFunc(ctx, x, y, button, buttons)
+func mouseMoveBudget(ctx context.Context) time.Duration {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return mouseMoveBudgetCeiling
+	}
+	return min(max(time.Until(deadline)/mouseMoveBudgetShare, mouseMoveBudgetFloor), mouseMoveBudgetCeiling)
+}
+
+func dispatchMouseMoveOrFallback(ctx context.Context, x, y float64, button input.MouseButton, buttons int64, synthetic func(context.Context) error) error {
+	ctx = WithTrustedInput(ctx)
+	stepCtx, cancel := context.WithTimeout(ctx, mouseMoveBudget(ctx))
+	err := dispatchRealMouseMoveFunc(stepCtx, x, y, button, buttons)
+	cancel()
 	if err == nil {
 		return nil
 	}
@@ -239,21 +244,19 @@ func dispatchMouseMove(ctx context.Context, x, y float64, button input.MouseButt
 	if !errors.Is(err, context.DeadlineExceeded) {
 		return err
 	}
-	return dispatchSyntheticMouseMoveFunc(ctx, x, y, button, buttons)
+	return synthetic(ctx)
+}
+
+func dispatchMouseMove(ctx context.Context, x, y float64, button input.MouseButton, buttons int64) error {
+	return dispatchMouseMoveOrFallback(ctx, x, y, button, buttons, func(ctx context.Context) error {
+		return dispatchSyntheticMouseMoveFunc(ctx, x, y, button, buttons)
+	})
 }
 
 func dispatchMouseMoveToNode(ctx context.Context, nodeID int64, x, y float64, button input.MouseButton, buttons int64) error {
-	err := dispatchRealMouseMoveFunc(ctx, x, y, button, buttons)
-	if err == nil {
-		return nil
-	}
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-	if !errors.Is(err, context.DeadlineExceeded) {
-		return err
-	}
-	return dispatchSyntheticMouseMoveOnNodeFunc(ctx, nodeID, button, buttons)
+	return dispatchMouseMoveOrFallback(ctx, x, y, button, buttons, func(ctx context.Context) error {
+		return dispatchSyntheticMouseMoveOnNodeFunc(ctx, nodeID, button, buttons)
+	})
 }
 
 func dispatchSyntheticMouseMove(ctx context.Context, x, y float64, button input.MouseButton, buttons int64) error {

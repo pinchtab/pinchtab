@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/chromedp/cdproto"
 	"github.com/chromedp/cdproto/input"
@@ -442,5 +443,84 @@ func TestLinkContextGoneOnlyMatchesADestroyedContext(t *testing.T) {
 		if got := linkContextGone(tc.err); got != tc.want {
 			t.Errorf("linkContextGone(%v) = %v, want %v", tc.err, got, tc.want)
 		}
+	}
+}
+
+func stubMouseMoves(t *testing.T, real func(context.Context) error) *bool {
+	t.Helper()
+	origReal, origSynthetic := dispatchRealMouseMoveFunc, dispatchSyntheticMouseMoveFunc
+	t.Cleanup(func() {
+		dispatchRealMouseMoveFunc = origReal
+		dispatchSyntheticMouseMoveFunc = origSynthetic
+	})
+	dispatchRealMouseMoveFunc = func(ctx context.Context, _, _ float64, _ input.MouseButton, _ int64) error {
+		return real(ctx)
+	}
+	fellBack := false
+	dispatchSyntheticMouseMoveFunc = func(context.Context, float64, float64, input.MouseButton, int64) error {
+		fellBack = true
+		return nil
+	}
+	return &fellBack
+}
+
+func TestASlowRealMoveWithSecondsLeftSucceedsWithoutTheSyntheticFallback(t *testing.T) {
+	fellBack := stubMouseMoves(t, func(ctx context.Context) error {
+		select {
+		case <-time.After(120 * time.Millisecond):
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := dispatchMouseMove(ctx, 1, 2, input.None, 0); err != nil {
+		t.Fatalf("dispatchMouseMove: %v", err)
+	}
+	if *fellBack {
+		t.Fatal("a 120ms real move with seconds left fell back to synthetic events")
+	}
+}
+
+func TestAHangingRealMoveFallsBackBeforeTheCeiling(t *testing.T) {
+	fellBack := stubMouseMoves(t, func(ctx context.Context) error {
+		<-ctx.Done()
+		return ctx.Err()
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	start := time.Now()
+	if err := dispatchMouseMove(ctx, 1, 2, input.None, 0); err != nil {
+		t.Fatalf("dispatchMouseMove: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > mouseMoveBudgetCeiling+time.Second {
+		t.Errorf("hanging move fell back after %v, want by the %v ceiling", elapsed, mouseMoveBudgetCeiling)
+	}
+	if !*fellBack {
+		t.Fatal("a hanging real move did not fall back to synthetic events")
+	}
+}
+
+func TestTheMoveBudgetScalesWithTheDeadlineBetweenFloorAndCeiling(t *testing.T) {
+	for _, tc := range []struct {
+		left time.Duration
+		want time.Duration
+	}{
+		{100 * time.Millisecond, mouseMoveBudgetFloor},
+		{3 * time.Second, 300 * time.Millisecond},
+		{time.Minute, mouseMoveBudgetCeiling},
+	} {
+		ctx, cancel := context.WithTimeout(context.Background(), tc.left)
+		got := mouseMoveBudget(ctx)
+		cancel()
+		if got > tc.want || got < tc.want-10*time.Millisecond {
+			t.Errorf("budget with %v left = %v, want %v", tc.left, got, tc.want)
+		}
+	}
+	if got := mouseMoveBudget(context.Background()); got != mouseMoveBudgetCeiling {
+		t.Errorf("budget with no deadline = %v, want the %v ceiling", got, mouseMoveBudgetCeiling)
 	}
 }
