@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/bridge"
 )
 
 const (
@@ -128,10 +130,10 @@ func (o *Orchestrator) applyStartupOutcome(inst *InstanceInternal, p startupProb
 	o.mu.Lock()
 	var eventType string
 	switch inst.Status {
-	case "stopping", "stopped":
+	case bridge.InstanceStopping, bridge.InstanceStopped:
 	default:
 		if p.healthy {
-			inst.Status = "running"
+			inst.Status = bridge.InstanceRunning
 			if p.resolvedURL != "" {
 				inst.URL = p.resolvedURL
 				inst.Instance.URL = p.resolvedURL
@@ -139,7 +141,7 @@ func (o *Orchestrator) applyStartupOutcome(inst *InstanceInternal, p startupProb
 			eventType = "instance.started"
 			slog.Info("instance ready", "id", inst.ID, "port", inst.Port)
 		} else if p.exitedEarly {
-			inst.Status = "error"
+			inst.Status = bridge.InstanceError
 			if p.waitErr != nil {
 				inst.Error = "process exited before health check: " + p.waitErr.Error()
 			} else {
@@ -152,7 +154,7 @@ func (o *Orchestrator) applyStartupOutcome(inst *InstanceInternal, p startupProb
 			eventType = "instance.error"
 			slog.Error("instance exited before ready", "id", inst.ID, "reason", string(inst.lastFailureReason))
 		} else {
-			inst.Status = "error"
+			inst.Status = bridge.InstanceError
 			inst.Error = fmt.Errorf("health check timeout after %s (%s)", instanceStartupTimeout, p.lastProbe).Error()
 			if tail := tailLogLine(inst.logBuf.String()); tail != "" {
 				inst.Error += " | " + tail
@@ -186,8 +188,8 @@ func (o *Orchestrator) finalizeInstanceExit(inst *InstanceInternal, p startupPro
 	}
 	o.mu.Lock()
 	wasStopped := false
-	if inst.Status == "running" || inst.Status == "stopping" {
-		inst.Status = "stopped"
+	if inst.Status == bridge.InstanceRunning || inst.Status == bridge.InstanceStopping {
+		inst.Status = bridge.InstanceStopped
 		wasStopped = true
 		o.syncInstanceToManager(&inst.Instance)
 	}

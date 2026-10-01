@@ -15,7 +15,7 @@ func TestProfileInstanceHolderCountsEveryStateThatHoldsTheDirectory(t *testing.T
 	const profileID = "prof_held"
 
 	for _, tc := range []struct {
-		status   string
+		status   bridge.InstanceStatus
 		wantHeld bool
 		why      string
 	}{
@@ -26,7 +26,7 @@ func TestProfileInstanceHolderCountsEveryStateThatHoldsTheDirectory(t *testing.T
 		{"failed", false, "nothing holds the directory"},
 		{"", false, "an unset status must not read as held, or every idle profile becomes undeletable"},
 	} {
-		t.Run(tc.status, func(t *testing.T) {
+		t.Run(string(tc.status), func(t *testing.T) {
 			instances := []bridge.Instance{{ID: "inst_1", ProfileID: profileID, Status: tc.status}}
 
 			holder, held := profileInstanceHolder(instances, profileID)

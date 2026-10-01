@@ -90,11 +90,11 @@ func (o *Orchestrator) handleProfileInstance(w http.ResponseWriter, r *http.Requ
 
 	instances := o.List()
 	for _, inst := range instances {
-		if inst.ProfileName == name && (inst.Status == "running" || inst.Status == "starting") {
+		if inst.ProfileName == name && (inst.Status == bridge.InstanceRunning || inst.Status == bridge.InstanceStarting) {
 			httpx.JSON(w, 200, map[string]any{
 				"name":    name,
 				"exists":  true,
-				"running": inst.Status == "running",
+				"running": inst.Status == bridge.InstanceRunning,
 				"status":  inst.Status,
 				"port":    inst.Port,
 				"id":      inst.ID,

@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/bridge"
 )
 
 const attachedBridgeHealthPollInterval = 60 * time.Second
@@ -24,7 +26,7 @@ func (o *Orchestrator) monitorAttachedBridge(inst *InstanceInternal) {
 func (o *Orchestrator) checkAttachedBridgeHealth(inst *InstanceInternal) bool {
 	o.mu.RLock()
 	current, ok := o.instances[inst.ID]
-	shouldStop := !ok || current != inst || inst.Status != "running" || !inst.Attached || inst.AttachType != "bridge"
+	shouldStop := !ok || current != inst || inst.Status != bridge.InstanceRunning || !inst.Attached || inst.AttachType != "bridge"
 	o.mu.RUnlock()
 	if shouldStop {
 		return false

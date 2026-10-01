@@ -88,7 +88,7 @@ func (o *Orchestrator) handleRestartByInstanceID(w http.ResponseWriter, r *http.
 		httpx.Error(w, 404, fmt.Errorf("instance %q not found", id))
 		return
 	}
-	if !instanceIsActive(inst) || inst.Status != "running" {
+	if !instanceIsActive(inst) || inst.Status != bridge.InstanceRunning {
 		httpx.Error(w, 503, fmt.Errorf("instance %q is not running (status: %s)", id, inst.Status))
 		return
 	}
@@ -331,7 +331,7 @@ func (o *Orchestrator) handleInstanceTabs(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if inst.Status != "running" || !instanceIsActive(inst) {
+	if inst.Status != bridge.InstanceRunning || !instanceIsActive(inst) {
 		httpx.Error(w, 503, fmt.Errorf("instance %q is not running (status: %s)", id, inst.Status))
 		return
 	}

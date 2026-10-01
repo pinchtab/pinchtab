@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/handlers"
 	"github.com/pinchtab/pinchtab/internal/session"
 )
@@ -72,7 +73,7 @@ func (o *Orchestrator) closeEndedSessionTabs(parent context.Context, sessionID s
 	o.mu.RLock()
 	var targets []*InstanceInternal
 	for _, inst := range o.instances {
-		if inst.Status == "running" && instanceIsActive(inst) && o.hopIsTrusted(inst) {
+		if inst.Status == bridge.InstanceRunning && instanceIsActive(inst) && o.hopIsTrusted(inst) {
 			targets = append(targets, inst)
 		}
 	}

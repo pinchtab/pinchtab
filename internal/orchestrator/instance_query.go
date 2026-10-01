@@ -15,16 +15,12 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
-// effectiveInstanceStatus reconciles a stored instance Status with whether the
-// instance is actually active, so a stale "stopped" on a live instance reads as
-// "running" and a non-live "starting/running/stopping" reads as "stopped".
-func effectiveInstanceStatus(status string, active bool) string {
-	if active && status == "stopped" {
-		return "running"
+func effectiveInstanceStatus(status bridge.InstanceStatus, active bool) bridge.InstanceStatus {
+	if active && status == bridge.InstanceStopped {
+		return bridge.InstanceRunning
 	}
-	if !active &&
-		(status == "starting" || status == "running" || status == "stopping") {
-		return "stopped"
+	if !active && status.IsActive() {
+		return bridge.InstanceStopped
 	}
 	return status
 }
@@ -132,7 +128,7 @@ func (o *Orchestrator) refreshInstances() {
 	o.mu.RLock()
 	instances := make([]*InstanceInternal, 0, len(o.instances))
 	for _, inst := range o.instances {
-		if inst.Status == "running" && instanceIsActive(inst) {
+		if inst.Status == bridge.InstanceRunning && instanceIsActive(inst) {
 			instances = append(instances, inst)
 		}
 	}
@@ -249,7 +245,7 @@ func (o *Orchestrator) firstRunningURL(match func(*InstanceInternal) bool) strin
 func (o *Orchestrator) firstRunningLocked(match func(*InstanceInternal) bool) *InstanceInternal {
 	var first *InstanceInternal
 	for _, inst := range o.instances {
-		if inst.Status != "running" || !instanceIsActive(inst) || inst.URL == "" {
+		if inst.Status != bridge.InstanceRunning || !instanceIsActive(inst) || inst.URL == "" {
 			continue
 		}
 		if match != nil && !match(inst) {
@@ -365,7 +361,7 @@ func (o *Orchestrator) allTabs(fresh bool) []bridge.InstanceTab {
 	o.mu.RLock()
 	instances := make([]*InstanceInternal, 0)
 	for _, inst := range o.instances {
-		if inst.Status == "running" && instanceIsActive(inst) {
+		if inst.Status == bridge.InstanceRunning && instanceIsActive(inst) {
 			instances = append(instances, inst)
 		}
 	}
@@ -390,7 +386,7 @@ func (o *Orchestrator) FindInstanceByTab(tabID string) (*bridge.Instance, bool) 
 	o.mu.RLock()
 	instances := make([]*InstanceInternal, 0, len(o.instances))
 	for _, inst := range o.instances {
-		if inst.Status == "running" && instanceIsActive(inst) {
+		if inst.Status == bridge.InstanceRunning && instanceIsActive(inst) {
 			instances = append(instances, inst)
 		}
 	}
@@ -415,7 +411,7 @@ func (o *Orchestrator) AllMetrics() []types.InstanceMetrics {
 	o.mu.RLock()
 	instances := make([]*InstanceInternal, 0)
 	for _, inst := range o.instances {
-		if inst.Status == "running" && instanceIsActive(inst) {
+		if inst.Status == bridge.InstanceRunning && instanceIsActive(inst) {
 			instances = append(instances, inst)
 		}
 	}

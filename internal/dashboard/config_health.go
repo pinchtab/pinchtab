@@ -43,7 +43,7 @@ func defaultInstanceInfo(lister InstanceLister, instances []bridge.Instance) *ty
 	}
 	return &types.HealthInstanceInfo{
 		ID:             def.ID,
-		Status:         def.Status,
+		Status:         string(def.Status),
 		Responsiveness: def.Responsiveness,
 	}
 }

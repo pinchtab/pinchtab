@@ -19,7 +19,7 @@ func instanceIsActive(inst *InstanceInternal) bool {
 	if inst.cmd != nil {
 		return isProcessAlive(inst.cmd.PID())
 	}
-	return inst.Status == "starting" || inst.Status == "running" || inst.Status == "stopping"
+	return inst.Status.IsActive()
 }
 
 const processExitPollInterval = 150 * time.Millisecond

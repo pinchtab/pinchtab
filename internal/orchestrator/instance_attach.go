@@ -38,7 +38,7 @@ func (o *Orchestrator) attachExternalInstance(name string, inst bridge.Instance,
 				existing.URL = inst.URL
 				existing.Instance.URL = inst.URL
 				existing.authToken = authToken
-				existing.Status = "running"
+				existing.Status = bridge.InstanceRunning
 				existing.Error = ""
 				existing.StartTime = time.Now()
 				if inst.Browser != "" {
@@ -58,7 +58,7 @@ func (o *Orchestrator) attachExternalInstance(name string, inst bridge.Instance,
 	inst.ID = instanceID
 	inst.ProfileID = profileID
 	inst.ProfileName = name
-	inst.Status = "running"
+	inst.Status = bridge.InstanceRunning
 	inst.StartTime = time.Now()
 	internal := &InstanceInternal{
 		Instance:  inst,
@@ -127,7 +127,7 @@ func (o *Orchestrator) AttachWithOptions(name, cdpURL string, opts AttachOptions
 			ID:          instanceID,
 			ProfileID:   profileID,
 			ProfileName: name,
-			Status:      "starting",
+			Status:      bridge.InstanceStarting,
 			Attached:    true,
 		},
 	}
@@ -182,7 +182,7 @@ func (o *Orchestrator) AttachWithOptions(name, cdpURL string, opts AttachOptions
 			URL:         baseURL,
 			Mode:        bridge.ModeFromHeadless(false),
 			Headless:    false,
-			Status:      "starting",
+			Status:      bridge.InstanceStarting,
 			StartTime:   time.Now(),
 			Attached:    true,
 			AttachType:  "cdp-bridge",
@@ -249,8 +249,8 @@ func (o *Orchestrator) waitForChildBridgeHealthy(ctx context.Context, inst *Inst
 	// goroutine may have already moved the instance to a terminal
 	// state (error on process exit, or stopping/stopped); a transient
 	// health 200 must not resurrect it.
-	if inst.Status == "starting" {
-		inst.Status = "running"
+	if inst.Status == bridge.InstanceStarting {
+		inst.Status = bridge.InstanceRunning
 	}
 	o.mu.Unlock()
 	return nil

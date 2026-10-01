@@ -18,9 +18,9 @@ import (
 func TestEffectiveInstanceStatus(t *testing.T) {
 	cases := []struct {
 		name   string
-		status string
+		status bridge.InstanceStatus
 		active bool
-		want   string
+		want   bridge.InstanceStatus
 	}{
 		{"live but stored stopped -> running", "stopped", true, "running"},
 		{"dead starting -> stopped", "starting", false, "stopped"},
@@ -38,7 +38,7 @@ func TestEffectiveInstanceStatus(t *testing.T) {
 	}
 }
 
-func registerInstance(o *Orchestrator, id, status, browser string, start time.Time) {
+func registerInstance(o *Orchestrator, id string, status bridge.InstanceStatus, browser string, start time.Time) {
 	url := "http://" + id + ".local"
 	inst := &InstanceInternal{
 		Instance: bridge.Instance{ID: id, Status: status, URL: url, Browser: browser, StartTime: start},

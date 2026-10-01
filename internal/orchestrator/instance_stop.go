@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/browsers/providerhooks"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/readiness"
@@ -32,7 +33,7 @@ func (o *Orchestrator) Stop(id string) error {
 		o.mu.Unlock()
 		return fmt.Errorf("instance %q not found", id)
 	}
-	if inst.Status == "stopped" && !instanceIsActive(inst) {
+	if inst.Status == bridge.InstanceStopped && !instanceIsActive(inst) {
 		o.mu.Unlock()
 		o.markStopped(id)
 		return nil
@@ -41,7 +42,7 @@ func (o *Orchestrator) Stop(id string) error {
 		o.mu.Unlock()
 		return fmt.Errorf("instance %q is still starting", id)
 	}
-	inst.Status = "stopping"
+	inst.Status = bridge.InstanceStopping
 	o.mu.Unlock()
 
 	if inst.cmd == nil {
@@ -66,7 +67,7 @@ func (o *Orchestrator) Stop(id string) error {
 }
 
 func isSpawnReservation(inst *InstanceInternal) bool {
-	return inst.Status == "starting" && inst.cmd == nil && inst.AttachType == ""
+	return inst.Status == bridge.InstanceStarting && inst.cmd == nil && inst.AttachType == ""
 }
 
 // stopChildProcess runs the child shutdown escalation: ask the bridge to shut
@@ -276,7 +277,7 @@ func (o *Orchestrator) setStopError(id, msg string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if inst, ok := o.instances[id]; ok {
-		inst.Status = "error"
+		inst.Status = bridge.InstanceError
 		inst.Error = msg
 	}
 }

@@ -69,7 +69,7 @@ type ResolvedLaunchTarget struct {
 }
 
 type LaunchOutcome struct {
-	Status string
+	Status bridge.InstanceStatus
 	Reason LaunchFailureReason
 }
 
@@ -181,7 +181,7 @@ func (p LaunchPlanner) LaunchWithFallback(
 			continue
 		}
 
-		if outcome.Status == "running" {
+		if outcome.Status == bridge.InstanceRunning {
 			result := &PlannedLaunch{Instance: inst}
 			if i > 0 {
 				result.FallbackFrom = firstFailTarget
@@ -292,7 +292,7 @@ func fallbackExhaustedError(attempts []fallbackAttempt, cause error) *FallbackEx
 }
 
 // waitForLaunchOutcome polls until the instance reaches running/error or the timeout fires.
-func (o *Orchestrator) waitForLaunchOutcome(instanceID string, timeout time.Duration) (string, LaunchFailureReason, error) {
+func (o *Orchestrator) waitForLaunchOutcome(instanceID string, timeout time.Duration) (bridge.InstanceStatus, LaunchFailureReason, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -302,7 +302,7 @@ func (o *Orchestrator) waitForLaunchOutcome(instanceID string, timeout time.Dura
 	for {
 		o.mu.RLock()
 		inst, ok := o.instances[instanceID]
-		var status string
+		var status bridge.InstanceStatus
 		var reason LaunchFailureReason
 		if ok {
 			status = inst.Status
@@ -315,10 +315,10 @@ func (o *Orchestrator) waitForLaunchOutcome(instanceID string, timeout time.Dura
 		}
 
 		switch status {
-		case "running":
-			return "running", ReasonUnknown, nil
-		case "error":
-			return "error", reason, nil
+		case bridge.InstanceRunning:
+			return bridge.InstanceRunning, ReasonUnknown, nil
+		case bridge.InstanceError:
+			return bridge.InstanceError, reason, nil
 		}
 
 		select {
@@ -361,7 +361,7 @@ func (o *Orchestrator) detachFailedAttempt(instanceID string) *InstanceInternal 
 		o.mu.Unlock()
 		return nil
 	}
-	inst.Status = "stopping"
+	inst.Status = bridge.InstanceStopping
 	delete(o.instances, instanceID)
 	o.mu.Unlock()
 

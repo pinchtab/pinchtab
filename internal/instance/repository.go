@@ -26,13 +26,12 @@ func (r *Repository) store(inst *bridge.Instance) {
 	r.instances[inst.ID] = &snapshot
 }
 
-// Running returns only instances with status "running".
 func (r *Repository) Running() []bridge.Instance {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make([]bridge.Instance, 0, len(r.instances))
 	for _, inst := range r.instances {
-		if inst.Status == "running" {
+		if inst.Status == bridge.InstanceRunning {
 			out = append(out, *inst)
 		}
 	}

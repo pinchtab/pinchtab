@@ -387,16 +387,6 @@ func gracefulShutdownWithCap(orch *orchestrator.Orchestrator, cap time.Duration)
 	}
 }
 
-// heldInstanceStatuses are the instance states that count as holding a profile. STOPPING is
-// in the set deliberately: the browser still has the directory open while it winds down, so
-// deleting then is the same loss as deleting while it runs. STARTING likewise — the profile
-// is claimed before the process reports running.
-//
-// This is the safety-critical half of the profile guard, so it is a named function rather
-// than a closure inside RunDashboard: as a closure nothing could reach it, and the states it
-// matches were the one part of the guard no test could see.
-var heldInstanceStatuses = map[string]bool{"starting": true, "running": true, "stopping": true}
-
 // profileInstanceHolder reports the instance holding profileID, if any. It is the exact
 // derivation handed to ProfileManager.SetInstanceLookup at composition.
 func profileInstanceHolder(instances []bridge.Instance, profileID string) (string, bool) {
@@ -404,7 +394,7 @@ func profileInstanceHolder(instances []bridge.Instance, profileID string) (strin
 		if inst.ProfileID != profileID {
 			continue
 		}
-		if heldInstanceStatuses[inst.Status] {
+		if inst.Status.IsActive() {
 			return inst.ID, true
 		}
 	}

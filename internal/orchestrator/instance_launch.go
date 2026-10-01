@@ -3,13 +3,14 @@ package orchestrator
 import (
 	"context"
 	"fmt"
-	"github.com/pinchtab/pinchtab/internal/handlers"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pinchtab/pinchtab/internal/handlers"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -112,7 +113,7 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 		o.mu.Unlock()
 		return nil, err
 	}
-	if inst, ok := o.instances[instanceID]; ok && inst.Status == "running" {
+	if inst, ok := o.instances[instanceID]; ok && inst.Status == bridge.InstanceRunning {
 		o.mu.Unlock()
 		return nil, fmt.Errorf("instance already running for profile %q", name)
 	}
@@ -123,7 +124,7 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 			ProfileID:   profileID,
 			ProfileName: name,
 			Port:        port,
-			Status:      "starting",
+			Status:      bridge.InstanceStarting,
 		},
 	}
 	o.instances[instanceID] = placeholder
@@ -230,7 +231,7 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 			URL:            o.childInstanceBaseURL(port),
 			Mode:           bridge.ModeFromHeadless(headless),
 			Headless:       headless,
-			Status:         "starting",
+			Status:         bridge.InstanceStarting,
 			StartTime:      time.Now(),
 			SecurityPolicy: effectivePolicy,
 			Browser:        browser,

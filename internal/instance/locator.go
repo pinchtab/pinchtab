@@ -37,7 +37,7 @@ func (l *Locator) FindInstanceByTabID(tabID string) (*bridge.Instance, error) {
 
 	if ok {
 		inst, found := l.repo.Get(instID)
-		if found && inst.Status == "running" {
+		if found && inst.Status == bridge.InstanceRunning {
 			return inst, nil
 		}
 		// Stale cache entry — instance gone or not running.
