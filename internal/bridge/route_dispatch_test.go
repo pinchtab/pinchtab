@@ -10,8 +10,7 @@ import (
 
 // TestRouteDispatchPool_RunsAllJobs verifies every submitted job is run.
 func TestRouteDispatchPool_RunsAllJobs(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	const njobs = 100
 	var count atomic.Int32
@@ -38,8 +37,7 @@ func TestRouteDispatchPool_RunsAllJobs(t *testing.T) {
 // TestRouteDispatchPool_CapsConcurrency verifies no more than the worker count
 // run concurrently.
 func TestRouteDispatchPool_CapsConcurrency(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	const workers = 4
 	const njobs = 50
@@ -87,8 +85,7 @@ func TestRouteDispatchPool_CapsConcurrency(t *testing.T) {
 // TestRouteDispatchPool_SubmitReturnsFalseWhenFull verifies submit never blocks
 // and reports saturation so the caller can fall back.
 func TestRouteDispatchPool_SubmitReturnsFalseWhenFull(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	const workers = 2
 	block := make(chan struct{})

@@ -52,18 +52,18 @@ func (tm *TabManager) setupConsoleCapture(ctx context.Context, rawCDPID string) 
 			if !recordViaRuntime {
 				return
 			}
-			var msg string
+			var msg strings.Builder
 			for _, arg := range ev.Args {
 				if len(arg.Value) > 0 {
 					val := string(arg.Value)
 					if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
 						val = val[1 : len(val)-1]
 					}
-					msg += val
+					msg.WriteString(val)
 				} else if arg.Description != "" {
-					msg += arg.Description
+					msg.WriteString(arg.Description)
 				}
-				msg += " "
+				msg.WriteString(" ")
 			}
 
 			var ts time.Time
@@ -89,7 +89,7 @@ func (tm *TabManager) setupConsoleCapture(ctx context.Context, rawCDPID string) 
 			tm.logStore.AddConsoleLog(rawCDPID, types.ConsoleLogEntry{
 				Timestamp: ts,
 				Level:     string(ev.Type),
-				Message:   msg,
+				Message:   msg.String(),
 				Source:    source,
 			})
 

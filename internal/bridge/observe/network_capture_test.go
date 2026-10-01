@@ -177,7 +177,7 @@ func TestPublishCompletionDropsWhenSubscriberFull(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		// Far more than the 64-slot channel cap; excess must be dropped, not block.
-		for i := 0; i < 200; i++ {
+		for i := range 200 {
 			rid := fmt.Sprintf("r%d", i)
 			nb.MarkRequestStart(rid)
 			nb.MarkRequestEnd(rid)

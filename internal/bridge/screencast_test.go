@@ -187,7 +187,7 @@ func TestPollingScreencast_ChannelBufferPreventsBlock(t *testing.T) {
 
 	go func() {
 		defer close(frameCh)
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			select {
 			case frameCh <- fakeFrame:
 			case <-done:

@@ -31,8 +31,8 @@ func leafFieldCount(typ reflect.Type) int {
 		return 1
 	}
 	count := 0
-	for i := 0; i < typ.NumField(); i++ {
-		count += leafFieldCount(typ.Field(i).Type)
+	for field := range typ.Fields() {
+		count += leafFieldCount(field.Type)
 	}
 	return count
 }
@@ -51,9 +51,9 @@ func numericFields(t *testing.T, m *MemoryMetrics) map[string]float64 {
 
 	values := map[string]float64{}
 	flattenNumbers(t, "", decoded, values)
-	if m.Page != nil && len(values) < leafFieldCount(reflect.TypeOf(MemoryMetrics{})) {
+	if m.Page != nil && len(values) < leafFieldCount(reflect.TypeFor[MemoryMetrics]()) {
 		t.Fatalf("walked %d serialized fields for %d struct fields; a field this guard cannot see is a field it cannot police",
-			len(values), leafFieldCount(reflect.TypeOf(MemoryMetrics{})))
+			len(values), leafFieldCount(reflect.TypeFor[MemoryMetrics]()))
 	}
 	return values
 }

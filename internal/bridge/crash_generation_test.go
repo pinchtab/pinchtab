@@ -13,8 +13,7 @@ func TestBrowserContextGenerationIsStablePerContext(t *testing.T) {
 	t.Cleanup(ResetCrashMonitoringForTests)
 
 	first := context.Background()
-	second, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	second := t.Context()
 
 	genFirst := BrowserContextGeneration(first)
 	if again := BrowserContextGeneration(first); again != genFirst {
@@ -39,7 +38,7 @@ func TestCrashForBrowserContextIgnoresEarlierGenerations(t *testing.T) {
 	ResetCrashMonitoringForTests()
 	t.Cleanup(ResetCrashMonitoringForTests)
 
-	crashed, cancelCrashed := context.WithCancel(context.Background())
+	crashed, cancelCrashed := context.WithCancel(t.Context())
 	defer cancelCrashed()
 	RecordCrashForContextTests(crashed, CrashEvent{Reason: "inspector.targetCrashed"})
 
@@ -48,7 +47,7 @@ func TestCrashForBrowserContextIgnoresEarlierGenerations(t *testing.T) {
 		t.Fatalf("crash on the live context = %+v (ok=%v), want the recorded crash", got, ok)
 	}
 
-	restarted, cancelRestarted := context.WithCancel(context.Background())
+	restarted, cancelRestarted := context.WithCancel(t.Context())
 	defer cancelRestarted()
 	if got, ok := CrashForBrowserContext(restarted); ok {
 		t.Fatalf("a replaced browser still reports the old crash: %+v", got)
@@ -61,9 +60,9 @@ func TestCrashForBrowserContextIsPerInstance(t *testing.T) {
 	ResetCrashMonitoringForTests()
 	t.Cleanup(ResetCrashMonitoringForTests)
 
-	instanceA, cancelA := context.WithCancel(context.Background())
+	instanceA, cancelA := context.WithCancel(t.Context())
 	defer cancelA()
-	instanceB, cancelB := context.WithCancel(context.Background())
+	instanceB, cancelB := context.WithCancel(t.Context())
 	defer cancelB()
 
 	// Both contexts are seen before the crash, so this is not the "old
@@ -83,8 +82,7 @@ func TestCrashForBrowserContextReturnsTheMostRecentCrash(t *testing.T) {
 	ResetCrashMonitoringForTests()
 	t.Cleanup(ResetCrashMonitoringForTests)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	RecordCrashForContextTests(ctx, CrashEvent{Reason: "inspector.targetCrashed", Time: time.Unix(1, 0)})
 	RecordCrashForContextTests(ctx, CrashEvent{Reason: "unexpected context cancellation", Time: time.Unix(2, 0)})
 
@@ -100,8 +98,7 @@ func TestCrashSnapshotDoesNotExposeTheGeneration(t *testing.T) {
 	ResetCrashMonitoringForTests()
 	t.Cleanup(ResetCrashMonitoringForTests)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	RecordCrashForContextTests(ctx, CrashEvent{Reason: "killed", TargetID: "T1"})
 
 	encoded, err := json.Marshal(CrashSnapshot())

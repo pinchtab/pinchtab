@@ -56,7 +56,7 @@ func TestConsoleLogStore_AddAndGetErrors(t *testing.T) {
 func TestConsoleLogStore_Limit(t *testing.T) {
 	store := NewConsoleLogStore(5)
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		store.AddConsoleLog("tab1", types.ConsoleLogEntry{
 			Timestamp: time.Now(),
 			Level:     "log",
@@ -77,7 +77,7 @@ func TestConsoleLogStore_Limit(t *testing.T) {
 func TestConsoleLogStore_GetWithLimit(t *testing.T) {
 	store := NewConsoleLogStore(100)
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		store.AddConsoleLog("tab1", types.ConsoleLogEntry{
 			Timestamp: time.Now(),
 			Level:     "log",
@@ -99,7 +99,7 @@ func TestConsoleLogStore_GetWithLimit(t *testing.T) {
 func TestConsoleLogStore_GetWithLimit_ClampsToMaxLines(t *testing.T) {
 	store := NewConsoleLogStore(5)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		store.AddConsoleLog("tab1", types.ConsoleLogEntry{
 			Timestamp: time.Now(),
 			Level:     "log",

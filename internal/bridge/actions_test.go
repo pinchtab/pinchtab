@@ -327,8 +327,9 @@ func TestActionRequestUnmarshal_UsesCanonicalMouseFields(t *testing.T) {
 	}
 }
 
+//go:fix inline
 func boolPtr(v bool) *bool {
-	return &v
+	return new(v)
 }
 
 func TestEffectiveHumanizePrecedence(t *testing.T) {
@@ -354,14 +355,14 @@ func TestEffectiveHumanizePrecedence(t *testing.T) {
 		{
 			name:       "request true overrides config false",
 			config:     &config.RuntimeConfig{Humanize: false},
-			req:        ActionRequest{Humanize: boolPtr(true)},
+			req:        ActionRequest{Humanize: new(true)},
 			want:       true,
 			justifying: "per-request override can opt in",
 		},
 		{
 			name:       "request false overrides config true",
 			config:     &config.RuntimeConfig{Humanize: true},
-			req:        ActionRequest{Humanize: boolPtr(false)},
+			req:        ActionRequest{Humanize: new(false)},
 			want:       false,
 			justifying: "per-request override can force raw input",
 		},
@@ -413,7 +414,7 @@ func TestExecuteAction_ClickRejectsModeAndEffectiveHumanizeTogether(t *testing.T
 				Kind:     ActionClick,
 				Ref:      "e5",
 				Mode:     "dom",
-				Humanize: boolPtr(true),
+				Humanize: new(true),
 			},
 		},
 		{
@@ -471,7 +472,7 @@ func TestExecuteAction_ClickModeAllowedWhenHumanizeOverrideDisablesDefault(t *te
 		Kind:     ActionClick,
 		NodeID:   42,
 		Mode:     "dom",
-		Humanize: boolPtr(false),
+		Humanize: new(false),
 	})
 	if err != nil {
 		t.Fatalf("expected raw mode click to be allowed when humanize=false overrides default, got: %v", err)
@@ -492,7 +493,7 @@ func TestClickAction_HumanizeOptInUsesHumanizedPath(t *testing.T) {
 
 	_, err := raw.Actions[ActionClick](ctx, ActionRequest{
 		Kind:     ActionClick,
-		Humanize: boolPtr(false),
+		Humanize: new(false),
 		HasXY:    true,
 		X:        10,
 		Y:        20,
@@ -794,7 +795,7 @@ func TestTypeAction_HumanizeOptInUsesHumanizedPath(t *testing.T) {
 		Kind:     ActionType,
 		Selector: "#name",
 		Text:     "hi",
-		Humanize: boolPtr(false),
+		Humanize: new(false),
 	})
 	if err == nil {
 		t.Fatal("expected cancelled raw type to fail")
@@ -807,7 +808,7 @@ func TestTypeAction_HumanizeOptInUsesHumanizedPath(t *testing.T) {
 	_, err = humanized.Actions[ActionType](context.Background(), ActionRequest{
 		Kind:     ActionType,
 		Text:     "hi",
-		Humanize: boolPtr(true),
+		Humanize: new(true),
 	})
 	if err == nil {
 		t.Fatal("expected humanized targetless type to fail")
@@ -1220,7 +1221,7 @@ func TestHoverAction_HumanizeRoutesEveryTargetForm(t *testing.T) {
 		{
 			name:      "nodeId with request opt-in",
 			config:    &config.RuntimeConfig{},
-			req:       ActionRequest{NodeID: 77, Humanize: boolPtr(true)},
+			req:       ActionRequest{NodeID: 77, Humanize: new(true)},
 			wantNodes: []cdp.BackendNodeID{77},
 			wantHuman: true,
 		},
@@ -1234,7 +1235,7 @@ func TestHoverAction_HumanizeRoutesEveryTargetForm(t *testing.T) {
 		{
 			name:      "explicit false opts out of the humanized path",
 			config:    &config.RuntimeConfig{Humanize: true},
-			req:       ActionRequest{NodeID: 77, Humanize: boolPtr(false)},
+			req:       ActionRequest{NodeID: 77, Humanize: new(false)},
 			wantHuman: false,
 		},
 	}

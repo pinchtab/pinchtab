@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -213,11 +214,9 @@ func normalizeResolvedDevToolsURL(raw string, requested *url.URL, requestedPinne
 		addrs, err := resolveCDPHostAddrs(ctx, wsURL.Hostname())
 		cancel()
 		if err == nil {
-			for _, addr := range addrs {
-				if addr == requestedPinned {
-					wsURL.Host = urlHostForAddr(requestedPinned, wsURL.Port())
-					return wsURL.String(), nil
-				}
+			if slices.Contains(addrs, requestedPinned) {
+				wsURL.Host = urlHostForAddr(requestedPinned, wsURL.Port())
+				return wsURL.String(), nil
 			}
 		}
 	}

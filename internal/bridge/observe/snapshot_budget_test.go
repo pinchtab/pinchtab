@@ -36,7 +36,7 @@ func budgetProbeNodes(count int) []A11yNode {
 	values := []string{"", "user@example.com", "", "", "United Kingdom", "", "", ""}
 
 	nodes := make([]A11yNode, 0, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		nodes = append(nodes, A11yNode{
 			Ref:      fmt.Sprintf("e%d", i+1),
 			Role:     roles[i%len(roles)],
@@ -291,7 +291,7 @@ func TestNodeLayoutIsWrittenDownExactlyOnce(t *testing.T) {
 // of it.
 func pageShapedNodes(prose int) []A11yNode {
 	nodes := make([]A11yNode, 0, prose+6)
-	for i := 0; i < prose; i++ {
+	for i := range prose {
 		nodes = append(nodes,
 			A11yNode{Ref: fmt.Sprintf("h%d", i), Role: "heading", Name: fmt.Sprintf("Section %d", i)},
 			A11yNode{Ref: fmt.Sprintf("p%d", i), Role: "paragraph", Name: "Body copy the agent cannot act on, at some length."},

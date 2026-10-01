@@ -122,7 +122,7 @@ func ClearChromeSessions(profileDir string) {
 
 func retryRemove(path string, maxRetries int) error {
 	var err error
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for attempt := range maxRetries {
 		if attempt > 0 {
 			time.Sleep(time.Duration(50*(1<<uint(attempt))) * time.Millisecond)
 		}

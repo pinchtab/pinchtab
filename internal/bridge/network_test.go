@@ -381,7 +381,7 @@ func TestNewNetworkBuffer_CustomSize(t *testing.T) {
 	}
 
 	// Add more than default (100) entries to verify custom size works
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		buf.Add(NetworkEntry{RequestID: fmt.Sprintf("r%d", i)})
 	}
 	if buf.Len() != 200 {

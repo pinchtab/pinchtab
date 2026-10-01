@@ -129,7 +129,7 @@ func (nm *NetworkMonitor) StartCaptureWithSize(tabCtx context.Context, tabID str
 		return fmt.Errorf("network enable: %w", err)
 	}
 
-	chromedp.ListenTarget(listenerCtx, func(ev interface{}) {
+	chromedp.ListenTarget(listenerCtx, func(ev any) {
 		switch e := ev.(type) {
 		case *network.EventRequestWillBeSent:
 			buf.Add(requestEntryFromEvent(e))

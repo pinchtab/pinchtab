@@ -44,7 +44,7 @@ func TestOneResponseBodyFetcherThatReportsTheCDPFlag(t *testing.T) {
 		if strings.Contains(handlerBody, "GetResponseBodyDirect") {
 			t.Errorf("handlers/%s reaches GetResponseBodyDirect instead of the single fetcher", name)
 		}
-		for _, line := range strings.Split(handlerBody, "\n") {
+		for line := range strings.SplitSeq(handlerBody, "\n") {
 			if !strings.Contains(line, "GetResponseBody(") {
 				continue
 			}
@@ -70,7 +70,7 @@ func TestOneResponseBodyFetcherThatReportsTheCDPFlag(t *testing.T) {
 // about, wearing a different name, and a ban keyed on the fetcher's NAME cannot see it.
 func assertFlagNotDiscarded(t *testing.T, label, code string) {
 	t.Helper()
-	for _, line := range strings.Split(code, "\n") {
+	for line := range strings.SplitSeq(code, "\n") {
 		if !strings.Contains(line, "GetResponseBody(") {
 			continue
 		}

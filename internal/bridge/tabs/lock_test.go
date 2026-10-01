@@ -17,7 +17,7 @@ func TestReleaseDropsTheLeaseOfATabThatIsGone(t *testing.T) {
 	m := NewLockManager()
 	const tabs = 1000
 
-	for i := 0; i < tabs; i++ {
+	for i := range tabs {
 		if err := m.TryLock(fmt.Sprintf("tab-%d", i), "agent-a", time.Minute); err != nil {
 			t.Fatalf("lock tab-%d: %v", i, err)
 		}
@@ -26,7 +26,7 @@ func TestReleaseDropsTheLeaseOfATabThatIsGone(t *testing.T) {
 		t.Fatalf("held %d leases after locking %d tabs", got, tabs)
 	}
 
-	for i := 0; i < tabs; i++ {
+	for i := range tabs {
 		m.Release(fmt.Sprintf("tab-%d", i))
 	}
 	if got := m.trackedForTest(); got != 0 {

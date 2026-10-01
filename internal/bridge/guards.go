@@ -46,7 +46,7 @@ func classifyActionError(err error) error {
 		strings.Contains(e, "node with given id") ||
 		strings.Contains(e, "no node") ||
 		strings.Contains(e, "node with given identifier does not exist") {
-		return fmt.Errorf("%w: %v", ErrElementStale, err)
+		return fmt.Errorf("%w: %w", ErrElementStale, err)
 	}
 	return err
 }

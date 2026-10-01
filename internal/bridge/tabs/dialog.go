@@ -103,7 +103,7 @@ func HandleDialog(ctx context.Context, accept bool, promptText string) error {
 }
 
 func ListenDialogEvents(ctx context.Context, tabID string, dm *DialogManager, autoAccept bool) {
-	chromedp.ListenTarget(ctx, func(ev interface{}) {
+	chromedp.ListenTarget(ctx, func(ev any) {
 		switch e := ev.(type) {
 		case *page.EventJavascriptDialogOpening:
 			state := normalizeDialogState(&DialogState{

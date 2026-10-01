@@ -28,7 +28,7 @@ func (b *Bridge) DisableFetch(ctx context.Context) error {
 // The handler callback receives isAuth=true for AuthRequired events and false
 // for RequestPaused events.
 func (b *Bridge) ListenAuthRequired(ctx context.Context, handler func(requestID string, isAuth bool)) {
-	chromedp.ListenTarget(ctx, func(ev interface{}) {
+	chromedp.ListenTarget(ctx, func(ev any) {
 		switch e := ev.(type) {
 		case *fetch.EventAuthRequired:
 			handler(string(e.RequestID), true)
@@ -97,7 +97,7 @@ func (b *Bridge) EnableNetwork(ctx context.Context) error {
 }
 
 func (b *Bridge) ListenNetworkEvents(ctx context.Context, handler NetworkEventHandler) {
-	chromedp.ListenTarget(ctx, func(ev interface{}) {
+	chromedp.ListenTarget(ctx, func(ev any) {
 		switch e := ev.(type) {
 		case *network.EventRequestWillBeSent:
 			if handler.OnRequestWillBeSent != nil {

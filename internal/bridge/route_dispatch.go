@@ -78,7 +78,7 @@ func (rm *RouteManager) registerListener(listenCtx context.Context, tabID string
 	pool := newRouteDispatchPool(listenCtx, maxRouteDispatchWorkers, func(job routeDispatchJob) {
 		rm.dispatch(listenCtx, tabID, job)
 	})
-	chromedp.ListenTarget(listenCtx, func(ev interface{}) {
+	chromedp.ListenTarget(listenCtx, func(ev any) {
 		if listenCtx.Err() != nil {
 			return
 		}

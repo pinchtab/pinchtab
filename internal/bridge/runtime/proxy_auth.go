@@ -46,7 +46,7 @@ func EnableProxyAuth(tabCtx context.Context, p config.BrowserProxyConfig, pauseS
 	// first authRequired. ListenTarget queues the listener when the target
 	// is not materialized yet. Handlers run in goroutines — issuing CDP
 	// commands synchronously from the event-dispatch goroutine deadlocks.
-	chromedp.ListenTarget(tabCtx, func(ev interface{}) {
+	chromedp.ListenTarget(tabCtx, func(ev any) {
 		switch e := ev.(type) {
 		case *fetch.EventAuthRequired:
 			go handleAuthRequired(tabCtx, e, username, password)

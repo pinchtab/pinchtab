@@ -76,7 +76,7 @@ func (b *Bridge) startScreencastEventDriven(ctx context.Context, opts Screencast
 	}()
 
 	var lastFrame time.Time
-	chromedp.ListenTarget(ctx, func(ev interface{}) {
+	chromedp.ListenTarget(ctx, func(ev any) {
 		switch e := ev.(type) {
 		case *page.EventScreencastFrame:
 			select {

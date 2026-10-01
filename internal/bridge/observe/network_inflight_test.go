@@ -8,7 +8,7 @@ import (
 
 func TestNetworkBuffer_RingEvictionOrder(t *testing.T) {
 	buf := NewNetworkBuffer(3)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		buf.Add(NetworkEntry{RequestID: fmt.Sprintf("r%d", i), URL: "https://example.com", Method: "GET"})
 	}
 

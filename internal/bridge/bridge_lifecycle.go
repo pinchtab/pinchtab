@@ -57,10 +57,7 @@ func (b *Bridge) RestartStatus() (bool, time.Duration) {
 	if !b.draining {
 		return false, 0
 	}
-	remaining := time.Until(b.drainUntil)
-	if remaining < 0 {
-		remaining = 0
-	}
+	remaining := max(time.Until(b.drainUntil), 0)
 	return true, remaining
 }
 
@@ -261,7 +258,7 @@ func (b *Bridge) EnsureBrowser(cfg *config.RuntimeConfig) error {
 				_ = AcquireProfileLock(cfg.ProfileDir)
 			} else {
 				slog.Error("cannot acquire profile lock and failed to create temp dir", "profile", cfg.ProfileDir, "err", err.Error(), "tmpErr", tmpErr.Error())
-				return fmt.Errorf("profile lock: %w (temp dir failed: %v)", err, tmpErr)
+				return fmt.Errorf("profile lock: %w (temp dir failed: %w)", err, tmpErr)
 			}
 		} else {
 			slog.Error("cannot acquire profile lock; another pinchtab may be active", "profile", cfg.ProfileDir, "err", err.Error())

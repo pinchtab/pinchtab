@@ -452,13 +452,7 @@ func DragBetweenPoints(ctx context.Context, x, y, endX, endY float64, button str
 	dx := endX - x
 	dy := endY - y
 	dist := math.Sqrt(dx*dx + dy*dy)
-	steps := int(dist / 20)
-	if steps < 3 {
-		steps = 3
-	}
-	if steps > 20 {
-		steps = 20
-	}
+	steps := min(max(int(dist/20), 3), 20)
 	held, err := heldButton(button)
 	if err != nil {
 		return err

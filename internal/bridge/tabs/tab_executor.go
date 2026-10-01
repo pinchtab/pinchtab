@@ -44,14 +44,7 @@ func NewTabExecutor(maxParallel int) *TabExecutor {
 }
 
 func DefaultMaxParallel() int {
-	n := runtime.NumCPU() * 2
-	if n > 8 {
-		n = 8
-	}
-	if n < 1 {
-		n = 1
-	}
-	return n
+	return max(min(runtime.NumCPU()*2, 8), 1)
 }
 
 func (te *TabExecutor) MaxParallel() int {

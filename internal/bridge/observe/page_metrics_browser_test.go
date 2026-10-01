@@ -94,26 +94,26 @@ func TestPerPollCostAcrossSeveralTabsIsRecorded(t *testing.T) {
 	browser := launchBrowser(t)
 	const tabs = 5
 	targets := map[string]context.Context{}
-	for i := 0; i < tabs; i++ {
+	for i := range tabs {
 		targets[fmt.Sprint(i)] = openTab(t, browser, "<html><body>"+strings.Repeat("<p>x</p>", 200)+"</body></html>")
 	}
 	const polls = 10
 	start := time.Now()
-	for i := 0; i < polls; i++ {
+	for range polls {
 		if _, err := processTreeMemory(browser); err != nil {
 			t.Fatal(err)
 		}
 	}
 	rssOnly := time.Since(start) / polls
 	start = time.Now()
-	for i := 0; i < polls; i++ {
+	for i := range polls {
 		if page, unreadable := readTargets(targets); page == nil || page.Targets != tabs || unreadable != 0 {
 			t.Fatalf("poll %d read %+v / %d unreadable, want all %d tabs", i, page, unreadable, tabs)
 		}
 	}
 	allTargets := time.Since(start) / polls
 	start = time.Now()
-	for i := 0; i < polls; i++ {
+	for range polls {
 		if _, err := GetAggregatedMemoryMetrics(browser, targets); err != nil {
 			t.Fatal(err)
 		}

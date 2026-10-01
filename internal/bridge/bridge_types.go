@@ -3,6 +3,7 @@ package bridge
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net"
 	"strconv"
 	"sync"
@@ -136,9 +137,7 @@ func (c *RefCache) bookFromCache() *RefBook {
 		return book
 	}
 	if c.Book != nil {
-		for id, ref := range c.Book.byNode {
-			book.byNode[id] = ref
-		}
+		maps.Copy(book.byNode, c.Book.byNode)
 		book.next = c.Book.next
 		return book
 	}

@@ -18,10 +18,7 @@ func TestDefaultMaxParallel(t *testing.T) {
 	if n < 1 {
 		t.Errorf("DefaultMaxParallel must be >= 1, got %d", n)
 	}
-	expected := runtime.NumCPU() * 2
-	if expected > 8 {
-		expected = 8
-	}
+	expected := min(runtime.NumCPU()*2, 8)
 	if n != expected {
 		t.Errorf("DefaultMaxParallel = %d, want %d (NumCPU=%d)", n, expected, runtime.NumCPU())
 	}
@@ -115,64 +112,62 @@ func TestTabExecutor_CancelledContextBeforeExecute(t *testing.T) {
 
 func TestTabExecutor_PerTabSequential(t *testing.T) {
 	te := bridgetabs.NewTabExecutor(4)
-	var counter int32
-	var maxConcurrent int32
+	var counter atomic.Int32
+	var maxConcurrent atomic.Int32
 
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 10 {
+		wg.Go(func() {
 			_ = te.Execute(context.Background(), "tab1", func(ctx context.Context) error {
-				cur := atomic.AddInt32(&counter, 1)
+				cur := counter.Add(1)
 				// Track max concurrent executions for same tab
 				for {
-					old := atomic.LoadInt32(&maxConcurrent)
-					if cur <= old || atomic.CompareAndSwapInt32(&maxConcurrent, old, cur) {
+					old := maxConcurrent.Load()
+					if cur <= old || maxConcurrent.CompareAndSwap(old, cur) {
 						break
 					}
 				}
 				time.Sleep(5 * time.Millisecond)
-				atomic.AddInt32(&counter, -1)
+				counter.Add(-1)
 				return nil
 			})
-		}()
+		})
 	}
 	wg.Wait()
 
-	if max := atomic.LoadInt32(&maxConcurrent); max > 1 {
+	if max := maxConcurrent.Load(); max > 1 {
 		t.Errorf("per-tab execution should be sequential, but max concurrent was %d", max)
 	}
 }
 
 func TestTabExecutor_CrossTabParallel(t *testing.T) {
 	te := bridgetabs.NewTabExecutor(4)
-	var maxConcurrent int32
-	var current int32
+	var maxConcurrent atomic.Int32
+	var current atomic.Int32
 
 	var wg sync.WaitGroup
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		wg.Add(1)
 		tabID := fmt.Sprintf("tab%d", i)
 		go func() {
 			defer wg.Done()
 			_ = te.Execute(context.Background(), tabID, func(ctx context.Context) error {
-				cur := atomic.AddInt32(&current, 1)
+				cur := current.Add(1)
 				for {
-					old := atomic.LoadInt32(&maxConcurrent)
-					if cur <= old || atomic.CompareAndSwapInt32(&maxConcurrent, old, cur) {
+					old := maxConcurrent.Load()
+					if cur <= old || maxConcurrent.CompareAndSwap(old, cur) {
 						break
 					}
 				}
 				time.Sleep(50 * time.Millisecond)
-				atomic.AddInt32(&current, -1)
+				current.Add(-1)
 				return nil
 			})
 		}()
 	}
 	wg.Wait()
 
-	if max := atomic.LoadInt32(&maxConcurrent); max < 2 {
+	if max := maxConcurrent.Load(); max < 2 {
 		t.Errorf("cross-tab execution should be parallel, but max concurrent was %d", max)
 	}
 }
@@ -180,33 +175,33 @@ func TestTabExecutor_CrossTabParallel(t *testing.T) {
 func TestTabExecutor_SemaphoreLimit(t *testing.T) {
 	maxParallel := 2
 	te := bridgetabs.NewTabExecutor(maxParallel)
-	var maxConcurrent int32
-	var current int32
+	var maxConcurrent atomic.Int32
+	var current atomic.Int32
 
 	var wg sync.WaitGroup
 	// Launch more tasks than the semaphore allows
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		wg.Add(1)
 		tabID := fmt.Sprintf("tab%d", i)
 		go func() {
 			defer wg.Done()
 			_ = te.Execute(context.Background(), tabID, func(ctx context.Context) error {
-				cur := atomic.AddInt32(&current, 1)
+				cur := current.Add(1)
 				for {
-					old := atomic.LoadInt32(&maxConcurrent)
-					if cur <= old || atomic.CompareAndSwapInt32(&maxConcurrent, old, cur) {
+					old := maxConcurrent.Load()
+					if cur <= old || maxConcurrent.CompareAndSwap(old, cur) {
 						break
 					}
 				}
 				time.Sleep(30 * time.Millisecond)
-				atomic.AddInt32(&current, -1)
+				current.Add(-1)
 				return nil
 			})
 		}()
 	}
 	wg.Wait()
 
-	if max := atomic.LoadInt32(&maxConcurrent); int(max) > maxParallel {
+	if max := maxConcurrent.Load(); int(max) > maxParallel {
 		t.Errorf("semaphore should limit to %d, but max concurrent was %d", maxParallel, max)
 	}
 }
@@ -299,32 +294,32 @@ func TestTabExecutor_NilTask(t *testing.T) {
 func TestTabExecutor_MaxParallelOne(t *testing.T) {
 	// With maxParallel=1, ALL tabs are fully serialized (no parallelism)
 	te := bridgetabs.NewTabExecutor(1)
-	var maxConcurrent int32
-	var current int32
+	var maxConcurrent atomic.Int32
+	var current atomic.Int32
 
 	var wg sync.WaitGroup
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		wg.Add(1)
 		tabID := fmt.Sprintf("tab%d", i)
 		go func() {
 			defer wg.Done()
 			_ = te.Execute(context.Background(), tabID, func(ctx context.Context) error {
-				cur := atomic.AddInt32(&current, 1)
+				cur := current.Add(1)
 				for {
-					old := atomic.LoadInt32(&maxConcurrent)
-					if cur <= old || atomic.CompareAndSwapInt32(&maxConcurrent, old, cur) {
+					old := maxConcurrent.Load()
+					if cur <= old || maxConcurrent.CompareAndSwap(old, cur) {
 						break
 					}
 				}
 				time.Sleep(5 * time.Millisecond)
-				atomic.AddInt32(&current, -1)
+				current.Add(-1)
 				return nil
 			})
 		}()
 	}
 	wg.Wait()
 
-	if max := atomic.LoadInt32(&maxConcurrent); max > 1 {
+	if max := maxConcurrent.Load(); max > 1 {
 		t.Errorf("maxParallel=1 should serialize all tabs, but max concurrent was %d", max)
 	}
 }
@@ -341,7 +336,7 @@ func TestTabExecutor_MultiplePanicsAcrossTabs(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make([]error, 4)
 
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		wg.Add(1)
 		i := i
 		go func() {
@@ -438,7 +433,7 @@ func TestTabExecutor_SequentialVsParallelTiming(t *testing.T) {
 
 	// Sequential: all tasks on one tab
 	seqStart := time.Now()
-	for i := 0; i < numTasks; i++ {
+	for range numTasks {
 		_ = te.Execute(context.Background(), "single_tab", func(ctx context.Context) error {
 			time.Sleep(taskDuration)
 			return nil
@@ -450,7 +445,7 @@ func TestTabExecutor_SequentialVsParallelTiming(t *testing.T) {
 	te2 := bridgetabs.NewTabExecutor(numTasks)
 	parStart := time.Now()
 	var wg sync.WaitGroup
-	for i := 0; i < numTasks; i++ {
+	for i := range numTasks {
 		wg.Add(1)
 		tabID := fmt.Sprintf("par_tab_%d", i)
 		go func() {
@@ -487,7 +482,7 @@ func TestTabExecutor_SemaphoreFairnessUnderContention(t *testing.T) {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		wg.Add(1)
 		i := i
 		go func() {
@@ -544,7 +539,7 @@ func TestTabExecutor_ManyUniqueTabsCreation(t *testing.T) {
 	var wg sync.WaitGroup
 	numTabs := 100
 
-	for i := 0; i < numTabs; i++ {
+	for i := range numTabs {
 		wg.Add(1)
 		tabID := fmt.Sprintf("unique_tab_%d", i)
 		go func() {
@@ -561,7 +556,7 @@ func TestTabExecutor_ManyUniqueTabsCreation(t *testing.T) {
 	}
 
 	// Clean up all
-	for i := 0; i < numTabs; i++ {
+	for i := range numTabs {
 		te.RemoveTab(fmt.Sprintf("unique_tab_%d", i))
 	}
 	if te.ActiveTabs() != 0 {

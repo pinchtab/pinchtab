@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"maps"
 	"strings"
 	"sync"
 	"testing"
@@ -72,9 +73,7 @@ func (c *cdpCounter) stop() map[string]int {
 	defer c.mu.Unlock()
 	c.counting = false
 	out := make(map[string]int, len(c.byMethod))
-	for method, count := range c.byMethod {
-		out[method] = count
-	}
+	maps.Copy(out, c.byMethod)
 	return out
 }
 

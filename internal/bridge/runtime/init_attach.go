@@ -52,7 +52,7 @@ func initBrowserFromExistingCDP(cfg *config.RuntimeConfig, bundle *stealth.Bundl
 	refreshedURL, refreshErr := refreshStaleCDPURL(cfg.CDPAttachURL, wsURL, err, cfg)
 	if refreshErr != nil {
 		return nil, nil, nil, nil, stealth.LaunchModeUninitialized,
-			fmt.Errorf("%w; stale CDP endpoint refresh failed: %v", err, refreshErr)
+			fmt.Errorf("%w; stale CDP endpoint refresh failed: %w", err, refreshErr)
 	}
 	if refreshedURL == "" {
 		return nil, nil, nil, nil, stealth.LaunchModeUninitialized, err

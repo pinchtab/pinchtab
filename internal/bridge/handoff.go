@@ -12,7 +12,7 @@ type TabHandoffState struct {
 	Reason        string    `json:"reason,omitempty"`
 	PausedAt      time.Time `json:"pausedAt"`
 	LastUpdatedAt time.Time `json:"lastUpdatedAt"`
-	ExpiresAt     time.Time `json:"expiresAt,omitempty"`
+	ExpiresAt     time.Time `json:"expiresAt"`
 }
 
 func (b *Bridge) SetTabHandoff(tabID, reason string, timeout time.Duration) error {

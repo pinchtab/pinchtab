@@ -618,7 +618,7 @@ func TestRouteManager_RemoveTab_NoStateNoOp(t *testing.T) {
 func TestRouteManager_RemoveTab_NoLeakAcrossManyTabs(t *testing.T) {
 	rm := NewRouteManager(nil)
 	const cycles = 200
-	for i := 0; i < cycles; i++ {
+	for i := range cycles {
 		tabID := fmt.Sprintf("tab-%d", i)
 		// Mimic AddRule's effect on state without driving CDP.
 		rm.mu.Lock()
@@ -682,7 +682,7 @@ func TestRouteManager_AddRule_PerTabCapEnforced(t *testing.T) {
 	rm := NewRouteManager(nil)
 	rm.mu.Lock()
 	rules := make([]RouteRule, 0, MaxRulesPerTab)
-	for i := 0; i < MaxRulesPerTab; i++ {
+	for i := range MaxRulesPerTab {
 		rules = append(rules, RouteRule{
 			Pattern: fmt.Sprintf("p%d", i),
 			Action:  RouteActionAbort,

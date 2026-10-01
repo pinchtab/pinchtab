@@ -232,7 +232,7 @@ func TestRenderedFormatsDistinguishAllThreeCheckedStates(t *testing.T) {
 			t.Errorf("text output missing %q:\n%s", want, text)
 		}
 	}
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "e4 ") && strings.Contains(line, "check") {
 			t.Errorf("a node without checkedness carries a checked annotation: %q", line)
 		}

@@ -21,7 +21,7 @@ func TestTabExecutor_MultiTabSimulation(t *testing.T) {
 	tabs := []string{"tab1", "tab2", "tab3"}
 
 	for _, tab := range tabs {
-		for step := 0; step < 5; step++ {
+		for step := range 5 {
 			wg.Add(1)
 			tab, step := tab, step
 			go func() {
@@ -95,17 +95,17 @@ func TestTabExecutor_PanicIsolation(t *testing.T) {
 
 func TestTabExecutor_StressHighConcurrency(t *testing.T) {
 	te := bridgetabs.NewTabExecutor(4)
-	var completed int32
+	var completed atomic.Int32
 	var wg sync.WaitGroup
 
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		wg.Add(1)
 		tabID := fmt.Sprintf("tab%d", i%10) // 10 unique tabs
 		go func() {
 			defer wg.Done()
 			err := te.Execute(context.Background(), tabID, func(ctx context.Context) error {
 				time.Sleep(time.Millisecond)
-				atomic.AddInt32(&completed, 1)
+				completed.Add(1)
 				return nil
 			})
 			if err != nil {
@@ -115,7 +115,7 @@ func TestTabExecutor_StressHighConcurrency(t *testing.T) {
 	}
 	wg.Wait()
 
-	if n := atomic.LoadInt32(&completed); n != 50 {
+	if n := completed.Load(); n != 50 {
 		t.Errorf("expected 50 completions, got %d", n)
 	}
 }
@@ -124,7 +124,7 @@ func TestTabExecutor_StressRapidCreateRemove(t *testing.T) {
 	te := bridgetabs.NewTabExecutor(4)
 	var wg sync.WaitGroup
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -141,23 +141,21 @@ func TestTabExecutor_StressRapidCreateRemove(t *testing.T) {
 
 func TestTabExecutor_StressSameTabConcurrent(t *testing.T) {
 	te := bridgetabs.NewTabExecutor(8)
-	var counter int32
+	var counter atomic.Int32
 	var wg sync.WaitGroup
 
 	// 30 goroutines all targeting the same tab
-	for i := 0; i < 30; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 30 {
+		wg.Go(func() {
 			_ = te.Execute(context.Background(), "single_tab", func(ctx context.Context) error {
-				atomic.AddInt32(&counter, 1)
+				counter.Add(1)
 				return nil
 			})
-		}()
+		})
 	}
 	wg.Wait()
 
-	if n := atomic.LoadInt32(&counter); n != 30 {
+	if n := counter.Load(); n != 30 {
 		t.Errorf("expected 30 executions, got %d", n)
 	}
 }
@@ -228,7 +226,7 @@ func TestTabExecutor_ConcurrentRemoveAndExecute(t *testing.T) {
 	te := bridgetabs.NewTabExecutor(4)
 
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		wg.Add(2)
 		tabID := fmt.Sprintf("race_tab_%d", i)
 
@@ -284,7 +282,7 @@ func TestTabExecutor_StatsUnderLoad(t *testing.T) {
 
 	// Fill both semaphore slots
 	var wg sync.WaitGroup
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()

@@ -23,7 +23,7 @@ type NetworkEntry struct {
 	PostData        string            `json:"postData,omitempty"`
 	MimeType        string            `json:"mimeType,omitempty"`
 	StartTime       time.Time         `json:"startTime"`
-	EndTime         time.Time         `json:"endTime,omitempty"`
+	EndTime         time.Time         `json:"endTime"`
 	Duration        float64           `json:"duration,omitempty"`
 	Size            int64             `json:"size,omitempty"`
 	Error           string            `json:"error,omitempty"`

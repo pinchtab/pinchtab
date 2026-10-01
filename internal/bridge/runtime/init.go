@@ -293,7 +293,7 @@ func missingBrowserBinaryError(cfg *config.RuntimeConfig) error {
 func injectedScript(ctx context.Context, script string) error {
 	return chromedp.FromContext(ctx).Target.Execute(ctx,
 		"Page.addScriptToEvaluateOnNewDocument",
-		map[string]interface{}{
+		map[string]any{
 			"source": script,
 		}, nil)
 }

@@ -47,7 +47,7 @@ func TestReconcileTabBudgetBoundsUntrackedTargets(t *testing.T) {
 	}
 
 	var firstCreated target.ID
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		id, err := target.CreateTarget("about:blank").Do(exec)
 		if err != nil {
 			t.Fatalf("create untracked target %d: %v", i, err)

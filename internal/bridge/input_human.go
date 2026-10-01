@@ -80,13 +80,7 @@ func MouseMove(ctx context.Context, fromX, fromY, toX, toY float64) error {
 	baseDuration := 100 + (distance/2000)*200
 	duration := baseDuration + float64(humanRand.Intn(100))
 
-	steps := int(duration / 20)
-	if steps < 5 {
-		steps = 5
-	}
-	if steps > 30 {
-		steps = 30
-	}
+	steps := min(max(int(duration/20), 5), 30)
 
 	cp1X := fromX + (toX-fromX)*0.25 + (humanRand.Float64()-0.5)*50
 	cp1Y := fromY + (toY-fromY)*0.25 + (humanRand.Float64()-0.5)*50
@@ -130,7 +124,7 @@ func MouseMove(ctx context.Context, fromX, fromY, toX, toY float64) error {
 	}
 
 	// End-frame micro-jitter near target to emulate tiny hand stabilization.
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		jx := toX + (humanRand.Float64()-0.5)*1.2
 		jy := toY + (humanRand.Float64()-0.5)*1.2
 		if err := dispatchMouseMovedBounded(ctx, jx, jy); err != nil {

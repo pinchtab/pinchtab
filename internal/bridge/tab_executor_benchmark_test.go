@@ -61,7 +61,7 @@ func BenchmarkTabExecutor_WithWork(b *testing.B) {
 			_ = te.Execute(ctx, tabID, func(ctx context.Context) error {
 				// Simulate light work
 				sum := 0
-				for j := 0; j < 100; j++ {
+				for j := range 100 {
 					sum += j
 				}
 				_ = sum
@@ -80,7 +80,7 @@ func BenchmarkSequentialVsParallel(b *testing.B) {
 		ctx := context.Background()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			for j := 0; j < 4; j++ {
+			for j := range 4 {
 				_ = te.Execute(ctx, fmt.Sprintf("tab%d", j), func(ctx context.Context) error {
 					time.Sleep(workDuration)
 					return nil
@@ -95,7 +95,7 @@ func BenchmarkSequentialVsParallel(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			var wg sync.WaitGroup
-			for j := 0; j < 4; j++ {
+			for j := range 4 {
 				wg.Add(1)
 				tabID := fmt.Sprintf("tab%d", j)
 				go func() {

@@ -230,7 +230,7 @@ func (b *Bridge) MonitorCrashes(handler CrashHandler) {
 		return
 	}
 
-	chromedp.ListenTarget(b.BrowserCtx, func(ev interface{}) {
+	chromedp.ListenTarget(b.BrowserCtx, func(ev any) {
 		switch e := ev.(type) {
 		case *inspector.EventTargetCrashed:
 			event := CrashEvent{

@@ -500,7 +500,7 @@ func AcquireProfileLock(profileDir string) error {
 
 	pidFile := filepath.Join(profileDir, "pinchtab.pid")
 	slog.Debug("acquiring profile lock", "profile", profileDir, "pid", os.Getpid())
-	return os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0644)
+	return os.WriteFile(pidFile, fmt.Appendf(nil, "%d", os.Getpid()), 0644)
 }
 
 func extractChromeProfileLockPID(msg string) (int, bool) {

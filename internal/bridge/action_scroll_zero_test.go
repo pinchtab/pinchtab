@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/token"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -96,9 +97,7 @@ func presenceInferredKeys(t *testing.T) []string {
 func jsonFieldByName(t *testing.T, name string) reflect.StructField {
 	t.Helper()
 
-	typ := reflect.TypeOf(ActionRequest{})
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
+	for field := range reflect.TypeFor[ActionRequest]().Fields() {
 		if jsonTagName(field) == name {
 			return field
 		}
@@ -114,12 +113,7 @@ func jsonTagName(field reflect.StructField) string {
 
 func omitsEmpty(field reflect.StructField) bool {
 	_, opts, _ := strings.Cut(field.Tag.Get("json"), ",")
-	for _, opt := range strings.Split(opts, ",") {
-		if opt == "omitempty" {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(strings.Split(opts, ","), "omitempty")
 }
 
 func zeroJSONLiteral(field reflect.StructField) string {
@@ -167,7 +161,7 @@ func TestPresenceInferredFieldsSurviveAMarshalRoundTrip(t *testing.T) {
 		if !omitsEmpty(field) {
 			t.Errorf("%s lacks omitempty, so a re-marshal of an absent %s re-introduces it as an explicit zero", field.Name, key)
 		}
-		flag, ok := reflect.TypeOf(ActionRequest{}).FieldByName(flagName)
+		flag, ok := reflect.TypeFor[ActionRequest]().FieldByName(flagName)
 		if !ok {
 			t.Fatalf("ActionRequest has no field %s", flagName)
 		}

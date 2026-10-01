@@ -72,7 +72,7 @@ func WaitForQuietWindow(ctx context.Context, quiet, ceiling time.Duration) (time
 		done      atomic.Bool
 	)
 
-	chromedp.ListenTarget(ctx, func(ev interface{}) {
+	chromedp.ListenTarget(ctx, func(ev any) {
 		if done.Load() {
 			return
 		}
@@ -85,10 +85,7 @@ func WaitForQuietWindow(ctx context.Context, quiet, ceiling time.Duration) (time
 
 	defer done.Store(true)
 	start := time.Now()
-	pollInterval := quiet / 4
-	if pollInterval < 10*time.Millisecond {
-		pollInterval = 10 * time.Millisecond
-	}
+	pollInterval := max(quiet/4, 10*time.Millisecond)
 	_, err := readiness.WaitUntil(ctx, ceiling, pollInterval, func() (struct{}, bool, error) {
 		mu.Lock()
 		sinceLast := time.Since(lastEvent)

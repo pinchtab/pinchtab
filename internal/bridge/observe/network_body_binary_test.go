@@ -202,8 +202,8 @@ func base64Len(raw int) int {
 func pngBytes(t *testing.T, size int) []byte {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
-	for y := 0; y < size; y++ {
-		for x := 0; x < size; x++ {
+	for y := range size {
+		for x := range size {
 			img.Set(x, y, color.RGBA{R: uint8(x * 7), G: uint8(y * 11), B: uint8(x ^ y), A: 255})
 		}
 	}
