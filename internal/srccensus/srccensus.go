@@ -351,14 +351,20 @@ type Func struct {
 // Func looks a declaration up ANYWHERE in the package and returns found=false rather than
 // panicking or guessing. A guard reporting not-found should name the declaration and the
 // directory it searched, so a helper that moved to a sibling file — or was renamed —
-// explains itself instead of producing a slice-bounds error.
+// explains itself instead of producing a slice-bounds error. A "Type.Method" name matches
+// only the method declared on that receiver type, so a sibling type's method of the same
+// name cannot stand in for it.
 func (p *Package) Func(name string) (Func, bool) {
+	recv, method, qualified := strings.Cut(name, ".")
+	if !qualified {
+		recv, method = "", name
+	}
 	var found Func
 	ok := false
 	p.each(func(fileName string, file *ast.File) {
 		for _, decl := range file.Decls {
 			fn, isFunc := decl.(*ast.FuncDecl)
-			if !isFunc || fn.Name.Name != name || ok {
+			if !isFunc || fn.Name.Name != method || ok || (qualified && receiverType(fn) != recv) {
 				continue
 			}
 			position := p.fset.Position(fn.Pos())
@@ -432,6 +438,20 @@ func enclosingFunc(file *ast.File, pos token.Pos) string {
 		}
 	}
 	return name
+}
+
+func receiverType(fn *ast.FuncDecl) string {
+	if fn.Recv == nil || len(fn.Recv.List) == 0 {
+		return ""
+	}
+	typ := fn.Recv.List[0].Type
+	if star, ok := typ.(*ast.StarExpr); ok {
+		typ = star.X
+	}
+	if ident, ok := typ.(*ast.Ident); ok {
+		return ident.Name
+	}
+	return ""
 }
 
 func calleeName(fun ast.Expr) string {

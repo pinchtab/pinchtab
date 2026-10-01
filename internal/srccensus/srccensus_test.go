@@ -249,6 +249,21 @@ func TestFuncFindsADeclarationInAnySiblingFile(t *testing.T) {
 	}
 }
 
+func TestFuncQualifiedByReceiverSkipsASiblingTypesMethod(t *testing.T) {
+	pkg := Load(t, writePackage(t, map[string]string{
+		"a.go": "package p\n\ntype A struct{}\n\nfunc (A) M() {}\n",
+		"b.go": "package p\n\ntype B struct{}\n\nfunc (b *B) M() {}\n",
+	}), 2)
+
+	fn, ok := pkg.Func("B.M")
+	if !ok || fn.File != "b.go" {
+		t.Fatalf("Func(B.M) = %+v, %v; want B's method in b.go, not A's", fn, ok)
+	}
+	if _, ok := pkg.Func("C.M"); ok {
+		t.Error("Func(C.M) matched a method on another receiver")
+	}
+}
+
 func TestSourceIsTheDeclarationAndFileSourceItsWholeFile(t *testing.T) {
 	file := "package p\n\nfunc before() {}\n\nfunc owner() { body() }\n\nfunc after() {}\n"
 	pkg := Load(t, writePackage(t, map[string]string{"a.go": file}), 1)

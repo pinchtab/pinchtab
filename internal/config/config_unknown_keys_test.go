@@ -212,10 +212,7 @@ func TestUnknownConfigKeysErrorNamesThePaths(t *testing.T) {
 // keys the loader honours and accepting keys it ignores.
 func TestReaderDecodesAFileConfigShadowSoTheWalkChecksTheRightKeys(t *testing.T) {
 	pkg := srccensus.Load(t, ".", 25)
-	unmarshaler := pkg.Source(pkg.MustFunc(t, "UnmarshalJSON"))
-	if !strings.HasPrefix(unmarshaler, "func (fc *FileConfig) UnmarshalJSON(") {
-		t.Fatalf("the UnmarshalJSON found is not FileConfig's; the unknown-key walk's premise cannot be checked: %.80s", unmarshaler)
-	}
+	unmarshaler := pkg.Source(pkg.MustFunc(t, "FileConfig.UnmarshalJSON"))
 
 	if !strings.Contains(unmarshaler, "type rawFileConfig FileConfig") {
 		t.Error("UnmarshalJSON no longer decodes a defined-type shadow of FileConfig; UnknownFileConfigKeys walks FileConfig's tags and must be pointed at whatever shape the reader now uses")

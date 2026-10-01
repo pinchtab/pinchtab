@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -316,7 +317,8 @@ func TestStreamSiteCensusStaysBehindStreamAwareMiddleware(t *testing.T) {
 		}
 	}
 
-	if len(srccensus.Load(t, filepath.Join("..", "server"), 8).CallsAllowingNone("handlers.AuthMiddlewareWithSessions")) == 0 {
+	server := srccensus.Load(t, filepath.Join("..", "server"), 8)
+	if !strings.Contains(server.Source(server.MustFunc(t, "FrontDoorHandler")), "handlers.AuthMiddlewareWithSessions(") {
 		t.Fatal("front door no longer mounts AuthMiddlewareWithSessions; the stream-aware credential re-check does not reach the stream sites")
 	}
 }
