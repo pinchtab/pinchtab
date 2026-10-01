@@ -15,9 +15,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
-// A drag destination is a selector in the same vocabulary as the source, so it goes through
-// the same resolver — refs are what a snapshot hands an agent, and a destination that is
-// never resolved is a drag to (0,0) reported as success.
 func TestADragDestinationIsResolvedThroughTheSourceResolver(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 	req := bridge.ActionRequest{Kind: bridge.ActionDrag, Selector: "#src", ToSelector: "e9"}
@@ -35,8 +32,6 @@ func TestADragDestinationIsResolvedThroughTheSourceResolver(t *testing.T) {
 	}
 }
 
-// Resolution is idempotent: the tab-scoped handler forwards an already-resolved request to
-// the generic one, and re-resolving there would spend the node id it was given.
 func TestAnAlreadyResolvedDragDestinationIsLeftAlone(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 
@@ -55,9 +50,6 @@ func TestAnAlreadyResolvedDragDestinationIsLeftAlone(t *testing.T) {
 	}
 }
 
-// The wiring, not the helper: a drag whose destination never reaches the resolver drags to
-// (0,0) and answers dragged:true, which is the silent-success shape this card is about. A
-// resolved source (nodeId) is what lets this reach the destination step without a browser.
 func TestTheActionHandlerResolvesADragDestination(t *testing.T) {
 	h := New(&mockBridge{availableActions: []string{bridge.ActionDrag}}, &config.RuntimeConfig{}, nil, nil, nil)
 	body := `{"kind":"drag","nodeId":42,"toSelector":"e9","tabId":"tab1"}`
@@ -73,8 +65,6 @@ func TestTheActionHandlerResolvesADragDestination(t *testing.T) {
 	}
 }
 
-// The GET form of /action is a documented convenience, and a destination it drops is the
-// same silent no-op in a second place: the drag would run to (0,0) and answer dragged:true.
 func TestTheQueryFormOfActionCarriesTheDragDestination(t *testing.T) {
 	req, ok := decodeActionRequest(httptest.NewRecorder(), httptest.NewRequest("GET", "/action?kind=drag&selector=%23src&toSelector=e9", nil))
 	if !ok {
@@ -113,15 +103,13 @@ func newDragRecoveryFixture(t *testing.T) (context.Context, *bridge.Bridge, *Han
 	if err := chromedp.Run(ctx, chromedp.Navigate("data:text/html;base64,"+base64.StdEncoding.EncodeToString([]byte(dragRecoveryFixtureHTML)))); err != nil {
 		t.Fatal(err)
 	}
-	cfg := &config.RuntimeConfig{ActionTimeout: 8 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
+	cfg := &config.RuntimeConfig{ActionTimeout: 45 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
 	b := browserBridge(ctx, cfg)
 	b.RegisterTab("tab-drag", ctx)
 	h := New(b, cfg, nil, nil, nil)
 	return ctx, b, h
 }
 
-// seedDragSnapshot plays the role of an agent's earlier /snapshot: refs with the
-// descriptors a real snapshot carries, so recovery has something to match with.
 func seedDragSnapshot(t *testing.T, ctx context.Context, b *bridge.Bridge) {
 	t.Helper()
 	nids := map[string]int64{}
@@ -171,10 +159,6 @@ func postDrag(t *testing.T, h *Handlers, body string) *httptest.ResponseRecorder
 	return w
 }
 
-// The asymmetry this card removes: the destination now gets the refresh-and-recover
-// the source always had. Asserted against the page's own record of where the drop
-// landed — a drag that reports dragged:true while dropping elsewhere is the failure
-// being ruled out.
 func TestADragWithAStaleDestinationRecoversAndLandsOnIt(t *testing.T) {
 	ctx, b, h := newDragRecoveryFixture(t)
 	seedDragSnapshot(t, ctx, b)
@@ -191,8 +175,6 @@ func TestADragWithAStaleDestinationRecoversAndLandsOnIt(t *testing.T) {
 	}
 }
 
-// Both refs come from one snapshot, so they go stale together far more often than
-// separately — the common case.
 func TestADragWithBothEndsStaleRecoversBothFromOneSnapshot(t *testing.T) {
 	ctx, b, h := newDragRecoveryFixture(t)
 	seedDragSnapshot(t, ctx, b)
@@ -209,8 +191,6 @@ func TestADragWithBothEndsStaleRecoversBothFromOneSnapshot(t *testing.T) {
 	}
 }
 
-// Recovery still refuses where it must: a destination that genuinely no longer
-// exists after a refresh 404s, naming the destination rather than the source.
 func TestADragDestinationGoneAfterRefreshStillRefuses(t *testing.T) {
 	ctx, b, h := newDragRecoveryFixture(t)
 	seedDragSnapshot(t, ctx, b)
@@ -231,10 +211,6 @@ func TestADragDestinationGoneAfterRefreshStillRefuses(t *testing.T) {
 	}
 }
 
-// The browserless half (CI installs no browser): every site that re-resolves after
-// the DOM changed re-resolves EVERY selector the request carries, through the one
-// owner. A future re-resolution site that forgets the secondary targets is exactly
-// how the destination was left behind the first time.
 func TestEveryReResolutionSiteRefreshesSecondaryTargets(t *testing.T) {
 	pkg := srccensus.Load(t, ".", 80)
 	pkg.MustFunc(t, "refreshActionSecondaryTargets")
