@@ -12,21 +12,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/runtimetypes"
 )
 
-// IsolatedNodeObjectID converts a backend node id to a JS object handle in the
-// top frame's isolated world. The rule and the world both have one owner in
-// internal/cdptk, the lowest CDP layer: DOM.resolveNode without an
-// executionContextId hands back a main-world object, so every
-// Runtime.callFunctionOn against it runs where page script can redefine the DOM
-// methods it calls.
-//
-// JS invoked on the returned handle must not read ambient globals. The handle
-// lives in the world it was resolved into, not necessarily the node's frame, so
-// `window` and `document` there are the top frame's. Derive them from the node
-// via ownerDocument/defaultView instead.
-func IsolatedNodeObjectID(ctx context.Context, backendNodeID int64) (string, error) {
-	return cdptk.IsolatedNodeObjectID(ctx, backendNodeID)
-}
-
 // FrameExecutionContextID returns a Runtime.executionContextId that evaluates
 // in the given frame's document, minted by the one owner in internal/cdptk.
 //

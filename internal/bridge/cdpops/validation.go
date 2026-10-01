@@ -47,7 +47,7 @@ func PointerPointForNode(ctx context.Context, backendNodeID int64, requireTopMos
 		return 0, 0, fmt.Errorf("scroll into view: %w", err)
 	}
 
-	objectID, err := IsolatedNodeObjectID(ctx, backendNodeID)
+	objectID, err := cdptk.IsolatedNodeObjectID(ctx, backendNodeID)
 	if err != nil {
 		return 0, 0, err
 	}
