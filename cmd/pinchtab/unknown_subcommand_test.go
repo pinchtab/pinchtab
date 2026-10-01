@@ -169,20 +169,31 @@ func TestARefusalRendersOnceWithoutTheUsageBlock(t *testing.T) {
 // installs it itself proves the walk works, not that the binary runs it.
 func TestExecuteInstallsTheGuard(t *testing.T) {
 	pkg := srccensus.Load(t, ".", 40)
-	body := pkg.Source(pkg.MustFunc(t, "Execute"))
-	install := strings.Index(body, "installUnknownSubcommandGuard(rootCmd)")
-	// Prefix match: the call has been both Execute() and ExecuteC(), and a
-	// rename must not read as an ordering failure.
-	execute := strings.Index(body, "rootCmd.Execute")
-	if install < 0 {
+	execute := pkg.MustFunc(t, "Execute")
+	install, installed := firstCallInside(pkg, execute, "installUnknownSubcommandGuard")
+	if !installed {
 		t.Fatal("Execute no longer installs the unknown-subcommand guard, so every group is back to exit 0")
 	}
-	if execute < 0 {
+	run, runs := firstCallInside(pkg, execute, "rootCmd.ExecuteC", "rootCmd.Execute")
+	if !runs {
 		t.Fatal("Execute no longer runs the command tree through rootCmd.Execute/ExecuteC; re-point this ordering guard at whatever runs it rather than deleting it")
 	}
-	if execute < install {
+	if run.Line < install.Line {
 		t.Error("the guard is installed after the command tree runs, which is too late to matter")
 	}
+}
+
+func firstCallInside(pkg *srccensus.Package, fn srccensus.Func, callees ...string) (srccensus.Site, bool) {
+	var first srccensus.Site
+	found := false
+	for _, callee := range callees {
+		for _, site := range pkg.CallsAllowingNone(callee) {
+			if pkg.Contains(fn, site) && (!found || site.Line < first.Line) {
+				first, found = site, true
+			}
+		}
+	}
+	return first, found
 }
 
 func commandGroups(root *cobra.Command) []*cobra.Command {
