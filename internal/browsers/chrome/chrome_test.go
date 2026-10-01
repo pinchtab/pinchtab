@@ -10,9 +10,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/browserprobe"
 	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/browsers/chrome"
 )
+
+func TestMain(m *testing.M) {
+	browserprobe.VersionTimeout = time.Minute
+	os.Exit(m.Run())
+}
 
 func TestRegistration(t *testing.T) {
 	b, ok := browsers.Get("chrome")

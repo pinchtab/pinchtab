@@ -7,28 +7,16 @@ import (
 	"time"
 )
 
-// FallbackChromeVersion is the Chrome version advertised when the real one is not
-// known — no browser.version in config and no successful probe of the launched binary.
-//
-// It lives here, beside RunVersion, because this package is the only leaf all three
-// consumers can import: internal/stealth imports internal/config, so config can never
-// read a constant owned by stealth, and internal/handlers reads both. Before it had one
-// owner the same digits were written out in config's file default, config's runtime
-// default and two fallbacks in stealth's UA builder, so a Chrome release meant four
-// edits in lockstep across three packages and nothing failed when they drifted.
-//
-// Bumping it is a stopgap, not the fix: the version a page sees should come from the
-// binary RunVersion probes, and this is what is left when that cannot be answered.
 const FallbackChromeVersion = "144.0.7559.133"
 
+var VersionTimeout = 5 * time.Second
+
 func RunVersion(ctx context.Context, binary string) (string, error) {
-	// Some platforms cannot answer this by execution; prefer the install layout
-	// where one is available. See versionFromInstallLayout.
 	if v := versionFromInstallLayout(binary); v != "" {
 		return v, nil
 	}
 
-	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	cctx, cancel := context.WithTimeout(ctx, VersionTimeout)
 	defer cancel()
 	out, err := exec.CommandContext(cctx, binary, "--version").CombinedOutput()
 	if err != nil {
@@ -77,8 +65,6 @@ func hasDottedDigits(s string) bool {
 	return sawDigit && sawDot
 }
 
-// CompareSemver returns -1/0/1 comparing major.minor.patch of a and b; it is
-// lenient about "v" prefixes, build/prerelease suffixes, and non-numeric noise.
 func CompareSemver(a, b string) int {
 	ap := splitVersion(a)
 	bp := splitVersion(b)
