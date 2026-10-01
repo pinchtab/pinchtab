@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 	"github.com/spf13/cobra"
 )
 
@@ -167,11 +168,8 @@ func TestARefusalRendersOnceWithoutTheUsageBlock(t *testing.T) {
 // The guard lives at Execute because the command tree is only complete there. A test that
 // installs it itself proves the walk works, not that the binary runs it.
 func TestExecuteInstallsTheGuard(t *testing.T) {
-	src, err := os.ReadFile("root.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	body := string(src)
+	pkg := srccensus.Load(t, ".", 40)
+	body := pkg.Source(pkg.MustFunc(t, "Execute"))
 	install := strings.Index(body, "installUnknownSubcommandGuard(rootCmd)")
 	// Prefix match: the call has been both Execute() and ExecuteC(), and a
 	// rename must not read as an ordering failure.

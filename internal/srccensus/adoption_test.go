@@ -36,11 +36,12 @@ func TestEveryASTParsingTestUnderInternalBuildsOnSrccensus(t *testing.T) {
 	}
 }
 
-func TestNoTestUnderInternalReadsSourceByLiteralFilename(t *testing.T) {
+func TestNoTestReadsSourceByLiteralFilename(t *testing.T) {
 	files := TestTree(t, filepath.Join("..", ".."), 100)
 
 	for _, file := range files {
-		if !strings.HasPrefix(file.Name, "internal/") || strings.HasPrefix(file.Name, "internal/srccensus/") {
+		inScope := strings.HasPrefix(file.Name, "internal/") || strings.HasPrefix(file.Name, "cmd/")
+		if !inScope || strings.HasPrefix(file.Name, "internal/srccensus/") {
 			continue
 		}
 		reads, err := literalSourceReads(file.Name, file.Text)
@@ -62,13 +63,15 @@ func f() {
 	_, _ = parser.ParseFile(fset, "snapshot.go", nil, 0)
 	_, _ = parser.ParseFile(fset, "mutation.go", planted, 0)
 	_, _ = os.ReadFile("fixture.json")
+	_, _ = os.ReadFile(filepath.Join(dir, "config_load.go"))
+	_, _ = os.ReadFile(filepath.Join(dir, "fixture.json"))
 }
 `
 	got, err := literalSourceReads("planted_test.go", src)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{`line 4: os.ReadFile("handlers.go")`, `line 5: parser.ParseFile(_, "snapshot.go", nil)`}
+	want := []string{`line 4: os.ReadFile("handlers.go")`, `line 5: parser.ParseFile(_, "snapshot.go", nil)`, `line 8: os.ReadFile("config_load.go")`}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("literalSourceReads = %q, want %q", got, want)
 	}
@@ -112,6 +115,9 @@ func literalSourceReads(name, src string) ([]string, error) {
 }
 
 func goFileLiteral(expr ast.Expr) (string, bool) {
+	if join, ok := expr.(*ast.CallExpr); ok && calleeName(join.Fun) == "filepath.Join" && len(join.Args) > 0 {
+		expr = join.Args[len(join.Args)-1]
+	}
 	lit, ok := expr.(*ast.BasicLit)
 	if !ok || lit.Kind != token.STRING {
 		return "", false

@@ -557,13 +557,11 @@ func TestDefaultRunRecordsNoConfigLoadDiagnosticButKeepsWarnings(t *testing.T) {
 func TestConfigPackageHoldsNoLogLevelPrecedence(t *testing.T) {
 	configDir := filepath.Join("..", "..", "internal", "config")
 
-	raw, err := os.ReadFile(filepath.Join(configDir, "config_load.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	configPkg := srccensus.Load(t, configDir, 25)
+	loader := configPkg.MustFunc(t, "LoadConfig")
 	for _, forbidden := range []string{"safelog.", "SetLevel("} {
-		if strings.Contains(string(raw), forbidden) {
-			t.Errorf("internal/config/config_load.go references %q — the level decision must stay in resolveLogLevel", forbidden)
+		if strings.Contains(configPkg.FileSource(loader), forbidden) {
+			t.Errorf("internal/config/%s references %q — the level decision must stay in resolveLogLevel", loader.File, forbidden)
 		}
 	}
 

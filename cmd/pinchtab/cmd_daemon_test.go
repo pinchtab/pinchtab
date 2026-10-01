@@ -3,12 +3,12 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"os"
 	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/daemon"
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 type recordingDaemonManager struct {
@@ -361,14 +361,8 @@ func TestDaemonStopStillReportsTheRealResultWhenInstalled(t *testing.T) {
 }
 
 func TestEveryDispatchedDaemonVerbDeclaresItsNotInstalledPolicy(t *testing.T) {
-	raw, err := os.ReadFile("cmd_daemon.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	src := string(raw)
-
-	body := src[strings.Index(src, "func dispatchDaemonCommand("):]
-	body = body[:strings.Index(body, "\nfunc ")]
+	pkg := srccensus.Load(t, ".", 40)
+	body := pkg.Source(pkg.MustFunc(t, "dispatchDaemonCommand"))
 
 	var verbs []string
 	for line := range strings.SplitSeq(body, "\n") {
