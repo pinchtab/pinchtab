@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -39,24 +40,26 @@ func TestEveryASTParsingTestUnderInternalBuildsOnSrccensus(t *testing.T) {
 func TestNoTestReadsSourceByLiteralFilename(t *testing.T) {
 	files := TestTree(t, filepath.Join("..", ".."), 100)
 
+	var inScope []SourceFile
 	for _, file := range files {
-		inScope := strings.HasPrefix(file.Name, "internal/") || strings.HasPrefix(file.Name, "cmd/")
-		if !inScope || strings.HasPrefix(file.Name, "internal/srccensus/") {
-			continue
+		underGuard := strings.HasPrefix(file.Name, "internal/") || strings.HasPrefix(file.Name, "cmd/")
+		if underGuard && !strings.HasPrefix(file.Name, "internal/srccensus/") {
+			inScope = append(inScope, file)
 		}
-		reads, err := literalSourceReads(file.Name, file.Text)
-		if err != nil {
+	}
+	reads, failures := literalSourceReads(inScope)
+	for _, file := range inScope {
+		if err := failures[file.Name]; err != nil {
 			t.Errorf("%s: cannot parse, so this guard can neither clear nor flag it: %v", file.Name, err)
-			continue
 		}
-		if len(reads) > 0 {
-			t.Errorf("%s reads Go source by literal filename (%s); load the package with srccensus.Load and locate the declaration by name, so a rename or a move to a sibling file keeps the guard pointed at the code", file.Name, strings.Join(reads, ", "))
+		if found := reads[file.Name]; len(found) > 0 {
+			t.Errorf("%s reads Go source by literal filename (%s); load the package with srccensus.Load and locate the declaration by name, so a rename or a move to a sibling file keeps the guard pointed at the code", file.Name, strings.Join(found, ", "))
 		}
 	}
 }
 
 func TestLiteralSourceReadsFlagsNamedReadsAndAllowsPlantedSource(t *testing.T) {
-	src := `package p
+	calls := `package p
 
 func f() {
 	_, _ = os.ReadFile("handlers.go")
@@ -69,6 +72,8 @@ func f() {
 	_ = readHelper(t, "docs/click.md")
 	_ = pureHelper("x.go")
 }
+`
+	helpers := `package p
 
 func readHelper(t *testing.T, rel string) string {
 	raw, _ := os.ReadFile(filepath.Join("..", rel))
@@ -77,23 +82,64 @@ func readHelper(t *testing.T, rel string) string {
 
 func pureHelper(name string) string { return name }
 `
-	got, err := literalSourceReads("planted_test.go", src)
-	if err != nil {
-		t.Fatal(err)
+	otherPackage := `package q
+
+func g() {
+	_ = readHelper(t, "bridge/action_request.go")
+}
+`
+	reads, failures := literalSourceReads([]SourceFile{
+		{Name: "internal/p/planted_test.go", Text: calls},
+		{Name: "internal/p/helpers_test.go", Text: helpers},
+		{Name: "internal/q/planted_test.go", Text: otherPackage},
+	})
+	if len(failures) > 0 {
+		t.Fatal(failures)
 	}
+	got := reads["internal/p/planted_test.go"]
 	want := []string{`line 4: os.ReadFile("handlers.go")`, `line 5: parser.ParseFile(_, "snapshot.go", nil)`, `line 8: os.ReadFile("config_load.go")`, `line 10: readHelper(_, "bridge/action_request.go")`}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("literalSourceReads = %q, want %q", got, want)
 	}
+	if len(reads) != 1 {
+		t.Fatalf("literalSourceReads flagged files beyond the planted caller: %q", reads)
+	}
 }
 
-func literalSourceReads(name, src string) ([]string, error) {
+func literalSourceReads(files []SourceFile) (map[string][]string, map[string]error) {
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, name, src, 0)
-	if err != nil {
-		return nil, err
+	parsed := map[string]*ast.File{}
+	failures := map[string]error{}
+	for _, file := range files {
+		syntax, err := parser.ParseFile(fset, file.Name, file.Text, 0)
+		if err != nil {
+			failures[file.Name] = err
+			continue
+		}
+		parsed[file.Name] = syntax
 	}
-	readers := fileReadingHelpers(file)
+	readers := map[string]map[string]bool{}
+	for name, syntax := range parsed {
+		key := testPackageKey(name, syntax)
+		if readers[key] == nil {
+			readers[key] = map[string]bool{}
+		}
+		addFileReadingHelpers(readers[key], syntax)
+	}
+	reads := map[string][]string{}
+	for name, syntax := range parsed {
+		if found := sourceReadsIn(fset, syntax, readers[testPackageKey(name, syntax)]); len(found) > 0 {
+			reads[name] = found
+		}
+	}
+	return reads, failures
+}
+
+func testPackageKey(name string, file *ast.File) string {
+	return path.Dir(name) + " " + file.Name.Name
+}
+
+func sourceReadsIn(fset *token.FileSet, file *ast.File, readers map[string]bool) []string {
 	var reads []string
 	ast.Inspect(file, func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
@@ -130,11 +176,10 @@ func literalSourceReads(name, src string) ([]string, error) {
 		}
 		return true
 	})
-	return reads, nil
+	return reads
 }
 
-func fileReadingHelpers(file *ast.File) map[string]bool {
-	readers := map[string]bool{}
+func addFileReadingHelpers(readers map[string]bool, file *ast.File) {
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok || fn.Body == nil || fn.Recv != nil {
@@ -147,7 +192,6 @@ func fileReadingHelpers(file *ast.File) map[string]bool {
 			return true
 		})
 	}
-	return readers
 }
 
 func goFileLiteral(expr ast.Expr) (string, bool) {
