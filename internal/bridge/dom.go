@@ -2,12 +2,10 @@ package bridge
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
-	"github.com/chromedp/chromedp"
-
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
+	"github.com/pinchtab/pinchtab/internal/cdptk"
 )
 
 func (b *Bridge) CallFunctionOnNode(ctx context.Context, backendNodeID int64, functionDecl string, args []map[string]any, result any) error {
@@ -29,36 +27,7 @@ func (b *Bridge) EvaluateInFrame(ctx context.Context, frameID string, expression
 		return b.Evaluate(ctx, expression, result, opts)
 	}
 
-	var raw json.RawMessage
-	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.evaluate", map[string]any{
-			"expression":    expression,
-			"returnByValue": true,
-			"contextId":     execID,
-		}, &raw)
-	}))
-	if err != nil {
-		return err
-	}
-
-	var parsed struct {
-		Result struct {
-			Value json.RawMessage `json:"value"`
-		} `json:"result"`
-		ExceptionDetails *struct {
-			Text string `json:"text"`
-		} `json:"exceptionDetails,omitempty"`
-	}
-	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return fmt.Errorf("evaluate in frame parse: %w", err)
-	}
-	if parsed.ExceptionDetails != nil && parsed.ExceptionDetails.Text != "" {
-		return fmt.Errorf("%s", parsed.ExceptionDetails.Text)
-	}
-	if result == nil || len(parsed.Result.Value) == 0 {
-		return nil
-	}
-	return json.Unmarshal(parsed.Result.Value, result)
+	return cdptk.EvaluateInContext(ctx, execID, expression, opts.AwaitPromise, result)
 }
 
 func (b *Bridge) DescribeNode(ctx context.Context, backendNodeID int64) (*NodeInfo, error) {

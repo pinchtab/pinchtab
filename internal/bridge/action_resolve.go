@@ -321,39 +321,16 @@ func BackendNodeWithinScope(ctx context.Context, scopeBackendNodeID, targetBacke
 	scopeObjectID, targetObjectID := objectIDs[0], objectIDs[1]
 
 	var contains bool
-	err = chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		var raw json.RawMessage
-		if err := chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.callFunctionOn", map[string]any{
-			"functionDeclaration": `function(target) {
-				for (let cur = target; cur; cur = cur.parentNode || cur.host || null) {
-					if (cur === this) return true;
-				}
-				return false;
-			}`,
-			"objectId":      scopeObjectID,
-			"arguments":     []map[string]any{{"objectId": targetObjectID}},
-			"returnByValue": true,
-		}, &raw); err != nil {
-			return err
+	err = cdptk.CallFunctionOn(ctx, scopeObjectID, `function(target) {
+		for (let cur = target; cur; cur = cur.parentNode || cur.host || null) {
+			if (cur === this) return true;
 		}
-		var parsed struct {
-			Result struct {
-				Value bool `json:"value"`
-			} `json:"result"`
-			ExceptionDetails *struct {
-				Text string `json:"text"`
-			} `json:"exceptionDetails,omitempty"`
-		}
-		if err := json.Unmarshal(raw, &parsed); err != nil {
-			return err
-		}
-		if parsed.ExceptionDetails != nil {
-			return fmt.Errorf("scope containment check: %s", parsed.ExceptionDetails.Text)
-		}
-		contains = parsed.Result.Value
-		return nil
-	}))
-	return contains, err
+		return false;
+	}`, []map[string]any{{"objectId": targetObjectID}}, &contains)
+	if err != nil {
+		return false, fmt.Errorf("scope containment check: %w", err)
+	}
+	return contains, nil
 }
 
 func resolveElementMetaInFrame(ctx context.Context, frameID, functionDeclaration string, args []map[string]any) (FrameElementMeta, error) {

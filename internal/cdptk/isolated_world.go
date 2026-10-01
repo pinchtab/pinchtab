@@ -172,14 +172,20 @@ func EvaluateInIsolatedWorld(ctx context.Context, frameID, expression string, re
 	if err != nil {
 		return err
 	}
+	return EvaluateInContext(ctx, execID, expression, true, result)
+}
 
+// EvaluateInContext is the one by-value Runtime.evaluate reader for an explicit
+// execution context. A thrown script is an error carrying the exception's own
+// text, not a zero value.
+func EvaluateInContext(ctx context.Context, execID int64, expression string, awaitPromise bool, result any) error {
 	var raw json.RawMessage
 	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.evaluate", map[string]any{
 			"expression":    expression,
 			"contextId":     execID,
 			"returnByValue": true,
-			"awaitPromise":  true,
+			"awaitPromise":  awaitPromise,
 		}, &raw)
 	})); err != nil {
 		return err
@@ -189,15 +195,13 @@ func EvaluateInIsolatedWorld(ctx context.Context, frameID, expression string, re
 		Result struct {
 			Value json.RawMessage `json:"value"`
 		} `json:"result"`
-		ExceptionDetails *struct {
-			Text string `json:"text"`
-		} `json:"exceptionDetails,omitempty"`
+		ExceptionDetails *exceptionDetails `json:"exceptionDetails,omitempty"`
 	}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return fmt.Errorf("evaluate in isolated world parse: %w", err)
+		return fmt.Errorf("evaluate parse: %w", err)
 	}
-	if parsed.ExceptionDetails != nil && parsed.ExceptionDetails.Text != "" {
-		return fmt.Errorf("%s", parsed.ExceptionDetails.Text)
+	if parsed.ExceptionDetails != nil {
+		return fmt.Errorf("evaluate: %s", parsed.ExceptionDetails.message())
 	}
 	if result == nil || len(parsed.Result.Value) == 0 {
 		return nil

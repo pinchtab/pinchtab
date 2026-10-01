@@ -10,15 +10,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/cdptk"
 )
 
-// EvaluateInIsolatedWorld runs expression in the isolated world of frameID (the
-// top frame when frameID is empty) and unmarshals the returned value into
-// result, awaiting a returned promise. It runs where page script cannot reach,
-// so a page that redefines globals or DOM prototypes cannot alter the result —
-// the property the axe engine depends on.
-func EvaluateInIsolatedWorld(ctx context.Context, frameID, expression string, result any) error {
-	return cdptk.EvaluateInIsolatedWorld(ctx, frameID, expression, result)
-}
-
 // BackendNodeIDForSelector resolves a CSS selector to a backend node id in the
 // isolated world of frameID (top frame when empty). It returns 0 without error
 // when the selector matches nothing, so a caller mapping many selectors treats a

@@ -11,6 +11,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/audit"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/bridge/observe"
+	"github.com/pinchtab/pinchtab/internal/cdptk"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
@@ -37,7 +38,7 @@ func (h *Handlers) runAxeAudit(w http.ResponseWriter, r *http.Request, tCtx cont
 	injectAxeIntoAllFrames(tCtx)
 
 	var raw audit.AxeRawResult
-	if err := bridge.EvaluateInIsolatedWorld(tCtx, "", axeRunSnippet(config, selector), &raw); err != nil {
+	if err := cdptk.EvaluateInIsolatedWorld(tCtx, "", axeRunSnippet(config, selector), &raw); err != nil {
 		httpx.Error(w, http.StatusInternalServerError, fmt.Errorf("run axe: %w", err))
 		return
 	}
@@ -67,7 +68,7 @@ func injectAxeIntoAllFrames(tCtx context.Context) {
 		ids = []string{""} // top frame only
 	}
 	for _, id := range ids {
-		_ = bridge.EvaluateInIsolatedWorld(tCtx, id, assets.AxeJS, nil)
+		_ = cdptk.EvaluateInIsolatedWorld(tCtx, id, assets.AxeJS, nil)
 	}
 }
 
