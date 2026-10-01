@@ -57,7 +57,7 @@ func (s *Cloudflare) Solve(ctx context.Context, page autosolver.Page, executor a
 		return waitForCFResolve(ctx, page, result, 15*time.Second)
 	}
 
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := range 3 {
 		result.Attempts = attempt + 1
 
 		waitForSpinner(ctx, executor, 10*time.Second)

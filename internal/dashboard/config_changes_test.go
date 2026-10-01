@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -112,10 +113,9 @@ var fileConfigSectionCensus = map[string]configSectionCensusRow{
 }
 
 func TestEveryFileConfigSectionHasAnEffectiveDisposition(t *testing.T) {
-	typ := reflect.TypeOf(config.FileConfig{})
+	typ := reflect.TypeFor[config.FileConfig]()
 	seen := make(map[string]bool, typ.NumField())
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
+	for field := range typ.Fields() {
 		seen[field.Name] = true
 		row, ok := fileConfigSectionCensus[field.Name]
 		if !ok {
@@ -170,12 +170,7 @@ func TestEveryRestartRequiredConfigSectionHasAWorkingClause(t *testing.T) {
 }
 
 func containsString(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(values, want)
 }
 
 func TestSensitiveConfigChangesStillReportsARealSecurityEdit(t *testing.T) {

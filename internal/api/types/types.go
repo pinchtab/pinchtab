@@ -80,7 +80,7 @@ type Agent struct {
 	ID           string    `json:"id"`
 	Name         string    `json:"name,omitempty"`
 	ConnectedAt  time.Time `json:"connectedAt"`
-	LastActivity time.Time `json:"lastActivity,omitempty"`
+	LastActivity time.Time `json:"lastActivity"`
 	RequestCount int       `json:"requestCount"`
 }
 
@@ -90,17 +90,17 @@ type AgentDetail struct {
 }
 
 type ActivityEvent struct {
-	ID        string                 `json:"id"`
-	AgentID   string                 `json:"agentId"`
-	Channel   string                 `json:"channel"` // "tool_call" or "progress"
-	Type      string                 `json:"type"`    // navigate/snapshot/action/screenshot/other
-	Method    string                 `json:"method"`
-	Path      string                 `json:"path"`
-	Message   string                 `json:"message,omitempty"`  // human-readable (progress channel)
-	Progress  *int                   `json:"progress,omitempty"` // 0-100 numeric progress
-	Total     *int                   `json:"total,omitempty"`    // total steps
-	Timestamp time.Time              `json:"timestamp"`
-	Details   map[string]interface{} `json:"details,omitempty"`
+	ID        string         `json:"id"`
+	AgentID   string         `json:"agentId"`
+	Channel   string         `json:"channel"` // "tool_call" or "progress"
+	Type      string         `json:"type"`    // navigate/snapshot/action/screenshot/other
+	Method    string         `json:"method"`
+	Path      string         `json:"path"`
+	Message   string         `json:"message,omitempty"`  // human-readable (progress channel)
+	Progress  *int           `json:"progress,omitempty"` // 0-100 numeric progress
+	Total     *int           `json:"total,omitempty"`    // total steps
+	Timestamp time.Time      `json:"timestamp"`
+	Details   map[string]any `json:"details,omitempty"`
 }
 
 type RouteAttempt struct {

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -44,11 +45,11 @@ type Task struct {
 	Params   map[string]any `json:"params,omitempty"`
 	Priority int            `json:"priority"`
 	State    TaskState      `json:"state"`
-	Deadline time.Time      `json:"deadline,omitempty"`
+	Deadline time.Time      `json:"deadline"`
 
 	CreatedAt   time.Time `json:"createdAt"`
-	StartedAt   time.Time `json:"startedAt,omitempty"`
-	CompletedAt time.Time `json:"completedAt,omitempty"`
+	StartedAt   time.Time `json:"startedAt"`
+	CompletedAt time.Time `json:"completedAt"`
 	LatencyMs   int64     `json:"latencyMs,omitempty"`
 
 	Result any    `json:"result,omitempty"`
@@ -115,9 +116,7 @@ func (t *Task) Snapshot() *Task {
 	var params map[string]any
 	if t.Params != nil {
 		params = make(map[string]any, len(t.Params))
-		for k, v := range t.Params {
-			params[k] = v
-		}
+		maps.Copy(params, t.Params)
 	}
 	return &Task{
 		ID:          t.ID,
@@ -150,7 +149,7 @@ type SubmitRequest struct {
 	Ref         string         `json:"ref,omitempty"` // deprecated: use Selector
 	Params      map[string]any `json:"params,omitempty"`
 	Priority    int            `json:"priority,omitempty"`
-	Deadline    string         `json:"deadline,omitempty"`
+	Deadline    string         `json:"deadline"`
 	CallbackURL string         `json:"callbackUrl,omitempty"`
 }
 

@@ -86,7 +86,7 @@ type persistedSessionRecord struct {
 	ID            string    `json:"id"`
 	CreatedAt     time.Time `json:"createdAt"`
 	LastSeen      time.Time `json:"lastSeen"`
-	ElevatedUntil time.Time `json:"elevatedUntil,omitempty"`
+	ElevatedUntil time.Time `json:"elevatedUntil"`
 	TokenHash     string    `json:"tokenHash"`
 }
 

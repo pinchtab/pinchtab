@@ -21,14 +21,14 @@ func TestRepositoryDoesNotAliasAddedInstance(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 500; i++ {
+		for range 500 {
 			inst.Status = "stopped"
 			inst.Status = "running"
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 500; i++ {
+		for range 500 {
 			_ = repo.running()
 		}
 	}()

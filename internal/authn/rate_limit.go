@@ -80,10 +80,7 @@ func (l *AttemptLimiter) allowedLocked(hits []time.Time, now time.Time) (bool, t
 	if len(hits) < l.maxAttempts {
 		return true, 0
 	}
-	retryAfter := l.window - now.Sub(hits[0])
-	if retryAfter < 0 {
-		retryAfter = 0
-	}
+	retryAfter := max(l.window-now.Sub(hits[0]), 0)
 	return false, retryAfter
 }
 

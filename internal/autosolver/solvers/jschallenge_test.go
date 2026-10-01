@@ -52,7 +52,7 @@ func (m *jsMockExecutor) WaitFor(_ context.Context, _ string, _ time.Duration) e
 	m.waits++
 	return m.waitErr
 }
-func (m *jsMockExecutor) Evaluate(_ context.Context, _ string, _ interface{}) error {
+func (m *jsMockExecutor) Evaluate(_ context.Context, _ string, _ any) error {
 	m.evals++
 	return m.evaluateErr
 }

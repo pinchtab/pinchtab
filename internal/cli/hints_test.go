@@ -65,11 +65,11 @@ func TestNoSessionHintHoldsWhetherOrNotSessionsAreEnabled(t *testing.T) {
 // assigned value silently. The separator check is kept as its own assertion
 // because it names the sharpest failure.
 func TestNoSessionHintEndsWithTheCommandSoItCanBeLifted(t *testing.T) {
-	command := strings.Index(NoSessionHint, SessionCreateCommand)
-	if command < 0 {
+	_, after, ok := strings.Cut(NoSessionHint, SessionCreateCommand)
+	if !ok {
 		t.Fatalf("hint no longer carries the create command: %q", NoSessionHint)
 	}
-	trailing := NoSessionHint[command+len(SessionCreateCommand):]
+	trailing := after
 
 	for _, separator := range []string{";", "&&", "||", "|", "&"} {
 		if strings.HasPrefix(trailing, separator) {

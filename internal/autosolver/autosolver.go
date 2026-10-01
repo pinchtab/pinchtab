@@ -350,15 +350,12 @@ func (as *AutoSolver) trySemantic(ctx context.Context, page Page, executor Actio
 	defer cancel()
 
 	initialIntentType := intentTypeOf(intent)
-	stepBudget := semanticStepBudget(initialIntentType)
-	if stepBudget < 1 {
-		stepBudget = 1
-	}
+	stepBudget := max(semanticStepBudget(initialIntentType), 1)
 
 	currentIntent := intent
 	actionsExecuted := 0
 
-	for step := 0; step < stepBudget; step++ {
+	for step := range stepBudget {
 		if step > 0 {
 			if nextIntent, detectErr := as.detectIntent(semanticCtx, page); detectErr != nil {
 				slog.Debug("autosolver: semantic step intent refresh failed",
@@ -437,11 +434,11 @@ func (as *AutoSolver) executeSemanticStep(ctx context.Context, page Page, execut
 
 	healed, healErr := as.selfHealSemanticAction(ctx, page, intent, step, action)
 	if healErr != nil {
-		return fmt.Errorf("execute semantic action: %v; self-heal failed: %v", err, healErr)
+		return fmt.Errorf("execute semantic action: %w; self-heal failed: %w", err, healErr)
 	}
 
 	if execErr := executeSuggestedAction(ctx, executor, healed); execErr != nil {
-		return fmt.Errorf("execute semantic self-heal action: %v", execErr)
+		return fmt.Errorf("execute semantic self-heal action: %w", execErr)
 	}
 
 	return nil
@@ -727,7 +724,7 @@ func executeSuggestedAction(ctx context.Context, executor ActionExecutor, action
 		if action.Expr == "" {
 			return fmt.Errorf("evaluate action requires expr")
 		}
-		var out interface{}
+		var out any
 		return executor.Evaluate(ctx, action.Expr, &out)
 
 	case ActionNone:
@@ -834,9 +831,6 @@ func (as *AutoSolver) backoffDelay(attempt int) time.Duration {
 		maxDelay = 10 * time.Second
 	}
 
-	delay := base * time.Duration(1<<uint(attempt-1))
-	if delay > maxDelay {
-		delay = maxDelay
-	}
+	delay := min(base*time.Duration(1<<uint(attempt-1)), maxDelay)
 	return delay
 }

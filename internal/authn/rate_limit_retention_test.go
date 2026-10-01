@@ -14,7 +14,7 @@ func TestAttemptLimiterDoesNotRetainExpiredKeys(t *testing.T) {
 	l := NewAttemptLimiter(AttemptLimiterConfig{Window: time.Minute, MaxAttempts: 3})
 	l.now = func() time.Time { return now }
 
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		l.RecordFailure(fmt.Sprintf("10.0.%d.%d", i/256, i%256))
 	}
 
@@ -37,7 +37,7 @@ func TestAttemptLimiterKeepsLiveKeysWhileSweeping(t *testing.T) {
 	l := NewAttemptLimiter(AttemptLimiterConfig{Window: time.Minute, MaxAttempts: 3})
 	l.now = func() time.Time { return now }
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		l.RecordFailure("10.0.0.1")
 	}
 	if allowed, _ := l.Allow("10.0.0.1"); allowed {

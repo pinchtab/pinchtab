@@ -177,7 +177,7 @@ func TestAnExplicitOutputPathStillOverwrites(t *testing.T) {
 // each of the four phrases it differently, and the assertion is about the name.
 func printedName(t *testing.T, out, prefix, ext string) string {
 	t.Helper()
-	for _, field := range strings.Fields(out) {
+	for field := range strings.FieldsSeq(out) {
 		// record prints an absolute path, the other four a bare name; the assertion is
 		// about which file was named, so compare the basename either way.
 		if name := filepath.Base(field); strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ext) {
@@ -420,7 +420,7 @@ func takeEveryNameInWindow(t *testing.T, dir, prefix, ext string) map[string]boo
 	t.Helper()
 	taken := map[string]bool{}
 	start := time.Now()
-	for i := 0; i < autoNameWindowSeconds; i++ {
+	for i := range autoNameWindowSeconds {
 		name := prefix + start.Add(time.Duration(i)*time.Second).Format("20060102-150405") + ext
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(reservedContents), 0600); err != nil {
 			t.Fatal(err)

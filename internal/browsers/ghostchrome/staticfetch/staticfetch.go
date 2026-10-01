@@ -309,7 +309,7 @@ func stripScripts(r io.Reader) (io.Reader, error) {
 		tt := z.Next()
 		switch tt {
 		case nethtml.ErrorToken:
-			if z.Err() == io.EOF {
+			if errors.Is(z.Err(), io.EOF) {
 				return &buf, nil
 			}
 			return nil, z.Err()

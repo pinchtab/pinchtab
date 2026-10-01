@@ -110,7 +110,7 @@ func checkBinaryStarts(ctx context.Context, cfg *config.RuntimeConfig) CheckResu
 }
 
 func parseVersionLine(s string) string {
-	for _, line := range strings.Split(s, "\n") {
+	for line := range strings.SplitSeq(s, "\n") {
 		if t := strings.TrimSpace(line); t != "" {
 			return t
 		}

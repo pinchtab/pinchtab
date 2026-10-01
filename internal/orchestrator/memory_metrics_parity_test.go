@@ -13,8 +13,7 @@ func jsonKeyPaths(typ reflect.Type, prefix string, into *[]string) {
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
 	}
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
+	for field := range typ.Fields() {
 		key := strings.Split(field.Tag.Get("json"), ",")[0]
 		leaf := field.Type
 		if leaf.Kind() == reflect.Ptr {
@@ -32,8 +31,8 @@ func jsonKeyPaths(typ reflect.Type, prefix string, into *[]string) {
 // a key missing here is a measurement the front door silently drops.
 func TestTheOrchestratorMemoryDTOMirrorsTheMeasuredMemoryMetricsKeyForKey(t *testing.T) {
 	var measured, wire []string
-	jsonKeyPaths(reflect.TypeOf(observe.MemoryMetrics{}), "", &measured)
-	jsonKeyPaths(reflect.TypeOf(memoryMetrics{}), "", &wire)
+	jsonKeyPaths(reflect.TypeFor[observe.MemoryMetrics](), "", &measured)
+	jsonKeyPaths(reflect.TypeFor[memoryMetrics](), "", &wire)
 	sort.Strings(measured)
 	sort.Strings(wire)
 	if strings.Join(measured, ",") != strings.Join(wire, ",") {

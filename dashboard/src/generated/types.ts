@@ -132,7 +132,7 @@ export interface Agent {
   id: string;
   name?: string;
   connectedAt: string;
-  lastActivity?: string;
+  lastActivity: string;
   requestCount: number /* int */;
 }
 export interface AgentDetail {

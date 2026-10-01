@@ -46,15 +46,13 @@ func TestLaunchReturnsAValueTheMonitorCannotWrite(t *testing.T) {
 	// depending on the exact scheduling.
 	deadline := time.Now().Add(4 * instanceHealthPollInterval)
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for time.Now().Before(deadline) {
 			if _, err := json.Marshal(inst); err != nil {
 				t.Errorf("Marshal: %v", err)
 				return
 			}
 		}
-	}()
+	})
 	wg.Wait()
 }

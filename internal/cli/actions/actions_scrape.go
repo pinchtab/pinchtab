@@ -36,7 +36,7 @@ func Scrape(conn apiclient.Conn, cmd *cobra.Command, target string) (err error) 
 			if err == nil {
 				err = cleanupErr
 			} else {
-				err = fmt.Errorf("%w (also %v)", err, cleanupErr)
+				err = fmt.Errorf("%w (also %w)", err, cleanupErr)
 			}
 		}
 	}()

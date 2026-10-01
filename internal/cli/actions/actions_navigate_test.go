@@ -804,7 +804,7 @@ func agentIDFlagCmd(t *testing.T, tabID, agentID string) *cobra.Command {
 func fallbackNoticeLine(t *testing.T, stderr string) string {
 	t.Helper()
 
-	for _, line := range strings.Split(stderr, "\n") {
+	for line := range strings.SplitSeq(stderr, "\n") {
 		if strings.Contains(line, "no longer exists") {
 			return line
 		}

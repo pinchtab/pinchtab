@@ -35,7 +35,7 @@ type StateFile struct {
 	Origins   []string                 `json:"origins"`
 	Cookies   []Cookie                 `json:"cookies"`
 	Storage   map[string]OriginStorage `json:"storage"`
-	Metadata  map[string]interface{}   `json:"metadata"`
+	Metadata  map[string]any           `json:"metadata"`
 	Encrypted bool                     `json:"encrypted"`
 }
 
@@ -221,8 +221,8 @@ func isStateFile(name string) bool {
 }
 
 func trimStateExt(name string) string {
-	if strings.HasSuffix(name, ".json.enc") {
-		return strings.TrimSuffix(name, ".json.enc")
+	if before, ok := strings.CutSuffix(name, ".json.enc"); ok {
+		return before
 	}
 	return strings.TrimSuffix(name, ".json")
 }

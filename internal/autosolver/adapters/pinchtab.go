@@ -106,7 +106,7 @@ func (e *PinchtabExecutor) WaitFor(ctx context.Context, selector string, timeout
 	return chromedp.Run(waitCtx, chromedp.WaitVisible(selector))
 }
 
-func (e *PinchtabExecutor) Evaluate(ctx context.Context, expr string, result interface{}) error {
+func (e *PinchtabExecutor) Evaluate(ctx context.Context, expr string, result any) error {
 	return chromedp.Run(ctx, chromedp.Evaluate(expr, result))
 }
 

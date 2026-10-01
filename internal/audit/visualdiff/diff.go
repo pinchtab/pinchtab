@@ -62,8 +62,8 @@ func Compare(a, b image.Image, opts Options) (Result, error) {
 	w, h := max(aw, bw), max(ah, bh)
 
 	res := Result{Width: w, Height: h, mask: make([]bool, w*h)}
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			inA := x < aw && y < ah
 			inB := x < bw && y < bh
 			if inA && inB {

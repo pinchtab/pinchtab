@@ -571,11 +571,11 @@ func assertFloorNamesOnly(t *testing.T, message, want, other string) {
 // " files" — so the assertion is equality rather than a substring test.
 func floorFileClass(message string) (string, bool) {
 	const marker = " files "
-	at := strings.Index(message, marker)
-	if at < 0 {
+	before, _, ok := strings.Cut(message, marker)
+	if !ok {
 		return "", false
 	}
-	head := message[:at]
+	head := before
 	space := strings.LastIndexByte(head, ' ')
 	if space < 0 {
 		return "", false

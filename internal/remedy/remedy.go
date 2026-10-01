@@ -24,6 +24,7 @@ package remedy
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -180,10 +181,8 @@ func checkInvocation(line string, words []string) error {
 	if words[0] != "pinchtab" {
 		return fmt.Errorf("remedy %q starts a command with %q rather than pinchtab, so it is prose", line, words[0])
 	}
-	for _, word := range words[1:] {
-		if word == "pinchtab" {
-			return fmt.Errorf("remedy %q runs two commands in one segment, so they are joined by prose rather than &&", line)
-		}
+	if slices.Contains(words[1:], "pinchtab") {
+		return fmt.Errorf("remedy %q runs two commands in one segment, so they are joined by prose rather than &&", line)
 	}
 	return nil
 }

@@ -98,13 +98,7 @@ func TestBinaryNamesReturnsExpectedNames(t *testing.T) {
 
 	required := []string{"google-chrome", "chromium-browser", "chrome"}
 	for _, want := range required {
-		found := false
-		for _, n := range names {
-			if n == want {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(names, want)
 		if !found {
 			t.Errorf("BinaryNames() missing %q; got %v", want, names)
 		}

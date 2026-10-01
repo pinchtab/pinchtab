@@ -28,8 +28,7 @@ func collectJSONKeys(typ reflect.Type, prefix string, into map[string]bool) {
 	for typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
 	}
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
+	for field := range typ.Fields() {
 		if !field.IsExported() {
 			continue
 		}

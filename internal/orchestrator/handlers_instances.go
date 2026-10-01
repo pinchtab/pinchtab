@@ -81,15 +81,9 @@ func (o *Orchestrator) handleStopByInstanceID(w http.ResponseWriter, r *http.Req
 func (o *Orchestrator) handleRestartByInstanceID(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	o.mu.RLock()
-	inst, ok := o.instances[id]
-	o.mu.RUnlock()
-	if !ok {
-		httpx.Error(w, 404, fmt.Errorf("instance %q not found", id))
-		return
-	}
-	if !o.instanceIsActive(inst) || inst.Status != bridge.InstanceRunning {
-		httpx.Error(w, 503, fmt.Errorf("instance %q is not running (status: %s)", id, inst.Status))
+	inst, code, err := o.servingInstance(id)
+	if err != nil {
+		httpx.Error(w, code, err)
 		return
 	}
 
@@ -322,17 +316,9 @@ func validateStartInstanceSecurityPolicy(policy *bridge.SecurityPolicy) error {
 func (o *Orchestrator) handleInstanceTabs(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	o.mu.RLock()
-	inst, ok := o.instances[id]
-	o.mu.RUnlock()
-
-	if !ok {
-		httpx.Error(w, 404, fmt.Errorf("instance %q not found", id))
-		return
-	}
-
-	if inst.Status != bridge.InstanceRunning || !o.instanceIsActive(inst) {
-		httpx.Error(w, 503, fmt.Errorf("instance %q is not running (status: %s)", id, inst.Status))
+	inst, code, err := o.servingInstance(id)
+	if err != nil {
+		httpx.Error(w, code, err)
 		return
 	}
 

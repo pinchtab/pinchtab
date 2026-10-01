@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"os"
 
@@ -62,9 +63,7 @@ func printDownloadResult(result map[string]any) {
 
 func formatDownloadResult(result map[string]any) string {
 	view := make(map[string]any, len(result)+2)
-	for k, v := range result {
-		view[k] = v
-	}
+	maps.Copy(view, result)
 
 	if b64, ok := view["data"].(string); ok && len(b64) > downloadDataPreviewLimit {
 		view["data"] = b64[:downloadDataPreviewLimit] + "... (truncated)"
@@ -91,7 +90,7 @@ func saveDownloadData(result map[string]any, output string) (int, error) {
 	}
 	data, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
-		return 0, fmt.Errorf("%w: %v", errDecodeDownloadData, err)
+		return 0, fmt.Errorf("%w: %w", errDecodeDownloadData, err)
 	}
 	if err := os.WriteFile(output, data, 0600); err != nil {
 		return 0, err

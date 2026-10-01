@@ -10,7 +10,7 @@ import (
 
 func TestClickJitterStaysInsideItsWindow(t *testing.T) {
 	limit := cfClickJitterPx / 2.0
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		got := cfClickJitter()
 		if math.Abs(got) > limit {
 			t.Fatalf("cfClickJitter() = %v, outside ±%v: a click offset wider than the checkbox lands beside it", got, limit)
@@ -22,7 +22,7 @@ func TestClickJitterStaysInsideItsWindow(t *testing.T) {
 // which is the fingerprint the jitter was ported to remove.
 func TestClickJitterVaries(t *testing.T) {
 	first := cfClickJitter()
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		if cfClickJitter() != first {
 			return
 		}
@@ -36,14 +36,12 @@ func TestClickJitterVaries(t *testing.T) {
 // is the check that bites in a plain run, and this one is what a -race run reports.
 func TestClickJitterIsSafeForConcurrentSolves(t *testing.T) {
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < 500; j++ {
+	for range 8 {
+		wg.Go(func() {
+			for range 500 {
 				_ = cfClickJitter()
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }

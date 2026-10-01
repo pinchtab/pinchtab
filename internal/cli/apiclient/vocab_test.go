@@ -211,7 +211,7 @@ func TestVocabStoreIsOneBoundedFilePerServer(t *testing.T) {
 	defer srv.httpServer.Close()
 	base, client := srv.httpServer.URL, srv.httpServer.Client()
 
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		actions.Snapshot(apiclient.Conn{Client: client, Base: base}, snapCmd(fmt.Sprintf("tab-%02d", i)), "")
 	}
 

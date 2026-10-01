@@ -138,7 +138,7 @@ func TestBuildAxeReport_ShapeAndScore(t *testing.T) {
 
 func TestBuildAxeReport_ScoreFlooredAtZero(t *testing.T) {
 	var nodes []AxeRawNode
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		nodes = append(nodes, AxeRawNode{Target: []any{"img"}})
 	}
 	raw := AxeRawResult{Violations: []AxeRawViolation{{ID: "image-alt", Impact: "critical", Nodes: nodes}}}

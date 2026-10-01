@@ -111,7 +111,7 @@ type DownloadOpts struct {
 	// (bypassing private-IP checks).
 	IsDomainAllowed func(rawURL string) bool
 	// ParseContentLength extracts Content-Length from response headers, if present.
-	ParseContentLength func(headers map[string]interface{}) (int64, bool)
+	ParseContentLength func(headers map[string]any) (int64, bool)
 }
 
 type DownloadResult struct {

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -137,13 +138,7 @@ func TestEveryEscalationRuleMatchesATrackedPath(t *testing.T) {
 
 	for _, rule := range escalationRules(t, root) {
 		pattern := rule.compile(t)
-		matched := false
-		for _, path := range tracked {
-			if pattern.MatchString(path) {
-				matched = true
-				break
-			}
-		}
+		matched := slices.ContainsFunc(tracked, pattern.MatchString)
 		if !matched {
 			t.Errorf("rule %q matches no tracked file, so the coverage it claims is not wired to anything; re-point it at the path that moved rather than leaving it", rule.pattern)
 		}
@@ -327,7 +322,7 @@ func runDetect(t *testing.T, root string, changed []string, env ...string) []str
 		t.Fatalf("%s failed on %v: %v\n%s", escalationScript, changed, err, stderr.String())
 	}
 	var lines []string
-	for _, line := range strings.Split(strings.TrimSpace(stdout.String()), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(stdout.String()), "\n") {
 		if line != "" {
 			lines = append(lines, line)
 		}
@@ -343,7 +338,7 @@ type escalationRule struct {
 func escalationRules(t *testing.T, root string) []escalationRule {
 	t.Helper()
 	var rules []escalationRule
-	for _, line := range strings.Split(readRepoFile(t, root, escalationMap), "\n") {
+	for line := range strings.SplitSeq(readRepoFile(t, root, escalationMap), "\n") {
 		if strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -474,12 +469,7 @@ func isAreaSource(path string) bool {
 }
 
 func containsString(values []string, want string) bool {
-	for _, v := range values {
-		if v == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(values, want)
 }
 
 func TestEveryAutomaticTriggerCanActuallyFire(t *testing.T) {

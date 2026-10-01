@@ -250,12 +250,12 @@ func (g *graph) classRetained(classOf []int32, classes int) []int64 {
 		retained[i] = g.selfSize[node]
 	}
 	root := int32(m - 1)
-	for i := int32(0); i < root; i++ {
+	for i := range root {
 		retained[doms[i]] += retained[i]
 	}
 
 	childStart := make([]int32, m+1)
-	for i := int32(0); i < root; i++ {
+	for i := range root {
 		childStart[doms[i]+1]++
 	}
 	for i := 1; i <= m; i++ {
@@ -263,7 +263,7 @@ func (g *graph) classRetained(classOf []int32, classes int) []int64 {
 	}
 	children := make([]int32, childStart[m])
 	fill := append([]int32(nil), childStart[:m]...)
-	for i := int32(0); i < root; i++ {
+	for i := range root {
 		children[fill[doms[i]]] = i
 		fill[doms[i]]++
 	}

@@ -113,12 +113,10 @@ func TestShutdownJoinsDetachedFailedAttemptTeardowns(t *testing.T) {
 	o := NewOrchestratorWithRunner(t.TempDir(), &mockRunner{portAvail: true})
 
 	var finished atomic.Bool
-	o.detachedStops.Add(1)
-	go func() {
-		defer o.detachedStops.Done()
+	o.detachedStops.Go(func() {
 		time.Sleep(300 * time.Millisecond)
 		finished.Store(true)
-	}()
+	})
 
 	o.Shutdown()
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -58,7 +59,7 @@ func TestFrontDoorMetricsCountRejectedRequestsExactly(t *testing.T) {
 	handler := frontDoorFixture(t)
 
 	const rejected = 5
-	for i := 0; i < rejected; i++ {
+	for i := range rejected {
 		req := httptest.NewRequest("GET", "/tabs", nil)
 		req.Header.Set("Authorization", "Bearer WRONG")
 		rec := httptest.NewRecorder()
@@ -68,7 +69,7 @@ func TestFrontDoorMetricsCountRejectedRequestsExactly(t *testing.T) {
 		}
 	}
 	// An unrouted path is the other case that never reaches an instance.
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		req := httptest.NewRequest("GET", fmt.Sprintf("/zzz%d", i), nil)
 		req.Header.Set("Authorization", "Bearer "+frontDoorToken)
 		rec := httptest.NewRecorder()
@@ -177,10 +178,8 @@ func TestMetricsIsFrontDoorLocalAndNotProxied(t *testing.T) {
 	}
 
 	// The tab-scoped variant is a browser measurement and must STILL proxy.
-	for _, route := range routes.TabScopedRoutes() {
-		if route == "GET /tabs/{id}/metrics" {
-			return
-		}
+	if slices.Contains(routes.TabScopedRoutes(), "GET /tabs/{id}/metrics") {
+		return
 	}
 	t.Error("GET /tabs/{id}/metrics is no longer proxied; per-tab metrics belong to the instance")
 }

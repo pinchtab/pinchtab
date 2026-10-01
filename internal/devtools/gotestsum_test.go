@@ -217,7 +217,7 @@ func hidesOutputSummary(command string) bool {
 		if end := strings.IndexAny(value, " \t"); end >= 0 {
 			value = value[:end]
 		}
-		for _, section := range strings.Split(value, ",") {
+		for section := range strings.SplitSeq(value, ",") {
 			if strings.TrimSpace(section) == bannedSummarySection {
 				return true
 			}
@@ -248,7 +248,7 @@ func isGotestsumInvocation(command string) bool {
 }
 
 func printsRatherThanRuns(command string) bool {
-	for _, field := range strings.Fields(command) {
+	for field := range strings.FieldsSeq(command) {
 		switch field {
 		case "echo", "printf":
 			return true

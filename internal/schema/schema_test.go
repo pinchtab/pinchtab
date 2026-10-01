@@ -75,9 +75,9 @@ func TestConfigSchemaCoversBrowserConfigFields(t *testing.T) {
 		definition string
 		structType reflect.Type
 	}{
-		{"browser", reflect.TypeOf(config.BrowserConfig{})},
-		{"browserTarget", reflect.TypeOf(config.BrowserTargetConfig{})},
-		{"browserProxy", reflect.TypeOf(config.BrowserProxyConfig{})},
+		{"browser", reflect.TypeFor[config.BrowserConfig]()},
+		{"browserTarget", reflect.TypeFor[config.BrowserTargetConfig]()},
+		{"browserProxy", reflect.TypeFor[config.BrowserProxyConfig]()},
 	}
 	for _, tc := range cases {
 		def, ok := raw.Definitions[tc.definition]
@@ -111,7 +111,7 @@ func TestConfigSchemaCoversBrowserConfigFields(t *testing.T) {
 	if err := json.Unmarshal(defsOnly["browserProxy"], &proxyDef); err != nil {
 		t.Fatal(err)
 	}
-	for _, tag := range jsonTags(reflect.TypeOf(config.BrowserProxyGeoConfig{})) {
+	for _, tag := range jsonTags(reflect.TypeFor[config.BrowserProxyGeoConfig]()) {
 		if _, ok := proxyDef.Properties.Geo.Properties[tag]; !ok {
 			t.Errorf("browserProxy.geo missing property %q", tag)
 		}
@@ -120,8 +120,8 @@ func TestConfigSchemaCoversBrowserConfigFields(t *testing.T) {
 
 func jsonTags(t reflect.Type) []string {
 	var tags []string
-	for i := 0; i < t.NumField(); i++ {
-		tag := t.Field(i).Tag.Get("json")
+	for field := range t.Fields() {
+		tag := field.Tag.Get("json")
 		if tag == "" || tag == "-" {
 			continue
 		}

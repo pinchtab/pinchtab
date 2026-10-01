@@ -28,10 +28,10 @@ func TestStore_ConcurrentMutationsPersistConsistently(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		go func(g int) {
 			defer wg.Done()
-			for i := 0; i < perGoroutine; i++ {
+			for i := range perGoroutine {
 				id, token, err := s.Create("agent", "", "")
 				if err != nil {
 					t.Errorf("Create: %v", err)

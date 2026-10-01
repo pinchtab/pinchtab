@@ -2,6 +2,7 @@ package doctor
 
 import (
 	"context"
+	"slices"
 	"sort"
 
 	"github.com/pinchtab/pinchtab/internal/browsers"
@@ -158,12 +159,7 @@ func cfgDefaultBrowser(cfg *config.RuntimeConfig) string {
 }
 
 func contains(ss []string, s string) bool {
-	for _, v := range ss {
-		if v == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ss, s)
 }
 
 func errMsg(err error) string {
@@ -189,11 +185,8 @@ func doctorEnvForBrowser(cfg *config.RuntimeConfig, browserID string) *browsers.
 		name = matches[0]
 	default:
 		dt := config.ResolveDefaultTarget(cfg)
-		for _, m := range matches {
-			if m == dt {
-				name = dt
-				break
-			}
+		if slices.Contains(matches, dt) {
+			name = dt
 		}
 	}
 	if name != "" {

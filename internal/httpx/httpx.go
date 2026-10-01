@@ -243,8 +243,7 @@ func jsonFieldNames(typ reflect.Type) []string {
 	}
 
 	seen := make(map[string]struct{})
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
+	for field := range typ.Fields() {
 		if field.Anonymous && field.Tag.Get("json") == "" {
 			for _, name := range jsonFieldNames(field.Type) {
 				seen[name] = struct{}{}

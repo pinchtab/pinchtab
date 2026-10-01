@@ -1248,14 +1248,14 @@ func TestAttach_ConcurrentDuplicateNameSpawnsOneChild(t *testing.T) {
 	o.attachHealthCheckTimeout = 50 * time.Millisecond
 
 	errs := make(chan error, 2)
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		go func() {
 			_, err := o.Attach("shared", "ws://localhost:9222/devtools/browser/a")
 			errs <- err
 		}()
 	}
 	var failures int
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		if err := <-errs; err != nil {
 			failures++
 			if !strings.Contains(err.Error(), "already exists") {

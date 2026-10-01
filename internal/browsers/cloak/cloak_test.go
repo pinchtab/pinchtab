@@ -90,12 +90,7 @@ func TestBothBrowsersRegistered(t *testing.T) {
 	ids := browsers.IDs()
 
 	has := func(target string) bool {
-		for _, id := range ids {
-			if id == target {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(ids, target)
 	}
 
 	if !has("chrome") {
@@ -111,13 +106,7 @@ func TestBinaryNamesReturnsExpectedNames(t *testing.T) {
 	if len(names) == 0 {
 		t.Fatal("BinaryNames() returned empty slice")
 	}
-	found := false
-	for _, n := range names {
-		if n == "cloakbrowser" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(names, "cloakbrowser")
 	if !found {
 		t.Errorf("BinaryNames() missing 'cloakbrowser'; got %v", names)
 	}
@@ -708,13 +697,7 @@ func TestGeoAlignmentPrecedenceMatrix(t *testing.T) {
 				t.Fatalf("got %d flags %v; want %d %v", len(gs.Flags), gs.Flags, len(tt.wantFlags), tt.wantFlags)
 			}
 			for _, w := range tt.wantFlags {
-				found := false
-				for _, f := range gs.Flags {
-					if f == w {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(gs.Flags, w)
 				if !found {
 					t.Errorf("missing expected flag %q in %v", w, gs.Flags)
 				}

@@ -60,7 +60,7 @@ func forwardedDirective(header, name string) string {
 	if header == "" {
 		return ""
 	}
-	for _, part := range strings.Split(header, ";") {
+	for part := range strings.SplitSeq(header, ";") {
 		key, value, ok := strings.Cut(strings.TrimSpace(part), "=")
 		if !ok || !strings.EqualFold(key, name) {
 			continue

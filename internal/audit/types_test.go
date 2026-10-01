@@ -306,8 +306,7 @@ func normaliseMirrorType(typ string, re *regexp.Regexp, rename map[string]string
 func mirrorShape(v any, re *regexp.Regexp, rename map[string]string) []string {
 	rt := reflect.TypeOf(v)
 	var out []string
-	for i := 0; i < rt.NumField(); i++ {
-		f := rt.Field(i)
+	for f := range rt.Fields() {
 		out = append(out, f.Name+" "+normaliseMirrorType(f.Type.String(), re, rename)+" "+f.Tag.Get("json"))
 	}
 	return out
@@ -367,8 +366,8 @@ func TestMirrorTypeNormaliserTouchesOnlyTheMirroredQualifier(t *testing.T) {
 	verbatim := map[string]bool{"time.Time": false, "map[string]interface {}": false}
 	for _, pair := range mirrorPairs {
 		rt := reflect.TypeOf(pair.sdk)
-		for i := 0; i < rt.NumField(); i++ {
-			typ := rt.Field(i).Type.String()
+		for field := range rt.Fields() {
+			typ := field.Type.String()
 			if _, tracked := verbatim[typ]; tracked {
 				verbatim[typ] = true
 			}

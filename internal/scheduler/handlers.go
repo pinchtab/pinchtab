@@ -94,7 +94,7 @@ func (s *Scheduler) handleList(w http.ResponseWriter, r *http.Request) {
 
 	var states []TaskState
 	if stateParam != "" {
-		for _, s := range strings.Split(stateParam, ",") {
+		for s := range strings.SplitSeq(stateParam, ",") {
 			trimmed := strings.TrimSpace(s)
 			if trimmed != "" {
 				states = append(states, TaskState(trimmed))

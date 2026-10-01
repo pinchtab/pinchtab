@@ -51,7 +51,7 @@ type ActionExecutor interface {
 	WaitFor(ctx context.Context, selector string, timeout time.Duration) error
 
 	// Evaluate executes JavaScript and unmarshals the result.
-	Evaluate(ctx context.Context, expr string, result interface{}) error
+	Evaluate(ctx context.Context, expr string, result any) error
 
 	// Navigate loads a URL and waits for the page to settle.
 	Navigate(ctx context.Context, url string) error

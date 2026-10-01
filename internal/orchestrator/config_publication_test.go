@@ -55,9 +55,7 @@ func TestOneReadOfThePublishedConfigIsCoherentUnderConcurrentPublishes(t *testin
 
 	var wg sync.WaitGroup
 	stop := make(chan struct{})
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case <-stop:
@@ -70,9 +68,9 @@ func TestOneReadOfThePublishedConfigIsCoherentUnderConcurrentPublishes(t *testin
 				return
 			}
 		}
-	}()
+	})
 
-	for i := 0; i < 500; i++ {
+	for i := range 500 {
 		o.ApplyRuntimeConfig(publish(i%2 == 0))
 	}
 	close(stop)

@@ -6,14 +6,8 @@ import (
 	"strings"
 	"sync"
 	"time"
-)
 
-// DefaultConcurrency is the number of pages audited in parallel when the
-// caller does not choose one; MaxConcurrency caps what a caller may request
-// (each worker drives its own browser tab).
-const (
-	DefaultConcurrency = 2
-	MaxConcurrency     = 8
+	"github.com/pinchtab/pinchtab/internal/scrape"
 )
 
 // RunOptions configures a multi-page audit run.
@@ -22,7 +16,7 @@ type RunOptions struct {
 	// (see SamplePages), 0 = no cap.
 	SampleSize int
 	// Concurrency is the number of pages audited in parallel, clamped to
-	// [1, MaxConcurrency].
+	// [1, scrape.MaxConcurrency].
 	Concurrency int
 	// EnrichAll browser-enriches every seaportal page, overriding the
 	// per-page BrowserRecommended routing.
@@ -53,18 +47,6 @@ func PlanURLs(urls []string) []string {
 		plan = append(plan, u)
 	}
 	return plan
-}
-
-// clampConcurrency normalizes a requested concurrency into [1, MaxConcurrency].
-func clampConcurrency(n int) int {
-	switch {
-	case n < 1:
-		return DefaultConcurrency
-	case n > MaxConcurrency:
-		return MaxConcurrency
-	default:
-		return n
-	}
 }
 
 // pagePlan is one planned page of a run: where to go, whether the browser
@@ -133,7 +115,7 @@ func RunAudit(input AuditInput, seaportalPages []SeaportalPage, opts RunOptions,
 		return AuditReport{}, errors.New("no URLs to audit")
 	}
 
-	concurrency := clampConcurrency(opts.Concurrency)
+	concurrency := scrape.ClampConcurrency(opts.Concurrency)
 	results := make([]PageResult, len(plans))
 	exec := func(i int) {
 		p := plans[i]

@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"slices"
 
 	"github.com/pinchtab/pinchtab/internal/netguard"
 )
@@ -157,10 +158,8 @@ func validateLiteDialIP(ip net.IP, policy *NavigateNetworkPolicy) error {
 
 	if addr, ok := netip.AddrFromSlice(ip); ok {
 		addr = addr.Unmap()
-		for _, trusted := range policy.TrustedResolvedIP {
-			if trusted == addr {
-				return nil
-			}
+		if slices.Contains(policy.TrustedResolvedIP, addr) {
+			return nil
 		}
 	}
 

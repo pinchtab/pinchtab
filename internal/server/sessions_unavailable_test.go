@@ -140,11 +140,11 @@ func TestTheTwoUnavailableModesDoNotShareARemedy(t *testing.T) {
 // field" because the editor knows sessions.dashboard.* and no sessions.agent.* field.
 func configSetFieldIn(remedy string) (string, bool) {
 	const prefix = "config set "
-	at := strings.Index(remedy, prefix)
-	if at < 0 {
+	_, after, ok := strings.Cut(remedy, prefix)
+	if !ok {
 		return "", false
 	}
-	field := strings.Fields(remedy[at+len(prefix):])
+	field := strings.Fields(after)
 	if len(field) == 0 {
 		return "", false
 	}

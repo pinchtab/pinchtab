@@ -241,7 +241,7 @@ func TestBridgeProxy_TabContext_ConcurrentEscalation(t *testing.T) {
 	resolvedIDs := make([]string, goroutines)
 	errs := make([]error, goroutines)
 
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		go func(idx int) {
 			defer wg.Done()
 			_, resolved, err := proxy.TabContext(liteTabID)

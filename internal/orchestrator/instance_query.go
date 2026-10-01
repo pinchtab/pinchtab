@@ -128,7 +128,7 @@ func (o *Orchestrator) refreshInstances() {
 	o.mu.RLock()
 	instances := make([]*InstanceInternal, 0, len(o.instances))
 	for _, inst := range o.instances {
-		if inst.Status == bridge.InstanceRunning && o.instanceIsActive(inst) {
+		if o.instanceIsServing(inst) {
 			instances = append(instances, inst)
 		}
 	}
@@ -245,7 +245,7 @@ func (o *Orchestrator) firstRunningURL(match func(*InstanceInternal) bool) strin
 func (o *Orchestrator) firstRunningLocked(match func(*InstanceInternal) bool) *InstanceInternal {
 	var first *InstanceInternal
 	for _, inst := range o.instances {
-		if inst.Status != bridge.InstanceRunning || !o.instanceIsActive(inst) || inst.URL == "" {
+		if !o.instanceIsServing(inst) || inst.URL == "" {
 			continue
 		}
 		if match != nil && !match(inst) {
@@ -361,7 +361,7 @@ func (o *Orchestrator) allTabs(fresh bool) []bridge.InstanceTab {
 	o.mu.RLock()
 	instances := make([]*InstanceInternal, 0)
 	for _, inst := range o.instances {
-		if inst.Status == bridge.InstanceRunning && o.instanceIsActive(inst) {
+		if o.instanceIsServing(inst) {
 			instances = append(instances, inst)
 		}
 	}
@@ -386,7 +386,7 @@ func (o *Orchestrator) FindInstanceByTab(tabID string) (*bridge.Instance, bool) 
 	o.mu.RLock()
 	instances := make([]*InstanceInternal, 0, len(o.instances))
 	for _, inst := range o.instances {
-		if inst.Status == bridge.InstanceRunning && o.instanceIsActive(inst) {
+		if o.instanceIsServing(inst) {
 			instances = append(instances, inst)
 		}
 	}
@@ -411,7 +411,7 @@ func (o *Orchestrator) AllMetrics() []types.InstanceMetrics {
 	o.mu.RLock()
 	instances := make([]*InstanceInternal, 0)
 	for _, inst := range o.instances {
-		if inst.Status == bridge.InstanceRunning && o.instanceIsActive(inst) {
+		if o.instanceIsServing(inst) {
 			instances = append(instances, inst)
 		}
 	}

@@ -110,17 +110,17 @@ func TestLoadPersistedAgentActivityBudgetIsNotSpentOnNonAgentSources(t *testing.
 		}
 	}
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		id := "client-" + strconv.Itoa(i)
 		agentIDs[id] = true
 		record(activity.SourceClient, id, base.Add(time.Duration(i)*time.Second))
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		id := "sched-" + strconv.Itoa(i)
 		agentIDs[id] = true
 		record(activity.SourceScheduler, id, base.Add(time.Duration(10+i)*time.Second))
 	}
-	for i := 0; i < 1200; i++ {
+	for i := range 1200 {
 		record(activity.SourceDashboard, "", base.Add(time.Duration(100+i)*time.Second))
 	}
 

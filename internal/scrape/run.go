@@ -219,7 +219,7 @@ func Run(ctx context.Context, input Input, opts RunOptions, crawl Crawler, rende
 		enrich[i] = needs && !opts.NoBrowser && !opts.Preview && render != nil
 	}
 
-	sem := make(chan struct{}, clampConcurrency(opts.Concurrency))
+	sem := make(chan struct{}, ClampConcurrency(opts.Concurrency))
 	var wg sync.WaitGroup
 	for i := range pages {
 		if !enrich[i] {
@@ -477,8 +477,7 @@ func regeneratedLocally(rec string) bool {
 	return false
 }
 
-// clampConcurrency normalizes a requested concurrency into [1, MaxConcurrency].
-func clampConcurrency(n int) int {
+func ClampConcurrency(n int) int {
 	switch {
 	case n < 1:
 		return DefaultConcurrency

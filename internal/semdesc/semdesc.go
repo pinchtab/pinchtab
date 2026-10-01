@@ -46,10 +46,7 @@ func Build(nodes []observe.A11yNode) []semantic.ElementDescriptor {
 
 	stackByDepth := make(map[int]int)
 	for i, node := range nodes {
-		depth := node.Depth
-		if depth < 0 {
-			depth = 0
-		}
+		depth := max(node.Depth, 0)
 		if depth > 0 {
 			if parent, ok := stackByDepth[depth-1]; ok {
 				parentIdx[i] = parent

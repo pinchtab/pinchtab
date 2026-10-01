@@ -357,7 +357,7 @@ func hostPlatformVersion(uaDataPlatform string) string {
 
 func normalizePlatformVersion(raw string) string {
 	parts := make([]string, 0, 3)
-	for _, field := range strings.Split(raw, ".") {
+	for field := range strings.SplitSeq(raw, ".") {
 		digits := leadingDigits(field)
 		if digits == "" {
 			break

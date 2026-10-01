@@ -52,7 +52,7 @@ func TestABurstOfEndedSessionsKeepsTheCloseFanOutBounded(t *testing.T) {
 	addInstanceOver(t, o, "inst_b", closes.handler(), "")
 	hook := o.SessionLifecycleHook()
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		hook(session.LifecycleEvent{SessionID: fmt.Sprintf("ses_%02d", i), Reason: session.LifecycleReasonPruned})
 	}
 	bound := int32(sessionCloseSlots * 2)

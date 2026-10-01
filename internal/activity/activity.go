@@ -434,7 +434,7 @@ func (s *Store) Query(filter Filter) ([]Event, error) {
 		return events, nil // not wrapped → already oldest→newest
 	}
 	ordered := make([]Event, limit)
-	for i := 0; i < limit; i++ {
+	for i := range limit {
 		ordered[i] = events[(head+i)%limit]
 	}
 	return ordered, nil

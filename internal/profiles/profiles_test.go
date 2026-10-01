@@ -341,7 +341,7 @@ func TestProfileManagerLogsAndAnalyticsUseActivityRecorder(t *testing.T) {
 
 	profileName := fmt.Sprintf("prof-%d", time.Now().UnixNano())
 	now := time.Now().UTC()
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := store.Record(activity.Event{
 			Timestamp:   now.Add(time.Duration(i) * time.Second),
 			Source:      "server",

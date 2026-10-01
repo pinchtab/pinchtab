@@ -118,7 +118,7 @@ func TestListOrdersInstancesByStartTimeThenIDWhateverTheMapOrder(t *testing.T) {
 	registerInstance(o, "inst_c", "running", "", base.Add(-time.Second))
 
 	want := []string{"inst_c", "inst_b", "inst_z", "inst_y", "inst_a", "inst_m"}
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		if got := listIDs(o); !slices.Equal(got, want) {
 			t.Fatalf("call %d: List() order = %v, want %v", i, got, want)
 		}
@@ -155,7 +155,7 @@ func TestHealthDefaultInstanceIsTheInstanceShorthandRoutesUse(t *testing.T) {
 			if routed != tc.want {
 				t.Fatalf("shorthand route instance = %q, want %q", routed, tc.want)
 			}
-			for i := 0; i < 20; i++ {
+			for i := range 20 {
 				if got := healthDefaultInstanceID(t, o); got != routed {
 					t.Fatalf("call %d: /health defaultInstance = %q, want the shorthand route instance %q", i, got, routed)
 				}
@@ -175,7 +175,7 @@ func TestHealthDefaultInstanceFallsBackToTheFirstListedWhenNoneIsRoutable(t *tes
 	if _, ok := o.DefaultInstance(); ok {
 		t.Fatal("DefaultInstance reported a routable instance while every instance is still starting")
 	}
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		if got := healthDefaultInstanceID(t, o); got != "inst_z" {
 			t.Fatalf("call %d: /health defaultInstance = %q, want the earliest-started inst_z", i, got)
 		}

@@ -111,8 +111,8 @@ func relPath(base, url string) string {
 	if url == base {
 		return ""
 	}
-	if strings.HasPrefix(url, base+"/") {
-		return strings.TrimPrefix(url, base+"/")
+	if after, ok := strings.CutPrefix(url, base+"/"); ok {
+		return after
 	}
 	return url
 }

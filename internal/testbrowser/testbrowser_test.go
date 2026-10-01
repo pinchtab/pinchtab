@@ -1,6 +1,7 @@
 package testbrowser
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -65,13 +66,7 @@ func TestProviderIDsPrefersChromeAndCoversTheRegistry(t *testing.T) {
 		t.Fatalf("providerIDs() = %v, want chrome first", ids)
 	}
 	for _, want := range []string{"chrome", "cloak", "ghost-chrome"} {
-		found := false
-		for _, id := range ids {
-			if id == want {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(ids, want)
 		if !found {
 			t.Errorf("providerIDs() = %v, missing %q", ids, want)
 		}

@@ -409,11 +409,11 @@ func extractAttr(snippet, attr string) string {
 	quote := rest[0]
 	if quote != '"' && quote != '\'' {
 		// Unquoted attribute — take until space or end.
-		end := strings.IndexByte(rest, ' ')
-		if end == -1 {
+		before, _, ok := strings.Cut(rest, " ")
+		if !ok {
 			return rest
 		}
-		return rest[:end]
+		return before
 	}
 
 	end := strings.IndexByte(rest[1:], quote)

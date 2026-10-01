@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -149,11 +150,12 @@ func formatMemorySummary(s memorySummary) string {
 }
 
 func constructorTable(rows []heapsnap.Constructor) string {
-	out := fmt.Sprintf("  %-32s  %8s  %10s\n", "CONSTRUCTOR", "COUNT", "SELF SIZE")
+	var out strings.Builder
+	fmt.Fprintf(&out, "  %-32s  %8s  %10s\n", "CONSTRUCTOR", "COUNT", "SELF SIZE")
 	for _, c := range rows {
-		out += fmt.Sprintf("  %-32s  %8d  %10s\n", c.Name, c.Count, formatBytes(c.SelfSize))
+		fmt.Fprintf(&out, "  %-32s  %8d  %10s\n", c.Name, c.Count, formatBytes(c.SelfSize))
 	}
-	return out
+	return out.String()
 }
 
 type memoryComparison struct {

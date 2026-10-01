@@ -83,17 +83,9 @@ func (o *Orchestrator) proxyResolvedTab(w http.ResponseWriter, r *http.Request, 
 func (o *Orchestrator) proxyToInstance(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	o.mu.RLock()
-	inst, ok := o.instances[id]
-	o.mu.RUnlock()
-
-	if !ok {
-		httpx.Error(w, 404, fmt.Errorf("instance %q not found", id))
-		return
-	}
-
-	if inst.Status != bridge.InstanceRunning {
-		httpx.Error(w, 503, fmt.Errorf("instance %q is not running (status: %s)", id, inst.Status))
+	inst, code, err := o.servingInstance(id)
+	if err != nil {
+		httpx.Error(w, code, err)
 		return
 	}
 	activity.EnrichRequest(r, activity.Update{
@@ -174,7 +166,7 @@ func (o *Orchestrator) findRunningInstanceByTabID(tabID string) (*InstanceIntern
 	o.mu.RLock()
 	instances := make([]*InstanceInternal, 0, len(o.instances))
 	for _, inst := range o.instances {
-		if inst.Status == bridge.InstanceRunning && o.instanceIsActive(inst) {
+		if o.instanceIsServing(inst) {
 			instances = append(instances, inst)
 		}
 	}
@@ -197,11 +189,9 @@ func (o *Orchestrator) findRunningInstanceByTabID(tabID string) (*InstanceIntern
 func (o *Orchestrator) handleProxyScreencast(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	o.mu.RLock()
-	inst, ok := o.instances[id]
-	o.mu.RUnlock()
-	if !ok || inst.Status != bridge.InstanceRunning {
-		httpx.Error(w, 404, fmt.Errorf("instance not found or not running"))
+	inst, code, err := o.servingInstance(id)
+	if err != nil {
+		httpx.Error(w, code, err)
 		return
 	}
 	activity.EnrichRequest(r, activity.Update{
@@ -520,7 +510,7 @@ func (o *Orchestrator) singleRunningInstance() *InstanceInternal {
 
 	var only *InstanceInternal
 	for _, inst := range o.instances {
-		if inst.Status != bridge.InstanceRunning || !o.instanceIsActive(inst) {
+		if !o.instanceIsServing(inst) {
 			continue
 		}
 		if only != nil {

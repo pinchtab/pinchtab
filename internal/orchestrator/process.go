@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/readiness"
 )
 
@@ -20,6 +22,24 @@ func (o *Orchestrator) instanceIsActive(inst *InstanceInternal) bool {
 		return o.hooks.processAlive(inst.cmd.PID())
 	}
 	return inst.Status.IsActive()
+}
+
+func (o *Orchestrator) instanceIsServing(inst *InstanceInternal) bool {
+	return inst != nil && inst.Status == bridge.InstanceRunning && o.instanceIsActive(inst)
+}
+
+// servingInstance reads Status under o.mu because health writes it there.
+func (o *Orchestrator) servingInstance(id string) (*InstanceInternal, int, error) {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	inst, ok := o.instances[id]
+	if !ok {
+		return nil, http.StatusNotFound, fmt.Errorf("instance %q not found", id)
+	}
+	if !o.instanceIsServing(inst) {
+		return nil, http.StatusServiceUnavailable, fmt.Errorf("instance %q is not running (status: %s)", id, inst.Status)
+	}
+	return inst, 0, nil
 }
 
 const processExitPollInterval = 150 * time.Millisecond

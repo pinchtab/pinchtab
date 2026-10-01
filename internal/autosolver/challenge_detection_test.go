@@ -28,7 +28,7 @@ func assignsIntentChallengeType(path, src string) bool {
 	if !strings.Contains(path, "internal/autosolver/") {
 		return false
 	}
-	for _, line := range strings.Split(src, "\n") {
+	for line := range strings.SplitSeq(src, "\n") {
 		rest, found := cutAfter(line, "ChallengeType")
 		if !found {
 			continue
@@ -42,11 +42,11 @@ func assignsIntentChallengeType(path, src string) bool {
 }
 
 func cutAfter(line, token string) (string, bool) {
-	at := strings.Index(line, token)
-	if at < 0 {
+	_, after, ok := strings.Cut(line, token)
+	if !ok {
 		return "", false
 	}
-	return line[at+len(token):], true
+	return after, true
 }
 
 func TestChallengeTypeHasOneProducer(t *testing.T) {

@@ -108,7 +108,6 @@ func Registry(cfg *config.RuntimeConfig) []CheckEntry {
 	if b, ok := browsers.Get(browserID); ok {
 		env := doctorEnvForBrowser(cfg, browserID)
 		for _, dc := range b.DoctorChecks(browsers.TargetConfig{Provider: browserID}) {
-			dc := dc
 			entries = append(entries, CheckEntry{
 				Name:            dc.ID,
 				LaunchesBrowser: dc.LaunchesBrowser,

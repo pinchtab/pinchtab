@@ -46,7 +46,7 @@ func TestSummaryOverTheFixtureIsDeterministic(t *testing.T) {
 			{Value: "hello", Length: 5, Count: 2, SelfSize: 40},
 		},
 	}
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		got, err := SummarizeFile(fixturePath, 4)
 		if err != nil {
 			t.Fatalf("summarize: %v", err)

@@ -46,7 +46,7 @@ type logger interface {
 
 func removeProfileDir(t logger, dir string) {
 	var err error
-	for attempt := 0; attempt < removalAttempts; attempt++ {
+	for attempt := range removalAttempts {
 		if attempt > 0 {
 			time.Sleep(removalBackoff)
 		}

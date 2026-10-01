@@ -1,6 +1,7 @@
 package extract
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
@@ -358,8 +359,8 @@ func TestResolve_RequestScopeThatMatchesNothingLeavesEveryFieldUnresolved(t *tes
 
 func TestSchemaWithScopeRefusesABrowserSelectorNamingTheScope(t *testing.T) {
 	_, err := mustSchema(t, productListSchema).WithScope("css:table")
-	ue, ok := err.(*UnsupportedError)
-	if !ok || ue.Path != "scope" {
+	var ue *UnsupportedError
+	if !errors.As(err, &ue) || ue.Path != "scope" {
 		t.Fatalf("err = %v (%T), want an UnsupportedError at path scope", err, err)
 	}
 }

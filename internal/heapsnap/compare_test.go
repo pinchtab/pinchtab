@@ -44,7 +44,7 @@ func TestCompareOverTheFixturesReturnsTheDeltaTableDeterministically(t *testing.
 		},
 	}
 	var first []byte
-	for run := 0; run < 2; run++ {
+	for run := range 2 {
 		got, err := Compare(parseFixture(t, fixturePath, false), parseFixture(t, grownFixturePath, false), Options{})
 		if err != nil {
 			t.Fatal(err)
@@ -230,7 +230,7 @@ func writeSyntheticSnapshot(tb testing.TB, path string, targetBytes int) {
 	fmt.Fprintf(&b, `"node_count":%d,"edge_count":%d,"trace_function_count":0},`+"\n", nodes, edges)
 	fmt.Fprintf(&b, `"nodes":[9,1,1,0,%d,0,0`, rootEdges)
 	id := 3
-	for i := 0; i < objects; i++ {
+	for i := range objects {
 		fmt.Fprintf(&b, "\n,3,%d,%d,%d,4,0,0", 2+i%4, id, 32+i%64)
 		fmt.Fprintf(&b, "\n,1,6,%d,%d,0,0,0", id+2, 16+i%512)
 		fmt.Fprintf(&b, "\n,2,%d,%d,%d,0,0,0", 6+i%3, id+4, 20+i%8)
@@ -242,7 +242,7 @@ func writeSyntheticSnapshot(tb testing.TB, path string, targetBytes int) {
 		fmt.Fprintf(&b, "%s1,%d,%d", sep, i, objectOffset(i))
 		sep = "\n,"
 	}
-	for i := 0; i < objects; i++ {
+	for i := range objects {
 		obj := 1 + i*perObject
 		fmt.Fprintf(&b, "\n,3,8,%d\n,2,7,%d\n,2,6,%d\n,2,8,%d", (obj+1)*7, (obj+2)*7, objectOffset((i*7919+1)%objects), objectOffset((i+1)%objects))
 	}

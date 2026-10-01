@@ -3,6 +3,7 @@ package actions
 import (
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
@@ -113,16 +114,17 @@ func NetworkRules(conn apiclient.Conn, cmd *cobra.Command) {
 }
 
 func describeRouteRule(rule map[string]any) string {
-	line := fmt.Sprintf("%v (%v)", rule["pattern"], rule["action"])
+	var line strings.Builder
+	fmt.Fprintf(&line, "%v (%v)", rule["pattern"], rule["action"])
 	for _, key := range []string{"method", "resourceType", "status", "contentType"} {
 		if v, ok := rule[key]; ok && v != nil && v != "" && v != float64(0) {
-			line += fmt.Sprintf(" %s=%v", key, v)
+			fmt.Fprintf(&line, " %s=%v", key, v)
 		}
 	}
 	if body, ok := rule["body"].(string); ok && body != "" {
-		line += fmt.Sprintf(" body=%d bytes", len(body))
+		fmt.Fprintf(&line, " body=%d bytes", len(body))
 	}
-	return line
+	return line.String()
 }
 
 func networkRoutePath(cmd *cobra.Command) string {

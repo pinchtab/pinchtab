@@ -91,7 +91,7 @@ func ensurePathHasNoSymlinkComponents(absBase, absPath string, requireFullExiste
 	}
 
 	current := absBase
-	for _, part := range strings.Split(relPath, string(filepath.Separator)) {
+	for part := range strings.SplitSeq(relPath, string(filepath.Separator)) {
 		current = filepath.Join(current, part)
 		info, err := os.Lstat(current)
 		if err != nil {

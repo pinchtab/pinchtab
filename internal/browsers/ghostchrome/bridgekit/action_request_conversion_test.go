@@ -196,8 +196,8 @@ const (
 // The failure names the field, which is the information a count guard cannot carry: "21
 // fields, expected 20" sends the reader hunting, "HasText is not carried" does not.
 func TestEveryActionRequestFieldIsCarriedOrClassified(t *testing.T) {
-	carried := fieldNames(reflect.TypeOf(ghostchrome.ActionRequest{}))
-	all := fieldNames(reflect.TypeOf(bridge.ActionRequest{}))
+	carried := fieldNames(reflect.TypeFor[ghostchrome.ActionRequest]())
+	all := fieldNames(reflect.TypeFor[bridge.ActionRequest]())
 
 	var unclassified []string
 	for name := range all {
@@ -268,9 +268,9 @@ func fillEveryField(t *testing.T, v reflect.Value) {
 // the ones outside it are classified by the table above.
 func assertStaticFieldsEqual(t *testing.T, direction string, from, to reflect.Value) {
 	t.Helper()
-	subset := reflect.TypeOf(ghostchrome.ActionRequest{})
-	for i := 0; i < subset.NumField(); i++ {
-		name := subset.Field(i).Name
+	subset := reflect.TypeFor[ghostchrome.ActionRequest]()
+	for field := range subset.Fields() {
+		name := field.Name
 		source, target := from.FieldByName(name), to.FieldByName(name)
 		if !source.IsValid() || !target.IsValid() {
 			t.Fatalf("%s: %s is missing from one side of the conversion", direction, name)
@@ -283,8 +283,8 @@ func assertStaticFieldsEqual(t *testing.T, direction string, from, to reflect.Va
 
 func fieldNames(t reflect.Type) map[string]bool {
 	names := map[string]bool{}
-	for i := 0; i < t.NumField(); i++ {
-		names[t.Field(i).Name] = true
+	for field := range t.Fields() {
+		names[field.Name] = true
 	}
 	return names
 }

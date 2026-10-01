@@ -2,6 +2,7 @@ package extract
 
 import (
 	"encoding/json"
+	"errors"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -331,8 +332,8 @@ func TestParseSchema_UnsupportedConstructs(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := ParseSchema([]byte(tc.doc))
-			ue, ok := err.(*UnsupportedError)
-			if !ok {
+			var ue *UnsupportedError
+			if !errors.As(err, &ue) {
 				t.Fatalf("expected *UnsupportedError, got %T (%v)", err, err)
 			}
 			if ue.Path != tc.wantPath {

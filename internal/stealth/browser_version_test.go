@@ -98,7 +98,7 @@ func TestProbedVersionReachesPersonaAndSecCHUA(t *testing.T) {
 func TestBinaryIsProbedAtMostOncePerProcess(t *testing.T) {
 	cache := browserprobe.NewVersionCache(versionLineProbe(map[string]string{"/fake/chrome": "150.0.7871.187"}))
 	cfg := &config.RuntimeConfig{BrowserBinary: "/fake/chrome"}
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if v := resolveBrowserVersion(cache, cfg); v != "150.0.7871.187" {
 			t.Fatalf("resolve %d returned %q", i, v)
 		}
@@ -186,7 +186,7 @@ func TestNewBundlePersonaAdvertisesTheProbedBinaryVersion(t *testing.T) {
 }
 
 func firstPersonaLine(script string) string {
-	for _, line := range strings.Split(script, "\n") {
+	for line := range strings.SplitSeq(script, "\n") {
 		if strings.Contains(line, "userAgent") {
 			return line
 		}

@@ -8,6 +8,7 @@ package llm
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/autosolver"
 )
@@ -62,7 +63,8 @@ func (p *Provider) SuggestNextAction(ctx context.Context, req autosolver.LLMRequ
 }
 
 func buildPrompt(req autosolver.LLMRequest) string {
-	prompt := fmt.Sprintf(`You are a browser automation assistant. Analyze the following page and suggest the next action.
+	var prompt strings.Builder
+	fmt.Fprintf(&prompt, `You are a browser automation assistant. Analyze the following page and suggest the next action.
 
 Page Title: %s
 Page URL: %s
@@ -74,15 +76,15 @@ Page HTML (trimmed):
 `, req.PageTitle, req.PageURL, req.DetectedType, req.TrimmedHTML)
 
 	if len(req.PrevAttempts) > 0 {
-		prompt += "Previous failed attempts:\n"
+		prompt.WriteString("Previous failed attempts:\n")
 		for _, a := range req.PrevAttempts {
-			prompt += fmt.Sprintf("- Solver: %s, Status: %s, Error: %s\n",
+			fmt.Fprintf(&prompt, "- Solver: %s, Status: %s, Error: %s\n",
 				a.Solver, a.Status, a.Error)
 		}
-		prompt += "\n"
+		prompt.WriteString("\n")
 	}
 
-	prompt += `Respond with a JSON object:
+	prompt.WriteString(`Respond with a JSON object:
 {
   "action": "click" | "type" | "wait" | "navigate" | "none",
   "selector": "CSS selector if action=click",
@@ -90,7 +92,7 @@ Page HTML (trimmed):
   "url": "URL if action=navigate",
   "reasoning": "brief explanation",
   "confidence": 0.0-1.0
-}`
+}`)
 
-	return prompt
+	return prompt.String()
 }

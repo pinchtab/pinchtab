@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"strings"
 
@@ -54,9 +55,7 @@ func (o *Orchestrator) instanceQueryRequest(ctx context.Context, method string, 
 	if err != nil {
 		return nil, err
 	}
-	for key, values := range header {
-		req.Header[key] = values
-	}
+	maps.Copy(req.Header, header)
 	tagOrchestratorMonitoringRequest(req)
 	o.applyInstanceAuth(req, inst)
 	return o.client.Do(req)

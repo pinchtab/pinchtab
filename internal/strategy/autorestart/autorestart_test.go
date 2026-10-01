@@ -464,10 +464,7 @@ func TestStrategy_ExponentialBackoff(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		backoff := s.config.InitBackoff * time.Duration(1<<uint(tt.restartCount))
-		if backoff > s.config.MaxBackoff {
-			backoff = s.config.MaxBackoff
-		}
+		backoff := min(s.config.InitBackoff*time.Duration(1<<uint(tt.restartCount)), s.config.MaxBackoff)
 		if backoff != tt.wantBackoff {
 			t.Errorf("restartCount=%d: expected backoff=%s, got %s", tt.restartCount, tt.wantBackoff, backoff)
 		}

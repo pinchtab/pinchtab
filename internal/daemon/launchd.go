@@ -110,11 +110,11 @@ func (m *launchdManager) Pid() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	lines := strings.Split(output, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(output, "\n")
+	for line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "pid = ") {
-			return strings.TrimPrefix(trimmed, "pid = "), nil
+		if after, ok := strings.CutPrefix(trimmed, "pid = "); ok {
+			return after, nil
 		}
 	}
 	return "", nil

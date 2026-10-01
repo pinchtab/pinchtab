@@ -96,7 +96,7 @@ func normalizeCookieValue(value string) string {
 
 func cookieValueFromHeaders(headers []string, name string) string {
 	for _, header := range headers {
-		for _, part := range strings.Split(header, ";") {
+		for part := range strings.SplitSeq(header, ";") {
 			part = strings.TrimSpace(part)
 			if part == "" {
 				continue

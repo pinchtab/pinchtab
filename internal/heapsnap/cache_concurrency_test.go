@@ -23,7 +23,7 @@ func TestCacheServesConcurrentPlainAndRetainedLoads(t *testing.T) {
 	var c Cache
 	var wg sync.WaitGroup
 	errs := make(chan error, 64)
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()

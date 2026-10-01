@@ -39,7 +39,7 @@ const MaxUniqueNameAttempts = 512
 // and reporting the name that was built instead trades a silent overwrite for a
 // confidently printed filename that does not exist.
 func CreateUnique(dir, base, ext string) (*os.File, string, error) {
-	for attempt := 0; attempt < MaxUniqueNameAttempts; attempt++ {
+	for attempt := range MaxUniqueNameAttempts {
 		name := base + ext
 		if attempt > 0 {
 			name = fmt.Sprintf("%s-%d%s", base, attempt, ext)

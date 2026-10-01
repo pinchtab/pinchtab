@@ -49,7 +49,7 @@ func (m *mockExecutor) WaitFor(_ context.Context, _ string, _ time.Duration) err
 	m.waitCalled++
 	return nil
 }
-func (m *mockExecutor) Evaluate(_ context.Context, _ string, _ interface{}) error {
+func (m *mockExecutor) Evaluate(_ context.Context, _ string, _ any) error {
 	m.evaluateCalled++
 	return m.evaluateErr
 }
@@ -1250,7 +1250,7 @@ func TestOrderSolversWarnsOncePerUnregisteredKeyGatedSolver(t *testing.T) {
 	gated := KeyGatedSolvers()[0]
 	as := New(Config{Solvers: []string{"cloudflare", gated.Name}}, nil, nil)
 	matching := []Solver{&mockSolver{name: "cloudflare", priority: 10}}
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		as.orderSolvers(matching)
 	}
 
@@ -1278,7 +1278,7 @@ func TestUnregisteredKeyGatedWarningRepeatsForAFreshAutoSolver(t *testing.T) {
 	gated := KeyGatedSolvers()[0]
 	matching := []Solver{&mockSolver{name: "cloudflare", priority: 10}}
 	const requests = 3
-	for i := 0; i < requests; i++ {
+	for range requests {
 		as := New(Config{Solvers: []string{"cloudflare", gated.Name}}, nil, nil)
 		as.orderSolvers(matching)
 		as.orderSolvers(matching)

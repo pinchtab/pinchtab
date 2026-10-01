@@ -55,7 +55,7 @@ type RestartState struct {
 	InstanceID   string    `json:"instanceId"`
 	RestartCount int       `json:"restartCount"`
 	MaxRestarts  int       `json:"maxRestarts"`
-	LastCrash    time.Time `json:"lastCrash,omitempty"`
+	LastCrash    time.Time `json:"lastCrash"`
 	LastStart    time.Time `json:"lastStart"`
 	Status       string    `json:"status"` // "running", "restarting", "crashed", "stopped"
 }

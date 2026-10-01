@@ -163,7 +163,7 @@ func findListeningProcessLsof(port int) (int, string, bool) {
 
 	var pid int
 	var command string
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		if line == "" {
 			continue
 		}

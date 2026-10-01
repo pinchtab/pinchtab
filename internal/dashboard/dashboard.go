@@ -31,8 +31,8 @@ var dashboardFS embed.FS
 
 // SystemEvent is sent for instance lifecycle changes.
 type SystemEvent struct {
-	Type     string      `json:"type"` // "instance.started", "instance.stopped", "instance.error"
-	Instance interface{} `json:"instance,omitempty"`
+	Type     string `json:"type"` // "instance.started", "instance.stopped", "instance.error"
+	Instance any    `json:"instance,omitempty"`
 }
 
 // InstanceLister returns running instances (provided by Orchestrator).

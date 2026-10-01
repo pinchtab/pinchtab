@@ -1,6 +1,7 @@
 package runtimekit
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -152,13 +153,7 @@ func TestResolveProviderLaunchPlan_Chrome(t *testing.T) {
 	if len(plan.Args) == 0 {
 		t.Fatal("plan.Args is empty; expected chrome base flags")
 	}
-	found := false
-	for _, arg := range plan.Args {
-		if arg == "--disable-background-networking" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(plan.Args, "--disable-background-networking")
 	if !found {
 		t.Fatalf("plan.Args missing a known chrome base flag: %v", plan.Args)
 	}

@@ -155,13 +155,7 @@ func sanitizeAttr(attr slog.Attr, budget int) (slog.Attr, int) {
 }
 
 func sanitizeText(s string, budget int) (string, int) {
-	limit := MaxStringValueBytes
-	if budget < limit {
-		limit = budget
-	}
-	if limit < 0 {
-		limit = 0
-	}
+	limit := max(min(budget, MaxStringValueBytes), 0)
 	s = sanitize.CleanForLog(s, limit)
 	return s, clampBudget(budget - len(s))
 }

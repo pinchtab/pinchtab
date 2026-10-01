@@ -30,7 +30,7 @@ func RunVersion(ctx context.Context, binary string) (string, error) {
 }
 
 func parseFirstLine(s string) string {
-	for _, line := range strings.Split(s, "\n") {
+	for line := range strings.SplitSeq(s, "\n") {
 		if t := strings.TrimSpace(line); t != "" {
 			return t
 		}
@@ -39,8 +39,8 @@ func parseFirstLine(s string) string {
 }
 
 func ExtractVersionToken(s string) string {
-	fields := strings.Fields(s)
-	for _, f := range fields {
+	fields := strings.FieldsSeq(s)
+	for f := range fields {
 		f = strings.Trim(f, "()[],;")
 		if hasDottedDigits(f) {
 			return f
@@ -68,7 +68,7 @@ func hasDottedDigits(s string) bool {
 func CompareSemver(a, b string) int {
 	ap := splitVersion(a)
 	bp := splitVersion(b)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		switch {
 		case ap[i] < bp[i]:
 			return -1

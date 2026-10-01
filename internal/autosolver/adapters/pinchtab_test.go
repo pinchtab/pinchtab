@@ -101,7 +101,7 @@ func TestHTMLWithin_StalledFetchDoesNotLeakGoroutine(t *testing.T) {
 	before := runtime.NumGoroutine()
 
 	const iterations = 5
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		runStalledFetch()
 	}
 	settle()

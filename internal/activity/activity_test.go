@@ -20,7 +20,7 @@ func TestQueryKeepsNewestWithinLimitInOrder(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := store.Record(Event{
 			Timestamp: now.Add(time.Duration(i) * time.Second),
 			Source:    "client",
@@ -64,7 +64,7 @@ func TestTailReaderLosslessUnderLimit(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := store.Record(Event{
 			Timestamp: now.Add(time.Duration(i) * time.Second),
 			Source:    "client",
@@ -172,7 +172,7 @@ func TestTailReadersHaveIndependentCursors(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := store.Record(Event{
 			Timestamp: now.Add(time.Duration(i) * time.Second),
 			Source:    "client",
@@ -768,10 +768,10 @@ func TestStoreRecordConcurrentNoCorruption(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		go func(g int) {
 			defer wg.Done()
-			for e := 0; e < perGoroutine; e++ {
+			for e := range perGoroutine {
 				if err := store.Record(Event{
 					Source:    "server",
 					RequestID: fmt.Sprintf("g%d-e%d", g, e),
@@ -799,8 +799,8 @@ func TestStoreRecordConcurrentNoCorruption(t *testing.T) {
 	for _, evt := range got {
 		seen[evt.RequestID]++
 	}
-	for g := 0; g < goroutines; g++ {
-		for e := 0; e < perGoroutine; e++ {
+	for g := range goroutines {
+		for e := range perGoroutine {
 			key := fmt.Sprintf("g%d-e%d", g, e)
 			if seen[key] != 1 {
 				t.Fatalf("RequestID %s appeared %d times, want 1", key, seen[key])

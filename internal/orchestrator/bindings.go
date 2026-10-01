@@ -228,7 +228,7 @@ func (b *Bindings) PruneAgents(idle time.Duration, max int) {
 			return entries[i].seen.Before(entries[j].seen)
 		})
 		excess := len(entries) - max
-		for i := 0; i < excess; i++ {
+		for i := range excess {
 			delete(b.agent, entries[i].id)
 			delete(b.agentSeen, entries[i].id)
 		}

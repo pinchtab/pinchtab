@@ -83,10 +83,7 @@ func (s *Strategy) handleCrash(ctx context.Context, crashedID string) {
 	s.lastCrash = time.Now()
 	count := s.restartCount
 	maxRestarts := s.config.MaxRestarts
-	backoff := s.config.InitBackoff * time.Duration(1<<uint(count-1))
-	if backoff > s.config.MaxBackoff {
-		backoff = s.config.MaxBackoff
-	}
+	backoff := min(s.config.InitBackoff*time.Duration(1<<uint(count-1)), s.config.MaxBackoff)
 	s.mu.Unlock()
 
 	if s.hasRestartLimit() && count > maxRestarts {

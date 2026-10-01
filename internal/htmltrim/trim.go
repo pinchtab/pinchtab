@@ -26,7 +26,7 @@ func TrimHTML(html string) string {
 	html = reNewlines.ReplaceAllString(html, "\n")
 
 	var trimmed []string
-	for _, line := range strings.Split(html, "\n") {
+	for line := range strings.SplitSeq(html, "\n") {
 		line = strings.TrimSpace(line)
 		if line != "" {
 			trimmed = append(trimmed, line)

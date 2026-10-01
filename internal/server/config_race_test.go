@@ -38,9 +38,7 @@ func TestADashboardSaveDoesNotRaceAnOrchestratorReader(t *testing.T) {
 
 	stop := make(chan struct{})
 	var readers sync.WaitGroup
-	readers.Add(1)
-	go func() {
-		defer readers.Done()
+	readers.Go(func() {
 		for {
 			select {
 			case <-stop:
@@ -53,9 +51,9 @@ func TestADashboardSaveDoesNotRaceAnOrchestratorReader(t *testing.T) {
 			_ = orch.AllowsMacro()
 			_ = orch.AllowsDownload()
 		}
-	}()
+	})
 
-	for i := 0; i < 25; i++ {
+	for i := range 25 {
 		payload := config.DefaultFileConfig()
 		macro, download := i%2 == 0, i%2 == 1
 		payload.Security.AllowMacro = &macro

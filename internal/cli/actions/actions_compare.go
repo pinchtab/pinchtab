@@ -30,7 +30,7 @@ func Compare(conn apiclient.Conn, cmd *cobra.Command, liveBase, stagingBase stri
 			if err == nil {
 				err = cleanupErr
 			} else {
-				err = fmt.Errorf("%w (also %v)", err, cleanupErr)
+				err = fmt.Errorf("%w (also %w)", err, cleanupErr)
 			}
 		}
 	}()
@@ -129,7 +129,7 @@ func comparePaths(cmd *cobra.Command) []string {
 		return []string{""}
 	}
 	var paths []string
-	for _, p := range strings.Split(raw, ",") {
+	for p := range strings.SplitSeq(raw, ",") {
 		paths = append(paths, strings.TrimSpace(p))
 	}
 	return paths

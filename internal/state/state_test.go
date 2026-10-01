@@ -25,7 +25,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 				Session: map[string]string{"token": "xyz"},
 			},
 		},
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"url":       "https://example.com/page",
 			"origin":    "https://example.com",
 			"userAgent": "Chrome/120",
@@ -75,7 +75,7 @@ func TestSaveLoadEncrypted(t *testing.T) {
 			{Name: "auth", Value: "secret", Domain: "secure.example.com"},
 		},
 		Storage: map[string]OriginStorage{},
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"url": "https://secure.example.com",
 		},
 	}
@@ -87,7 +87,7 @@ func TestSaveLoadEncrypted(t *testing.T) {
 
 	// Verify the file is not plain JSON
 	raw, _ := os.ReadFile(path)
-	var probe map[string]interface{}
+	var probe map[string]any
 	if json.Unmarshal(raw, &probe) == nil {
 		// If it parses as JSON, encryption might not have worked
 		// But note: Save writes encrypted bytes, not a JSON wrapper
@@ -380,7 +380,7 @@ func TestEmptyStorage(t *testing.T) {
 		Origins:  []string{},
 		Cookies:  []Cookie{},
 		Storage:  map[string]OriginStorage{},
-		Metadata: map[string]interface{}{},
+		Metadata: map[string]any{},
 	}
 
 	path, err := Save(dir, sf, "")

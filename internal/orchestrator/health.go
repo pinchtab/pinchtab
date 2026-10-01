@@ -33,11 +33,9 @@ type startupProbe struct {
 // Shutdown can wait for it. Every monitor must start this way; a bare
 // `go o.monitor(inst)` is a goroutine that outlives its orchestrator.
 func (o *Orchestrator) startMonitor(inst *InstanceInternal) {
-	o.monitors.Add(1)
-	go func() {
-		defer o.monitors.Done()
+	o.monitors.Go(func() {
 		o.monitor(inst)
-	}()
+	})
 }
 
 // shuttingDown reports whether Shutdown has been called. Safe on an

@@ -79,7 +79,7 @@ func TestTheReservationHoldsTheNameWhileTheFirstHandleIsStillOpen(t *testing.T) 
 // files for one second is a runaway caller.
 func TestAFullDirectoryIsRefusedRatherThanOverwritten(t *testing.T) {
 	dir := t.TempDir()
-	for i := 0; i < MaxUniqueNameAttempts; i++ {
+	for i := range MaxUniqueNameAttempts {
 		name := "full.bin"
 		if i > 0 {
 			name = strings.Replace(name, ".bin", "-"+strconv.Itoa(i)+".bin", 1)

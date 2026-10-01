@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -111,10 +112,8 @@ func eofComparisonSubject(n ast.Node) (string, bool) {
 			break
 		}
 		for _, stmt := range e.Body.List {
-			for _, expr := range stmt.(*ast.CaseClause).List {
-				if isIOEOF(expr) {
-					return ident.Name, true
-				}
+			if slices.ContainsFunc(stmt.(*ast.CaseClause).List, isIOEOF) {
+				return ident.Name, true
 			}
 		}
 	case *ast.CallExpr:
@@ -139,7 +138,7 @@ func TestOnlyDecodeJSONTreatsADecodeEOFAsAnEmptyBody(t *testing.T) {
 			found[site] = true
 		}
 		if file.Name == "internal/browsers/ghostchrome/staticfetch/staticfetch.go" {
-			sawTokenizer = strings.Contains(file.Text, "z.Err() == io.EOF")
+			sawTokenizer = strings.Contains(file.Text, "errors.Is(z.Err(), io.EOF)")
 		}
 	}
 

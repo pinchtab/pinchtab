@@ -19,7 +19,7 @@ func benchManager(b *testing.B, sessions int) (*Manager, []string) {
 		PersistPath:     filepath.Join(b.TempDir(), "sessions.json"),
 	})
 	ids := make([]string, 0, sessions)
-	for i := 0; i < sessions; i++ {
+	for range sessions {
 		id, err := mgr.Create("secret")
 		if err != nil {
 			b.Fatalf("Create: %v", err)

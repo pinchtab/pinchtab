@@ -121,8 +121,8 @@ func hasJSErrors(r audit.AuditReport) bool {
 // firstLine trims an exception message down to its first line, so a stack trace
 // never breaks the list or table cell it is rendered into.
 func firstLine(s string) string {
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		return strings.TrimSpace(s[:i])
+	if before, _, ok := strings.Cut(s, "\n"); ok {
+		return strings.TrimSpace(before)
 	}
 	return strings.TrimSpace(s)
 }

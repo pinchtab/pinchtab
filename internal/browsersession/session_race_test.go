@@ -18,7 +18,7 @@ func TestDurationAccessorsAreSynchronized(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 500; i++ {
+		for i := range 500 {
 			m.UpdateConfig(Config{
 				IdleTimeout:     time.Duration(i+1) * time.Minute,
 				MaxLifetime:     time.Duration(i+1) * time.Hour,
@@ -28,7 +28,7 @@ func TestDurationAccessorsAreSynchronized(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 500; i++ {
+		for range 500 {
 			_ = m.MaxLifetime()
 			_ = m.IdleTimeout()
 			_ = m.ElevationWindow()
@@ -58,7 +58,7 @@ func TestPersistConfigCapturedUnderStateLock(t *testing.T) {
 	wg.Add(3)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 200; i++ {
+		for i := range 200 {
 			mgr.UpdateConfig(Config{
 				IdleTimeout:                   time.Hour,
 				MaxLifetime:                   time.Hour,
@@ -71,13 +71,13 @@ func TestPersistConfigCapturedUnderStateLock(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 200; i++ {
+		for range 200 {
 			mgr.Elevate(sessionID, "secret")
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 200; i++ {
+		for range 200 {
 			if _, err := mgr.Create("secret"); err != nil {
 				t.Errorf("Create: %v", err)
 				return

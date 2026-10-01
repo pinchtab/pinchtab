@@ -1,31 +1,20 @@
 package routes
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
 
 func TestCaptureEndpointIsShorthandAndTabScoped(t *testing.T) {
 	wantShorthand := "GET /capture"
-	found := false
-	for _, route := range ShorthandRoutes() {
-		if route == wantShorthand {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(ShorthandRoutes(), wantShorthand)
 	if !found {
 		t.Fatalf("ShorthandRoutes() missing %s — proxy mux will 404 until the routes catalog entry is added next to the handlers.RegisterRoutes call", wantShorthand)
 	}
 
 	wantTab := "GET /tabs/{id}/capture"
-	found = false
-	for _, route := range TabScopedRoutes() {
-		if route == wantTab {
-			found = true
-			break
-		}
-	}
+	found = slices.Contains(TabScopedRoutes(), wantTab)
 	if !found {
 		t.Fatalf("TabScopedRoutes() missing %s — the catalog entry's TabScoped flag was likely flipped to false", wantTab)
 	}
@@ -85,24 +74,12 @@ func TestFrameEndpointsAreShorthandAndTabScoped(t *testing.T) {
 }
 
 func TestCloseRoutesAreShorthandAndTabScoped(t *testing.T) {
-	found := false
-	for _, route := range TabScopedRoutes() {
-		if route == "POST /tabs/{id}/close" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(TabScopedRoutes(), "POST /tabs/{id}/close")
 	if !found {
 		t.Fatal("TabScopedRoutes() missing POST /tabs/{id}/close")
 	}
 
-	found = false
-	for _, route := range ShorthandRoutes() {
-		if route == "POST /close" {
-			found = true
-			break
-		}
-	}
+	found = slices.Contains(ShorthandRoutes(), "POST /close")
 	if !found {
 		t.Fatal("ShorthandRoutes() missing POST /close")
 	}

@@ -357,3 +357,43 @@ func TestProxyToTarget_InjectsChildAuthAndStripsCookie(t *testing.T) {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
 }
+
+func TestInstanceRoutesRefuseARunningInstanceWhoseProcessDied(t *testing.T) {
+	var forwarded atomic.Int32
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		forwarded.Add(1)
+	}))
+	defer backend.Close()
+
+	o := NewOrchestrator(t.TempDir())
+	o.client = backend.Client()
+	o.instances["inst_1"] = &InstanceInternal{
+		Instance: bridge.Instance{ID: "inst_1", Status: bridge.InstanceRunning, URL: backend.URL},
+		URL:      backend.URL,
+		cmd:      &mockCmd{pid: 1234},
+	}
+	o.hooks.processAlive = func(int) bool { return false }
+
+	for _, tc := range []struct {
+		name    string
+		path    string
+		handler http.HandlerFunc
+	}{
+		{"tabs open", "/instances/inst_1/tabs/open", o.handleInstanceTabOpen},
+		{"proxy", "/instances/inst_1/tab", o.proxyToInstance},
+		{"screencast", "/instances/inst_1/screencast", o.handleProxyScreencast},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(`{}`))
+			req.SetPathValue("id", "inst_1")
+			w := httptest.NewRecorder()
+			tc.handler(w, req)
+			if w.Code != http.StatusServiceUnavailable {
+				t.Fatalf("status = %d, want 503: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+	if n := forwarded.Load(); n != 0 {
+		t.Fatalf("forwarded %d requests to a dead browser", n)
+	}
+}

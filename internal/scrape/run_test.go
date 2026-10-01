@@ -346,7 +346,7 @@ func TestCrawlGuardPolicyWithoutValidatorFailsClosed(t *testing.T) {
 
 func TestRunConcurrencyIsBounded(t *testing.T) {
 	var pages []seaportal.PageObject
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		pages = append(pages, seaportal.PageObject{URL: fmt.Sprintf("https://example.com/p%d", i), Status: 200, Markdown: "x"})
 	}
 	active := make(chan struct{}, MaxConcurrency) // buffered at the cap: overflow panics via select default

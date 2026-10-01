@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -137,7 +138,7 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 	case <-sigChan:
 	case err := <-serveErr:
 		doShutdown()
-		if err != nil && err != http.ErrServerClosed {
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			_ = registration.Close()
 			fatalStartup("server error", err)
 		}

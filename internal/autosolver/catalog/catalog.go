@@ -5,6 +5,7 @@
 package catalog
 
 import (
+	"slices"
 	"sort"
 
 	"github.com/pinchtab/pinchtab/internal/autosolver"
@@ -109,10 +110,5 @@ func Names() []string {
 }
 
 func IsKnown(name string) bool {
-	for _, known := range Names() {
-		if known == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(Names(), name)
 }

@@ -279,9 +279,10 @@ func sessionIDForRouting(r *http.Request) string {
 // signal is returned (false means "let fallback handle it").
 func (o *Orchestrator) routeToInstanceID(w http.ResponseWriter, r *http.Request, instanceID string, decision RoutingDecision) bool {
 	o.mu.RLock()
-	internal, ok := o.instances[instanceID]
+	internal := o.instances[instanceID]
+	serving := o.instanceIsServing(internal)
 	o.mu.RUnlock()
-	if !ok || internal == nil || internal.Status != bridge.InstanceRunning || !o.instanceIsActive(internal) {
+	if !serving {
 		if o.bindings != nil {
 			o.bindings.ClearInstance(instanceID)
 		}

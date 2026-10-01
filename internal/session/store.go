@@ -164,7 +164,6 @@ func (s *Store) dispatchLifecycle(events []LifecycleEvent) {
 	// order. Hooks still run concurrently with one another. events is built fresh
 	// per call and not mutated after dispatch, so the goroutines share it read-only.
 	for _, fn := range hooks {
-		fn := fn
 		go func() {
 			for _, evt := range events {
 				fn(evt)

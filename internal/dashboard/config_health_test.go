@@ -106,7 +106,7 @@ func TestHealthDefaultInstanceNamesTheRoutedInstanceRatherThanTheFirstListed(t *
 		{ID: "inst_routed", Status: "running", Responsiveness: bridge.ResponsivenessResponsive},
 	}
 	lister := routedInstances{instances: listed, def: listed[1], routable: true}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		def, _ := healthBody(t, lister)["defaultInstance"].(map[string]any)
 		if def["id"] != "inst_routed" || def["status"] != "running" || def["responsiveness"] != bridge.ResponsivenessResponsive {
 			t.Fatalf("call %d: defaultInstance = %v, want the routed inst_routed", i, def)

@@ -24,13 +24,13 @@ func TestAuthenticateReturnsDefensiveCopy(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 500; i++ {
+		for range 500 {
 			s.SetGrants(id, []string{"GET /snapshot", "POST /action"})
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 500; i++ {
+		for range 500 {
 			_ = len(sess.Grants)
 			_ = sess.LastSeenAt
 		}
@@ -47,13 +47,13 @@ func TestConfigAccessorsAreSynchronized(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 500; i++ {
+		for i := range 500 {
 			s.UpdateConfig(Config{Enabled: i%2 == 0, Mode: ModeOff})
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 500; i++ {
+		for range 500 {
 			_ = s.Enabled()
 		}
 	}()

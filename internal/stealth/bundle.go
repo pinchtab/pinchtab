@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/assets"
@@ -239,12 +241,7 @@ func statusFlags(bundle *Bundle, cfg *config.RuntimeConfig) map[string]bool {
 }
 
 func hasFlag(args []string, want string) bool {
-	for _, field := range args {
-		if field == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(args, want)
 }
 
 func capabilityMap(level Level, headless bool) map[string]bool {
@@ -385,9 +382,7 @@ func cloneBoolMap(src map[string]bool) map[string]bool {
 		return nil
 	}
 	dst := make(map[string]bool, len(src))
-	for k, v := range src {
-		dst[k] = v
-	}
+	maps.Copy(dst, src)
 	return dst
 }
 
@@ -396,8 +391,8 @@ func (b *Bundle) LaunchUserAgent() string {
 		return ""
 	}
 	for _, arg := range b.Launch.Args {
-		if strings.HasPrefix(arg, "--user-agent=") {
-			return strings.TrimPrefix(arg, "--user-agent=")
+		if after, ok := strings.CutPrefix(arg, "--user-agent="); ok {
+			return after
 		}
 	}
 	return ""

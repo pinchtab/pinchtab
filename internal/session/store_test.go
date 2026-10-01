@@ -67,7 +67,7 @@ func TestAuthenticateTokenIndex_ManySessions(t *testing.T) {
 
 	type rec struct{ id, token string }
 	recs := make([]rec, 0, 5)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		id, token, err := s.Create("agent", "", "")
 		if err != nil {
 			t.Fatalf("create %d: %v", i, err)
