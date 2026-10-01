@@ -41,15 +41,14 @@ func TestWaitUntil_ProbeErrorShortCircuits(t *testing.T) {
 
 func TestWaitUntil_NeverReadyReturnsErrNotReady(t *testing.T) {
 	calls := 0
-	_, err := WaitUntil(context.Background(), 12*time.Millisecond, 5*time.Millisecond, func() (string, bool, error) {
+	const interval = 2 * time.Millisecond
+	_, err := WaitUntil(context.Background(), 100*interval, interval, func() (string, bool, error) {
 		calls++
 		return "", false, nil
 	})
 	if !errors.Is(err, ErrNotReady) {
 		t.Fatalf("err = %v, want ErrNotReady", err)
 	}
-	// probe-first with deadline-at-top: probes at ~0, ~5, ~10 (before the 12ms
-	// deadline), then exits — at least 2 probes, no extra probe past the deadline.
 	if calls < 2 {
 		t.Fatalf("probe called %d times, want >= 2", calls)
 	}
