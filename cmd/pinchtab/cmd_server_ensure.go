@@ -80,10 +80,6 @@ func ensureServerWithDaemonRecovery(baseURL, token, command string, allowAutoSta
 	return ensureServerWithAutoStart(baseURL, token, command, true, startDetached, probe, timeout)
 }
 
-func ensureServerWith(baseURL, token, command string, start serverStartFunc, probe serverProbeFunc, timeout time.Duration) error {
-	return ensureServerWithAutoStart(baseURL, token, command, true, start, probe, timeout)
-}
-
 func ensureServerWithAutoStart(baseURL, token, command string, allowAutoStart bool, start serverStartFunc, probe serverProbeFunc, timeout time.Duration) error {
 	initial := probe(baseURL, token)
 	if serverProbeHealthy(initial) {
@@ -136,10 +132,6 @@ func serverProbeHealthy(probe server.HealthProbe) bool {
 	return probe.Reachable && probe.StatusCode < 500
 }
 
-func isServerHealthy(baseURL, token string) bool {
-	return serverProbeHealthy(probeServerHealth(baseURL, token))
-}
-
 func autoStartServer() error {
 	if err := requireDetachedServerOwnership("automatic start", false); err != nil {
 		return err
@@ -162,10 +154,6 @@ func autoStartServerArgs(marker ...string) []string {
 		args = append(args, backgroundChildFlag, marker[0])
 	}
 	return args
-}
-
-func waitForServer(baseURL, token string, timeout time.Duration) bool {
-	return waitForServerWith(baseURL, token, timeout, isServerHealthy)
 }
 
 func waitForServerWith(baseURL, token string, timeout time.Duration, healthy serverHealthFunc) bool {

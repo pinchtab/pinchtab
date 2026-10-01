@@ -201,17 +201,9 @@ func (s tabStateStore) announceCachedTab(tabID string) {
 	apiclient.UseCachedTab(apiclient.CachedTab{TabID: tabID, Base: base, StateFile: s.path()})
 }
 
-// The package-level helpers below preserve the existing CLI/test API by
-// delegating to defaultTabState; command files call these directly while the
-// service owns the filesystem/network logic.
-
 func resolveTabArg(args []string) string { return defaultTabState.resolveArg(args) }
 
 func defaultTabFlagFromState(cmd *cobra.Command) { defaultTabState.applyDefaultFlag(cmd) }
-
-func useLocalTabStateFile() bool { return defaultTabState.useLocal() }
-
-func tabStateFile() string { return defaultTabState.path() }
 
 // WriteTabStateFile persists the current tab for anonymous local workflows.
 func WriteTabStateFile(tabID string) { defaultTabState.write(tabID) }
