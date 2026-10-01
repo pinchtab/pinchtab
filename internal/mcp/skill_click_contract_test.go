@@ -2,11 +2,16 @@ package mcp
 
 import (
 	"encoding/json"
+	"go/ast"
+	"go/token"
 	"os"
 	"path/filepath"
-	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
 const clickDocPath = "docs/reference/click.md"
@@ -43,16 +48,31 @@ func readRepoFile(t *testing.T, rel string) string {
 func navigationSignalKeys(t *testing.T) []string {
 	t.Helper()
 
-	src := readRepoFile(t, "internal/bridge/action_request.go")
-	pattern := regexp.MustCompile(`(?m)^\s*Result[A-Za-z]+\s*=\s*"([^"]+)"`)
-	matches := pattern.FindAllStringSubmatch(src, -1)
-
+	bridgePkg := srccensus.Load(t, filepath.Join("..", "bridge"), 40)
+	_, files := bridgePkg.Syntax()
 	var keys []string
-	for _, m := range matches {
-		keys = append(keys, m[1])
+	for _, file := range files {
+		ast.Inspect(file, func(node ast.Node) bool {
+			spec, ok := node.(*ast.ValueSpec)
+			if !ok {
+				return true
+			}
+			for i, name := range spec.Names {
+				if !strings.HasPrefix(name.Name, "Result") || i >= len(spec.Values) {
+					continue
+				}
+				if lit, isLit := spec.Values[i].(*ast.BasicLit); isLit && lit.Kind == token.STRING {
+					if key, err := strconv.Unquote(lit.Value); err == nil {
+						keys = append(keys, key)
+					}
+				}
+			}
+			return true
+		})
 	}
+	slices.Sort(keys)
 	if len(keys) < 4 {
-		t.Fatalf("found %d navigation signal constants (%v) in internal/bridge/action_request.go; the contract publishes at least navigated, url, previousUrl and refsStale, so this guard is reading the wrong place and would pass vacuously", len(keys), keys)
+		t.Fatalf("found %d navigation signal constants (%v) in %s; the contract publishes at least navigated, url, previousUrl and refsStale, so this guard is reading the wrong place and would pass vacuously", len(keys), keys, bridgePkg.Dir())
 	}
 	return keys
 }

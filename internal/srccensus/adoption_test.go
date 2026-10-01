@@ -65,13 +65,23 @@ func f() {
 	_, _ = os.ReadFile("fixture.json")
 	_, _ = os.ReadFile(filepath.Join(dir, "config_load.go"))
 	_, _ = os.ReadFile(filepath.Join(dir, "fixture.json"))
+	_ = readHelper(t, "bridge/action_request.go")
+	_ = readHelper(t, "docs/click.md")
+	_ = pureHelper("x.go")
 }
+
+func readHelper(t *testing.T, rel string) string {
+	raw, _ := os.ReadFile(filepath.Join("..", rel))
+	return string(raw)
+}
+
+func pureHelper(name string) string { return name }
 `
 	got, err := literalSourceReads("planted_test.go", src)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{`line 4: os.ReadFile("handlers.go")`, `line 5: parser.ParseFile(_, "snapshot.go", nil)`, `line 8: os.ReadFile("config_load.go")`}
+	want := []string{`line 4: os.ReadFile("handlers.go")`, `line 5: parser.ParseFile(_, "snapshot.go", nil)`, `line 8: os.ReadFile("config_load.go")`, `line 10: readHelper(_, "bridge/action_request.go")`}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("literalSourceReads = %q, want %q", got, want)
 	}
@@ -83,10 +93,19 @@ func literalSourceReads(name, src string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	readers := fileReadingHelpers(file)
 	var reads []string
 	ast.Inspect(file, func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
+			return true
+		}
+		if helper, isIdent := call.Fun.(*ast.Ident); isIdent && readers[helper.Name] {
+			for _, arg := range call.Args {
+				if lit, isGoFile := goFileLiteral(arg); isGoFile {
+					reads = append(reads, "line "+strconv.Itoa(fset.Position(call.Pos()).Line)+": "+helper.Name+"(_, "+lit+")")
+				}
+			}
 			return true
 		}
 		sel, ok := call.Fun.(*ast.SelectorExpr)
@@ -112,6 +131,23 @@ func literalSourceReads(name, src string) ([]string, error) {
 		return true
 	})
 	return reads, nil
+}
+
+func fileReadingHelpers(file *ast.File) map[string]bool {
+	readers := map[string]bool{}
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil || fn.Recv != nil {
+			continue
+		}
+		ast.Inspect(fn.Body, func(node ast.Node) bool {
+			if call, isCall := node.(*ast.CallExpr); isCall && calleeName(call.Fun) == "os.ReadFile" {
+				readers[fn.Name.Name] = true
+			}
+			return true
+		})
+	}
+	return readers
 }
 
 func goFileLiteral(expr ast.Expr) (string, bool) {
