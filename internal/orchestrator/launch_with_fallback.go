@@ -269,7 +269,7 @@ func (o *Orchestrator) snapshotWithFallbackMetadata(planned *PlannedLaunch) *bri
 		internal.FallbackReason = reason
 		snapshot := internal.Instance
 		o.mu.Unlock()
-		o.syncInstanceToManager(&snapshot)
+		o.instanceMgr.TrackInstance(&snapshot)
 		return &snapshot
 	}
 	o.mu.Unlock()
@@ -365,7 +365,7 @@ func (o *Orchestrator) detachFailedAttempt(instanceID string) *InstanceInternal 
 	delete(o.instances, instanceID)
 	o.mu.Unlock()
 
-	o.removeInstanceFromManager(instanceID)
+	o.instanceMgr.ForgetInstance(instanceID)
 	o.releaseInstancePorts(instanceID, inst)
 	return inst
 }

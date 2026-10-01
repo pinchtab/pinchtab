@@ -163,10 +163,10 @@ func fastPolling(t *testing.T) {
 
 func newFallbackTestOrch(t *testing.T) *Orchestrator {
 	t.Helper()
-	o := &Orchestrator{
+	o := withInstanceManager(&Orchestrator{
 		instances:     make(map[string]*InstanceInternal),
 		portAllocator: NewPortAllocator(9000, 9100),
-	}
+	})
 	o.LiveConfig().Publish(&config.RuntimeConfig{
 		DefaultBrowser: config.BrowserChrome,
 		Targets: config.BrowserTargetsConfig{

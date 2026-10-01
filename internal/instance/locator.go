@@ -19,8 +19,7 @@ type Locator struct {
 	fetcher TabFetcher
 }
 
-// NewLocator creates a Locator backed by the given repository and tab fetcher.
-func NewLocator(repo *Repository, fetcher TabFetcher) *Locator {
+func newLocator(repo *Repository, fetcher TabFetcher) *Locator {
 	return &Locator{
 		cache:   make(map[string]string),
 		repo:    repo,
@@ -28,23 +27,22 @@ func NewLocator(repo *Repository, fetcher TabFetcher) *Locator {
 	}
 }
 
-// FindInstanceByTabID returns the instance that owns the given tab.
 // Fast path: cache hit (O(1)). Slow path: queries all bridges.
-func (l *Locator) FindInstanceByTabID(tabID string) (*bridge.Instance, error) {
+func (l *Locator) findInstanceByTabID(tabID string) (*bridge.Instance, error) {
 	l.mu.RLock()
 	instID, ok := l.cache[tabID]
 	l.mu.RUnlock()
 
 	if ok {
-		inst, found := l.repo.Get(instID)
+		inst, found := l.repo.get(instID)
 		if found && inst.Status == bridge.InstanceRunning {
 			return inst, nil
 		}
 		// Stale cache entry — instance gone or not running.
-		l.Invalidate(tabID)
+		l.invalidate(tabID)
 	}
 
-	running := l.repo.Running()
+	running := l.repo.running()
 	for _, inst := range running {
 		url := inst.URL
 		if url == "" {
@@ -56,7 +54,7 @@ func (l *Locator) FindInstanceByTabID(tabID string) (*bridge.Instance, error) {
 			continue
 		}
 		// Cache the tabs scanned so far in one critical section rather than
-		// taking the write lock per tab, matching RefreshAll.
+		// taking the write lock per tab, matching refreshAll.
 		l.mu.Lock()
 		var match bool
 		for _, tab := range tabs {
@@ -77,22 +75,19 @@ func (l *Locator) FindInstanceByTabID(tabID string) (*bridge.Instance, error) {
 	return nil, fmt.Errorf("tab %q not found in any running instance", tabID)
 }
 
-// Register adds a tab→instance mapping to the cache.
-func (l *Locator) Register(tabID, instanceID string) {
+func (l *Locator) register(tabID, instanceID string) {
 	l.mu.Lock()
 	l.cache[tabID] = instanceID
 	l.mu.Unlock()
 }
 
-// Invalidate removes a tab from the cache.
-func (l *Locator) Invalidate(tabID string) {
+func (l *Locator) invalidate(tabID string) {
 	l.mu.Lock()
 	delete(l.cache, tabID)
 	l.mu.Unlock()
 }
 
-// InvalidateInstance removes all cached tabs for an instance.
-func (l *Locator) InvalidateInstance(instanceID string) {
+func (l *Locator) invalidateInstance(instanceID string) {
 	l.mu.Lock()
 	for tabID, instID := range l.cache {
 		if instID == instanceID {
@@ -102,13 +97,13 @@ func (l *Locator) InvalidateInstance(instanceID string) {
 	l.mu.Unlock()
 }
 
-// RefreshAll clears the cache and re-discovers all tabs from running instances.
-func (l *Locator) RefreshAll() {
+// refreshAll clears the cache and re-discovers all tabs from running instances.
+func (l *Locator) refreshAll() {
 	l.mu.Lock()
 	l.cache = make(map[string]string)
 	l.mu.Unlock()
 
-	running := l.repo.Running()
+	running := l.repo.running()
 	for _, inst := range running {
 		url := inst.URL
 		if url == "" {
@@ -127,8 +122,7 @@ func (l *Locator) RefreshAll() {
 	}
 }
 
-// CacheSize returns the number of cached tab→instance mappings.
-func (l *Locator) CacheSize() int {
+func (l *Locator) cacheSize() int {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	return len(l.cache)

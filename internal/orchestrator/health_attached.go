@@ -39,7 +39,7 @@ func (o *Orchestrator) checkAttachedBridgeHealth(inst *InstanceInternal) bool {
 			if current, ok := o.instances[inst.ID]; ok && current == inst {
 				inst.URL = resolvedURL
 				inst.Instance.URL = resolvedURL
-				o.syncInstanceToManager(&inst.Instance)
+				o.instanceMgr.TrackInstance(&inst.Instance)
 			}
 			o.mu.Unlock()
 		}

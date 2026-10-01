@@ -46,17 +46,13 @@ func (o *Orchestrator) proxyTabRequest(w http.ResponseWriter, r *http.Request) {
 // shortcut. On a total miss it returns the lookup error for the caller to
 // surface as 404.
 func (o *Orchestrator) resolveInstanceForTab(tabID string) (*bridge.Instance, error) {
-	if o.instanceMgr != nil {
-		if inst, err := o.instanceMgr.FindInstanceByTabID(tabID); err == nil {
-			return inst, nil
-		}
+	if inst, err := o.instanceMgr.FindInstanceByTabID(tabID); err == nil {
+		return inst, nil
 	}
 
 	inst, err := o.findRunningInstanceByTabID(tabID)
 	if err == nil {
-		if o.instanceMgr != nil {
-			o.instanceMgr.Locator.Register(tabID, inst.ID)
-		}
+		o.instanceMgr.RememberTab(tabID, inst.ID)
 		return &inst.Instance, nil
 	}
 
@@ -417,8 +413,8 @@ func (o *Orchestrator) handleProxyResponseHeaders(origReq *http.Request, resp *h
 	}
 
 	closedTab := closedTabID(origReq, resp)
-	if o.instanceMgr != nil && closedTab != "" {
-		o.instanceMgr.InvalidateTab(closedTab)
+	if closedTab != "" {
+		o.instanceMgr.ForgetTab(closedTab)
 	}
 
 	// Identity → instance binding writes. Bindings are persisted only after

@@ -173,23 +173,19 @@ func (o *Orchestrator) routeByTabOwner(w http.ResponseWriter, r *http.Request, t
 	requestedBrowser := ExtractRequestedBrowser(r)
 
 	// Fast path via locator cache.
-	if o.instanceMgr != nil {
-		if inst, err := o.instanceMgr.FindInstanceByTabID(tabID); err == nil && inst != nil {
-			if writeBrowserConflict(w, tabID, inst, requestedBrowser) {
-				return true
-			}
-			if !o.allowCrossInstance(w, r, inst.ID) {
-				return true
-			}
-			o.proxyToInstanceForRoute(w, r, inst, tabID, RoutingDecisionTabOwner)
+	if inst, err := o.instanceMgr.FindInstanceByTabID(tabID); err == nil && inst != nil {
+		if writeBrowserConflict(w, tabID, inst, requestedBrowser) {
 			return true
 		}
+		if !o.allowCrossInstance(w, r, inst.ID) {
+			return true
+		}
+		o.proxyToInstanceForRoute(w, r, inst, tabID, RoutingDecisionTabOwner)
+		return true
 	}
 	// Slow path: enumerate running instances.
 	if internal, err := o.findRunningInstanceByTabID(tabID); err == nil && internal != nil {
-		if o.instanceMgr != nil {
-			o.instanceMgr.Locator.Register(tabID, internal.ID)
-		}
+		o.instanceMgr.RememberTab(tabID, internal.ID)
 		if writeBrowserConflict(w, tabID, &internal.Instance, requestedBrowser) {
 			return true
 		}

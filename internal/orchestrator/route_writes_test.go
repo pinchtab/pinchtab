@@ -119,7 +119,7 @@ func TestWrapShorthand_TabOwnerRouteRebindsIdentityOnSuccess(t *testing.T) {
 	_, pathB := newBackendInstance(t, o, "inst_b")
 
 	o.bindings.BindAgent("agent-1", "inst_a")
-	o.instanceMgr.Locator.Register("tab-on-b", "inst_b")
+	o.instanceMgr.RememberTab("tab-on-b", "inst_b")
 
 	wrapped := o.WrapShorthand(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("tab-owner routing should not fall back")
@@ -152,7 +152,7 @@ func TestWrapShorthand_StrictRejectsCrossInstance(t *testing.T) {
 	_, pathB := newBackendInstance(t, o, "inst_b")
 
 	o.bindings.BindAgent("agent-1", "inst_a")
-	o.instanceMgr.Locator.Register("tab-on-b", "inst_b")
+	o.instanceMgr.RememberTab("tab-on-b", "inst_b")
 
 	wrapped := o.WrapShorthand(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("strict mode must reject before fallback")
@@ -184,7 +184,7 @@ func TestWrapShorthand_StrictAllowsSameInstance(t *testing.T) {
 	_, gotPath := newBackendInstance(t, o, "inst_a")
 
 	o.bindings.BindAgent("agent-1", "inst_a")
-	o.instanceMgr.Locator.Register("tab-on-a", "inst_a")
+	o.instanceMgr.RememberTab("tab-on-a", "inst_a")
 
 	wrapped := o.WrapShorthand(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("tab-owner must succeed when binding matches owner")
@@ -218,7 +218,7 @@ func TestWrapShorthand_BindingNotWrittenOnFailure(t *testing.T) {
 		URL:      srv.URL,
 		cmd:      &mockCmd{pid: 1, isAlive: true},
 	}
-	o.syncInstanceToManager(&o.instances["inst_fail"].Instance)
+	o.instanceMgr.TrackInstance(&o.instances["inst_fail"].Instance)
 
 	wrapped := o.WrapShorthand(func(w http.ResponseWriter, r *http.Request) {
 		o.ProxyToTarget(w, r, srv.URL+r.URL.Path)

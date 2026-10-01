@@ -1,18 +1,17 @@
-package instance_test
+package instance
 
 import (
 	"testing"
 
 	bridgepkg "github.com/pinchtab/pinchtab/internal/bridge"
-	"github.com/pinchtab/pinchtab/internal/instance"
 )
 
-// FindInstanceByTabID caches every tab it discovers, but tabs also close
+// findInstanceByTabID caches every tab it discovers, but tabs also close
 // without passing through the orchestrator proxy — the bridge evicts idle tabs
 // on its own, and pages call window.close(). Those entries are never
-// invalidated, so the cache only ever grows. RefreshAll is the reconciler.
+// invalidated, so the cache only ever grows. refreshAll is the reconciler.
 func TestLocatorRefreshAllDropsTabsClosedOutOfBand(t *testing.T) {
-	repo := instance.NewRepository()
+	repo := newRepository()
 	fetcher := newMockFetcher()
 	addRunning(repo, "p", "9001")
 
@@ -22,11 +21,11 @@ func TestLocatorRefreshAllDropsTabsClosedOutOfBand(t *testing.T) {
 
 	// Looking up the last tab caches the ones scanned before it too; the scan
 	// returns early on a match, so everything up to the hit lands in the cache.
-	locator := instance.NewLocator(repo, fetcher)
-	if _, err := locator.FindInstanceByTabID("tab-3"); err != nil {
-		t.Fatalf("FindInstanceByTabID: %v", err)
+	locator := newLocator(repo, fetcher)
+	if _, err := locator.findInstanceByTabID("tab-3"); err != nil {
+		t.Fatalf("findInstanceByTabID: %v", err)
 	}
-	if got := locator.CacheSize(); got != 3 {
+	if got := locator.cacheSize(); got != 3 {
 		t.Fatalf("cache size after discovery = %d, want 3", got)
 	}
 
@@ -35,13 +34,13 @@ func TestLocatorRefreshAllDropsTabsClosedOutOfBand(t *testing.T) {
 		{ID: "tab-2", URL: "https://example.com"},
 	}
 
-	if got := locator.CacheSize(); got != 3 {
+	if got := locator.cacheSize(); got != 3 {
 		t.Fatalf("cache size = %d, want 3 — entries linger until reconciled", got)
 	}
 
-	locator.RefreshAll()
+	locator.refreshAll()
 
-	if got := locator.CacheSize(); got != 1 {
-		t.Errorf("cache size after RefreshAll = %d, want 1 — closed tabs must be dropped", got)
+	if got := locator.cacheSize(); got != 1 {
+		t.Errorf("cache size after refreshAll = %d, want 1 — closed tabs must be dropped", got)
 	}
 }

@@ -13,7 +13,7 @@ import (
 // usable and publishing is the only way in — there is no pointer for a test to
 // keep and write through afterwards.
 func orchWithConfig(cfg *config.RuntimeConfig) *Orchestrator {
-	o := &Orchestrator{}
+	o := withInstanceManager(&Orchestrator{})
 	o.LiveConfig().Publish(cfg)
 	return o
 }

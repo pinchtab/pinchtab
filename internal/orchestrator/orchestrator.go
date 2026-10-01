@@ -260,9 +260,7 @@ func (o *Orchestrator) RunMaintenance(ctx context.Context) {
 // window.close() among them — so both need periodic reconciliation.
 func (o *Orchestrator) runMaintenanceOnce(idleTTL time.Duration, maxAgent int) {
 	o.bindings.PruneAgents(idleTTL, maxAgent)
-	if o.instanceMgr != nil {
-		o.instanceMgr.Locator.RefreshAll()
-	}
+	o.instanceMgr.Reconcile()
 }
 
 func (o *Orchestrator) Bindings() *Bindings {
@@ -288,13 +286,6 @@ func (o *Orchestrator) SetStrictCrossInstanceTab(strict bool) {
 	o.mu.Lock()
 	o.strictCrossInstanceTab = strict
 	o.mu.Unlock()
-}
-
-func (o *Orchestrator) syncInstanceToManager(inst *bridge.Instance) {
-	if o.instanceMgr == nil {
-		return
-	}
-	o.instanceMgr.Repo.Add(inst)
 }
 
 func (o *Orchestrator) SetProfileManager(pm *profiles.ProfileManager) {

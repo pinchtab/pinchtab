@@ -12,8 +12,7 @@ type Repository struct {
 	instances map[string]*bridge.Instance
 }
 
-// NewRepository creates an empty Repository.
-func NewRepository() *Repository {
+func newRepository() *Repository {
 	return &Repository{instances: make(map[string]*bridge.Instance)}
 }
 
@@ -26,7 +25,7 @@ func (r *Repository) store(inst *bridge.Instance) {
 	r.instances[inst.ID] = &snapshot
 }
 
-func (r *Repository) Running() []bridge.Instance {
+func (r *Repository) running() []bridge.Instance {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make([]bridge.Instance, 0, len(r.instances))
@@ -38,8 +37,7 @@ func (r *Repository) Running() []bridge.Instance {
 	return out
 }
 
-// Get returns an instance by ID.
-func (r *Repository) Get(id string) (*bridge.Instance, bool) {
+func (r *Repository) get(id string) (*bridge.Instance, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	inst, ok := r.instances[id]
@@ -50,8 +48,7 @@ func (r *Repository) Get(id string) (*bridge.Instance, bool) {
 	return &copy, true
 }
 
-// Add registers an existing instance (used for sync with external state).
-func (r *Repository) Add(inst *bridge.Instance) {
+func (r *Repository) add(inst *bridge.Instance) {
 	if inst == nil {
 		return
 	}
@@ -60,8 +57,7 @@ func (r *Repository) Add(inst *bridge.Instance) {
 	r.mu.Unlock()
 }
 
-// Remove deletes an instance from the store without stopping it.
-func (r *Repository) Remove(id string) {
+func (r *Repository) remove(id string) {
 	r.mu.Lock()
 	delete(r.instances, id)
 	r.mu.Unlock()

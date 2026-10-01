@@ -42,7 +42,7 @@ func newBackendInstance(t *testing.T, o *Orchestrator, instanceID string) (*http
 		cmd:      &mockCmd{pid: 1, isAlive: true},
 	}
 	o.instances[instanceID] = inst
-	o.syncInstanceToManager(&inst.Instance)
+	o.instanceMgr.TrackInstance(&inst.Instance)
 	return srv, gotPath
 }
 
@@ -118,7 +118,7 @@ func TestRouteForRequest_AcceptsOperatorConfiguredBrowser(t *testing.T) {
 	})
 	newBackendInstance(t, o, "inst_chrome")
 	o.instances["inst_chrome"].Browser = config.BrowserChrome
-	o.syncInstanceToManager(&o.instances["inst_chrome"].Instance)
+	o.instanceMgr.TrackInstance(&o.instances["inst_chrome"].Instance)
 
 	req := httptest.NewRequest(http.MethodPost, "/navigate?browser=custombrowser", nil)
 	target, status, err := o.RouteForRequest(req)
@@ -137,7 +137,7 @@ func TestRouteForRequest_AcceptsValidBrowsers(t *testing.T) {
 			o := NewOrchestrator(t.TempDir())
 			_, _ = newBackendInstance(t, o, "inst_"+browser)
 			o.instances["inst_"+browser].Browser = browser
-			o.syncInstanceToManager(&o.instances["inst_"+browser].Instance)
+			o.instanceMgr.TrackInstance(&o.instances["inst_"+browser].Instance)
 
 			req := httptest.NewRequest(http.MethodPost, "/navigate?browser="+browser, nil)
 			target, status, err := o.RouteForRequest(req)
@@ -157,7 +157,7 @@ func TestWrapShorthand_TabOwnerWins(t *testing.T) {
 	_, pathA := newBackendInstance(t, o, "inst_a")
 	_, pathB := newBackendInstance(t, o, "inst_b")
 
-	o.instanceMgr.Locator.Register("tab-x", "inst_b")
+	o.instanceMgr.RememberTab("tab-x", "inst_b")
 
 	called := false
 	wrapped := o.WrapShorthand(func(w http.ResponseWriter, r *http.Request) {
@@ -199,8 +199,8 @@ func TestWrapShorthand_TabOwnerBrowserTargetConflict(t *testing.T) {
 	})
 	_, pathB := newBackendInstance(t, o, "inst_b")
 	o.instances["inst_b"].Browser = config.BrowserChrome
-	o.syncInstanceToManager(&o.instances["inst_b"].Instance)
-	o.instanceMgr.Locator.Register("tab-x", "inst_b")
+	o.instanceMgr.TrackInstance(&o.instances["inst_b"].Instance)
+	o.instanceMgr.RememberTab("tab-x", "inst_b")
 
 	wrapped := o.WrapShorthand(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("fallback should not run for tab-owner conflict")

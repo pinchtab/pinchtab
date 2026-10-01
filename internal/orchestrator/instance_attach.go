@@ -47,7 +47,7 @@ func (o *Orchestrator) attachExternalInstance(name string, inst bridge.Instance,
 				result := existing.Instance
 				o.mu.Unlock()
 
-				o.syncInstanceToManager(&result)
+				o.instanceMgr.TrackInstance(&result)
 				return &result, false, nil
 			}
 			o.mu.Unlock()
@@ -68,7 +68,7 @@ func (o *Orchestrator) attachExternalInstance(name string, inst bridge.Instance,
 	o.instances[instanceID] = internal
 	o.mu.Unlock()
 
-	o.syncInstanceToManager(&internal.Instance)
+	o.instanceMgr.TrackInstance(&internal.Instance)
 	return &internal.Instance, true, nil
 }
 

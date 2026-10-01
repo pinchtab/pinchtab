@@ -209,7 +209,7 @@ func (o *Orchestrator) markStopped(id string) {
 	o.mu.Unlock()
 
 	o.releaseInstancePorts(id, inst)
-	o.removeInstanceFromManager(id)
+	o.instanceMgr.ForgetInstance(id)
 
 	slog.Info("instance stopped and removed", "id", id, "profile", profileName)
 	o.cleanupStoppedProfile(profileName, browser)
@@ -235,13 +235,6 @@ func (o *Orchestrator) releaseInstancePorts(id string, inst *InstanceInternal) {
 	if inst.cdpPort > 0 {
 		o.ports().ReleasePort(inst.cdpPort)
 		slog.Debug("released browser debug port", "id", id, "port", inst.cdpPort)
-	}
-}
-
-func (o *Orchestrator) removeInstanceFromManager(id string) {
-	if o != nil && o.instanceMgr != nil {
-		o.instanceMgr.Locator.InvalidateInstance(id)
-		o.instanceMgr.Repo.Remove(id)
 	}
 }
 

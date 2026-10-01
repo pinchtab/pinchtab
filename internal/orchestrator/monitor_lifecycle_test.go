@@ -60,10 +60,10 @@ func TestShutdownStopsAndJoinsStartupMonitors(t *testing.T) {
 }
 
 // Shutdown is reachable more than once (an explicit call plus a signal handler),
-// and on an Orchestrator built as a bare struct literal, which several tests in
-// this package do. Neither may panic on the nil channel.
+// and on an Orchestrator whose shutdown channel was never made. Neither may panic
+// on the nil channel.
 func TestSignalShutdownIsIdempotentAndNilSafe(t *testing.T) {
-	bare := &Orchestrator{}
+	bare := withInstanceManager(&Orchestrator{})
 	if bare.shuttingDown() {
 		t.Fatal("a fresh orchestrator reports itself shutting down")
 	}

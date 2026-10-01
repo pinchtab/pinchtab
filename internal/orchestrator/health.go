@@ -166,7 +166,7 @@ func (o *Orchestrator) applyStartupOutcome(inst *InstanceInternal, p startupProb
 	}
 	// The repository holds a snapshot, so every status transition must re-sync;
 	// error and timeout outcomes used to reach it only by sharing this struct.
-	o.syncInstanceToManager(&inst.Instance)
+	o.instanceMgr.TrackInstance(&inst.Instance)
 	instCopy := inst.Instance
 	o.mu.Unlock()
 	if eventType != "" {
@@ -191,7 +191,7 @@ func (o *Orchestrator) finalizeInstanceExit(inst *InstanceInternal, p startupPro
 	if inst.Status == bridge.InstanceRunning || inst.Status == bridge.InstanceStopping {
 		inst.Status = bridge.InstanceStopped
 		wasStopped = true
-		o.syncInstanceToManager(&inst.Instance)
+		o.instanceMgr.TrackInstance(&inst.Instance)
 	}
 	instCopy := inst.Instance
 	o.mu.Unlock()

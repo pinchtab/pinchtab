@@ -1334,7 +1334,7 @@ func TestCleanupStoppedProfile_EmptyBrowserStillRunsCleanupHook(t *testing.T) {
 		})
 	})
 
-	o := &Orchestrator{baseDir: t.TempDir()}
+	o := withInstanceManager(&Orchestrator{baseDir: t.TempDir()})
 	o.cleanupStoppedProfile("prof-x", "")
 	if len(swept) != 1 {
 		t.Fatalf("cleanup hook not invoked for empty browser + nil runtimeCfg: %v", swept)

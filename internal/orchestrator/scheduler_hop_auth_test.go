@@ -11,7 +11,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/handlers"
-	"github.com/pinchtab/pinchtab/internal/instance"
 	"github.com/pinchtab/pinchtab/internal/scheduler"
 )
 
@@ -54,11 +53,10 @@ func TestSchedulerActionRecordsAsSchedulerThroughRealIngress(t *testing.T) {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	})
 
-	o := &Orchestrator{
+	o := withInstanceManager(&Orchestrator{
 		internalToken: "orch-generated-token",
 		instances:     map[string]*InstanceInternal{},
-		instanceMgr:   instance.NewManager(nil),
-	}
+	})
 	srv := httptest.NewServer(
 		handlers.TrustedInternalProxyStripMiddleware(o.internalToken)(
 			activity.Middleware(rec, "fallback", final)))
@@ -69,8 +67,8 @@ func TestSchedulerActionRecordsAsSchedulerThroughRealIngress(t *testing.T) {
 		t.Fatal(err)
 	}
 	inst := &bridge.Instance{ID: "inst-1", Port: parsed.Port(), Status: "running"}
-	o.instanceMgr.Repo.Add(inst)
-	o.instanceMgr.Locator.Register("tab-42", "inst-1")
+	o.instanceMgr.TrackInstance(inst)
+	o.instanceMgr.RememberTab("tab-42", "inst-1")
 	o.instances["inst-1"] = &InstanceInternal{Instance: *inst}
 
 	exec := scheduler.NewActionExecutor(o)

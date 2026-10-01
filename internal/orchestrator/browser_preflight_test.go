@@ -81,7 +81,7 @@ func TestBrowserUnavailableReason(t *testing.T) {
 	})
 
 	t.Run("nil config is safe", func(t *testing.T) {
-		o := &Orchestrator{}
+		o := withInstanceManager(&Orchestrator{})
 		if _, unavailable := o.BrowserUnavailableReason(req("/text")); unavailable {
 			t.Error("nil runtimeCfg must not report unavailable")
 		}
