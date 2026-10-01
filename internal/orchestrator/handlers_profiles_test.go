@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -125,6 +126,51 @@ func TestHandleProfileInstanceDistinguishesMissingFromStopped(t *testing.T) {
 			}
 			if !tc.wantExists && (!strings.Contains(body.Message, "does not exist") || !strings.Contains(body.Message, "human setup step")) {
 				t.Fatalf("missing-profile message does not stop an agent retry loop: %q", body.Message)
+			}
+		})
+	}
+}
+
+func TestHandleProfileInstanceReportsEveryStateThatHoldsTheProfile(t *testing.T) {
+	baseDir := t.TempDir()
+	o := NewOrchestratorWithRunner(baseDir, &mockRunner{portAvail: true})
+	pm := profiles.NewProfileManager(baseDir)
+	for _, name := range []string{"idle", "busy", "closing"} {
+		if err := pm.CreateWithMeta(name, profiles.ProfileMeta{}); err != nil {
+			t.Fatalf("CreateWithMeta(%s): %v", name, err)
+		}
+	}
+	o.profiles = pm
+	for id, profile := range map[string]struct {
+		name   string
+		status bridge.InstanceStatus
+		port   string
+	}{
+		"inst_busy":    {"busy", bridge.InstanceRunning, "9901"},
+		"inst_closing": {"closing", bridge.InstanceStopping, "9902"},
+	} {
+		registerInstance(o, id, profile.status, "chrome", time.Now())
+		o.instances[id].ProfileName = profile.name
+		o.instances[id].Port = profile.port
+		o.instances[id].cmd = nil
+	}
+
+	for _, tc := range []struct {
+		id   string
+		want string
+	}{
+		{"idle", `{"exists":true,"name":"idle","port":"","running":false,"status":"stopped"}`},
+		{"missing", `{"exists":false,"message":"Profile \"missing\" does not exist. Creating and authenticating a reusable profile is a human setup step.","name":"missing","port":"","running":false,"status":"missing"}`},
+		{"busy", `{"exists":true,"id":"inst_busy","name":"busy","port":"9901","running":true,"status":"running"}`},
+		{"closing", `{"exists":true,"id":"inst_closing","name":"closing","port":"9902","running":false,"status":"stopping"}`},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/profiles/"+tc.id+"/instance", nil)
+			req.SetPathValue("id", tc.id)
+			w := httptest.NewRecorder()
+			o.handleProfileInstance(w, req)
+			if got := strings.TrimSpace(w.Body.String()); got != tc.want {
+				t.Fatalf("body =\n%s\nwant\n%s", got, tc.want)
 			}
 		})
 	}

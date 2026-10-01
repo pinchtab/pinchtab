@@ -73,40 +73,42 @@ func (o *Orchestrator) handleStopByID(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, 200, map[string]string{"status": "stopped", "id": id, "name": name})
 }
 
+type profileInstanceResponse struct {
+	Exists  bool                  `json:"exists"`
+	ID      string                `json:"id,omitempty"`
+	Message string                `json:"message,omitempty"`
+	Name    string                `json:"name"`
+	Port    string                `json:"port"`
+	Running bool                  `json:"running"`
+	Status  bridge.InstanceStatus `json:"status"`
+}
+
+const profileMissingStatus bridge.InstanceStatus = "missing"
+
 func (o *Orchestrator) handleProfileInstance(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	name, err := o.resolveProfileName(id)
 	if err != nil {
-		httpx.JSON(w, 200, map[string]any{
-			"name":    id,
-			"exists":  false,
-			"running": false,
-			"status":  "missing",
-			"port":    "",
-			"message": fmt.Sprintf("Profile %q does not exist. Creating and authenticating a reusable profile is a human setup step.", id),
+		httpx.JSON(w, 200, profileInstanceResponse{
+			Name:    id,
+			Status:  profileMissingStatus,
+			Message: fmt.Sprintf("Profile %q does not exist. Creating and authenticating a reusable profile is a human setup step.", id),
 		})
 		return
 	}
 
-	instances := o.List()
-	for _, inst := range instances {
-		if inst.ProfileName == name && (inst.Status == bridge.InstanceRunning || inst.Status == bridge.InstanceStarting) {
-			httpx.JSON(w, 200, map[string]any{
-				"name":    name,
-				"exists":  true,
-				"running": inst.Status == bridge.InstanceRunning,
-				"status":  inst.Status,
-				"port":    inst.Port,
-				"id":      inst.ID,
+	for _, inst := range o.List() {
+		if inst.ProfileName == name && inst.Status.IsActive() {
+			httpx.JSON(w, 200, profileInstanceResponse{
+				Exists:  true,
+				ID:      inst.ID,
+				Name:    name,
+				Port:    inst.Port,
+				Running: inst.Status == bridge.InstanceRunning,
+				Status:  inst.Status,
 			})
 			return
 		}
 	}
-	httpx.JSON(w, 200, map[string]any{
-		"name":    name,
-		"exists":  true,
-		"running": false,
-		"status":  "stopped",
-		"port":    "",
-	})
+	httpx.JSON(w, 200, profileInstanceResponse{Exists: true, Name: name, Status: bridge.InstanceStopped})
 }
