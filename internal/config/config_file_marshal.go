@@ -217,7 +217,6 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 		},
 		MultiInstance: multiInstanceConfigJSON{
 			Strategy:          fc.MultiInstance.Strategy,
-			AllocationPolicy:  fc.MultiInstance.AllocationPolicy,
 			InstancePortStart: fc.MultiInstance.InstancePortStart,
 			InstancePortEnd:   fc.MultiInstance.InstancePortEnd,
 			Restart:           fc.MultiInstance.Restart,
@@ -452,7 +451,6 @@ func profilesConfigFromRuntime(cfg *RuntimeConfig) ProfilesConfig {
 func multiInstanceConfigFromRuntime(cfg *RuntimeConfig) MultiInstanceConfig {
 	return MultiInstanceConfig{
 		Strategy:          cfg.Strategy,
-		AllocationPolicy:  cfg.AllocationPolicy,
 		InstancePortStart: new(cfg.InstancePortStart),
 		InstancePortEnd:   new(cfg.InstancePortEnd),
 		Restart: MultiInstanceRestartConfig{

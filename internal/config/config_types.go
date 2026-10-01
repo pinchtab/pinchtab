@@ -115,7 +115,6 @@ type RuntimeConfig struct {
 
 	// Orchestrator settings (dashboard mode only)
 	Strategy           string        // "always-on" (default), "simple", "explicit", or "simple-autorestart"
-	AllocationPolicy   string        // "fcfs" (default), "round_robin", "random"
 	RestartMaxRestarts int           // Max restart attempts for restart-managed strategies (-1 = unlimited, 0 = strategy default)
 	RestartInitBackoff time.Duration // Initial restart backoff (0 = strategy default)
 	RestartMaxBackoff  time.Duration // Maximum restart backoff cap (0 = strategy default)
@@ -499,7 +498,6 @@ func (s SecurityConfig) MarshalJSON() ([]byte, error) {
 
 type MultiInstanceConfig struct {
 	Strategy          string                     `json:"strategy,omitempty"`
-	AllocationPolicy  string                     `json:"allocationPolicy,omitempty"`
 	InstancePortStart *int                       `json:"instancePortStart,omitempty"`
 	InstancePortEnd   *int                       `json:"instancePortEnd,omitempty"`
 	Restart           MultiInstanceRestartConfig `json:"restart"`

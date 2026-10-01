@@ -241,7 +241,6 @@ pinchtab pdf --tab <id> -o page.pdf
 `pinchtab config` prints a read-only overview:
 
 - `multiInstance.strategy`
-- `multiInstance.allocationPolicy`
 - `instanceDefaults.stealthLevel`
 - `instanceDefaults.tabEvictionPolicy`
 - `instanceDefaults.tabPolicy.lifecycle`

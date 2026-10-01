@@ -50,7 +50,6 @@ var censusValueFor = map[string]string{
 	"instanceDefaults.tabPolicy.eviction":  "reject",
 	"instanceDefaults.tabPolicy.lifecycle": "close_idle",
 	"multiInstance.strategy":               "explicit",
-	"multiInstance.allocationPolicy":       "round_robin",
 	"scheduler.strategy":                   "fair-fifo",
 	"security.attach.allowSchemes":         "wss",
 	"security.attach.allowHosts":           "10.0.0.1",

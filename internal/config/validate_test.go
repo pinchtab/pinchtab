@@ -33,8 +33,7 @@ func TestValidateFileConfig_Valid(t *testing.T) {
 			TabEvictionPolicy: "reject",
 		},
 		MultiInstance: MultiInstanceConfig{
-			Strategy:         "simple",
-			AllocationPolicy: "fcfs",
+			Strategy: "simple",
 			Restart: MultiInstanceRestartConfig{
 				MaxRestarts:    new(20),
 				InitBackoffSec: new(2),
@@ -254,31 +253,6 @@ func TestValidateFileConfig_InvalidStrategy(t *testing.T) {
 	}
 }
 
-func TestValidateFileConfig_InvalidAllocationPolicy(t *testing.T) {
-	tests := []struct {
-		policy  string
-		wantErr bool
-	}{
-		{"fcfs", false},
-		{"round_robin", false},
-		{"random", false},
-		{"", false},
-		{"fifo", true},
-		{"roundrobin", true}, // underscore required
-	}
-
-	for _, tt := range tests {
-		fc := &FileConfig{
-			MultiInstance: MultiInstanceConfig{AllocationPolicy: tt.policy},
-		}
-		errs := ValidateFileConfig(fc)
-		hasErr := len(errs) > 0
-		if hasErr != tt.wantErr {
-			t.Errorf("allocationPolicy=%q: got error=%v, want error=%v", tt.policy, hasErr, tt.wantErr)
-		}
-	}
-}
-
 func TestValidateFileConfig_InvalidAttachScheme(t *testing.T) {
 	tests := []struct {
 		schemes []string
@@ -417,8 +391,7 @@ func TestValidateFileConfig_MultipleErrors(t *testing.T) {
 			TabEvictionPolicy: "delete_oldest", // invalid
 		},
 		MultiInstance: MultiInstanceConfig{
-			Strategy:         "magical",  // invalid
-			AllocationPolicy: "balanced", // invalid
+			Strategy: "magical", // invalid
 		},
 	}
 
@@ -633,12 +606,6 @@ func TestValidEnumValues(t *testing.T) {
 		}
 	}
 
-	for _, policy := range allocationPolicies {
-		if !isValidAllocationPolicy(policy) {
-			t.Errorf("AllocationPolicies contains %q but isValidAllocationPolicy returns false", policy)
-		}
-	}
-
 	for _, scheme := range attachSchemes {
 		if !isValidAttachScheme(scheme) {
 			t.Errorf("AttachSchemes contains %q but isValidAttachScheme returns false", scheme)
@@ -653,7 +620,7 @@ func TestValidEnumValues(t *testing.T) {
 
 	// Known-bad values must be rejected by every membership check.
 	if isValidStealthLevel("bogus") || isValidEvictionPolicy("bogus") ||
-		isValidStrategy("bogus") || isValidAllocationPolicy("bogus") ||
+		isValidStrategy("bogus") ||
 		isValidAttachScheme("bogus") || isValidLifecyclePolicy("bogus") {
 		t.Error("a bogus value was accepted by a membership check")
 	}

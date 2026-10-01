@@ -524,7 +524,6 @@ var multiInstanceRestartFields = fieldTable[MultiInstanceRestartConfig]{
 var multiInstanceFields = fieldTable[MultiInstanceConfig]{
 	fields: []fieldSpec[MultiInstanceConfig]{
 		stringField("strategy", func(o *MultiInstanceConfig) *string { return &o.Strategy }),
-		stringField("allocationPolicy", func(o *MultiInstanceConfig) *string { return &o.AllocationPolicy }),
 		intPtrField("instancePortStart", func(o *MultiInstanceConfig) **int { return &o.InstancePortStart }),
 		intPtrField("instancePortEnd", func(o *MultiInstanceConfig) **int { return &o.InstancePortEnd }),
 	},

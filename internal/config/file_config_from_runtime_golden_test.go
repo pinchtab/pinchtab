@@ -38,7 +38,7 @@ const populatedFileConfigJSON = `{
                "idpi": {"enabled": true, "strictMode": true, "scanContent": true, "wrapContent": true,
                         "customPatterns": ["ignore previous"], "scanTimeoutSec": 3, "shieldThreshold": 55}},
   "profiles": {"baseDir": "/tmp/profiles", "defaultProfile": "main", "quarantineKeep": 2},
-  "multiInstance": {"strategy": "always-on", "allocationPolicy": "round-robin", "instancePortStart": 9900, "instancePortEnd": 9950,
+  "multiInstance": {"strategy": "always-on", "instancePortStart": 9900, "instancePortEnd": 9950,
                     "restart": {"maxRestarts": 5, "initBackoffSec": 2, "maxBackoffSec": 60, "stableAfterSec": 120}},
   "timeouts": {"actionSec": 11, "navigateSec": 22, "shutdownSec": 33, "waitNavMs": 444},
   "observability": {"activity": {"enabled": true, "sessionIdleSec": 300, "retentionDays": 9,

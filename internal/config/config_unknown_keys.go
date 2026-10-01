@@ -156,12 +156,37 @@ func aliasFileConfigPaths() map[string]bool {
 	return exempt
 }
 
+// retiredFileConfigKeys are keys deliberately absent from FileConfig, the editor
+// and the schema that existing config files must still load with. A non-empty
+// advisory is reported at load; an empty one is accepted silently.
+var retiredFileConfigKeys = map[string]string{
+	"security.enableActionGuards":    "",
+	"multiInstance.allocationPolicy": "multiInstance.allocationPolicy is retired and ignored: shorthand requests go to the first running instance for the browser",
+}
+
 func acceptedUndeclaredFileConfigPaths() map[string]bool {
 	exempt := aliasFileConfigPaths()
-	// Retired in PIN-315. Existing config files must continue to load, but the
-	// key is deliberately absent from FileConfig, the editor, and the schema.
-	exempt["security.enableActionGuards"] = true
+	for key := range retiredFileConfigKeys {
+		exempt[key] = true
+	}
 	return exempt
+}
+
+// RetiredFileConfigAdvisories reports each retired key present in data that has
+// an advisory.
+func RetiredFileConfigAdvisories(data []byte) []string {
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(data, &root); err != nil {
+		return nil
+	}
+	var advisories []string
+	for _, key := range collectUnknownKeys("", root, reflect.TypeFor[FileConfig](), aliasFileConfigPaths()) {
+		if advisory := retiredFileConfigKeys[key]; advisory != "" {
+			advisories = append(advisories, advisory)
+		}
+	}
+	sort.Strings(advisories)
+	return advisories
 }
 
 func declaredPaths(prefix string, structType reflect.Type) []string {

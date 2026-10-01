@@ -149,9 +149,6 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.Strategy != "always-on" {
 		t.Errorf("default Strategy = %v, want always-on", cfg.Strategy)
 	}
-	if cfg.AllocationPolicy != "fcfs" {
-		t.Errorf("default AllocationPolicy = %v, want fcfs", cfg.AllocationPolicy)
-	}
 	if cfg.TabEvictionPolicy != "close_lru" {
 		t.Errorf("default TabEvictionPolicy = %v, want close_lru", cfg.TabEvictionPolicy)
 	}

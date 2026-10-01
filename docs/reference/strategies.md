@@ -1,16 +1,11 @@
-# Strategies And Allocation
+# Strategies
 
-PinchTab has two separate multi-instance controls:
+`multiInstance.strategy` decides which routes PinchTab exposes and how shorthand requests behave.
 
-- `multiInstance.strategy`
-- `multiInstance.allocationPolicy`
+Shorthand routes go to the earliest-started running instance of the requested (or default) browser target.
+Requests that name an instance (`/instances/{id}/...`) go to that instance.
 
-They solve different problems:
-
-```text
-strategy          = what routes PinchTab exposes and how shorthand requests behave
-allocationPolicy  = which running instance gets picked when PinchTab must choose one
-```
+`multiInstance.allocationPolicy` is retired: config files that still set it load with an advisory, and the value is ignored.
 
 ## Strategy
 
@@ -106,56 +101,12 @@ Best fit:
 - centralized routing tiers that should never spawn Chrome themselves
 - environments where the local PinchTab process must remain a pure proxy
 
-## Allocation Policy
-
-Valid policies in the current implementation:
-
-- `fcfs`
-- `round_robin`
-- `random`
-
-Allocation policy is meant for the case where PinchTab has multiple eligible running instances and needs to choose one.
-If your request already targets `/instances/{id}/...`, no allocation policy is involved for that request.
-
-**Current behavior:** the value is validated and loaded into the orchestrator's allocator, but no request path
-consults that allocator yet. Shorthand routes always go to the earliest-started running instance of the requested
-(or default) browser target, which is what `fcfs` describes, whichever policy is configured.
-
-### `fcfs`
-
-First running candidate wins.
-
-Best fit:
-
-- predictable behavior
-- simplest operational model
-- “always use the earliest running instance” workflows
-
-### `round_robin`
-
-Candidates are selected in rotation.
-
-Best fit:
-
-- light balancing across a stable pool
-- repeated shorthand-style traffic where you want even distribution over time
-
-### `random`
-
-PinchTab picks a random eligible candidate.
-
-Best fit:
-
-- looser balancing
-- experiments where deterministic ordering is not important
-
 ## Example Config
 
 ```json
 {
   "multiInstance": {
     "strategy": "explicit",
-    "allocationPolicy": "round_robin",
     "instancePortStart": 9868,
     "instancePortEnd": 9968
   }
@@ -170,7 +121,6 @@ Best fit:
 {
   "multiInstance": {
     "strategy": "always-on",
-    "allocationPolicy": "fcfs",
     "restart": {
       "maxRestarts": 20,
       "initBackoffSec": 2,
@@ -188,8 +138,7 @@ Use this when the default managed browser should be started immediately and kept
 ```json
 {
   "multiInstance": {
-    "strategy": "simple",
-    "allocationPolicy": "fcfs"
+    "strategy": "simple"
   }
 }
 ```
@@ -201,8 +150,7 @@ Use this when you want shorthand routes to feel like a single local browser serv
 ```json
 {
   "multiInstance": {
-    "strategy": "explicit",
-    "allocationPolicy": "round_robin"
+    "strategy": "explicit"
   }
 }
 ```
@@ -215,7 +163,6 @@ Use this when your client is instance-aware and you want to control lifecycle di
 {
   "multiInstance": {
     "strategy": "simple-autorestart",
-    "allocationPolicy": "fcfs",
     "restart": {
       "maxRestarts": 3,
       "initBackoffSec": 2,
@@ -236,8 +183,4 @@ simple              = on-demand shorthand auto-launch
 explicit            = most control, no shorthand auto-launch
 simple-autorestart  = one managed browser with crash recovery
 no-instance         = pure proxy/hub for remote bridges, never launches Chrome
-
-fcfs                = deterministic
-round_robin         = balanced rotation
-random              = loose distribution
 ```

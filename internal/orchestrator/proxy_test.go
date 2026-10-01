@@ -199,7 +199,7 @@ func TestRegisterHandlers_TabCloseUsesGenericProxyAndInvalidatesCache(t *testing
 		cmd:      &mockCmd{pid: 1234, isAlive: true},
 	}
 	o.instanceMgr.Repo.Add(&inst)
-	o.instanceMgr.RegisterTab("tab-close", "inst_1")
+	o.instanceMgr.Locator.Register("tab-close", "inst_1")
 
 	mux := http.NewServeMux()
 	o.RegisterHandlers(mux)
@@ -243,7 +243,7 @@ func TestProxyToURL_CloseShorthandInvalidatesCacheFromResponseHeader(t *testing.
 		cmd:      &mockCmd{pid: 1234, isAlive: true},
 	}
 	o.instanceMgr.Repo.Add(&inst)
-	o.instanceMgr.RegisterTab("tab-close", "inst_1")
+	o.instanceMgr.Locator.Register("tab-close", "inst_1")
 
 	targetURL, err := url.Parse(backend.URL + "/close")
 	if err != nil {

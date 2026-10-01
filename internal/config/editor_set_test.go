@@ -211,7 +211,6 @@ func TestSetConfigValue_MultiInstanceFields(t *testing.T) {
 		wantErr bool
 	}{
 		{"multiInstance.strategy", "explicit", func(fc *FileConfig) bool { return fc.MultiInstance.Strategy == "explicit" }, false},
-		{"multiInstance.allocationPolicy", "round_robin", func(fc *FileConfig) bool { return fc.MultiInstance.AllocationPolicy == "round_robin" }, false},
 		{"multiInstance.instancePortStart", "9900", func(fc *FileConfig) bool { return *fc.MultiInstance.InstancePortStart == 9900 }, false},
 		{"multiInstance.restart.maxRestarts", "12", func(fc *FileConfig) bool {
 			return fc.MultiInstance.Restart.MaxRestarts != nil && *fc.MultiInstance.Restart.MaxRestarts == 12

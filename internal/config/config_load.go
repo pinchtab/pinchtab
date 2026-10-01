@@ -99,10 +99,11 @@ func readAndParseConfigFile() parsedConfigFile {
 			res.UnknownKeys = keys
 			res.UnknownFields = &UnknownConfigKeysError{Keys: keys}
 		}
+		res.Advisories = RetiredFileConfigAdvisories(data)
 	}
 	if res.FC != nil {
 		res.ValidationErrs = ValidateFileConfig(res.FC)
-		res.Advisories = FileConfigAdvisories(res.FC)
+		res.Advisories = append(res.Advisories, FileConfigAdvisories(res.FC)...)
 	}
 	return res
 }
@@ -188,7 +189,6 @@ const (
 	DefaultInstancePortEnd    = 9968
 	DefaultMaxTabs            = 20
 	DefaultStrategy           = "always-on"
-	DefaultAllocationPolicy   = "fcfs"
 	DefaultRestartMaxRestarts = 20
 	DefaultRestartInitBackoff = 2 * time.Second
 	DefaultRestartMaxBackoff  = 60 * time.Second
@@ -265,7 +265,6 @@ func defaultRuntimeConfig() *RuntimeConfig {
 		WaitNavDelay:    DefaultWaitNavDelay,
 
 		Strategy:           DefaultStrategy,
-		AllocationPolicy:   DefaultAllocationPolicy,
 		RestartMaxRestarts: DefaultRestartMaxRestarts,
 		RestartInitBackoff: DefaultRestartInitBackoff,
 		RestartMaxBackoff:  DefaultRestartMaxBackoff,
@@ -767,9 +766,6 @@ func applyProfilesConfig(cfg *RuntimeConfig, p ProfilesConfig) {
 func applyMultiInstanceConfig(cfg *RuntimeConfig, m MultiInstanceConfig) {
 	if m.Strategy != "" {
 		cfg.Strategy = m.Strategy
-	}
-	if m.AllocationPolicy != "" {
-		cfg.AllocationPolicy = m.AllocationPolicy
 	}
 	if m.InstancePortStart != nil {
 		cfg.InstancePortStart = *m.InstancePortStart

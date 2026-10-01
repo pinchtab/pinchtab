@@ -24,7 +24,6 @@ func printConfigOverview(cfg *config.RuntimeConfig) {
 	_, _ = fmt.Fprintln(out, cli.StyleStdout(cli.HeadingStyle, "Config"))
 	_, _ = fmt.Fprintln(out)
 	_, _ = fmt.Fprintf(out, "  %-20s %s\n", "strategy", cli.StyleStdout(cli.ValueStyle, cfg.Strategy))
-	_, _ = fmt.Fprintf(out, "  %-20s %s\n", "allocation policy", cli.StyleStdout(cli.ValueStyle, cfg.AllocationPolicy))
 	_, _ = fmt.Fprintf(out, "  %-20s %s\n", "stealth level", cli.StyleStdout(cli.ValueStyle, cfg.StealthLevel))
 	_, _ = fmt.Fprintf(out, "  %-20s %s\n", "tab eviction", cli.StyleStdout(cli.ValueStyle, cfg.TabEvictionPolicy))
 	_, _ = fmt.Fprintf(out, "  %-20s %s\n", "tab lifecycle", cli.StyleStdout(cli.ValueStyle, formatTabLifecycle(cfg)))

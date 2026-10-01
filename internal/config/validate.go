@@ -203,12 +203,6 @@ func validateMultiInstancePolicy(mi MultiInstanceConfig) []error {
 			Message: fmt.Sprintf("invalid value %q (must be simple, explicit, simple-autorestart, or always-on)", mi.Strategy),
 		})
 	}
-	if mi.AllocationPolicy != "" && !isValidAllocationPolicy(mi.AllocationPolicy) {
-		errs = append(errs, ValidationError{
-			Field:   "multiInstance.allocationPolicy",
-			Message: fmt.Sprintf("invalid value %q (must be fcfs, round_robin, or random)", mi.AllocationPolicy),
-		})
-	}
 	return errs
 }
 
@@ -409,13 +403,12 @@ func validateCloakBrowserConfigAt(fieldPrefix string, cloak CloakBrowserConfig) 
 // isValid* membership checks and the exported Valid*() lists derive from these
 // slices so the two can't drift apart.
 var (
-	cloakPlatforms     = []string{"windows", "macos", "linux"}
-	stealthLevels      = []string{"light", "medium", "full"}
-	evictionPolicies   = []string{"reject", "close_oldest", "close_lru"}
-	lifecyclePolicies  = []string{"keep", "close_idle", "freeze_idle"}
-	strategies         = []string{"simple", "explicit", "simple-autorestart", "always-on", "no-instance"}
-	allocationPolicies = []string{"fcfs", "round_robin", "random"}
-	attachSchemes      = []string{"ws", "wss", "http", "https"}
+	cloakPlatforms    = []string{"windows", "macos", "linux"}
+	stealthLevels     = []string{"light", "medium", "full"}
+	evictionPolicies  = []string{"reject", "close_oldest", "close_lru"}
+	lifecyclePolicies = []string{"keep", "close_idle", "freeze_idle"}
+	strategies        = []string{"simple", "explicit", "simple-autorestart", "always-on", "no-instance"}
+	attachSchemes     = []string{"ws", "wss", "http", "https"}
 )
 
 func isValidCloakPlatform(platform string) bool {
@@ -440,10 +433,6 @@ func IdleTabLifecycle(policy string) bool {
 
 func isValidStrategy(strategy string) bool {
 	return slices.Contains(strategies, strategy)
-}
-
-func isValidAllocationPolicy(policy string) bool {
-	return slices.Contains(allocationPolicies, policy)
 }
 
 func isValidAttachScheme(scheme string) bool {

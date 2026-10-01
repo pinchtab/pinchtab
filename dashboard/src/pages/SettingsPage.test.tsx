@@ -43,7 +43,6 @@ const backendConfig = {
   profiles: { baseDir: "", defaultProfile: "default" },
   multiInstance: {
     strategy: "always-on",
-    allocationPolicy: "fcfs",
     restart: {},
   },
   timeouts: {

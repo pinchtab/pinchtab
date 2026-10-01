@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -215,10 +214,7 @@ func (o *Orchestrator) registerInstanceCleanupHook() {
 
 func (o *Orchestrator) initInstanceManager() {
 	bridgeClient := instance.NewBridgeClientWithAuth(o.authorizeInstanceRequest)
-	o.instanceMgr = instance.NewManager(
-		&orchestratorLauncher{orch: o},
-		bridgeClient,
-	)
+	o.instanceMgr = instance.NewManager(bridgeClient)
 }
 
 // authorizeInstanceRequest stamps the target instance's own credential on a
@@ -294,26 +290,6 @@ func (o *Orchestrator) SetStrictCrossInstanceTab(strict bool) {
 	o.mu.Unlock()
 }
 
-func (o *Orchestrator) InstanceManager() *instance.Manager {
-	return o.instanceMgr
-}
-
-func (o *Orchestrator) SetAllocationPolicy(name string) error {
-	return o.instanceMgr.SetAllocationPolicy(name)
-}
-
-type orchestratorLauncher struct {
-	orch *Orchestrator
-}
-
-func (l *orchestratorLauncher) Launch(name, port string, headless bool) (*bridge.Instance, error) {
-	return l.orch.Launch(name, port, headless, nil)
-}
-
-func (l *orchestratorLauncher) Stop(id string) error {
-	return l.orch.Stop(id)
-}
-
 func (o *Orchestrator) syncInstanceToManager(inst *bridge.Instance) {
 	if o.instanceMgr == nil {
 		return
@@ -334,11 +310,6 @@ func (o *Orchestrator) ApplyRuntimeConfig(cfg *config.RuntimeConfig) {
 		return
 	}
 	o.SetPortRange(cfg.InstancePortStart, cfg.InstancePortEnd)
-	if cfg.AllocationPolicy != "" {
-		if err := o.SetAllocationPolicy(cfg.AllocationPolicy); err != nil {
-			slog.Warn("failed to apply allocation policy", "policy", cfg.AllocationPolicy, "err", err)
-		}
-	}
 }
 
 // LiveConfig hands out the publication point so every other holder of the runtime

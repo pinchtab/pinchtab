@@ -33,7 +33,6 @@ func TestPrintConfigOverview(t *testing.T) {
 	required := []string{
 		"Config",
 		"strategy",
-		"allocation policy",
 		"stealth level",
 		"tab eviction",
 		"file",

@@ -31,7 +31,7 @@ export const sections: Array<{
   {
     id: "orchestration",
     label: "Orchestration",
-    description: "Routing strategy, port range, and allocation policy.",
+    description: "Routing strategy, port range, and restart policy.",
   },
   {
     id: "security",

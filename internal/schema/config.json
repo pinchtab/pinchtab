@@ -686,16 +686,6 @@
           ],
           "default": "always-on"
         },
-        "allocationPolicy": {
-          "type": "string",
-          "enum": [
-            "",
-            "fcfs",
-            "round_robin",
-            "random"
-          ],
-          "default": "fcfs"
-        },
         "instancePortStart": {
           "$ref": "#/definitions/nullablePort",
           "default": 9868

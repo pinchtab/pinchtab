@@ -242,11 +242,6 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	activeStrategy.RegisterRoutes(mux)
 	stratName := activeStrategy.Name()
 
-	allocPolicy := cfg.AllocationPolicy
-	if allocPolicy == "" {
-		allocPolicy = "none"
-	}
-
 	listenStatus := "starting"
 	if cli.IsDaemonRunning() && CheckPinchTabRunning(dashPort, cfg.Token) {
 		listenStatus = "running"
@@ -259,7 +254,6 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 			ListenStatus: listenStatus,
 			PublicURL:    fmt.Sprintf("http://localhost:%s", dashPort),
 			Strategy:     stratName,
-			Allocation:   allocPolicy,
 		})
 	}
 
@@ -270,7 +264,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 		os.Exit(0)
 	}
 
-	slog.Info("orchestration", "strategy", stratName, "allocation", allocPolicy)
+	slog.Info("orchestration", "strategy", stratName)
 
 	var sched *scheduler.Scheduler
 	if cfg.Scheduler.Enabled {

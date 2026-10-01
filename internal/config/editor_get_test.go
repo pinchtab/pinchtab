@@ -60,7 +60,6 @@ func TestGetConfigValue_RoundTrip(t *testing.T) {
 		{"profiles.baseDir", "/profiles", "/profiles"},
 		{"profiles.defaultProfile", "agent", "agent"},
 		{"multiInstance.strategy", "explicit", "explicit"},
-		{"multiInstance.allocationPolicy", "round_robin", "round_robin"},
 		{"multiInstance.instancePortStart", "9900", "9900"},
 		{"multiInstance.instancePortEnd", "9950", "9950"},
 		{"multiInstance.restart.maxRestarts", "12", "12"},

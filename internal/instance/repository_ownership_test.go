@@ -8,12 +8,12 @@ import (
 	"github.com/pinchtab/pinchtab/internal/instance"
 )
 
-// Get/List/Running all return copies, so the repository is meant to own its
-// instances. Add and Launch stored the caller's pointer instead, and the
+// Get and Running return copies, so the repository is meant to own its
+// instances. Add used to store the caller's pointer instead, and the
 // orchestrator keeps mutating that struct under its own lock — two unrelated
 // mutexes over the same memory.
 func TestRepositoryDoesNotAliasAddedInstance(t *testing.T) {
-	repo := instance.NewRepository(newMockLauncher())
+	repo := instance.NewRepository()
 
 	inst := &bridgepkg.Instance{ID: "inst_1", Port: "9001", Status: "running"}
 	repo.Add(inst)
@@ -31,7 +31,6 @@ func TestRepositoryDoesNotAliasAddedInstance(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < 500; i++ {
 			_ = repo.Running()
-			_ = repo.List()
 		}
 	}()
 	wg.Wait()
@@ -40,7 +39,7 @@ func TestRepositoryDoesNotAliasAddedInstance(t *testing.T) {
 // A snapshot taken through Add must not change when the caller mutates the
 // struct it handed over.
 func TestRepositoryAddSnapshotsInstance(t *testing.T) {
-	repo := instance.NewRepository(newMockLauncher())
+	repo := instance.NewRepository()
 
 	inst := &bridgepkg.Instance{ID: "inst_1", Port: "9001", Status: "running"}
 	repo.Add(inst)

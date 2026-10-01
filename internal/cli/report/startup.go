@@ -18,7 +18,6 @@ type StartupBannerOptions struct {
 	ListenStatus string
 	PublicURL    string
 	Strategy     string
-	Allocation   string
 	ProfileDir   string
 }
 
@@ -39,8 +38,7 @@ func PrintStartupBanner(cfg *config.RuntimeConfig, opts StartupBannerOptions) {
 		writeBannerf("  %s  %s\n", styleLabel("url"), styleValue(opts.PublicURL))
 	}
 	strat := blankIfEmpty(opts.Strategy, "manual")
-	alloc := blankIfEmpty(opts.Allocation, "none")
-	writeBannerf("  %s  %s\n", styleLabel("str,plc"), styleValue(fmt.Sprintf("%s,%s", strat, alloc)))
+	writeBannerf("  %s  %s\n", styleLabel("strategy"), styleValue(strat))
 
 	daemonStatus := styleStdout(warningStyle, "not installed")
 	if IsDaemonInstalled() {

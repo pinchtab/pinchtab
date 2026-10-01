@@ -12,15 +12,9 @@ import (
 // on its own, and pages call window.close(). Those entries are never
 // invalidated, so the cache only ever grows. RefreshAll is the reconciler.
 func TestLocatorRefreshAllDropsTabsClosedOutOfBand(t *testing.T) {
-	launcher := newMockLauncher()
-	repo := instance.NewRepository(launcher)
+	repo := instance.NewRepository()
 	fetcher := newMockFetcher()
-
-	inst, err := launcher.Launch("p", "9001", true)
-	if err != nil {
-		t.Fatalf("Launch: %v", err)
-	}
-	repo.Add(inst)
+	addRunning(repo, "p", "9001")
 
 	for _, tabID := range []string{"tab-1", "tab-2", "tab-3"} {
 		fetcher.AddTab("9001", tabID, "https://example.com")

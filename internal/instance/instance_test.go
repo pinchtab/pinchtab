@@ -6,39 +6,19 @@ import (
 
 	bridgepkg "github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/instance"
-	"github.com/pinchtab/pinchtab/internal/instance/allocation"
 )
 
-type mockLauncher struct {
-	instances map[string]*bridgepkg.Instance
-	nextID    int
-	stopErr   error
-}
-
-func newMockLauncher() *mockLauncher {
-	return &mockLauncher{instances: make(map[string]*bridgepkg.Instance)}
-}
-
-func (m *mockLauncher) Launch(name, port string, headless bool) (*bridgepkg.Instance, error) {
-	m.nextID++
+func addRunning(repo *instance.Repository, name, port string) *bridgepkg.Instance {
 	inst := &bridgepkg.Instance{
-		ID:          fmt.Sprintf("inst_%d", m.nextID),
+		ID:          "inst_" + port,
 		ProfileName: name,
 		Port:        port,
 		URL:         "http://localhost:" + port,
-		Headless:    headless,
+		Headless:    true,
 		Status:      "running",
 	}
-	m.instances[inst.ID] = inst
-	return inst, nil
-}
-
-func (m *mockLauncher) Stop(id string) error {
-	if m.stopErr != nil {
-		return m.stopErr
-	}
-	delete(m.instances, id)
-	return nil
+	repo.Add(inst)
+	return inst
 }
 
 type mockFetcher struct {
@@ -71,49 +51,29 @@ func (f *mockFetcher) AddTabForURL(instanceURL, tabID, url string) {
 	})
 }
 
-func TestRepository_LaunchAndGet(t *testing.T) {
-	launcher := newMockLauncher()
-	repo := instance.NewRepository(launcher)
-
-	inst, err := repo.Launch("default", "9868", true)
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestRepository_AddGetAndRemove(t *testing.T) {
+	repo := instance.NewRepository()
+	inst := addRunning(repo, "default", "9868")
 
 	got, ok := repo.Get(inst.ID)
 	if !ok {
-		t.Fatal("instance not found after launch")
+		t.Fatal("instance not found after add")
 	}
 	if got.ProfileName != "default" {
 		t.Errorf("expected profile default, got %s", got.ProfileName)
 	}
-	if repo.Count() != 1 {
-		t.Errorf("expected count 1, got %d", repo.Count())
-	}
-}
 
-func TestRepository_StopRemovesInstance(t *testing.T) {
-	launcher := newMockLauncher()
-	repo := instance.NewRepository(launcher)
-
-	inst, _ := repo.Launch("default", "9868", true)
-	if err := repo.Stop(inst.ID); err != nil {
-		t.Fatal(err)
-	}
+	repo.Remove(inst.ID)
 	if _, ok := repo.Get(inst.ID); ok {
-		t.Error("instance should be gone after stop")
-	}
-	if repo.Count() != 0 {
-		t.Errorf("expected count 0, got %d", repo.Count())
+		t.Error("instance should be gone after remove")
 	}
 }
 
 func TestRepository_Running_FiltersNonRunning(t *testing.T) {
-	launcher := newMockLauncher()
-	repo := instance.NewRepository(launcher)
+	repo := instance.NewRepository()
 
-	inst1, _ := repo.Launch("prof1", "9868", true)
-	_, _ = repo.Launch("prof2", "9869", true)
+	inst1 := addRunning(repo, "prof1", "9868")
+	addRunning(repo, "prof2", "9869")
 
 	stopped := *inst1
 	stopped.Status = "stopped"
@@ -126,12 +86,11 @@ func TestRepository_Running_FiltersNonRunning(t *testing.T) {
 }
 
 func TestLocator_CacheHit(t *testing.T) {
-	launcher := newMockLauncher()
 	fetcher := newMockFetcher()
-	repo := instance.NewRepository(launcher)
+	repo := instance.NewRepository()
 	locator := instance.NewLocator(repo, fetcher)
 
-	inst, _ := repo.Launch("default", "9868", true)
+	inst := addRunning(repo, "default", "9868")
 
 	locator.Register("tab_abc", inst.ID)
 
@@ -145,12 +104,11 @@ func TestLocator_CacheHit(t *testing.T) {
 }
 
 func TestLocator_CacheMiss_QueriesBridges(t *testing.T) {
-	launcher := newMockLauncher()
 	fetcher := newMockFetcher()
-	repo := instance.NewRepository(launcher)
+	repo := instance.NewRepository()
 	locator := instance.NewLocator(repo, fetcher)
 
-	inst, _ := repo.Launch("default", "9868", true)
+	inst := addRunning(repo, "default", "9868")
 
 	fetcher.AddTab("9868", "tab_xyz", "https://pinchtab.com")
 
@@ -168,12 +126,11 @@ func TestLocator_CacheMiss_QueriesBridges(t *testing.T) {
 }
 
 func TestLocator_TabNotFound(t *testing.T) {
-	launcher := newMockLauncher()
 	fetcher := newMockFetcher()
-	repo := instance.NewRepository(launcher)
+	repo := instance.NewRepository()
 	locator := instance.NewLocator(repo, fetcher)
 
-	_, _ = repo.Launch("default", "9868", true)
+	addRunning(repo, "default", "9868")
 	fetcher.AddTab("9868", "tab_abc", "https://pinchtab.com")
 
 	_, err := locator.FindInstanceByTabID("nonexistent")
@@ -183,12 +140,11 @@ func TestLocator_TabNotFound(t *testing.T) {
 }
 
 func TestLocator_UsesInstanceURLWhenPresent(t *testing.T) {
-	launcher := newMockLauncher()
 	fetcher := newMockFetcher()
-	repo := instance.NewRepository(launcher)
+	repo := instance.NewRepository()
 	locator := instance.NewLocator(repo, fetcher)
 
-	inst, _ := repo.Launch("remote", "9868", true)
+	inst := addRunning(repo, "remote", "9868")
 	inst.URL = "https://bridge.example.com:9868"
 	repo.Add(inst)
 	fetcher.AddTabForURL("https://bridge.example.com:9868", "tab_remote", "https://pinchtab.com")
@@ -203,12 +159,11 @@ func TestLocator_UsesInstanceURLWhenPresent(t *testing.T) {
 }
 
 func TestLocator_InvalidateRemovesCacheEntry(t *testing.T) {
-	launcher := newMockLauncher()
 	fetcher := newMockFetcher()
-	repo := instance.NewRepository(launcher)
+	repo := instance.NewRepository()
 	locator := instance.NewLocator(repo, fetcher)
 
-	inst, _ := repo.Launch("default", "9868", true)
+	inst := addRunning(repo, "default", "9868")
 	locator.Register("tab_abc", inst.ID)
 
 	if locator.CacheSize() != 1 {
@@ -222,12 +177,11 @@ func TestLocator_InvalidateRemovesCacheEntry(t *testing.T) {
 }
 
 func TestLocator_InvalidateInstance_RemovesAllTabs(t *testing.T) {
-	launcher := newMockLauncher()
 	fetcher := newMockFetcher()
-	repo := instance.NewRepository(launcher)
+	repo := instance.NewRepository()
 	locator := instance.NewLocator(repo, fetcher)
 
-	inst, _ := repo.Launch("default", "9868", true)
+	inst := addRunning(repo, "default", "9868")
 	locator.Register("tab_1", inst.ID)
 	locator.Register("tab_2", inst.ID)
 	locator.Register("tab_3", inst.ID)
@@ -239,12 +193,11 @@ func TestLocator_InvalidateInstance_RemovesAllTabs(t *testing.T) {
 }
 
 func TestLocator_StaleCache_InstanceGone(t *testing.T) {
-	launcher := newMockLauncher()
 	fetcher := newMockFetcher()
-	repo := instance.NewRepository(launcher)
+	repo := instance.NewRepository()
 	locator := instance.NewLocator(repo, fetcher)
 
-	inst, _ := repo.Launch("default", "9868", true)
+	inst := addRunning(repo, "default", "9868")
 	locator.Register("tab_abc", inst.ID)
 
 	// Remove instance from repo (simulates crash/stop).
@@ -257,128 +210,22 @@ func TestLocator_StaleCache_InstanceGone(t *testing.T) {
 	}
 }
 
-func TestAllocator_FCFS(t *testing.T) {
-	launcher := newMockLauncher()
-	repo := instance.NewRepository(launcher)
-	policy := &allocation.FCFS{}
-	alloc := instance.NewAllocator(repo, policy)
+func TestManager_FindsAndInvalidatesTabsThroughTheLocator(t *testing.T) {
+	mgr := instance.NewManager(newMockFetcher())
 
-	_, _ = repo.Launch("prof1", "9868", true)
+	inst := addRunning(mgr.Repo, "default", "9868")
+	mgr.Locator.Register("tab_abc", inst.ID)
 
-	got, err := alloc.Allocate()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.ProfileName != "prof1" {
-		t.Errorf("expected prof1, got %s", got.ProfileName)
-	}
-}
-
-func TestAllocator_RoundRobin(t *testing.T) {
-	launcher := newMockLauncher()
-	repo := instance.NewRepository(launcher)
-	policy := allocation.NewRoundRobin()
-	alloc := instance.NewAllocator(repo, policy)
-
-	_, _ = repo.Launch("prof1", "9868", true)
-	_, _ = repo.Launch("prof2", "9869", true)
-
-	// RoundRobin should cycle. Exact order depends on map iteration,
-	// but each allocation should succeed.
-	for range 4 {
-		_, err := alloc.Allocate()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
-func TestAllocator_NoRunningInstances(t *testing.T) {
-	launcher := newMockLauncher()
-	repo := instance.NewRepository(launcher)
-	alloc := instance.NewAllocator(repo, &allocation.FCFS{})
-
-	_, err := alloc.Allocate()
-	if err == nil {
-		t.Error("expected error with no running instances")
-	}
-}
-
-func TestManager_DelegatesToComponents(t *testing.T) {
-	launcher := newMockLauncher()
-	fetcher := newMockFetcher()
-	mgr := instance.NewManager(launcher, fetcher)
-
-	inst, err := mgr.Launch("default", "9868", true)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	got, ok := mgr.Get(inst.ID)
-	if !ok || got.ID != inst.ID {
-		t.Error("Get should delegate to repo")
-	}
-
-	list := mgr.List()
-	if len(list) != 1 {
-		t.Errorf("expected 1 instance, got %d", len(list))
-	}
-
-	mgr.RegisterTab("tab_abc", inst.ID)
 	found, err := mgr.FindInstanceByTabID("tab_abc")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if found.ID != inst.ID {
-		t.Error("FindInstanceByTabID should delegate to locator")
+		t.Errorf("found instance %q, want %q", found.ID, inst.ID)
 	}
 
-	alloc, err := mgr.Allocate()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if alloc.ProfileName != "default" {
-		t.Error("Allocate should delegate to allocator")
-	}
-
-	if err := mgr.Stop(inst.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := mgr.Get(inst.ID); ok {
-		t.Error("instance should be gone after stop")
-	}
-}
-
-func TestManager_StopInvalidatesTabCache(t *testing.T) {
-	launcher := newMockLauncher()
-	fetcher := newMockFetcher()
-	mgr := instance.NewManager(launcher, fetcher)
-
-	inst, _ := mgr.Launch("default", "9868", true)
-	mgr.RegisterTab("tab_1", inst.ID)
-	mgr.RegisterTab("tab_2", inst.ID)
-
-	_ = mgr.Stop(inst.ID)
-
-	_, err := mgr.FindInstanceByTabID("tab_1")
-	if err == nil {
-		t.Error("expected error: tab cache should be invalidated after stop")
-	}
-}
-
-func TestManager_SetAllocationPolicy(t *testing.T) {
-	launcher := newMockLauncher()
-	fetcher := newMockFetcher()
-	mgr := instance.NewManager(launcher, fetcher)
-
-	if err := mgr.SetAllocationPolicy("round_robin"); err != nil {
-		t.Fatalf("SetAllocationPolicy returned error: %v", err)
-	}
-	if got := mgr.Allocator.Policy().Name(); got != "round_robin" {
-		t.Fatalf("expected round_robin policy, got %q", got)
-	}
-
-	if err := mgr.SetAllocationPolicy("does_not_exist"); err == nil {
-		t.Fatal("expected error for unknown policy")
+	mgr.InvalidateTab("tab_abc")
+	if got := mgr.Locator.CacheSize(); got != 0 {
+		t.Errorf("cache size after invalidate = %d, want 0", got)
 	}
 }

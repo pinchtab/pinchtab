@@ -57,7 +57,7 @@ func TestSchedulerActionRecordsAsSchedulerThroughRealIngress(t *testing.T) {
 	o := &Orchestrator{
 		internalToken: "orch-generated-token",
 		instances:     map[string]*InstanceInternal{},
-		instanceMgr:   instance.NewManager(nil, nil),
+		instanceMgr:   instance.NewManager(nil),
 	}
 	srv := httptest.NewServer(
 		handlers.TrustedInternalProxyStripMiddleware(o.internalToken)(

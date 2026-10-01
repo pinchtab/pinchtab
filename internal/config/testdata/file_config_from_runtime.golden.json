@@ -129,7 +129,6 @@
   },
   "multiInstance": {
     "strategy": "always-on",
-    "allocationPolicy": "round-robin",
     "instancePortStart": 9900,
     "instancePortEnd": 9950,
     "restart": {

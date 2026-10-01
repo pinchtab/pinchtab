@@ -16,7 +16,7 @@ export function OrchestrationSettingsSection({
   return (
     <SectionCard
       title="Orchestration"
-      description="Port range and allocation policy can be applied immediately for future launches. Strategy and restart-policy changes require a dashboard restart because strategy routes and lifecycle state are registered at startup."
+      description="Port range changes can be applied immediately for future launches. Strategy and restart-policy changes require a dashboard restart because strategy routes and lifecycle state are registered at startup."
     >
       <SettingRow
         label="Strategy"
@@ -49,24 +49,6 @@ export function OrchestrationSettingsSection({
           {backendConfig.multiInstance.strategy === "no-instance" &&
             "No local Chrome processes. Acts as a hub for remote bridges only."}
         </div>
-      </SettingRow>
-      <SettingRow
-        label="Allocation policy"
-        description="Determines how running instances are chosen for shorthand requests."
-      >
-        <Select
-          value={backendConfig.multiInstance.allocationPolicy}
-          onChange={(e) =>
-            updateBackendSection("multiInstance", {
-              allocationPolicy: e.target
-                .value as BackendConfig["multiInstance"]["allocationPolicy"],
-            })
-          }
-        >
-          <option value="fcfs">First available</option>
-          <option value="round_robin">Round robin</option>
-          <option value="random">Random</option>
-        </Select>
       </SettingRow>
       <SettingRow
         label="Instance port start"

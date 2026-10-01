@@ -1,38 +1,20 @@
 package instance
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 )
 
-// Repository manages the in-memory store of instances and delegates
-// process lifecycle to an InstanceLauncher (typically the Orchestrator).
+// Repository is the in-memory store of the instances the orchestrator runs.
 type Repository struct {
 	mu        sync.RWMutex
 	instances map[string]*bridge.Instance
-	launcher  InstanceLauncher
 }
 
-// NewRepository creates a Repository backed by the given launcher.
-func NewRepository(launcher InstanceLauncher) *Repository {
-	return &Repository{
-		instances: make(map[string]*bridge.Instance),
-		launcher:  launcher,
-	}
-}
-
-// Launch starts a new instance and adds it to the store.
-func (r *Repository) Launch(name, port string, headless bool) (*bridge.Instance, error) {
-	inst, err := r.launcher.Launch(name, port, headless)
-	if err != nil {
-		return nil, fmt.Errorf("launch instance: %w", err)
-	}
-	r.mu.Lock()
-	r.store(inst)
-	r.mu.Unlock()
-	return inst, nil
+// NewRepository creates an empty Repository.
+func NewRepository() *Repository {
+	return &Repository{instances: make(map[string]*bridge.Instance)}
 }
 
 // store snapshots inst so the repository owns every struct it serves. Callers
@@ -42,28 +24,6 @@ func (r *Repository) Launch(name, port string, headless bool) (*bridge.Instance,
 func (r *Repository) store(inst *bridge.Instance) {
 	snapshot := *inst
 	r.instances[inst.ID] = &snapshot
-}
-
-// Stop terminates an instance and removes it from the store.
-func (r *Repository) Stop(id string) error {
-	if err := r.launcher.Stop(id); err != nil {
-		return fmt.Errorf("stop instance %q: %w", id, err)
-	}
-	r.mu.Lock()
-	delete(r.instances, id)
-	r.mu.Unlock()
-	return nil
-}
-
-// List returns all instances. The returned slice is a snapshot.
-func (r *Repository) List() []bridge.Instance {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	out := make([]bridge.Instance, 0, len(r.instances))
-	for _, inst := range r.instances {
-		out = append(out, *inst)
-	}
-	return out
 }
 
 // Running returns only instances with status "running".
@@ -106,11 +66,4 @@ func (r *Repository) Remove(id string) {
 	r.mu.Lock()
 	delete(r.instances, id)
 	r.mu.Unlock()
-}
-
-// Count returns the number of tracked instances.
-func (r *Repository) Count() int {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return len(r.instances)
 }

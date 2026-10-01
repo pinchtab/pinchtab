@@ -2,6 +2,7 @@ package report
 
 import (
 	"fmt"
+
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -50,7 +51,6 @@ func HandleConfigShow(cfg *config.RuntimeConfig) {
 	fmt.Println()
 	fmt.Println(styleStdout(headingStyle, "Multi-Instance"))
 	fmt.Printf("  Strategy:       %s\n", cfg.Strategy)
-	fmt.Printf("  Allocation:     %s\n", cfg.AllocationPolicy)
 	fmt.Printf("  Max Restarts:   %d\n", cfg.RestartMaxRestarts)
 	fmt.Printf("  Init Backoff:   %v\n", cfg.RestartInitBackoff)
 	fmt.Printf("  Max Backoff:    %v\n", cfg.RestartMaxBackoff)

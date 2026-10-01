@@ -14,7 +14,6 @@ Prints a read-only config overview. It is not an editor; change values with
 It shows these high-signal effective settings:
 
 - `multiInstance.strategy`
-- `multiInstance.allocationPolicy`
 - `instanceDefaults.stealthLevel`
 - `instanceDefaults.tabEvictionPolicy`
 - `instanceDefaults.tabPolicy.lifecycle` (with the close delay when an idle lifecycle is on)
@@ -291,7 +290,6 @@ Current nested file-config shape:
   },
   "multiInstance": {
     "strategy": "always-on",
-    "allocationPolicy": "fcfs",
     "instancePortStart": 9868,
     "instancePortEnd": 9968,
     "restart": {
@@ -807,7 +805,6 @@ Use `pinchtab config init` to create the current nested format.
 - `instanceDefaults.maxTabs >= 1`
 - `instanceDefaults.maxParallelTabs >= 0`
 - valid `multiInstance.strategy`
-- valid `multiInstance.allocationPolicy`
 - valid `multiInstance.restart.*` values
 - valid `security.attach.allowSchemes`
 - `multiInstance.instancePortStart <= multiInstance.instancePortEnd`
@@ -832,7 +829,6 @@ Valid enum values:
 | `instanceDefaults.tabPolicy.eviction` | `reject`, `close_oldest`, `close_lru` |
 | `instanceDefaults.tabPolicy.lifecycle` | `keep`, `close_idle`, `freeze_idle` |
 | `multiInstance.strategy` | `simple`, `explicit`, `simple-autorestart`, `always-on`, `no-instance` |
-| `multiInstance.allocationPolicy` | `fcfs`, `round_robin`, `random` |
 | `security.attach.allowSchemes` | `ws`, `wss`, `http`, `https` |
 | `security.attach.forwardProxyAuth` | `true`, `false` |
 | `sessions.agent.mode` | `off`, `preferred` |

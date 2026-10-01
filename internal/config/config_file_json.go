@@ -128,7 +128,6 @@ type idpiConfigJSON struct {
 
 type multiInstanceConfigJSON struct {
 	Strategy          string                     `json:"strategy"`
-	AllocationPolicy  string                     `json:"allocationPolicy"`
 	InstancePortStart *int                       `json:"instancePortStart,omitempty"`
 	InstancePortEnd   *int                       `json:"instancePortEnd,omitempty"`
 	Restart           MultiInstanceRestartConfig `json:"restart"`

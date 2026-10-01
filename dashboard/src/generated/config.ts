@@ -149,7 +149,6 @@ export interface RuntimeConfig {
    * Orchestrator settings (dashboard mode only)
    */
   Strategy: string; // "always-on" (default), "simple", "explicit", or "simple-autorestart"
-  AllocationPolicy: string; // "fcfs" (default), "round_robin", "random"
   RestartMaxRestarts: number /* int */; // Max restart attempts for restart-managed strategies (-1 = unlimited, 0 = strategy default)
   RestartInitBackoff: any /* time.Duration */; // Initial restart backoff (0 = strategy default)
   RestartMaxBackoff: any /* time.Duration */; // Maximum restart backoff cap (0 = strategy default)
@@ -494,7 +493,6 @@ export interface SecurityConfig {
 }
 export interface MultiInstanceConfig {
   strategy?: string;
-  allocationPolicy?: string;
   instancePortStart?: number /* int */;
   instancePortEnd?: number /* int */;
   restart: MultiInstanceRestartConfig;
