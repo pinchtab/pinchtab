@@ -71,20 +71,30 @@ func sleepForNav(ctx context.Context, delay time.Duration) {
 	_ = chromedp.Run(ctx, chromedp.Sleep(delay))
 }
 
-// trustedNodeClickTimeout bounds each of the trusted CDP click and its JS
-// fallback. It is kept short so a dialog-blocked JS fallback cannot hang for
-// the whole action timeout, but 100ms proved too tight under heavy CPU
-// contention (e.g. many concurrent browser instances): a legitimate CDP click
-// could exceed it, fall back to JS, and time out there too, failing the
-// action. 250ms keeps the dialog-hang bound small while surviving contention.
-const trustedNodeClickTimeout = 250 * time.Millisecond
+// Each step of the trusted click and its JS fallback gets a quarter of the
+// action time left, clamped. The floor survives a CPU-starved renderer; the
+// quarter share and the ceiling keep a dialog-blocked fallback returning well
+// before the action timeout.
+const (
+	minClickStepBudget   = 250 * time.Millisecond
+	maxClickStepBudget   = 2500 * time.Millisecond
+	clickStepBudgetShare = 4
+)
+
+func clickStepBudget(ctx context.Context) time.Duration {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return maxClickStepBudget
+	}
+	return min(max(time.Until(deadline)/clickStepBudgetShare, minClickStepBudget), maxClickStepBudget)
+}
 
 func (p *pointerOps) clickByNodeIDWithJSFallback(ctx context.Context, nodeID int64) error {
 	return withTrustedFallback(ctx, nodeID, p.clickByNodeID, p.jsClickByBackendNode)
 }
 
 func withTrustedFallback(ctx context.Context, nodeID int64, trusted, js func(context.Context, int64) error) error {
-	trustedCtx, cancel := context.WithTimeout(ctx, trustedNodeClickTimeout)
+	trustedCtx, cancel := context.WithTimeout(ctx, clickStepBudget(ctx))
 	err := trusted(trustedCtx, nodeID)
 	cancel()
 	if err == nil {
@@ -98,9 +108,7 @@ func withTrustedFallback(ctx context.Context, nodeID int64, trusted, js func(con
 	if !errors.Is(err, context.DeadlineExceeded) {
 		return err
 	}
-	// Bounded so the JS fallback cannot hang for the full action timeout
-	// when JS execution is blocked (e.g. by an open dialog).
-	jsCtx, jsCancel := context.WithTimeout(ctx, trustedNodeClickTimeout)
+	jsCtx, jsCancel := context.WithTimeout(ctx, clickStepBudget(ctx))
 	defer jsCancel()
 	return js(jsCtx, nodeID)
 }
