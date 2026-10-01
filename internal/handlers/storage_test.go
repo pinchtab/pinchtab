@@ -334,3 +334,64 @@ func TestHandleStorageDelete_ReadsQueryWhenBodyOmitsFields(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleStorage_TypeIsParsedBeforeAnyScriptRuns(t *testing.T) {
+	tests := []struct {
+		name     string
+		method   string
+		target   string
+		body     string
+		wantCode int
+	}{
+		{name: "get unknown type", method: http.MethodGet, target: "/storage?type=bogus", wantCode: http.StatusBadRequest},
+		{name: "get miscased type", method: http.MethodGet, target: "/storage?type=Local", wantCode: http.StatusBadRequest},
+		{name: "get all", method: http.MethodGet, target: "/storage?type=all", wantCode: http.StatusOK},
+		{name: "get local", method: http.MethodGet, target: "/storage?type=local", wantCode: http.StatusOK},
+		{name: "set all", method: http.MethodPost, target: "/storage", body: `{"key":"k","value":"v","type":"all"}`, wantCode: http.StatusBadRequest},
+		{name: "set unknown type", method: http.MethodPost, target: "/storage", body: `{"key":"k","value":"v","type":"bogus"}`, wantCode: http.StatusBadRequest},
+		{name: "delete unknown type", method: http.MethodDelete, target: "/storage?type=bogus", wantCode: http.StatusBadRequest},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h := New(&mockBridge{}, &config.RuntimeConfig{AllowStateExport: true}, nil, nil, nil)
+			ran := false
+			h.evalJS = func(ctx context.Context, expr string, out *string) error {
+				ran = true
+				*out = `{"local":[],"session":[],"origin":"http://example.com"}`
+				return nil
+			}
+
+			w := httptest.NewRecorder()
+			h.HandleStorage(w, httptest.NewRequest(tc.method, tc.target, strings.NewReader(tc.body)))
+
+			if w.Code != tc.wantCode {
+				t.Fatalf("status = %d, want %d: %s", w.Code, tc.wantCode, w.Body.String())
+			}
+			if wantRan := tc.wantCode == http.StatusOK; ran != wantRan {
+				t.Fatalf("script ran = %v, want %v", ran, wantRan)
+			}
+		})
+	}
+}
+
+func TestBuildStorageGetScriptReadsOnlyTheRequestedStore(t *testing.T) {
+	for _, tc := range []struct {
+		scope       storageScope
+		wantLocal   bool
+		wantSession bool
+	}{
+		{storageLocal, true, false},
+		{storageSession, false, true},
+		{storageAll, true, true},
+	} {
+		for _, key := range []string{"", "k"} {
+			script := buildStorageGetScript(tc.scope, key)
+			if got := strings.Contains(script, "localStorage"); got != tc.wantLocal {
+				t.Errorf("scope %s key %q reads localStorage = %v, want %v", tc.scope, key, got, tc.wantLocal)
+			}
+			if got := strings.Contains(script, "sessionStorage"); got != tc.wantSession {
+				t.Errorf("scope %s key %q reads sessionStorage = %v, want %v", tc.scope, key, got, tc.wantSession)
+			}
+		}
+	}
+}

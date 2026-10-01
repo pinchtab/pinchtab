@@ -85,18 +85,22 @@ func (h *Handlers) runStorageOp(w http.ResponseWriter, r *http.Request, tabID, s
 // Gated behind CapStateExport: storage can contain auth tokens and session data.
 //
 // Query params:
-//   - type: "local", "session", or "" (both)
+//   - type: "local", "session", "all", or "" (all)
 //   - key:  optional specific key to retrieve
 func (h *Handlers) handleStorageGet(w http.ResponseWriter, r *http.Request) {
 	if !h.ensureStateExportEnabled(w) {
 		return
 	}
-	tabID := r.URL.Query().Get("tabId")
-	storageType := r.URL.Query().Get("type")
-	key := r.URL.Query().Get("key")
+	query := r.URL.Query()
+	scope, err := parseStorageScope(cmp.Or(query.Get("type"), string(storageAll)))
+	if err != nil {
+		httpx.Error(w, 400, err)
+		return
+	}
+	key := query.Get("key")
 
-	script := buildStorageGetScript(storageType, key)
-	h.runStorageOp(w, r, tabID, script, "get", "storage.read", storageType, key, guardTabLease|guardDialogBlocked|guardDomainPolicy)
+	script := buildStorageGetScript(scope, key)
+	h.runStorageOp(w, r, query.Get("tabId"), script, "get", "storage.read", string(scope), key, guardTabLease|guardDialogBlocked|guardDomainPolicy)
 }
 
 type storageSetRequest struct {
@@ -124,14 +128,13 @@ func (h *Handlers) handleStorageSet(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 400, fmt.Errorf("type is required (local or session)"))
 		return
 	}
-	if req.Type != "local" && req.Type != "session" {
-		httpx.Error(w, 400, fmt.Errorf("type must be 'local' or 'session'"))
-		return
+	scope, err := parseStorageScope(req.Type)
+	if err == nil && scope == storageAll {
+		err = fmt.Errorf("type must be 'local' or 'session' to set an item")
 	}
-
-	storageObj := "localStorage"
-	if req.Type == "session" {
-		storageObj = "sessionStorage"
+	if err != nil {
+		httpx.Error(w, 400, err)
+		return
 	}
 
 	keyJSON, _ := json.Marshal(req.Key)
@@ -144,7 +147,7 @@ func (h *Handlers) handleStorageSet(w http.ResponseWriter, r *http.Request) {
 		} catch(e) {
 			JSON.stringify({success: false, error: e.message, origin: window.location.origin});
 		}
-	`, storageObj, string(keyJSON), string(valueJSON))
+	`, storageObjects[scope], string(keyJSON), string(valueJSON))
 
 	h.runStorageOp(w, r, req.TabID, script, "set", "storage.write", req.Type, req.Key, guardTabLease|guardDialogBlocked|guardDomainPolicy|guardHandoffPause)
 }
@@ -168,151 +171,105 @@ func (h *Handlers) handleStorageDelete(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	req.TabID = cmp.Or(req.TabID, query.Get("tabId"))
 	req.Key = cmp.Or(req.Key, query.Get("key"))
-	req.Type = cmp.Or(req.Type, query.Get("type"), "all")
+	req.Type = cmp.Or(req.Type, query.Get("type"), string(storageAll))
 
-	if req.Type != "local" && req.Type != "session" && req.Type != "all" {
-		httpx.Error(w, 400, fmt.Errorf("type must be 'local', 'session', or 'all'"))
+	scope, err := parseStorageScope(req.Type)
+	if err != nil {
+		httpx.Error(w, 400, err)
 		return
 	}
-	if req.Type == "all" && req.Key != "" {
+	if scope == storageAll && req.Key != "" {
 		httpx.Error(w, 400, fmt.Errorf("key cannot be used with type=all; omit key to clear both storages"))
 		return
 	}
 
-	script := buildStorageDeleteScript(req.Type, req.Key)
+	script := buildStorageDeleteScript(scope, req.Key)
 	h.runStorageOp(w, r, req.TabID, script, "delete", "storage.delete", req.Type, req.Key, guardTabLease|guardDialogBlocked|guardDomainPolicy|guardHandoffPause)
+}
+
+type storageScope string
+
+const (
+	storageLocal   storageScope = "local"
+	storageSession storageScope = "session"
+	storageAll     storageScope = "all"
+)
+
+var storageObjects = map[storageScope]string{
+	storageLocal:   "localStorage",
+	storageSession: "sessionStorage",
+}
+
+func parseStorageScope(raw string) (storageScope, error) {
+	switch scope := storageScope(raw); scope {
+	case storageLocal, storageSession, storageAll:
+		return scope, nil
+	}
+	return "", fmt.Errorf("type must be 'local', 'session', or 'all', got %q", raw)
+}
+
+func (s storageScope) includes(store storageScope) bool {
+	return s == storageAll || s == store
 }
 
 // buildStorageGetScript builds a JS expression that reads from localStorage
 // and/or sessionStorage. Returns a JSON string with local/session/origin fields.
-func buildStorageGetScript(storageType, key string) string {
-	if key != "" {
-		keyJSON, _ := json.Marshal(key)
-		switch storageType {
-		case "local":
-			return fmt.Sprintf(`
-				(function() {
-					try {
-						var v = localStorage.getItem(%s);
-						return JSON.stringify({
-							local: v !== null ? [{key: %s, value: v}] : [],
-							session: [],
-							origin: window.location.origin
-						});
-					} catch(e) {
-						return JSON.stringify({error: e.message, local: [], session: [], origin: window.location.origin});
-					}
-				})()
-			`, string(keyJSON), string(keyJSON))
-		case "session":
-			return fmt.Sprintf(`
-				(function() {
-					try {
-						var v = sessionStorage.getItem(%s);
-						return JSON.stringify({
-							local: [],
-							session: v !== null ? [{key: %s, value: v}] : [],
-							origin: window.location.origin
-						});
-					} catch(e) {
-						return JSON.stringify({error: e.message, local: [], session: [], origin: window.location.origin});
-					}
-				})()
-			`, string(keyJSON), string(keyJSON))
-		default:
-			return fmt.Sprintf(`
-				(function() {
-					try {
-						var lv = localStorage.getItem(%s);
-						var sv = sessionStorage.getItem(%s);
-						return JSON.stringify({
-							local: lv !== null ? [{key: %s, value: lv}] : [],
-							session: sv !== null ? [{key: %s, value: sv}] : [],
-							origin: window.location.origin
-						});
-					} catch(e) {
-						return JSON.stringify({error: e.message, local: [], session: [], origin: window.location.origin});
-					}
-				})()
-			`, string(keyJSON), string(keyJSON), string(keyJSON), string(keyJSON))
+// A keyed read lets a storage error surface as the error field; a full read
+// returns whatever items it reached.
+func buildStorageGetScript(scope storageScope, key string) string {
+	read := func(store storageScope) string {
+		if !scope.includes(store) {
+			return "[]"
 		}
-	}
-
-	getAllScript := func(storageObj string) string {
+		obj := storageObjects[store]
+		if key != "" {
+			keyJSON, _ := json.Marshal(key)
+			return fmt.Sprintf(`(function(v) { return v !== null ? [{key: %s, value: v}] : []; })(%s.getItem(%s))`, keyJSON, obj, keyJSON)
+		}
 		return fmt.Sprintf(`
 			(function() {
 				var items = [];
 				try {
-					for (var i = 0; i < %s.length; i++) {
-						var k = %s.key(i);
-						items.push({key: k, value: %s.getItem(k)});
+					for (var i = 0; i < %[1]s.length; i++) {
+						var k = %[1]s.key(i);
+						items.push({key: k, value: %[1]s.getItem(k)});
 					}
 				} catch(e) {}
 				return items;
-			})()
-		`, storageObj, storageObj, storageObj)
+			})()`, obj)
 	}
-
-	switch storageType {
-	case "local":
-		return fmt.Sprintf(`
-			(function() {
-				try {
-					var local = %s;
-					return JSON.stringify({local: local, session: [], origin: window.location.origin});
-				} catch(e) {
-					return JSON.stringify({error: e.message, local: [], session: [], origin: window.location.origin});
-				}
-			})()
-		`, getAllScript("localStorage"))
-	case "session":
-		return fmt.Sprintf(`
-			(function() {
-				try {
-					var session = %s;
-					return JSON.stringify({local: [], session: session, origin: window.location.origin});
-				} catch(e) {
-					return JSON.stringify({error: e.message, local: [], session: [], origin: window.location.origin});
-				}
-			})()
-		`, getAllScript("sessionStorage"))
-	default:
-		return fmt.Sprintf(`
-			(function() {
-				try {
-					var local = %s;
-					var session = %s;
-					return JSON.stringify({local: local, session: session, origin: window.location.origin});
-				} catch(e) {
-					return JSON.stringify({error: e.message, local: [], session: [], origin: window.location.origin});
-				}
-			})()
-		`, getAllScript("localStorage"), getAllScript("sessionStorage"))
-	}
+	return fmt.Sprintf(`
+		(function() {
+			try {
+				var local = %s;
+				var session = %s;
+				return JSON.stringify({local: local, session: session, origin: window.location.origin});
+			} catch(e) {
+				return JSON.stringify({error: e.message, local: [], session: [], origin: window.location.origin});
+			}
+		})()
+	`, read(storageLocal), read(storageSession))
 }
 
 // buildStorageDeleteScript builds a JS expression that removes a specific key
 // or clears the entire storage. Supports type local, session, or all.
 // Returns a JSON string with success/origin fields.
-func buildStorageDeleteScript(storageType, key string) string {
-	if storageType == "all" {
-		return `
+func buildStorageDeleteScript(scope storageScope, key string) string {
+	if scope == storageAll {
+		return fmt.Sprintf(`
 		(function() {
 			try {
-				localStorage.clear();
-				sessionStorage.clear();
+				%s.clear();
+				%s.clear();
 				return JSON.stringify({success: true, action: "clear", type: "all", origin: window.location.origin});
 			} catch(e) {
 				return JSON.stringify({success: false, error: e.message, origin: window.location.origin});
 			}
 		})()
-	`
+	`, storageObjects[storageLocal], storageObjects[storageSession])
 	}
 
-	storageObj := "localStorage"
-	if storageType == "session" {
-		storageObj = "sessionStorage"
-	}
+	storageObj := storageObjects[scope]
 
 	if key != "" {
 		keyJSON, _ := json.Marshal(key)
