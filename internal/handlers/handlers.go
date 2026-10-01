@@ -318,10 +318,10 @@ type routeBinding struct {
 // method so the per-binding handlers can close over the receiver h.
 func (h *Handlers) bridgeBindings() []routeBinding {
 	return []routeBinding{
-		{pattern: "POST /navigate", root: h.HandleNavigate, tab: h.HandleTabNavigate, guards: guardDialogBlocked | guardHandoffPause},
-		{pattern: "POST /back", root: h.HandleBack, tab: h.HandleTabBack, guards: guardDialogBlocked | guardHandoffPause},
-		{pattern: "POST /forward", root: h.HandleForward, tab: h.HandleTabForward, guards: guardDialogBlocked | guardHandoffPause},
-		{pattern: "POST /reload", root: h.HandleReload, tab: h.HandleTabReload, guards: guardDialogBlocked | guardHandoffPause},
+		{pattern: "POST /navigate", root: h.HandleNavigate, tab: h.HandleTabNavigate, guards: guardTabLease | guardDialogBlocked | guardHandoffPause},
+		{pattern: "POST /back", root: h.HandleBack, tab: h.HandleTabBack, guards: guardTabLease | guardDialogBlocked | guardHandoffPause},
+		{pattern: "POST /forward", root: h.HandleForward, tab: h.HandleTabForward, guards: guardTabLease | guardDialogBlocked | guardHandoffPause},
+		{pattern: "POST /reload", root: h.HandleReload, tab: h.HandleTabReload, guards: guardTabLease | guardDialogBlocked | guardHandoffPause},
 		{pattern: "GET /snapshot", root: h.HandleSnapshot, tab: h.HandleTabSnapshot, guards: guardDialogBlocked | guardDomainPolicy},
 		{pattern: "GET /frame", root: h.HandleFrame, tab: h.HandleTabFrame, guards: guardNone},
 		{pattern: "POST /frame", root: h.HandleFrame, tab: h.HandleTabFrame, guards: guardNone},
@@ -344,7 +344,7 @@ func (h *Handlers) bridgeBindings() []routeBinding {
 		{pattern: "POST /pdf", root: h.HandlePDF, tab: h.HandleTabPDF, guards: guardDialogBlocked | guardDomainPolicy},
 		{pattern: "POST /action", root: h.HandleAction, tab: h.HandleTabAction, guards: guardTabLease | guardDialogBlocked | guardDomainPolicy | guardHandoffPause},
 		{pattern: "POST /actions", root: h.HandleActions, tab: h.HandleTabActions, guards: guardTabLease | guardDialogBlocked | guardDomainPolicy}, // handoff-pause enforced PER STEP inside the batch loop, not as a request gate; the dialog guard gates the request and is re-checked per step
-		{pattern: "POST /dialog", root: h.HandleDialog, tab: h.HandleTabDialog, guards: guardHandoffPause},
+		{pattern: "POST /dialog", root: h.HandleDialog, tab: h.HandleTabDialog, guards: guardTabLease | guardHandoffPause},
 		{pattern: "POST /wait", root: h.HandleWait, tab: h.HandleTabWait, guards: guardDialogBlocked | guardDomainPolicy},
 		{pattern: "POST /find", root: h.HandleFind, tab: h.HandleFind, guards: guardDialogBlocked | guardDomainPolicy},
 		{pattern: "POST /extract", root: h.HandleExtract, tab: h.HandleTabExtract, guards: guardDialogBlocked | guardDomainPolicy},
@@ -355,8 +355,8 @@ func (h *Handlers) bridgeBindings() []routeBinding {
 		{pattern: "POST /handoff", tab: h.HandleTabHandoff, tabOnly: true, guards: guardTabLease | guardDomainPolicy},
 		{pattern: "POST /resume", tab: h.HandleTabResume, tabOnly: true, guards: guardTabLease | guardDomainPolicy},
 		{pattern: "GET /handoff", tab: h.HandleTabHandoffStatus, tabOnly: true, guards: guardNone},
-		{pattern: "GET /cookies", root: h.HandleGetCookies, tab: h.HandleTabGetCookies, guards: guardDomainPolicy}, // no handoff-pause: reads the tab's cookies, changes nothing the human sees
-		{pattern: "POST /cookies", root: h.HandleSetCookies, tab: h.HandleTabSetCookies, guards: guardDomainPolicy | guardHandoffPause},
+		{pattern: "GET /cookies", root: h.HandleGetCookies, tab: h.HandleTabGetCookies, guards: guardTabLease | guardDomainPolicy}, // no handoff-pause: reads the tab's cookies, changes nothing the human sees
+		{pattern: "POST /cookies", root: h.HandleSetCookies, tab: h.HandleTabSetCookies, guards: guardTabLease | guardDomainPolicy | guardHandoffPause},
 		{pattern: "DELETE /cookies", root: h.HandleClearCookies, tab: h.HandleTabClearCookies, guards: guardNone},
 		{pattern: "GET /metrics", root: h.HandleMetrics, tab: h.HandleTabMetrics, guards: guardNone},
 		{pattern: "GET /timing", root: h.HandleTiming, tab: h.HandleTabTiming, guards: guardDialogBlocked | guardDomainPolicy},
@@ -399,17 +399,17 @@ func (h *Handlers) bridgeBindings() []routeBinding {
 		{pattern: "POST /emulation/media", root: h.HandleSetMedia, tab: h.HandleTabSetMedia, guards: guardDialogBlocked | guardDomainPolicy | guardHandoffPause},
 		{pattern: "POST /cache/clear", root: h.HandleCacheClear, guards: guardNone},
 		{pattern: "GET /cache/status", root: h.HandleCacheStatus, guards: guardNone},
-		{pattern: "POST /storage", root: h.HandleStorage, tab: h.HandleTabStorageSet, guards: guardDialogBlocked | guardDomainPolicy | guardHandoffPause},
-		{pattern: "DELETE /storage", root: h.HandleStorage, tab: h.HandleTabStorageDelete, guards: guardDialogBlocked | guardDomainPolicy | guardHandoffPause},
-		{pattern: "GET /storage", root: h.HandleStorage, tab: h.HandleTabStorageGet, guards: guardDialogBlocked | guardDomainPolicy}, // no handoff-pause: read probe; the POST/DELETE siblings carry it
-		{pattern: "GET /state", root: h.HandleStateCurrent, guards: guardDialogBlocked | guardDomainPolicy},                          // no handoff-pause: captures a snapshot, writes nothing to the tab
+		{pattern: "POST /storage", root: h.HandleStorage, tab: h.HandleTabStorageSet, guards: guardTabLease | guardDialogBlocked | guardDomainPolicy | guardHandoffPause},
+		{pattern: "DELETE /storage", root: h.HandleStorage, tab: h.HandleTabStorageDelete, guards: guardTabLease | guardDialogBlocked | guardDomainPolicy | guardHandoffPause},
+		{pattern: "GET /storage", root: h.HandleStorage, tab: h.HandleTabStorageGet, guards: guardTabLease | guardDialogBlocked | guardDomainPolicy}, // no handoff-pause: read probe; the POST/DELETE siblings carry it
+		{pattern: "GET /state", root: h.HandleStateCurrent, guards: guardDialogBlocked | guardDomainPolicy},                                          // no handoff-pause: captures a snapshot, writes nothing to the tab
 		{pattern: "GET /state/list", root: h.HandleStateList, guards: guardNone},
 		{pattern: "GET /state/show", root: h.HandleStateShow, guards: guardNone},
 		{pattern: "POST /state/save", root: h.HandleStateSave, guards: guardDialogBlocked | guardDomainPolicy}, // no handoff-pause: POST writes a file, not the tab; /state/load is the write and carries it
 		{pattern: "POST /state/load", root: h.HandleStateLoad, guards: guardDialogBlocked | guardDomainPolicy | guardHandoffPause},
 		{pattern: "DELETE /state", root: h.HandleStateDelete, guards: guardNone},
 		{pattern: "POST /state/clean", root: h.HandleStateClean, guards: guardNone},
-		{pattern: "POST /evaluate", root: h.HandleEvaluate, tab: h.HandleTabEvaluate, guards: guardDialogBlocked | guardDomainPolicy | guardHandoffPause},
+		{pattern: "POST /evaluate", root: h.HandleEvaluate, tab: h.HandleTabEvaluate, guards: guardTabLease | guardDialogBlocked | guardDomainPolicy | guardHandoffPause},
 		{pattern: "POST /macro", root: h.HandleMacro, guards: guardTabLease | guardDialogBlocked | guardDomainPolicy}, // handoff-pause enforced PER STEP inside the macro loop, not as a request gate
 		{pattern: "GET /download", root: h.HandleDownload, tab: h.HandleTabDownload, guards: guardTabLease | guardDialogBlocked | guardDomainPolicy | guardHandoffPause},
 		{pattern: "POST /upload", root: h.HandleUpload, tab: h.HandleTabUpload, guards: guardTabLease | guardDialogBlocked | guardDomainPolicy | guardHandoffPause},

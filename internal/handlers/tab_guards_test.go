@@ -184,6 +184,11 @@ func probeRoute(t *testing.T, b bridge.BridgeAPI, cfg *config.RuntimeConfig, ep 
 
 func recordProbeRoute(t *testing.T, b bridge.BridgeAPI, cfg *config.RuntimeConfig, ep routes.Endpoint) (*httptest.ResponseRecorder, bool) {
 	t.Helper()
+	return recordProbeRouteAs(t, b, cfg, ep, "")
+}
+
+func recordProbeRouteAs(t *testing.T, b bridge.BridgeAPI, cfg *config.RuntimeConfig, ep routes.Endpoint, owner string) (*httptest.ResponseRecorder, bool) {
+	t.Helper()
 
 	h := New(b, cfg, nil, nil, nil)
 	mux := http.NewServeMux()
@@ -220,6 +225,9 @@ func recordProbeRoute(t *testing.T, b bridge.BridgeAPI, cfg *config.RuntimeConfi
 		}
 		req := httptest.NewRequest(method, path, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
+		if owner != "" {
+			req.Header.Set("X-Owner", owner)
+		}
 		mux.ServeHTTP(w, req)
 	}()
 	select {
@@ -743,6 +751,54 @@ func TestDeclaredLeaseGuardMatchesTheRefusal(t *testing.T) {
 	if checked == 0 || refusals == 0 {
 		t.Fatalf("checked %d routes and saw %d lease refusals; with none observed this test cannot tell a guard from its absence", checked, refusals)
 	}
+}
+
+func TestALeasedTabRefusesEveryOtherOwnerOnLeaseGuardedRoutes(t *testing.T) {
+	guarded := 0
+	for _, row := range guardedBindings(t) {
+		if row.b.guards&guardTabLease == 0 {
+			continue
+		}
+		guarded++
+		t.Run(row.ep.Route(), func(t *testing.T) {
+			cfg := allCapabilities(t, t.TempDir())
+			b := &guardProbeBridge{currentURL: "https://allowed.example/", lockOwner: "agent-a"}
+
+			w, _ := recordProbeRouteAs(t, b, cfg, row.ep, "agent-b")
+			var resp struct {
+				Code  string `json:"code"`
+				Error string `json:"error"`
+			}
+			_ = json.Unmarshal(w.Body.Bytes(), &resp)
+			if w.Code != http.StatusLocked || resp.Code != "tab_locked" || !strings.Contains(resp.Error, "agent-a") {
+				t.Errorf("owner agent-b on a tab leased by agent-a answered %d %q %q, want 423 tab_locked naming agent-a", w.Code, resp.Code, resp.Error)
+			}
+
+			w, _ = recordProbeRouteAs(t, b, cfg, row.ep, "agent-a")
+			if w.Code == http.StatusLocked {
+				t.Errorf("the lease holder agent-a was refused with 423: %s", w.Body.String())
+			}
+		})
+	}
+	for _, route := range []string{"POST /navigate", "POST /evaluate", "GET /cookies", "POST /cookies", "GET /storage", "POST /storage", "DELETE /storage", "POST /dialog"} {
+		if !leaseDeclared(t, route) {
+			t.Errorf("%s does not declare guardTabLease; leases must stop other agents changing the tab", route)
+		}
+	}
+	if guarded == 0 {
+		t.Fatal("no binding declares guardTabLease")
+	}
+}
+
+func leaseDeclared(t *testing.T, route string) bool {
+	t.Helper()
+	for _, row := range guardedBindings(t) {
+		if row.ep.Route() == route {
+			return row.b.guards&guardTabLease != 0
+		}
+	}
+	t.Fatalf("%s is not in the route catalog", route)
+	return false
 }
 
 type leaseBatchBridge struct {

@@ -434,7 +434,7 @@ func (h *Handlers) executeNavigate(w http.ResponseWriter, r *http.Request, req n
 		WriteTabContextError(w, err, 404)
 		return
 	}
-	if _, ok := h.applyTabGuards(w, r, ctx, resolvedTabID, guardDialogBlocked|guardHandoffPause); !ok {
+	if _, ok := h.applyTabGuards(w, r, ctx, resolvedTabID, guardTabLease|guardDialogBlocked|guardHandoffPause); !ok {
 		return
 	}
 	// Navigate signals fresh work on this tab — drop any pending auto-close

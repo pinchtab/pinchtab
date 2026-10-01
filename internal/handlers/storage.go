@@ -96,7 +96,7 @@ func (h *Handlers) handleStorageGet(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
 
 	script := buildStorageGetScript(storageType, key)
-	h.runStorageOp(w, r, tabID, script, "get", "storage.read", storageType, key, guardDialogBlocked|guardDomainPolicy)
+	h.runStorageOp(w, r, tabID, script, "get", "storage.read", storageType, key, guardTabLease|guardDialogBlocked|guardDomainPolicy)
 }
 
 type storageSetRequest struct {
@@ -146,7 +146,7 @@ func (h *Handlers) handleStorageSet(w http.ResponseWriter, r *http.Request) {
 		}
 	`, storageObj, string(keyJSON), string(valueJSON))
 
-	h.runStorageOp(w, r, req.TabID, script, "set", "storage.write", req.Type, req.Key, guardDialogBlocked|guardDomainPolicy|guardHandoffPause)
+	h.runStorageOp(w, r, req.TabID, script, "set", "storage.write", req.Type, req.Key, guardTabLease|guardDialogBlocked|guardDomainPolicy|guardHandoffPause)
 }
 
 // handleStorageDelete removes a storage item or clears storage.
@@ -190,7 +190,7 @@ func (h *Handlers) handleStorageDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	script := buildStorageDeleteScript(req.Type, req.Key)
-	h.runStorageOp(w, r, req.TabID, script, "delete", "storage.delete", req.Type, req.Key, guardDialogBlocked|guardDomainPolicy|guardHandoffPause)
+	h.runStorageOp(w, r, req.TabID, script, "delete", "storage.delete", req.Type, req.Key, guardTabLease|guardDialogBlocked|guardDomainPolicy|guardHandoffPause)
 }
 
 // buildStorageGetScript builds a JS expression that reads from localStorage

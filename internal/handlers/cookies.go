@@ -29,7 +29,7 @@ func (h *Handlers) HandleGetCookies(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Query().Get("url")
 	name := r.URL.Query().Get("name")
 
-	ctx, _, ok := h.guardedTabContext(w, r, tabID, guardDomainPolicy)
+	ctx, _, ok := h.guardedTabContext(w, r, tabID, guardTabLease|guardDomainPolicy)
 	if !ok {
 		return
 	}
@@ -190,7 +190,7 @@ func (h *Handlers) HandleSetCookies(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ctx, _, ok := h.guardedTabContext(w, r, req.TabID, guardDomainPolicy|guardHandoffPause)
+	ctx, _, ok := h.guardedTabContext(w, r, req.TabID, guardTabLease|guardDomainPolicy|guardHandoffPause)
 	if !ok {
 		return
 	}

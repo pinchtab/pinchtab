@@ -308,6 +308,24 @@ conflicting owner gets `409`.
 There are also root forms at `POST /lock` and `POST /unlock`; they take the tab in the body
 as `tabId` (required).
 
+### Which endpoints honour a lease
+
+While a tab is locked, these endpoints answer `423` with code `tab_locked` to any caller
+that is not the lock owner, in both their root and `/tabs/{id}/...` forms:
+
+- navigation: `POST /navigate`, `POST /back`, `POST /forward`, `POST /reload`
+- page interaction: `POST /action`, `POST /actions`, `POST /macro`, `POST /dialog`,
+  `POST /upload`, `GET /download`, `POST /solve`, `POST /solve/{name}`
+- script and state: `POST /evaluate`, `GET`/`POST /cookies`, `GET`/`POST`/`DELETE /storage`
+- handoff: `POST /tabs/{id}/handoff`, `POST /tabs/{id}/resume`
+- network capture export: `GET /network/export`, `GET /network/export/stream`
+
+Identify the caller with the `X-Owner` header or the `owner` query parameter; `/action`,
+`/actions` and `/macro` also accept `owner` in the body. A request without an owner is
+refused too. `DELETE /cookies` is not lease-guarded: it clears every cookie in the browser,
+not one tab's. Other read endpoints (snapshot, text, screenshot and the like) stay open
+to every caller.
+
 ## Important Limits
 
 - There is no `GET /tabs/{id}` endpoint. `GET /tabs/{id}/state` reports one tab's `tabId`, `url`, `title`,

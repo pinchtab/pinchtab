@@ -31,7 +31,7 @@ func (h *Handlers) HandleDialog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, resolvedID, ok := h.guardedTabContext(w, r, req.TabID, guardHandoffPause)
+	ctx, resolvedID, ok := h.guardedTabContext(w, r, req.TabID, guardTabLease|guardHandoffPause)
 	if !ok {
 		return
 	}
