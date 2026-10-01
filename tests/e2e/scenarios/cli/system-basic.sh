@@ -126,7 +126,7 @@ cat > "$CFG" <<'EOF'
 {
   "server": {"port": "9867"},
   "instanceDefaults": {"stealthLevel": "light", "tabEvictionPolicy": "reject"},
-  "multiInstance": {"strategy": "simple", "allocationPolicy": "fcfs"}
+  "multiInstance": {"strategy": "simple"}
 }
 EOF
 PINCHTAB_CONFIG="$CFG" pt_ok config validate

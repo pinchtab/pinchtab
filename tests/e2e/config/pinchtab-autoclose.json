@@ -18,8 +18,7 @@
     }
   },
   "multiInstance": {
-    "strategy": "always-on",
-    "allocationPolicy": "fcfs"
+    "strategy": "always-on"
   },
   "security": {
     "allowEvaluate": true,

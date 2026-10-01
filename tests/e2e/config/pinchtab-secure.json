@@ -10,7 +10,6 @@
   },
   "multiInstance": {
     "strategy": "always-on",
-    "allocationPolicy": "fcfs",
     "restart": {
       "maxRestarts": 20,
       "initBackoffSec": 2,
