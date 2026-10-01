@@ -3,7 +3,6 @@ package handlers
 import (
 	"net/http"
 	"net/http/httptest"
-	"sort"
 	"strings"
 	"testing"
 
@@ -11,30 +10,9 @@ import (
 	"github.com/pinchtab/pinchtab/internal/srccensus"
 )
 
-var jsonDecoderOwners = map[string]string{
-	"limits.go::decodeRequiredJSON": "the shared required-body decoder",
-	"limits.go::decodeOptionalJSON": "the shared optional-body decoder",
-	"upload.go::HandleUpload":       "decodes under the configured upload request cap, not maxBodySize",
-}
-
-func TestRequestBodiesDecodeOnlyThroughTheSharedHelpers(t *testing.T) {
-	found := map[string]bool{}
-	for _, site := range srccensus.Load(t, ".", handlersSourceFileFloor).Calls(t, "json.NewDecoder") {
-		key := site.File + "::" + site.Func
-		found[key] = true
-		if _, ok := jsonDecoderOwners[key]; !ok {
-			t.Errorf("%s hand-rolls a JSON body decode; call decodeRequiredJSON, decodeOptionalJSON or decodeJSONBody so an oversized body answers 413", site)
-		}
-	}
-	var stale []string
-	for owner := range jsonDecoderOwners {
-		if !found[owner] {
-			stale = append(stale, owner)
-		}
-	}
-	sort.Strings(stale)
-	for _, owner := range stale {
-		t.Errorf("%s no longer calls json.NewDecoder; drop it from jsonDecoderOwners", owner)
+func TestRequestBodiesDecodeOnlyThroughHTTPX(t *testing.T) {
+	for _, site := range srccensus.Load(t, ".", handlersSourceFileFloor).CallsAllowingNone("json.NewDecoder") {
+		t.Errorf("%s hand-rolls a JSON body decode; call decodeRequiredJSON, decodeOptionalJSON or httpx.DecodeJSON so an oversized body answers 413", site)
 	}
 }
 

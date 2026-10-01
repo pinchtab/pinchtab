@@ -12,8 +12,7 @@ import (
 )
 
 var optionalBodyOwners = map[string]bool{
-	"internal/httpx/httpx.go::DecodeOptionalJSONBody": true,
-	"internal/handlers/limits.go::decodeOptionalJSON": true,
+	"internal/httpx/httpx.go::DecodeJSON": true,
 }
 
 func decodeEOFSites(t *testing.T, name, src string) []string {
@@ -129,7 +128,7 @@ func eofComparisonSubject(n ast.Node) (string, bool) {
 	return "", false
 }
 
-func TestOnlyTheTwoHelpersTreatADecodeEOFAsAnEmptyBody(t *testing.T) {
+func TestOnlyDecodeJSONTreatsADecodeEOFAsAnEmptyBody(t *testing.T) {
 	found := map[string]bool{}
 	sawTokenizer := false
 	for _, file := range srccensus.Tree(t, "../..", 200) {
@@ -152,7 +151,7 @@ func TestOnlyTheTwoHelpersTreatADecodeEOFAsAnEmptyBody(t *testing.T) {
 	}
 	sort.Strings(stray)
 	for _, site := range stray {
-		t.Errorf("%s treats a JSON decode io.EOF as an empty body by hand; call httpx.DecodeOptionalJSONBody (strict) or decodeOptionalJSON (lenient, package handlers)", site)
+		t.Errorf("%s treats a JSON decode io.EOF as an empty body by hand; call httpx.DecodeJSON with Optional set", site)
 	}
 	for owner := range optionalBodyOwners {
 		if !found[owner] {

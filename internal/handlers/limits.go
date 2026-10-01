@@ -1,10 +1,7 @@
 package handlers
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"math"
 	"net/http"
 	"strconv"
@@ -43,17 +40,16 @@ func writeInvalidTimeout(w http.ResponseWriter, err error) {
 }
 
 func decodeRequiredJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(dst)
-	if err == nil {
-		return true
-	}
-	writeJSONDecodeError(w, err)
-	return false
+	return decodeLenientJSON(w, r, dst, httpx.JSONBodyOptions{MaxBytes: maxBodySize, Lenient: true})
 }
 
 func decodeOptionalJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(dst)
-	if err == nil || errors.Is(err, io.EOF) {
+	return decodeLenientJSON(w, r, dst, httpx.JSONBodyOptions{MaxBytes: maxBodySize, Lenient: true, Optional: true})
+}
+
+func decodeLenientJSON(w http.ResponseWriter, r *http.Request, dst any, opts httpx.JSONBodyOptions) bool {
+	err := httpx.DecodeJSON(w, r, dst, opts)
+	if err == nil {
 		return true
 	}
 	writeJSONDecodeError(w, err)

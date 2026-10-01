@@ -325,15 +325,23 @@ func TestHandleTabUpload_NoTab(t *testing.T) {
 	}
 }
 
-func TestHandleUpload_BodyTooLarge(t *testing.T) {
-	h := New(&mockBridge{}, &config.RuntimeConfig{AllowUpload: true}, nil, nil, nil)
-	bigBody := make([]byte, 11<<20) // 11MB
-	req := httptest.NewRequest("POST", "/upload", bytes.NewReader(bigBody))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	h.HandleUpload(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for oversized body, got %d", w.Code)
+func TestHandleUpload_BodyOverTheConfiguredRequestCapIs413(t *testing.T) {
+	body := `{"files":["` + strings.Repeat("a", 128) + `"]}`
+	for _, tc := range []struct {
+		maxRequestBytes int
+		want413         bool
+	}{
+		{maxRequestBytes: 64, want413: true},
+		{maxRequestBytes: 4096, want413: false},
+	} {
+		h := New(&mockBridge{}, &config.RuntimeConfig{AllowUpload: true, UploadMaxRequestBytes: tc.maxRequestBytes}, nil, nil, nil)
+		req := httptest.NewRequest("POST", "/upload", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		h.HandleUpload(w, req)
+		if got413 := w.Code == http.StatusRequestEntityTooLarge; got413 != tc.want413 {
+			t.Errorf("cap %d: status = %d, want 413 = %v: %s", tc.maxRequestBytes, w.Code, tc.want413, w.Body.String())
+		}
 	}
 }
 

@@ -191,23 +191,36 @@ func BeginStream(w http.ResponseWriter) (http.Flusher, bool) {
 	return flusher, true
 }
 
+// JSONBodyOptions picks the decode policy: Lenient ignores unknown fields instead of
+// rejecting them, and Optional treats an empty body as no fields set.
+type JSONBodyOptions struct {
+	MaxBytes int64
+	Lenient  bool
+	Optional bool
+}
+
 func DecodeJSONBody(w http.ResponseWriter, r *http.Request, maxBytes int64, dst any) error {
+	return DecodeJSON(w, r, dst, JSONBodyOptions{MaxBytes: maxBytes})
+}
+
+func DecodeOptionalJSONBody(w http.ResponseWriter, r *http.Request, maxBytes int64, dst any) error {
+	return DecodeJSON(w, r, dst, JSONBodyOptions{MaxBytes: maxBytes, Optional: true})
+}
+
+func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any, opts JSONBodyOptions) error {
+	maxBytes := opts.MaxBytes
 	if maxBytes <= 0 {
 		maxBytes = DefaultMaxJSONBodyBytes
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(dst); err != nil {
-		return clarifyUnknownJSONField(err, dst)
+	if !opts.Lenient {
+		decoder.DisallowUnknownFields()
 	}
-	return nil
-}
-
-func DecodeOptionalJSONBody(w http.ResponseWriter, r *http.Request, maxBytes int64, dst any) error {
-	if err := DecodeJSONBody(w, r, maxBytes, dst); err != nil && !errors.Is(err, io.EOF) {
-		return err
+	err := decoder.Decode(dst)
+	if err == nil || (opts.Optional && errors.Is(err, io.EOF)) {
+		return nil
 	}
-	return nil
+	return clarifyUnknownJSONField(err, dst)
 }
 
 func clarifyUnknownJSONField(err error, dst any) error {

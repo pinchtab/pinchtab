@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -81,10 +80,8 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	maxFileBytes := h.Config.EffectiveUploadMaxFileBytes()
 	maxTotalBytes := h.Config.EffectiveUploadMaxTotalBytes()
 
-	r.Body = http.MaxBytesReader(w, r.Body, int64(maxRequestBytes))
-
 	var req uploadRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := httpx.DecodeJSON(w, r, &req, httpx.JSONBodyOptions{MaxBytes: int64(maxRequestBytes), Lenient: true}); err != nil {
 		httpx.Error(w, httpx.StatusForJSONDecodeError(err), fmt.Errorf("invalid JSON body: %w", err))
 		return
 	}
