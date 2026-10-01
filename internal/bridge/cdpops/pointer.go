@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto"
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/cdptk"
@@ -114,6 +115,15 @@ func mouseEventAction(payload map[string]any) chromedp.Action {
 		return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", payload, nil)
 	})
 }
+
+// Chromium never acks, or delivers, a trusted Input.dispatchMouseEvent to a tab
+// that is not the focused one, which every Target.createTarget(focus=false) tab
+// is. Focus emulation makes the renderer accept input without raising the tab in
+// the operator's browser. Screenshots switch it off afterwards, so each trusted
+// dispatch re-enables it rather than relying on tab setup.
+var emulateInputFocus = chromedp.ActionFunc(func(ctx context.Context) error {
+	return emulation.SetFocusEmulationEnabled(true).Do(ctx)
+})
 
 // mousePressReleaseActions returns the left-button press/release pair at (x,y)
 // for the given clickCount (1 = single click, 2 = double click), the part
@@ -335,6 +345,7 @@ func ClickByNodeID(ctx context.Context, nodeID int64) error {
 	}
 
 	actions := []chromedp.Action{
+		emulateInputFocus,
 		mouseEventAction(map[string]any{"type": "mouseMoved", "x": x, "y": y}),
 	}
 	actions = append(actions, mousePressReleaseActions(x, y, 1)...)
@@ -413,6 +424,7 @@ func DoubleClickByNodeID(ctx context.Context, nodeID int64) error {
 	}
 
 	actions := []chromedp.Action{
+		emulateInputFocus,
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", map[string]any{"backendNodeId": nodeID}, nil)
 		}),
