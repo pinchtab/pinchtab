@@ -206,3 +206,24 @@ func TestFind_RefOnlyRefusesAnAmbiguousTie(t *testing.T) {
 		t.Errorf("output does not offer the positional retry query:\n%s", raw)
 	}
 }
+
+func TestAmbiguousMatchAcrossRolesDescribesEachTiedRef(t *testing.T) {
+	result := map[string]any{
+		"tied_refs": []any{"e0", "e1"},
+		"matches": []any{
+			map[string]any{"ref": "e0", "role": "button", "name": "Add item"},
+			map[string]any{"ref": "e1", "role": "link", "name": "Add item"},
+		},
+	}
+
+	msg := ambiguousMatch("Add item", []string{"e0", "e1"}, result)
+
+	if !strings.Contains(msg, `e0 (button "Add item"), e1 (link "Add item")`) {
+		t.Errorf("message = %q, want each tied ref with its role and name", msg)
+	}
+	for _, banned := range []string{"i counts from 1", "%!", "<nil>"} {
+		if strings.Contains(msg, banned) {
+			t.Errorf("message = %q, must not contain %q without a retry query", msg, banned)
+		}
+	}
+}

@@ -46,6 +46,13 @@ func handlePDF(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallT
 	}
 }
 
+func ambiguousFindHint(tied []any, retryQuery any) string {
+	if retry, _ := retryQuery.(string); retry != "" {
+		return fmt.Sprintf("Ambiguous: refs %v match equally well, so none is safe to act on. Retry pinchtab_find with query %q, where i counts from 1 in page order.", tied, retry)
+	}
+	return fmt.Sprintf("Ambiguous: refs %v score equally but differ in role or name. Compare their role and name in matches and act on the ref you mean.", tied)
+}
+
 func handleFind(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		query, err := r.RequireString("query")
@@ -75,7 +82,7 @@ func handleFind(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.Call
 		tied, _ := resp["tied_refs"].([]any)
 		switch {
 		case len(tied) > 0:
-			resp["nextActionHint"] = fmt.Sprintf("Ambiguous: refs %v match equally well, so none is safe to act on. Retry pinchtab_find with query %q, where i counts from 1 in page order.", tied, resp["retry_query"])
+			resp["nextActionHint"] = ambiguousFindHint(tied, resp["retry_query"])
 		case bestRef != "":
 			resp["bestRef"] = bestRef
 			resp["selector"] = bestRef

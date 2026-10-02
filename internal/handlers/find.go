@@ -226,16 +226,15 @@ const (
 	tieScoreMargin      = 0.01
 )
 
-func tiedTopRefs(matches []semantic.ElementMatch) []string {
+func tiedTopMatches(matches []semantic.ElementMatch) []semantic.ElementMatch {
 	if len(matches) < 2 {
 		return nil
 	}
 	top := matches[0]
-	tied := []string{top.Ref}
+	tied := []semantic.ElementMatch{top}
 	for _, m := range matches[1:] {
-		sameElement := m.Role == top.Role && m.Name == top.Name
-		if sameElement || top.Score-m.Score <= tieScoreMargin {
-			tied = append(tied, m.Ref)
+		if sameRoleAndName(m, top) || top.Score-m.Score <= tieScoreMargin {
+			tied = append(tied, m)
 		}
 	}
 	if len(tied) < 2 {
@@ -244,7 +243,28 @@ func tiedTopRefs(matches []semantic.ElementMatch) []string {
 	return tied
 }
 
-func positionalRetryQuery(top semantic.ElementMatch) string {
+func sameRoleAndName(a, b semantic.ElementMatch) bool {
+	return a.Role == b.Role && a.Name == b.Name
+}
+
+func matchRefs(matches []semantic.ElementMatch) []string {
+	if matches == nil {
+		return nil
+	}
+	refs := make([]string, len(matches))
+	for i, m := range matches {
+		refs[i] = m.Ref
+	}
+	return refs
+}
+
+func positionalRetryQuery(tied []semantic.ElementMatch) string {
+	top := tied[0]
+	for _, m := range tied[1:] {
+		if !sameRoleAndName(m, top) {
+			return ""
+		}
+	}
 	role := selector.Selector{Kind: selector.KindRole, Value: top.Role + " " + top.Name}
 	return selector.Selector{Kind: selector.KindNth, Value: "<i>:" + role.String()}.String()
 }
@@ -252,15 +272,15 @@ func positionalRetryQuery(top semantic.ElementMatch) string {
 func buildFindResponse(req findRequest, result semantic.FindResult, idpiWarning string, start time.Time) findResponse {
 	confidence := result.ConfidenceLabel()
 	retryQuery := ""
-	tied := tiedTopRefs(result.Matches)
+	tied := tiedTopMatches(result.Matches)
 	if tied != nil {
 		confidence = confidenceAmbiguous
-		retryQuery = positionalRetryQuery(result.Matches[0])
+		retryQuery = positionalRetryQuery(tied)
 	}
 	resp := findResponse{
 		BestRef:      result.BestRef,
 		Confidence:   confidence,
-		TiedRefs:     tied,
+		TiedRefs:     matchRefs(tied),
 		RetryQuery:   retryQuery,
 		Score:        result.BestScore,
 		Matches:      result.Matches,

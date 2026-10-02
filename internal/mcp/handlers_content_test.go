@@ -157,3 +157,16 @@ func TestHandleFindAmbiguousTieWithholdsSelector(t *testing.T) {
 		t.Errorf("nextActionHint = %q, want the positional retry query", hint)
 	}
 }
+
+func TestAmbiguousFindHintWithoutRetryQueryNamesNoPosition(t *testing.T) {
+	hint := ambiguousFindHint([]any{"e0", "e1"}, nil)
+
+	if !strings.Contains(hint, "e0") || !strings.Contains(hint, "e1") {
+		t.Errorf("hint = %q, want the tied refs named", hint)
+	}
+	for _, banned := range []string{"i counts from 1", "%!", `""`, "<nil>"} {
+		if strings.Contains(hint, banned) {
+			t.Errorf("hint = %q, must not contain %q without a retry query", hint, banned)
+		}
+	}
+}

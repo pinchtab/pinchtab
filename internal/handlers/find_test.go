@@ -546,6 +546,29 @@ func TestHandleFind_IndistinguishableTopMatchesAreAmbiguous(t *testing.T) {
 	}
 }
 
+func TestHandleFind_TieAcrossRolesOmitsTheUnreachableRetryQuery(t *testing.T) {
+	cache := &bridge.RefCache{
+		Nodes: []bridge.A11yNode{
+			{Ref: "e0", Role: "button", Name: "Add item"},
+			{Ref: "e1", Role: "link", Name: "Add item"},
+		},
+		Refs: map[string]int64{"e0": 1, "e1": 2},
+	}
+	h := newFindTestHandler(cache, false)
+
+	resp := postFind(t, h, `{"query": "Add item", "threshold": 0.1, "topK": 3}`)
+
+	if resp.Confidence != confidenceAmbiguous {
+		t.Fatalf("confidence = %q, want %q (matches %+v)", resp.Confidence, confidenceAmbiguous, resp.Matches)
+	}
+	if fmt.Sprint(resp.TiedRefs) != "[e0 e1]" && fmt.Sprint(resp.TiedRefs) != "[e1 e0]" {
+		t.Errorf("tied_refs = %v, want the button and the link", resp.TiedRefs)
+	}
+	if resp.RetryQuery != "" {
+		t.Errorf("retry_query = %q, want none: no positional query reaches both the button and the link", resp.RetryQuery)
+	}
+}
+
 func TestHandleFind_DistinctMatchKeepsItsScoreLabel(t *testing.T) {
 	h := newFindTestHandler(threeRowCartCache(), false)
 
@@ -588,8 +611,8 @@ func TestTiedTopRefs(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := tiedTopRefs(tc.matches); fmt.Sprint(got) != fmt.Sprint(tc.want) {
-				t.Errorf("tiedTopRefs = %v, want %v", got, tc.want)
+			if got := matchRefs(tiedTopMatches(tc.matches)); fmt.Sprint(got) != fmt.Sprint(tc.want) {
+				t.Errorf("tiedTopMatches refs = %v, want %v", got, tc.want)
 			}
 		})
 	}

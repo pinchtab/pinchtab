@@ -23,6 +23,33 @@ func noElementsMatched(query string) string {
 	return fmt.Sprintf("No elements matched %q", query)
 }
 
+func ambiguousMatch(query string, tied []string, result map[string]any) string {
+	if retry, _ := result["retry_query"].(string); retry != "" {
+		return fmt.Sprintf("Ambiguous match for %q: %s are indistinguishable; pick one with %q (i counts from 1 in page order)", query, strings.Join(tied, ", "), retry)
+	}
+	return fmt.Sprintf("Ambiguous match for %q: %s score equally but differ in role or name; use the ref you mean", query, describeTiedRefs(tied, result["matches"]))
+}
+
+func describeTiedRefs(tied []string, matches any) string {
+	items, _ := matches.([]any)
+	labels := make(map[string]string, len(items))
+	for _, item := range items {
+		m, _ := item.(map[string]any)
+		ref, _ := m["ref"].(string)
+		role, _ := m["role"].(string)
+		name, _ := m["name"].(string)
+		labels[ref] = fmt.Sprintf("%s (%s %q)", ref, role, name)
+	}
+	described := make([]string, len(tied))
+	for i, ref := range tied {
+		described[i] = ref
+		if label, ok := labels[ref]; ok {
+			described[i] = label
+		}
+	}
+	return strings.Join(described, ", ")
+}
+
 func Find(conn apiclient.Conn, query string, cmd *cobra.Command) {
 	tabID, _ := cmd.Flags().GetString("tab")
 	threshold, _ := cmd.Flags().GetString("threshold")
@@ -44,7 +71,7 @@ func Find(conn apiclient.Conn, query string, cmd *cobra.Command) {
 	if refOnly {
 		result := conn.PostQuiet(path, body, capture)
 		if tied := stringList(result["tied_refs"]); len(tied) > 0 {
-			cli.Fatal("Ambiguous match for %q: %s are indistinguishable; pick one with %q (i counts from 1 in page order)", query, strings.Join(tied, ", "), result["retry_query"])
+			cli.Fatal("%s", ambiguousMatch(query, tied, result))
 		}
 		if ref, ok := result["best_ref"].(string); ok && ref != "" {
 			fmt.Println(ref)
