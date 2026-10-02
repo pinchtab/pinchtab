@@ -39,9 +39,8 @@ type findResponse struct {
 	IDPIWarning  string                  `json:"idpiWarning,omitempty"`
 }
 
-// HandleFind performs semantic element matching against the accessibility
-// snapshot for a tab. If no cached snapshot exists, it is fetched
-// automatically via the existing snapshot infrastructure.
+// HandleFind performs semantic element matching against the tab's live
+// accessibility tree, re-read on every call.
 //
 // @Endpoint POST /find
 // @Description Find elements by natural language query
@@ -141,32 +140,20 @@ func parseFindRequest(w http.ResponseWriter, r *http.Request) (findRequest, bool
 	return req, true
 }
 
-// resolveOrRefreshSnapshotNodes returns the tab's cached snapshot AX nodes,
-// taking one CDP ref-cache refresh when the cache is empty. It is the shared
-// resolve-or-refresh prefix of /find (acquireFindNodes) and semantic-selector
-// descriptor acquisition (semanticDescriptorsForTabInFrame); callers apply their
-// own empty-handling, DOM-metadata enrichment, and frame scoping on top.
+// resolveOrRefreshSnapshotNodes re-reads the live AX tree before every match, so
+// a control an action just revealed is matchable and one it hid is not; a failed
+// read falls back to the cached snapshot. EpochRefs keeps each surviving node's
+// ref, so the refresh never renumbers a ref the caller already holds.
 func (h *Handlers) resolveOrRefreshSnapshotNodes(ctx context.Context, tabID string) []bridge.A11yNode {
-	nodes := h.resolveSnapshotNodes(tabID)
-	if len(nodes) == 0 {
-		// Auto-refresh: take a fresh snapshot via CDP using the context obtained
-		// from the initial TabContext call (tabID is the raw CDPID and cannot be
-		// passed to TabContext again).
-		h.refreshRefCache(ctx, tabID)
-		nodes = h.resolveSnapshotNodes(tabID)
-	}
-	return nodes
+	h.refreshRefCache(ctx, tabID)
+	return h.resolveSnapshotNodes(tabID)
 }
 
-// acquireFindNodes returns the tab's snapshot AX nodes (auto-refreshing the ref
-// cache once via CDP if the cache is empty) enriched with DOM metadata, or a 500
-// status error when the page still has no elements.
 func (h *Handlers) acquireFindNodes(ctx context.Context, resolvedTabID string) ([]bridge.A11yNode, *statusError) {
 	nodes := h.resolveOrRefreshSnapshotNodes(ctx, resolvedTabID)
 	if len(nodes) == 0 {
 		return nil, &statusError{500, fmt.Errorf("no elements found in snapshot for tab %s — navigate first", resolvedTabID)}
 	}
-	_ = bridge.EnrichA11yNodesWithDOMMetadata(ctx, nodes)
 	return nodes, nil
 }
 
@@ -320,9 +307,6 @@ func (h *Handlers) recordFindIntent(resolvedTabID string, req findRequest, resul
 	})
 }
 
-// resolveSnapshotNodes returns cached A11yNodes for the tab, or an empty
-// slice if no cache is available. The caller should use refreshRefCache
-// to auto-fetch a fresh snapshot via CDP when this returns nil.
 func (h *Handlers) resolveSnapshotNodes(tabID string) []bridge.A11yNode {
 	cache := h.Bridge.GetRefCache(tabID)
 	if cache != nil && len(cache.Nodes) > 0 {

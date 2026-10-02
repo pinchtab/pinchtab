@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -14,9 +15,11 @@ import (
 	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 
+	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/selector"
+	"github.com/pinchtab/pinchtab/internal/testbrowser"
 	"github.com/pinchtab/semantic"
 )
 
@@ -615,5 +618,79 @@ func TestTiedTopRefs(t *testing.T) {
 				t.Errorf("tiedTopMatches refs = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+const detailsDialogHTML = `<!doctype html><title>orders</title>
+<table><tr><td>Order 1</td><td><button id="open" onclick="document.getElementById('dlg').hidden=false">Details</button></td></tr></table>
+<div id="dlg" role="dialog" aria-label="Order details" hidden>
+<button id="close" onclick="document.getElementById('dlg').hidden=true">Close</button>
+</div>`
+
+func newDetailsDialogHandlers(t *testing.T) (*Handlers, context.Context, string) {
+	t.Helper()
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancelTimeout)
+
+	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(detailsDialogHTML))
+	if err := chromedp.Run(ctx, chromedp.Navigate(dataURL), chromedp.WaitVisible("#open", chromedp.ByID)); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.RuntimeConfig{ActionTimeout: 10 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
+	b := browserBridge(ctx, cfg)
+	const tabID = "tab-find-live"
+	b.RegisterTab(tabID, ctx)
+	h := New(b, cfg, nil, nil, nil)
+	h.Matcher = semantic.NewLexicalMatcher()
+	return h, ctx, tabID
+}
+
+func findButtonRef(t *testing.T, h *Handlers, tabID, name string) string {
+	t.Helper()
+	resp := postFind(t, h, fmt.Sprintf(`{"query": %q, "tabId": %q, "topK": 5, "threshold": 0.01}`, name, tabID))
+	for _, m := range resp.Matches {
+		if m.Role == "button" && m.Name == name {
+			return m.Ref
+		}
+	}
+	return ""
+}
+
+func clickFoundRef(t *testing.T, h *Handlers, ctx context.Context, tabID, ref string) {
+	t.Helper()
+	target, ok := h.Bridge.GetRefCache(tabID).Lookup(ref)
+	if !ok {
+		t.Fatalf("ref %s returned by find does not resolve in the ref cache the click reads", ref)
+	}
+	req := &bridge.ActionRequest{Kind: bridge.ActionClick, Ref: ref, NodeID: target.BackendNodeID}
+	if _, _, _, err := h.executeActionResilient(ctx, req, h.Config, tabID, false); err != nil {
+		t.Fatalf("click %s: %v", ref, err)
+	}
+}
+
+func TestHandleFind_SeesWhatAClickJustChangedWithoutASnapshot(t *testing.T) {
+	h, ctx, tabID := newDetailsDialogHandlers(t)
+
+	detailsRef := findButtonRef(t, h, tabID, "Details")
+	if detailsRef == "" {
+		t.Fatal("find did not return the Details button on a tab with no snapshot")
+	}
+	if closeRef := findButtonRef(t, h, tabID, "Close"); closeRef != "" {
+		t.Fatalf("find returned Close (%s) while its dialog is still hidden", closeRef)
+	}
+
+	clickFoundRef(t, h, ctx, tabID, detailsRef)
+	closeRef := findButtonRef(t, h, tabID, "Close")
+	if closeRef == "" {
+		t.Fatal("find missed the Close button the click just revealed")
+	}
+	if again := findButtonRef(t, h, tabID, "Details"); again != detailsRef {
+		t.Errorf("Details ref drifted across the refresh: %s then %s", detailsRef, again)
+	}
+
+	clickFoundRef(t, h, ctx, tabID, closeRef)
+	if stale := findButtonRef(t, h, tabID, "Close"); stale != "" {
+		t.Errorf("find still returns Close (%s) after the click hid its dialog", stale)
 	}
 }

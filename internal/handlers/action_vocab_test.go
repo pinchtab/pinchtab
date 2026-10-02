@@ -528,29 +528,24 @@ func (m *autoRefreshFindBridge) GetRefCache(string) *bridge.RefCache {
 	return m.fresh
 }
 
-func TestFindPublishesTheVocabularyItsAutoRefreshMinted(t *testing.T) {
-	mb := &autoRefreshFindBridge{fresh: &bridge.RefCache{
-		DomEpoch: "ep_fresh",
-		Nodes:    []bridge.A11yNode{{Ref: "e11", Role: "link", Name: "Go page 2"}},
-		Refs:     map[string]int64{"e11": 11},
-	}}
-	h := New(mb, &config.RuntimeConfig{ActionTimeout: 10 * time.Second}, nil, nil, nil)
-	h.Matcher = semantic.NewLexicalMatcher()
+func TestFindPublishesTheVocabularyItsRefreshMinted(t *testing.T) {
+	h, _, tabID := newDetailsDialogHandlers(t)
 
 	w := httptest.NewRecorder()
-	h.HandleFind(w, httptest.NewRequest("POST", "/find", strings.NewReader(`{"query":"Go page 2"}`)))
+	h.HandleFind(w, httptest.NewRequest("POST", "/find", strings.NewReader(`{"query":"Details","tabId":"`+tabID+`"}`)))
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
 	}
-	if mb.reads < 2 {
-		t.Fatalf("find read the ref cache %d time(s); the auto-refresh path was not taken", mb.reads)
+	cache := h.Bridge.GetRefCache(tabID)
+	if cache == nil || cache.DomEpoch == "" {
+		t.Fatalf("find on a tab with no snapshot left no epoch in the ref cache: %+v", cache)
 	}
-	if got := w.Header().Get(vocabHeader); got != "ep_fresh" {
-		t.Errorf("vocab header = %q, want the token the refresh minted", got)
+	if got := w.Header().Get(vocabHeader); got != cache.DomEpoch {
+		t.Errorf("vocab header = %q, want the token the refresh minted (%q)", got, cache.DomEpoch)
 	}
-	if got := w.Header().Get(activity.HeaderPTTabID); got != "tab1" {
-		t.Errorf("tab header = %q, want tab1 so a client keys the token to the resolved tab", got)
+	if got := w.Header().Get(activity.HeaderPTTabID); got != tabID {
+		t.Errorf("tab header = %q, want %s so a client keys the token to the resolved tab", got, tabID)
 	}
 }
 
