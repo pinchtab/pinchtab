@@ -64,7 +64,7 @@ func addPointerActionFlags(cmd *cobra.Command, action string) {
 // the bundle is defined once instead of repeated across browser commands.
 func addPostActionFlags(cmd *cobra.Command, verb string, withText bool) {
 	cmd.Flags().Bool("snap", false, "Output interactive snapshot after "+verb)
-	cmd.Flags().Bool("snap-diff", false, "Output snapshot diff after "+verb+" (changes only)")
+	cmd.Flags().Bool("snap-diff", false, "Output snapshot diff after "+verb+" (all nodes, marking [+] added, [~] changed and removed refs)")
 	if withText {
 		cmd.Flags().Bool("text", false, "Output page text after "+verb+" (for verification)")
 	}

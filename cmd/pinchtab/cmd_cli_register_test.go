@@ -197,16 +197,16 @@ func TestPostActionFlagsBundle(t *testing.T) {
 	}
 
 	wantUsage(clickCmd, "snap", "Output interactive snapshot after action")
-	wantUsage(clickCmd, "snap-diff", "Output snapshot diff after action (changes only)")
+	wantUsage(clickCmd, "snap-diff", "Output snapshot diff after action (all nodes, marking [+] added, [~] changed and removed refs)")
 	wantUsage(clickCmd, "text", "Output page text after action (for verification)")
 	wantUsage(clickCmd, "submit", "Dispatch one DOM click and report bounded post-submit state")
 
 	wantUsage(reloadCmd, "snap", "Output interactive snapshot after reload")
-	wantUsage(reloadCmd, "snap-diff", "Output snapshot diff after reload (changes only)")
+	wantUsage(reloadCmd, "snap-diff", "Output snapshot diff after reload (all nodes, marking [+] added, [~] changed and removed refs)")
 	wantUsage(reloadCmd, "text", "Output page text after reload (for verification)")
 
 	wantUsage(navCmd, "snap", "Output interactive snapshot after navigation")
-	wantUsage(navCmd, "snap-diff", "Output snapshot diff after navigation (changes only)")
+	wantUsage(navCmd, "snap-diff", "Output snapshot diff after navigation (all nodes, marking [+] added, [~] changed and removed refs)")
 	// nav has --text because landing on a page is exactly when reading it is
 	// useful, and reload — which lands on a page the same way — always had it.
 	wantUsage(navCmd, "text", "Output page text after navigation (for verification)")
