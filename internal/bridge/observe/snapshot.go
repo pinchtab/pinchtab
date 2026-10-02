@@ -413,7 +413,6 @@ var dialogRoles = map[string]bool{
 	"alertdialog": true,
 }
 
-// A form dialog would otherwise inline every label it holds.
 const maxDialogTextRunes = 200
 
 const FilterInteractive = "interactive"

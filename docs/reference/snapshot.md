@@ -21,7 +21,7 @@ pinchtab snap --full
 
 | Flag | Description |
 |------|-------------|
-| `-i`, `--interactive` | Keep interactive elements plus headings, images, table cells and non-empty alert/status messages (default: true) |
+| `-i`, `--interactive` | Keep interactive elements plus headings, images, table cells and non-empty alert/status messages and open dialogs (named with their text) (default: true) |
 | `-c`, `--compact` | Compact text output (default: true) |
 | `--json` | JSON output, keeping the interactive filter (same as `--compact=false`) |
 | `-d`, `--diff` | Show diff from previous snapshot, in whichever output format is selected |
@@ -48,7 +48,7 @@ pinchtab snap --max-tokens 2000         # Limit output size
 | Parameter | Description |
 |-----------|-------------|
 | `tabId` | Target tab (defaults to the current tab) |
-| `filter` | `interactive` for interactive elements plus headings, images, table cells and non-empty alert/status messages, `all` (default) for the whole tree |
+| `filter` | `interactive` for interactive elements plus headings, images, table cells and non-empty alert/status messages and open dialogs (named with their text), `all` (default) for the whole tree |
 | `interactive` | Boolean alias for `filter`: `true` is `filter=interactive`, `false` is `filter=all`. Contradicting an explicit `filter` is a 400 |
 | `format` | `compact`, `text`, `yaml`, or default JSON. The CLI and the MCP tool both ask for `compact`; the HTTP default is unchanged |
 | `diff` | `true` for diff mode. It honours every `format`: `compact` lists all nodes, marking `[+]` added, `[~]` changed and removed refs; `text` lists only the added and changed nodes, with the same markers and a `# removed:` line; `yaml` and JSON return `added`, `changed`, `removed` and `counts` |

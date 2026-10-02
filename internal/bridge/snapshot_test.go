@@ -649,7 +649,7 @@ func TestInteractiveSnapshotNamesOpenDialogsFromTheirText(t *testing.T) {
 	hidden.Properties = []bridgeobserve.RawAXProp{{Name: "hidden", Value: &bridgeobserve.RawAXValue{Value: json.RawMessage(`true`)}}}
 	longText := strings.Repeat("Label ", 100)
 	nodes := []RawAXNode{
-		axNode("root", "RootWebArea", "Orders", "detail", "confirm", "form", "closed"),
+		axNode("root", "RootWebArea", "Orders", "detail", "confirm", "titled", "form", "closed"),
 		axNode("detail", "dialog", "Order detail", "detail-p", "close"),
 		axNode("detail-p", "paragraph", "", "detail-text"),
 		axNode("detail-text", "StaticText", "Detail for #1003 — Cy Diaz"),
@@ -658,6 +658,10 @@ func TestInteractiveSnapshotNamesOpenDialogsFromTheirText(t *testing.T) {
 		axNode("confirm", "alertdialog", "", "confirm-text", "ok"),
 		axNode("confirm-text", "StaticText", "Delete order #1003?"),
 		axNode("ok", "button", "OK"),
+		axNode("titled", "dialog", "Confirm", "titled-heading", "titled-text"),
+		axNode("titled-heading", "heading", "Confirm", "titled-heading-text"),
+		axNode("titled-heading-text", "StaticText", "Confirm"),
+		axNode("titled-text", "StaticText", "Delete?"),
 		axNode("form", "dialog", "Edit", "form-text"),
 		axNode("form-text", "StaticText", longText),
 		hidden,
@@ -675,6 +679,8 @@ func TestInteractiveSnapshotNamesOpenDialogsFromTheirText(t *testing.T) {
 		"button Close",
 		"alertdialog Delete order #1003?",
 		"button OK",
+		"dialog Confirm Delete?",
+		"heading Confirm",
 	}
 	if len(got) != len(want)+1 {
 		t.Fatalf("interactive snapshot = %q, want %q plus the capped form dialog", got, want)

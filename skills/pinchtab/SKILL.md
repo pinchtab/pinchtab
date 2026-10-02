@@ -48,7 +48,7 @@ e12:textbox val="updated" [~]
 `[+]` = added, `[~]` = changed, removed refs listed at end. All valid refs are shown — no need to remember previous snapshot. Do not follow with redundant `snap`; only call `text` when you need prose content.
 
 Fallback observation (when `--snap` wasn't used):
-- `pinchtab snap` — interactive elements plus headings, images, table cells and non-empty alert/status messages, compact (default).
+- `pinchtab snap` — interactive elements plus headings, images, table cells, non-empty alerts and open dialogs, compact (default).
 - `pinchtab snap [selector]` — scope the current-tab snapshot to one element.
 - `pinchtab snap --full` — all nodes as JSON (for debugging).
 - `pinchtab text` — content only (use when snap is missing prose you need).
