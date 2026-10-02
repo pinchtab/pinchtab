@@ -151,6 +151,26 @@ func TestSnapshotDiffTreatsARenamedNodeAsChanged(t *testing.T) {
 	}
 }
 
+func TestSnapshotTextDiffListsOnlyAddedAndChangedNodes(t *testing.T) {
+	before := []A11yNode{
+		{Ref: "e1", Role: "textbox", Name: "Name", NodeID: 5},
+		{Ref: "e2", Role: "status", Name: "Thanks Bob", NodeID: 9},
+		{Ref: "e3", Role: "button", Name: "Send", NodeID: 11},
+	}
+	after := []A11yNode{
+		{Ref: "e1", Role: "textbox", Name: "Name", NodeID: 5},
+		{Ref: "e2", Role: "status", Name: "Thanks Dee", NodeID: 9},
+		{Ref: "e4", Role: "button", Name: "Close", Depth: 1, NodeID: 14},
+	}
+
+	added, changed, removed := DiffSnapshot(before, after)
+	got := FormatSnapshotTextDiff(after, added, changed, removed)
+	want := "e2 status \"Thanks Dee\" [~]\n  e4 button \"Close\" [+]\n# removed: e3\n"
+	if got != want {
+		t.Fatalf("text diff = %q, want %q", got, want)
+	}
+}
+
 func TestSnapshotDiffKeepsNodesWithoutANodeIDApart(t *testing.T) {
 	before := []A11yNode{
 		{Ref: "e1", Role: "StaticText", Name: "Alpha"},

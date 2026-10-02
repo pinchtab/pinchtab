@@ -130,21 +130,47 @@ func marshalSnapshotFile(q snapshotQuery, res snapshotResult, prevNodes []bridge
 	return ".json", content, nil
 }
 
-func (h *Handlers) writeSnapshotDiff(w http.ResponseWriter, q snapshotQuery, res snapshotResult, prevNodes []bridge.A11yNode, wrap bool) {
-	if q.format == "compact" {
-		added, changed, removed := bridge.DiffSnapshot(prevNodes, res.flat)
-		header := fmt.Sprintf("%s | +%d ~%d -%d",
-			snapshotCompactHeader(res.title, res.url, len(res.flat), res.scope), len(added), len(changed), len(removed))
-		h.writeSnapshotPlain(w, q, res, header, "", bridge.FormatSnapshotCompactDiff(res.flat, added, changed, removed), wrap)
+func (h *Handlers) writeSnapshotPlainDiff(w http.ResponseWriter, q snapshotQuery, res snapshotResult, prevNodes []bridge.A11yNode, wrap bool) {
+	added, changed, removed := bridge.DiffSnapshot(prevNodes, res.flat)
+	counts := fmt.Sprintf(" | +%d ~%d -%d", len(added), len(changed), len(removed))
+	if q.format == "text" {
+		h.writeSnapshotPlain(w, q, res, snapshotTextHeader(res.title, res.url, len(res.flat), res.scope)+counts, "",
+			bridge.FormatSnapshotTextDiff(res.flat, added, changed, removed), wrap)
 		return
 	}
+	h.writeSnapshotPlain(w, q, res, snapshotCompactHeader(res.title, res.url, len(res.flat), res.scope)+counts, "",
+		bridge.FormatSnapshotCompactDiff(res.flat, added, changed, removed), wrap)
+}
 
-	data := res.attachRootFrame(res.scope.attach(map[string]any{
-		"url":   res.url,
-		"title": res.title,
-		"route": res.route,
-	}))
-	httpx.JSON(w, 200, attachIgnoredParams(snapshotDiffFields(data, prevNodes, res), q.controls.Ignored))
+func (h *Handlers) writeSnapshotDiff(w http.ResponseWriter, q snapshotQuery, res snapshotResult, prevNodes []bridge.A11yNode, wrap bool) {
+	switch q.format {
+	case "compact", "text":
+		h.writeSnapshotPlainDiff(w, q, res, prevNodes, wrap)
+	case "yaml":
+		data := res.attachRootFrame(res.scope.attach(map[string]any{
+			"url":   res.url,
+			"title": res.title,
+		}))
+		writeSnapshotYAML(w, snapshotDiffFields(data, prevNodes, res), q.controls.Ignored)
+	default:
+		data := res.attachRootFrame(res.scope.attach(map[string]any{
+			"url":   res.url,
+			"title": res.title,
+			"route": res.route,
+		}))
+		httpx.JSON(w, 200, attachIgnoredParams(snapshotDiffFields(data, prevNodes, res), q.controls.Ignored))
+	}
+}
+
+func writeSnapshotYAML(w http.ResponseWriter, data map[string]any, ignored []string) {
+	content, err := yaml.Marshal(attachIgnoredParams(data, ignored))
+	if err != nil {
+		httpx.Error(w, 500, fmt.Errorf("marshal yaml: %w", err))
+		return
+	}
+	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
+	w.WriteHeader(200)
+	_, _ = w.Write(content)
 }
 
 func (h *Handlers) writeSnapshot(w http.ResponseWriter, q snapshotQuery, res snapshotResult, vocabularyToken string, idpiResult snapshotIDPIResult) {
@@ -165,15 +191,7 @@ func (h *Handlers) writeSnapshot(w http.ResponseWriter, q snapshotQuery, res sna
 		if res.hint != "" {
 			data["hint"] = res.hint
 		}
-		attachIgnoredParams(data, q.controls.Ignored)
-		content, err := yaml.Marshal(data)
-		if err != nil {
-			httpx.Error(w, 500, fmt.Errorf("marshal yaml: %w", err))
-			return
-		}
-		w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
-		w.WriteHeader(200)
-		_, _ = w.Write(content)
+		writeSnapshotYAML(w, data, q.controls.Ignored)
 	default:
 		resp := res.attachRootFrame(res.scope.attach(map[string]any{
 			"url":             res.url,

@@ -114,40 +114,45 @@ func FormatSnapshotCompact(nodes []A11yNode) string {
 // FormatSnapshotCompactDiff; agent-facing docs are held to it by a sync test.
 const CompactDiffSummary = "all nodes, marking [+] added, [~] changed and removed refs"
 
-// FormatSnapshotCompactDiff outputs all current nodes in compact format with
-// change markers: [+] for added, [~] for changed. Removed refs are listed at
-// the end as [- ref]. This gives agents the full valid ref set plus change info.
-func FormatSnapshotCompactDiff(nodes []A11yNode, added, changed, removed []A11yNode) string {
-	addedRefs := make(map[string]bool, len(added))
-	for _, n := range added {
-		addedRefs[n.Ref] = true
-	}
-	changedRefs := make(map[string]bool, len(changed))
+func diffMarker(added, changed []A11yNode) func(A11yNode) string {
+	markers := make(map[string]string, len(added)+len(changed))
 	for _, n := range changed {
-		changedRefs[n.Ref] = true
+		markers[n.Ref] = " [~]"
 	}
+	for _, n := range added {
+		markers[n.Ref] = " [+]"
+	}
+	return func(n A11yNode) string { return markers[n.Ref] }
+}
 
+func appendRemovedRefs(b *strings.Builder, removed []A11yNode) {
+	if len(removed) == 0 {
+		return
+	}
+	b.WriteString("# removed:")
+	for _, n := range removed {
+		b.WriteByte(' ')
+		b.WriteString(n.Ref)
+	}
+	b.WriteByte('\n')
+}
+
+func FormatSnapshotCompactDiff(nodes []A11yNode, added, changed, removed []A11yNode) string {
 	var b strings.Builder
-	b.WriteString(formatNodes(nodes, compactNodeStyle, func(n A11yNode) string {
-		switch {
-		case addedRefs[n.Ref]:
-			return " [+]"
-		case changedRefs[n.Ref]:
-			return " [~]"
-		default:
-			return ""
-		}
-	}))
+	b.WriteString(formatNodes(nodes, compactNodeStyle, diffMarker(added, changed)))
+	appendRemovedRefs(&b, removed)
+	return b.String()
+}
 
-	if len(removed) > 0 {
-		b.WriteString("# removed:")
-		for _, n := range removed {
-			b.WriteByte(' ')
-			b.WriteString(n.Ref)
+func FormatSnapshotTextDiff(nodes []A11yNode, added, changed, removed []A11yNode) string {
+	marker := diffMarker(added, changed)
+	var b strings.Builder
+	for _, n := range nodes {
+		if m := marker(n); m != "" {
+			appendNode(&b, n, textNodeStyle, m)
 		}
-		b.WriteByte('\n')
 	}
-
+	appendRemovedRefs(&b, removed)
 	return b.String()
 }
 

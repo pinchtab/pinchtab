@@ -709,7 +709,7 @@ func opensANestedBranch(n ast.Node) bool {
 	return false
 }
 
-var snapshotResponseWriters = []string{"HandleSnapshot", "writeSnapshotPlain", "writeSnapshotFile", "writeSnapshotDiff", "writeSnapshot"}
+var snapshotResponseWriters = []string{"HandleSnapshot", "writeSnapshotPlain", "writeSnapshotFile", "writeSnapshotDiff", "writeSnapshot", "writeSnapshotYAML"}
 
 func TestEveryResponseBranchDisclosesIgnoredParams(t *testing.T) {
 	pkg := srccensus.Load(t, ".", handlersSourceFileFloor)

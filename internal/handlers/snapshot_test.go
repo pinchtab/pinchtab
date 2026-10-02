@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
+	"gopkg.in/yaml.v3"
 )
 
 func TestHandleSnapshot_NoTab(t *testing.T) {
@@ -172,6 +173,58 @@ func TestEverySnapshotEmitterNamesTheRootFrameOnce(t *testing.T) {
 	} {
 		if got := strings.Count(body, rootFrameID); got != 1 {
 			t.Errorf("%s names the root frame %d times, want once at the top level", emitter, got)
+		}
+	}
+}
+
+func TestSnapshotDiffHonoursEveryFormat(t *testing.T) {
+	h, tabID, _ := newFrameDisclosureFixture(t)
+	diffIn := func(format string) (string, string) {
+		t.Helper()
+		snapshotQueryBody(t, h, "tabId="+tabID+"&filter=interactive")
+		w := httptest.NewRecorder()
+		h.HandleSnapshot(w, httptest.NewRequest("GET", "/snapshot?tabId="+tabID+"&diff=true&format="+format, nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("diff (%s): status %d body=%s", format, w.Code, w.Body.String())
+		}
+		return w.Header().Get("Content-Type"), w.Body.String()
+	}
+
+	const unchangedLine, addedLine = `button "OuterBtn"`, `StaticText "OuterBtn" [+]`
+
+	contentType, text := diffIn("text")
+	if !strings.HasPrefix(contentType, "text/plain") {
+		t.Errorf("text diff Content-Type = %q, want text/plain", contentType)
+	}
+	if !strings.Contains(text, " nodes | +") || !strings.Contains(text, addedLine) {
+		t.Errorf("text diff lacks the counts header or the added node:\n%s", text)
+	}
+	if strings.Contains(text, unchangedLine) {
+		t.Errorf("text diff repeats an unchanged node:\n%s", text)
+	}
+
+	contentType, compact := diffIn("compact")
+	if !strings.HasPrefix(contentType, "text/plain") || !strings.Contains(compact, unchangedLine) {
+		t.Errorf("compact diff (%s) no longer lists the whole tree:\n%s", contentType, compact)
+	}
+
+	contentType, jsonBody := diffIn("json")
+	var jsonDiff map[string]any
+	if err := json.Unmarshal([]byte(jsonBody), &jsonDiff); err != nil {
+		t.Fatalf("json diff (%s) does not parse: %v", contentType, err)
+	}
+
+	contentType, yamlBody := diffIn("yaml")
+	if !strings.HasPrefix(contentType, "text/yaml") {
+		t.Errorf("yaml diff Content-Type = %q, want text/yaml", contentType)
+	}
+	var yamlDiff map[string]any
+	if err := yaml.Unmarshal([]byte(yamlBody), &yamlDiff); err != nil {
+		t.Fatalf("yaml diff does not parse: %v\n%s", err, yamlBody)
+	}
+	for key := range jsonDiff {
+		if _, ok := yamlDiff[key]; !ok && key != "route" {
+			t.Errorf("yaml diff lacks the json diff key %q", key)
 		}
 	}
 }

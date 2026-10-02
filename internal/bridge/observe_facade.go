@@ -63,6 +63,10 @@ func FormatSnapshotCompactDiff(nodes, added, changed, removed []A11yNode) string
 	return bridgeobserve.FormatSnapshotCompactDiff(nodes, added, changed, removed)
 }
 
+func FormatSnapshotTextDiff(nodes, added, changed, removed []A11yNode) string {
+	return bridgeobserve.FormatSnapshotTextDiff(nodes, added, changed, removed)
+}
+
 func TruncateToTokens(nodes []A11yNode, maxTokens int, format string) ([]A11yNode, bool) {
 	return bridgeobserve.TruncateToTokens(nodes, maxTokens, format)
 }
