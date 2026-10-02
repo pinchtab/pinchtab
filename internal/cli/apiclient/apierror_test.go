@@ -522,33 +522,6 @@ func TestTheGenericSentinelCodeRendersExactlyAsAnUncodedError(t *testing.T) {
 	}
 }
 
-// The sentinel is spelled here rather than imported, so the agreement is pinned against the
-// BYTES the server actually sends rather than against a shared symbol. Drives the real
-// httpx.Error, so a rename or a change of the stamped code reds here instead of quietly
-// putting "(some_new_sentinel)" back on 424 responses.
-func TestTheGenericSentinelStillMatchesWhatTheServerSends(t *testing.T) {
-	w := httptest.NewRecorder()
-	httpx.Error(w, 404, errors.New("no element matches selector"))
-
-	var wire struct {
-		Code  string `json:"code"`
-		Error string `json:"error"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &wire); err != nil {
-		t.Fatalf("httpx.Error did not produce the error envelope: %v (%s)", err, w.Body.String())
-	}
-	if wire.Code == "" {
-		t.Fatal("httpx.Error stamped no code, so this parity check would compare against nothing")
-	}
-	if wire.Code != genericErrorCode {
-		t.Errorf("httpx.Error now stamps %q but the renderer suppresses %q, so every uncoded refusal would render with a meaningless suffix again — update genericErrorCode", wire.Code, genericErrorCode)
-	}
-	// The other half: a code that is NOT the sentinel must still reach the reader.
-	if !codeAddsInformation("tab_not_found", "unauthorized") {
-		t.Error("a real code was classified as adding nothing; the suppression is too wide")
-	}
-}
-
 func quoteJSON(s string) string {
 	encoded, err := json.Marshal(s)
 	if err != nil {

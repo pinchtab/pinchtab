@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/remedy"
 )
 
@@ -109,7 +110,7 @@ func UseCachedTab(c CachedTab) { cachedTab = c }
 // wire: the generic code httpx.Error writes for the bridge and the orchestrator, and
 // browser_crashed when the tab died with its browser. Every other 404 that names the tab
 // (ref_not_found puts it in its message) is about something inside a tab that is still alive.
-var missingTabCodes = map[string]bool{genericErrorCode: true, "browser_crashed": true}
+var missingTabCodes = map[string]bool{httpx.CodeGeneric: true, httpx.CodeBrowserCrashed: true}
 
 // namesCachedTab is the one classifier both consumers share: the formatter for the
 // wording, the terminal path for the clearing. Pure.
@@ -159,22 +160,11 @@ func clearCachedTabOnFailure(statusCode int, body []byte) string {
 	return "   The cached current tab is now cleared, so that retry will target the server's current tab.\n"
 }
 
-// genericErrorCode is the code httpx.Error stamps on every UNCODED refusal — the largest
-// error family in the product by a wide margin. It carries no information beyond the status
-// that is already printed, so rendering it appends a bare "(error)" to the most common error
-// shape and leaves a reader wondering what it denotes.
-//
-// Declared here rather than imported: the CLI is a client of the WIRE, not of the server's
-// error helper, so it should not take a runtime dependency on it. TestTheGenericSentinelStill
-// MatchesWhatTheServerSends drives httpx.Error and asserts the wire code is this value, which
-// pins the agreement more tightly than a shared symbol would — it compares the bytes.
-const genericErrorCode = "error"
-
 // codeAddsInformation is the rule the suffix exists for, stated once. A code repeats nothing
 // the reader already has: not the message beside it, and not the generic sentinel that every
 // uncoded refusal carries.
 func codeAddsInformation(code, message string) bool {
-	return code != "" && code != message && code != genericErrorCode
+	return code != "" && code != message && code != httpx.CodeGeneric
 }
 
 func renderAPIErrorBody(statusCode int, body []byte) string {

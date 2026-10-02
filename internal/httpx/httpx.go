@@ -64,7 +64,7 @@ func Error(w http.ResponseWriter, code int, err error) {
 	if message == "" {
 		message = "error"
 	}
-	ErrorCode(w, code, "error", message, false, nil)
+	ErrorCode(w, code, CodeGeneric, message, false, nil)
 }
 
 func NoRoute(w http.ResponseWriter, r *http.Request, status int) {

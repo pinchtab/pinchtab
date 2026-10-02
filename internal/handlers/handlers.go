@@ -201,7 +201,7 @@ func (h *Handlers) errorWithCrashContext(w http.ResponseWriter, status int, err 
 		httpx.Error(w, status, err)
 		return
 	}
-	httpx.ErrorCode(w, status, "browser_crashed", annotated, false, details)
+	httpx.ErrorCode(w, status, httpx.CodeBrowserCrashed, annotated, false, details)
 }
 
 // errorCodeWithCrashContext is httpx.ErrorCode plus the crash annotation. The

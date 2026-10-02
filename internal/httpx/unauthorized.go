@@ -12,6 +12,9 @@ const (
 	CodeMissingToken = "missing_token"
 	CodeBadToken     = "bad_token"
 	CodeBadSession   = "bad_session"
+
+	CodeGeneric        = "error"
+	CodeBrowserCrashed = "browser_crashed"
 )
 
 func UnauthorizedSession(w http.ResponseWriter) {
