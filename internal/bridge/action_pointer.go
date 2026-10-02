@@ -19,7 +19,7 @@ import (
 )
 
 type pointerOps struct {
-	scrollByCoordinate      func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error
+	scrollByCoordinate      func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) (bridgecdpops.ScrollPosition, error)
 	mouseMoveByCoordinate   func(ctx context.Context, x, y float64) error
 	mouseDownByCoordinate   func(ctx context.Context, x, y float64, button string, modifiers int) error
 	mouseUpByCoordinate     func(ctx context.Context, x, y float64, button string, modifiers int) error
@@ -586,7 +586,7 @@ func (b *Bridge) actionMouseWheel(ctx context.Context, req ActionRequest) (map[s
 			return nil, fmt.Errorf("resolve wheel viewport center: %w", err)
 		}
 	}
-	if err := b.pointer().scrollByCoordinate(ctx, x, y, deltaX, deltaY, req.Modifiers); err != nil {
+	if _, err := b.pointer().scrollByCoordinate(ctx, x, y, deltaX, deltaY, req.Modifiers); err != nil {
 		return nil, err
 	}
 	b.rememberPointerPosition(req.TabID, x, y)
@@ -630,31 +630,33 @@ func (b *Bridge) actionScroll(ctx context.Context, req ActionRequest) (map[strin
 		return map[string]any{"scrolled": true}, cdptk.ScrollNodeIntoView(ctx, nodeID)
 	}
 
-	scrollX, scrollY, err := scrollDelta(req)
+	deltaX, deltaY, err := scrollDelta(req)
 	if err != nil {
 		return nil, err
 	}
 
-	scrollTargetX := req.X
-	scrollTargetY := req.Y
+	targetX := req.X
+	targetY := req.Y
 	if !req.HasXY {
-		scrollTargetX, scrollTargetY, err = b.pointer().scrollViewportCenter(ctx)
+		targetX, targetY, err = b.pointer().scrollViewportCenter(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("resolve scroll viewport center: %w", err)
 		}
 	}
 
+	position, err := b.pointer().scrollByCoordinate(ctx, targetX, targetY, deltaX, deltaY, req.Modifiers)
+	if err != nil {
+		return nil, err
+	}
 	return map[string]any{
-			"scrolled": true,
-			// Legacy keys retained for compatibility with existing clients.
-			"x":       scrollX,
-			"y":       scrollY,
-			"targetX": scrollTargetX,
-			"targetY": scrollTargetY,
-			"deltaX":  scrollX,
-			"deltaY":  scrollY,
-		},
-		b.pointer().scrollByCoordinate(ctx, scrollTargetX, scrollTargetY, scrollX, scrollY, req.Modifiers)
+		"scrolled": position.Moved,
+		"scrollX":  position.X,
+		"scrollY":  position.Y,
+		"targetX":  targetX,
+		"targetY":  targetY,
+		"deltaX":   deltaX,
+		"deltaY":   deltaY,
+	}, nil
 }
 
 func (b *Bridge) actionDrag(ctx context.Context, req ActionRequest) (map[string]any, error) {

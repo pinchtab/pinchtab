@@ -57,11 +57,11 @@ func TestMouseUpByCoordinate_ContextCancelled(t *testing.T) {
 	}
 }
 
-func TestMouseWheelByCoordinate_ContextCancelled(t *testing.T) {
+func TestScrollByCoordinate_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := bridgecdpops.MouseWheelByCoordinate(ctx, 10, 20, 0, 120, 0)
+	_, err := bridgecdpops.ScrollByCoordinate(ctx, 10, 20, 0, 120, 0)
 	if err == nil {
 		t.Fatal("expected error for cancelled context")
 	}
@@ -107,7 +107,7 @@ func TestCoordinateActions_RejectNegativeCoordinates(t *testing.T) {
 	if err := bridgecdpops.MouseUpByCoordinate(ctx, -1, 0, "middle", 0); err == nil {
 		t.Fatal("expected mouse up negative coordinate to fail")
 	}
-	if err := bridgecdpops.MouseWheelByCoordinate(ctx, 0, -1, 0, 100, 0); err == nil {
+	if _, err := bridgecdpops.ScrollByCoordinate(ctx, 0, -1, 0, 100, 0); err == nil {
 		t.Fatal("expected mouse wheel negative coordinate to fail")
 	}
 }

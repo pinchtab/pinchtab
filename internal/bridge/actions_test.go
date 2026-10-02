@@ -11,6 +11,7 @@ import (
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -126,7 +127,7 @@ func TestMouseWheelAction_UsesExplicitWheelDeltas(t *testing.T) {
 	b.pointerOps = ops
 
 	called := false
-	ops.scrollByCoordinate = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
+	ops.scrollByCoordinate = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) (bridgecdpops.ScrollPosition, error) {
 		called = true
 		if x != 50 || y != 75 {
 			t.Fatalf("wheel coordinates = (%v, %v), want (50, 75)", x, y)
@@ -134,7 +135,7 @@ func TestMouseWheelAction_UsesExplicitWheelDeltas(t *testing.T) {
 		if deltaX != 123 || deltaY != -456 {
 			t.Fatalf("wheel delta = (%d, %d), want (123, -456)", deltaX, deltaY)
 		}
-		return nil
+		return bridgecdpops.ScrollPosition{}, nil
 	}
 	ops.scrollViewportCenter = func(context.Context) (float64, float64, error) {
 		t.Fatal("viewport center should not be used when explicit coordinates are provided")
@@ -197,9 +198,9 @@ func TestMouseWheelAction_ForwardsModifiers(t *testing.T) {
 	b.pointerOps = ops
 
 	var gotModifiers int
-	ops.scrollByCoordinate = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
+	ops.scrollByCoordinate = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) (bridgecdpops.ScrollPosition, error) {
 		gotModifiers = modifiers
-		return nil
+		return bridgecdpops.ScrollPosition{}, nil
 	}
 
 	// Shift+wheel (horizontal scroll intent): the bitmask must reach the wheel
@@ -292,7 +293,7 @@ func TestMouseWheelAction_UsesViewportCenterWhenPointerMissing(t *testing.T) {
 		return 300, 200, nil
 	}
 	called := false
-	ops.scrollByCoordinate = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
+	ops.scrollByCoordinate = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) (bridgecdpops.ScrollPosition, error) {
 		called = true
 		if x != 300 || y != 200 {
 			t.Fatalf("wheel coordinates = (%v, %v), want (300, 200)", x, y)
@@ -300,7 +301,7 @@ func TestMouseWheelAction_UsesViewportCenterWhenPointerMissing(t *testing.T) {
 		if deltaX != 0 || deltaY != 120 {
 			t.Fatalf("wheel delta = (%d, %d), want (0, 120)", deltaX, deltaY)
 		}
-		return nil
+		return bridgecdpops.ScrollPosition{}, nil
 	}
 	if _, err := b.Actions[ActionMouseWheel](context.Background(), ActionRequest{TabID: "tab-missing"}); err != nil {
 		t.Fatalf("unexpected wheel error: %v", err)
@@ -876,7 +877,7 @@ func TestScrollAction_UsesCoordinateWheelPath(t *testing.T) {
 	b.pointerOps = ops
 
 	called := false
-	ops.scrollByCoordinate = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
+	ops.scrollByCoordinate = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) (bridgecdpops.ScrollPosition, error) {
 		called = true
 		if x != 12.5 || y != 34.5 {
 			t.Fatalf("wheel coordinates = (%v, %v), want (12.5, 34.5)", x, y)
@@ -884,7 +885,7 @@ func TestScrollAction_UsesCoordinateWheelPath(t *testing.T) {
 		if deltaX != 0 || deltaY != 50 {
 			t.Fatalf("wheel delta = (%d, %d), want (0, 50)", deltaX, deltaY)
 		}
-		return nil
+		return bridgecdpops.ScrollPosition{X: 3, Y: 40, Moved: true}, nil
 	}
 	ops.scrollViewportCenter = func(context.Context) (float64, float64, error) {
 		t.Fatal("viewport center should not be used when explicit coordinates are provided")
@@ -903,8 +904,16 @@ func TestScrollAction_UsesCoordinateWheelPath(t *testing.T) {
 	if !called {
 		t.Fatal("expected coordinate wheel path to be used")
 	}
-	if result["x"] != 0 || result["y"] != 50 {
+	if result["deltaX"] != 0 || result["deltaY"] != 50 {
 		t.Fatalf("unexpected result payload: %#v", result)
+	}
+	if result["scrollX"] != 3.0 || result["scrollY"] != 40.0 || result["scrolled"] != true {
+		t.Fatalf("result does not carry the scroller position: %#v", result)
+	}
+	for _, legacy := range []string{"x", "y"} {
+		if _, ok := result[legacy]; ok {
+			t.Fatalf("result still carries the legacy %q key: %#v", legacy, result)
+		}
 	}
 }
 
@@ -918,7 +927,7 @@ func TestScrollAction_UsesViewportCenterWhenCoordinatesMissing(t *testing.T) {
 	}
 
 	called := false
-	ops.scrollByCoordinate = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
+	ops.scrollByCoordinate = func(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) (bridgecdpops.ScrollPosition, error) {
 		called = true
 		if x != 400 || y != 300 {
 			t.Fatalf("wheel coordinates = (%v, %v), want (400, 300)", x, y)
@@ -926,7 +935,7 @@ func TestScrollAction_UsesViewportCenterWhenCoordinatesMissing(t *testing.T) {
 		if deltaX != 0 || deltaY != 120 {
 			t.Fatalf("wheel delta = (%d, %d), want (0, 120)", deltaX, deltaY)
 		}
-		return nil
+		return bridgecdpops.ScrollPosition{}, nil
 	}
 
 	result, err := b.Actions[ActionScroll](context.Background(), ActionRequest{})
@@ -936,8 +945,11 @@ func TestScrollAction_UsesViewportCenterWhenCoordinatesMissing(t *testing.T) {
 	if !called {
 		t.Fatal("expected viewport-center wheel path to be used")
 	}
-	if result["x"] != 0 || result["y"] != 120 {
+	if result["deltaX"] != 0 || result["deltaY"] != 120 {
 		t.Fatalf("unexpected result payload: %#v", result)
+	}
+	if result["scrolled"] != false {
+		t.Fatalf("a scroller that did not move reported scrolled: %#v", result)
 	}
 	if result["targetX"] != 400.0 || result["targetY"] != 300.0 {
 		t.Fatalf("unexpected scroll target payload: %#v", result)
@@ -952,9 +964,9 @@ func TestScrollAction_PropagatesViewportCenterError(t *testing.T) {
 	ops.scrollViewportCenter = func(context.Context) (float64, float64, error) {
 		return 0, 0, context.Canceled
 	}
-	ops.scrollByCoordinate = func(context.Context, float64, float64, int, int, int) error {
+	ops.scrollByCoordinate = func(context.Context, float64, float64, int, int, int) (bridgecdpops.ScrollPosition, error) {
 		t.Fatal("wheel dispatch should not be called when viewport center resolution fails")
-		return nil
+		return bridgecdpops.ScrollPosition{}, nil
 	}
 
 	_, err := b.Actions[ActionScroll](context.Background(), ActionRequest{})

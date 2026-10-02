@@ -7,8 +7,8 @@ curl -X POST http://localhost:9867/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"scroll","scrollY":800}'
 # Response: {"success":true,"result":{"scrolled":true,...},"route":{...}}
-# result also carries deltaX/deltaY (the scroll applied), targetX/targetY (the point scrolled at)
-# and legacy x/y (same as deltaX/deltaY); an element scroll returns only scrolled:true
+# result also carries scrollX/scrollY (where the scroller ended up), deltaX/deltaY (the scroll
+# requested) and targetX/targetY (the point scrolled at); an element scroll returns only scrolled:true
 
 # CLI Alternative (human-readable by default)
 pinchtab scroll down
@@ -35,6 +35,11 @@ Notes:
   axis (`--dy 0 --dx 500`) is a real scroll and passes through. Only a request with no delta
   and no target at all scrolls down by the default 120px
 - a direction keyword (`up`, `down`, `left`, `right`) scrolls 800px per step
+- the scroll moves the nearest scrollable ancestor of the element at `targetX`/`targetY` — an
+  inner list or panel under that point — or the page when there is none. `scrollX`/`scrollY` in
+  the result are that scroller's position afterwards, clamped to its extent, not the delta asked for
+- `scrolled` is `true` only when that position changed, so a scroll at the end of the page or list
+  answers `scrolled:false` — the stop condition for a "scroll until nothing new loads" loop
 
 - use `--snap` to output an interactive snapshot after scrolling
 - use `--snap-diff` to output only the changes from the previous snapshot

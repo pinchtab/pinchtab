@@ -13,6 +13,7 @@ import (
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/input"
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/cdptk"
 )
@@ -360,20 +361,40 @@ func MouseUpByCoordinate(ctx context.Context, x, y float64, button string, modif
 	})
 }
 
-func MouseWheelByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
+// ScrollPosition is where the scroller a wheel acted on came to rest.
+type ScrollPosition struct {
+	X     float64 `json:"x"`
+	Y     float64 `json:"y"`
+	Moved bool    `json:"moved"`
+}
+
+func ScrollByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) (ScrollPosition, error) {
 	if err := validatePointerCoordinates(x, y); err != nil {
-		return err
+		return ScrollPosition{}, err
 	}
 
 	// Synthetic Input.dispatchMouseEvent(mouseWheel) in --headless=new no
 	// longer reliably fires `wheel` JS listeners and can stall on the
 	// compositor ack chain. Dispatch a real WheelEvent at the point under
-	// the cursor so listeners run, then scroll the window if no listener
-	// called preventDefault(). Held modifiers (Shift for horizontal scroll,
-	// Ctrl for zoom intent) are reflected on the event init.
-	expr := fmt.Sprintf(`(function() {
+	// the cursor so listeners run, then scroll the nearest wheel-scrollable
+	// ancestor if no listener called preventDefault(). Held modifiers (Shift
+	// for horizontal scroll, Ctrl for zoom intent) are reflected on the event
+	// init. The scroll is instant because a smooth one has not moved yet when
+	// the position is read, and a hidden page skips the frame wait because it
+	// never renders one.
+	expr := fmt.Sprintf(`(async function() {
 		var dx = %d, dy = %d, cx = %f, cy = %f;
 		var target = document.elementFromPoint(cx, cy) || document.documentElement;
+		var wheelScrolls = function(el) {
+			var style = getComputedStyle(el), overflows = /auto|scroll|overlay/;
+			return (dy !== 0 && overflows.test(style.overflowY) && el.scrollHeight > el.clientHeight) ||
+				(dx !== 0 && overflows.test(style.overflowX) && el.scrollWidth > el.clientWidth);
+		};
+		var scroller = document.scrollingElement || document.documentElement;
+		for (var el = target; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
+			if (wheelScrolls(el)) { scroller = el; break; }
+		}
+		var startX = scroller.scrollLeft, startY = scroller.scrollTop;
 		var ev = new WheelEvent('wheel', {
 			deltaX: dx, deltaY: dy,
 			clientX: cx, clientY: cy,
@@ -381,12 +402,26 @@ func MouseWheelByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY, m
 			bubbles: true, cancelable: true
 		});
 		if (target.dispatchEvent(ev)) {
-			window.scrollBy(dx, dy);
+			scroller.scrollBy({left: dx, top: dy, behavior: 'instant'});
 		}
+		if (!document.hidden) {
+			await new Promise(function(resolve) {
+				var fallback = setTimeout(resolve, 500);
+				requestAnimationFrame(function() { clearTimeout(fallback); resolve(); });
+			});
+		}
+		return {
+			x: scroller.scrollLeft, y: scroller.scrollTop,
+			moved: scroller.scrollLeft !== startX || scroller.scrollTop !== startY
+		};
 	})()`, deltaX, deltaY, x, y,
 		modifiers&modAlt != 0, modifiers&modCtrl != 0,
 		modifiers&modMeta != 0, modifiers&modShift != 0)
-	return chromedp.Run(ctx, chromedp.Evaluate(expr, nil))
+	var position ScrollPosition
+	err := chromedp.Run(ctx, chromedp.Evaluate(expr, &position, func(p *runtime.EvaluateParams) *runtime.EvaluateParams {
+		return p.WithAwaitPromise(true)
+	}))
+	return position, err
 }
 
 func ClickByCoordinate(ctx context.Context, x, y float64, modifiers int) error {
@@ -535,10 +570,6 @@ func DragBetweenPoints(ctx context.Context, x, y, endX, endY float64, button str
 
 func HoverByCoordinate(ctx context.Context, x, y float64) error {
 	return MouseMoveByCoordinate(ctx, x, y)
-}
-
-func ScrollByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY, modifiers int) error {
-	return MouseWheelByCoordinate(ctx, x, y, deltaX, deltaY, modifiers)
 }
 
 func HoverByNodeID(ctx context.Context, nodeID int64) error {
