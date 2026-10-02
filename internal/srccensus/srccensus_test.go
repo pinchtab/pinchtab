@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -457,20 +458,35 @@ func TestTreeStillWalksARootThatIsItselfACheckoutButNotItsGitSubtree(t *testing.
 }
 
 func TestTreeSkipsDependencyAndBuildTreesByName(t *testing.T) {
-	root := writeTree(t, map[string]string{
+	pinned := []string{"node_modules", "dist", "vendor", ".gocache", ".tmp"}
+
+	files := map[string]string{
 		"real.go":               "package a\n",
 		"pkg/one.go":            "package b\n",
-		"node_modules/dep.go":   "package c\n",
-		"dist/built.go":         "package d\n",
-		"vendor/vendored.go":    "package e\n",
-		"dist/nested/deeper.go": "package f\n",
-	})
+		"tmpx/walked.go":        "package c\n",
+		"dist/nested/deeper.go": "package d\n",
+	}
+	for _, dir := range pinned {
+		files[dir+"/planted.go"] = "package planted\n"
+	}
+	root := writeTree(t, files)
 
 	got := treeNames(Tree(t, root, 2))
 
-	want := []string{"pkg/one.go", "real.go"}
+	for _, name := range got {
+		if dir, _, _ := strings.Cut(name, "/"); slices.Contains(pinned, dir) {
+			t.Errorf("Tree returned %s; %s must be skipped by name", name, dir)
+		}
+	}
+	want := []string{"pkg/one.go", "real.go", "tmpx/walked.go"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("Tree = %v, want %v", got, want)
+	}
+
+	for dir := range treeSkipDirs {
+		if dir != ".git" && !slices.Contains(pinned, dir) {
+			t.Errorf("treeSkipDirs[%q] has no fixture; add it to pinned so its removal turns this test red", dir)
+		}
 	}
 }
 
