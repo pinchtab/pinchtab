@@ -1965,3 +1965,68 @@ func TestFocusingActionsOnAReRenderedRefRecoverOrAskForASnapshot(t *testing.T) {
 		})
 	}
 }
+
+func postBatchWaitNavClick(t *testing.T, b *submitActionBridge) waitNavResult {
+	t.Helper()
+	h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+	req := httptest.NewRequest(http.MethodPost, "/actions", bytes.NewBufferString(`{"tabId":"tab1","actions":[{"kind":"click","nodeId":42,"waitNav":true}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleActions(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Results []struct {
+			Success bool          `json:"success"`
+			Result  waitNavResult `json:"result"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Results) != 1 || !resp.Results[0].Success {
+		t.Fatalf("results = %+v, want one successful step: %s", resp.Results, w.Body.String())
+	}
+	return resp.Results[0].Result
+}
+
+func TestBatchWaitNavClickOnABlockedSubmitReportsValidationBlocked(t *testing.T) {
+	b := newSubmitActionBridge(t.Context())
+	b.invalidFields = []submitInvalidField{{Name: "name", Label: "Name", Message: "Please fill out this field."}}
+
+	got := postBatchWaitNavClick(t, b)
+
+	if got.Navigated == nil || *got.Navigated {
+		t.Fatalf("navigated = %v, want false", got.Navigated)
+	}
+	if got.PostState == nil || got.PostState.Status != "blocked" || got.PostState.Signal != "validation_blocked" {
+		t.Fatalf("postState = %+v, want blocked validation_blocked", got.PostState)
+	}
+	if len(b.armedNodeIDs) != 1 || b.armedNodeIDs[0] != 42 || b.actionCallsAtArm != 0 {
+		t.Fatalf("armed node IDs = %v after %d dispatches, want node 42 armed before the dispatch", b.armedNodeIDs, b.actionCallsAtArm)
+	}
+	if len(b.disarmedNodeIDs) != 1 || b.disarmedNodeIDs[0] != 42 {
+		t.Fatalf("disarmed node IDs = %v, want the armed node 42", b.disarmedNodeIDs)
+	}
+}
+
+func TestBatchWaitNavClickOnANavigatingSubmitReportsTheLandingWithoutProbing(t *testing.T) {
+	b := newSubmitActionBridge(t.Context())
+	b.invalidFields = []submitInvalidField{{Name: "name", Message: "Please fill out this field."}}
+	b.executeActionFn = func(context.Context, string, bridge.ActionRequest) (map[string]any, error) {
+		return navigatedActionResult(), nil
+	}
+
+	got := postBatchWaitNavClick(t, b)
+
+	if got.Navigated == nil || !*got.Navigated || got.URL == "" {
+		t.Fatalf("result = %+v, want navigated with a landed URL", got)
+	}
+	if got.PostState != nil {
+		t.Fatalf("postState = %+v, want none on a navigating click", got.PostState)
+	}
+	if len(b.probedNodeIDs) != 0 {
+		t.Fatalf("probed node IDs = %v, want no validation probe after a navigation", b.probedNodeIDs)
+	}
+}
