@@ -19,6 +19,15 @@ import (
 // error — which must surface as 5xx, not 404. Callers classify with errors.Is.
 var ErrSelectorNoMatch = errors.New("selector matched no element")
 
+// RefNotInCacheError marks a ref the snapshot cache does not hold. It unwraps to
+// ErrSelectorNoMatch so no-match classifiers keep working, while callers that owe
+// the caller a re-snapshot remedy single it out with errors.As.
+type RefNotInCacheError struct{ Ref string }
+
+func (e *RefNotInCacheError) Error() string { return "ref " + e.Ref + " not in snapshot cache" }
+
+func (e *RefNotInCacheError) Unwrap() error { return ErrSelectorNoMatch }
+
 // ErrSelectorOutsideScope marks a cached ref that still exists but belongs to
 // the background document rather than the active modal subtree. Callers must
 // not treat this as a stale ref or invoke global semantic recovery.
@@ -518,12 +527,10 @@ func (s frameScope) resolveAt(ctx context.Context, sel selector.Selector, index 
 }
 
 func (s frameScope) resolveRef(_ context.Context, sel selector.Selector, refCache *RefCache) (int64, error) {
-	if refCache != nil {
-		if target, ok := refCache.Lookup(sel.Value); ok {
-			return target.BackendNodeID, nil
-		}
+	if target, ok := refCache.Lookup(sel.Value); ok {
+		return target.BackendNodeID, nil
 	}
-	return 0, fmt.Errorf("ref %s not in snapshot cache: %w", sel.Value, ErrSelectorNoMatch)
+	return 0, &RefNotInCacheError{Ref: sel.Value}
 }
 
 type nodeScope struct{ backendNodeID int64 }
@@ -538,12 +545,9 @@ func (s nodeScope) resolveAt(ctx context.Context, sel selector.Selector, index i
 // an element behind the dialog. The outside-scope sentinel is distinct from
 // not-found: callers must not treat it as a stale ref.
 func (s nodeScope) resolveRef(ctx context.Context, sel selector.Selector, refCache *RefCache) (int64, error) {
-	if refCache == nil {
-		return 0, fmt.Errorf("ref %s not in snapshot cache: %w", sel.Value, ErrSelectorNoMatch)
-	}
 	target, ok := refCache.Lookup(sel.Value)
 	if !ok {
-		return 0, fmt.Errorf("ref %s not in snapshot cache: %w", sel.Value, ErrSelectorNoMatch)
+		return 0, &RefNotInCacheError{Ref: sel.Value}
 	}
 	inside, err := BackendNodeWithinScope(ctx, s.backendNodeID, target.BackendNodeID)
 	if err != nil {

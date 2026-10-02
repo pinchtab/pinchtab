@@ -92,12 +92,12 @@ func (h *Handlers) HandleText(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if scopeErr != nil {
-		respondSelectorFailure(w, scopeErr)
+		h.respondSelectorFailure(w, resolvedTabID, scopeErr)
 		return
 	}
 	if workErr != nil {
 		if elementRead {
-			respondSelectorFailure(w, fmt.Errorf("element text extract: %w", workErr))
+			h.respondSelectorFailure(w, resolvedTabID, fmt.Errorf("element text extract: %w", workErr))
 			return
 		}
 		httpx.Error(w, http.StatusInternalServerError, workErr)

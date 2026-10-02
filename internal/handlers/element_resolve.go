@@ -71,17 +71,22 @@ func selectorFailureStatus(err error) int {
 	}
 }
 
-// CodeElementNotFound is the machine-readable name for the one condition this card
-// is about, so an agent can branch on it instead of matching prose. Every surface
-// that resolves a selector answers with it, rather than the generic "error" code
-// each of them used to produce with a different status beside it.
-const CodeElementNotFound = "element_not_found"
+const (
+	CodeElementNotFound = "element_not_found"
+	CodeRefNotFound     = "ref_not_found"
+)
 
 // respondSelectorFailure is the ONE way a selector failure leaves a handler: the
 // status from the owner above, and a named code for the miss so the class is
-// readable without parsing the message. Handlers that must return rather than write
+// readable without parsing the message. A ref the snapshot cache lacks answers
+// exactly as an action naming it does. Handlers that must return rather than write
 // (the screenshot clip path) call selectorFailureStatus directly.
-func respondSelectorFailure(w http.ResponseWriter, err error) {
+func (h *Handlers) respondSelectorFailure(w http.ResponseWriter, tabID string, err error) {
+	var missingRef *bridge.RefNotInCacheError
+	if errors.As(err, &missingRef) {
+		writeTargetNotFound(w, tabID, h.refNotFoundOn(tabID, missingRef.Ref), nil)
+		return
+	}
 	status := selectorFailureStatus(err)
 	if status == http.StatusNotFound {
 		httpx.ErrorCode(w, status, CodeElementNotFound, err.Error(), false, nil)

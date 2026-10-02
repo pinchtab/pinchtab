@@ -45,7 +45,7 @@ func (h *Handlers) HandleAnnotate(w http.ResponseWriter, r *http.Request) {
 	// status, rather than leaving the collector to produce a generic 500.
 	if selector != "" {
 		if _, sErr := h.resolveSelectorNodeID(tCtx, resolvedTabID, selector); sErr != nil {
-			respondSelectorFailure(w, frameScopedSelectorError("selector", sErr))
+			h.respondSelectorFailure(w, resolvedTabID, frameScopedSelectorError("selector", sErr))
 			return
 		}
 	}

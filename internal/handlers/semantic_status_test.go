@@ -238,13 +238,13 @@ func TestOneMapperServesEverySelectorResolvingPath(t *testing.T) {
 	pkg := srccensus.Load(t, ".", 20)
 
 	callers := map[string]bool{}
-	for _, name := range []string{"selectorFailureStatus", "respondSelectorFailure"} {
+	for _, name := range []string{"selectorFailureStatus", "h.respondSelectorFailure"} {
 		for _, site := range pkg.Calls(t, name) {
 			callers[site.Func] = true
 		}
 	}
 	exits := map[string]bool{}
-	for _, site := range pkg.Calls(t, "respondSelectorFailure") {
+	for _, site := range pkg.Calls(t, "h.respondSelectorFailure") {
 		exits[site.Func] = true
 	}
 	for _, required := range []string{"HandleText", "collectSnapshot", "handleInspect"} {
@@ -306,7 +306,7 @@ func TestTheGenericWriterBanRedsOnTheShapeItExistsFor(t *testing.T) {
 		{"one line", "\thttpx.Error(w, selectorFailureStatus(err), err)\n", []int{1}},
 		{"with the code writer", "\n\thttpx.ErrorCode(w, selectorFailureStatus(err), \"x\", msg, false, nil)\n", []int{2}},
 		{"split across lines", "\thttpx.Error(\n\t\tw,\n\t\tselectorFailureStatus(err),\n\t\terr)\n", []int{1}},
-		{"the one exit", "\trespondSelectorFailure(w, err)\n", nil},
+		{"the one exit", "\th.respondSelectorFailure(w, tabID, err)\n", nil},
 		{"a producer carrying the status", "\treturn &statusError{selectorFailureStatus(err), err}\n", nil},
 		{"a literal status", "\thttpx.Error(w, 500, err)\n", nil},
 	} {

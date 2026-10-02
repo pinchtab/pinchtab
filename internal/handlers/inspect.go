@@ -94,7 +94,7 @@ func (h *Handlers) handleInspect(w http.ResponseWriter, r *http.Request, kind in
 	payload, err := h.inspectPayload(tCtx, resolvedTabID, targetFrameID, r.URL.Query().Get("selector"), r.URL.Query().Get("ref"), kind)
 	h.publishVocabIfReepoched(w, resolvedTabID, vocabBefore)
 	if err != nil {
-		respondSelectorFailure(w, err)
+		h.respondSelectorFailure(w, resolvedTabID, err)
 		return
 	}
 
@@ -196,13 +196,9 @@ func inspectDocumentExpression(kind inspectKind) string {
 }
 
 func (h *Handlers) inspectByRef(ctx context.Context, tabID, ref string, kind inspectKind) (inspectPayload, error) {
-	cache := h.Bridge.GetRefCache(tabID)
-	if cache == nil {
-		return inspectPayload{}, fmt.Errorf("ref not found: %s (no snapshot cache)", ref)
-	}
-	target, ok := cache.Lookup(ref)
+	target, ok := h.Bridge.GetRefCache(tabID).Lookup(ref)
 	if !ok {
-		return inspectPayload{}, fmt.Errorf("ref not found: %s", ref)
+		return inspectPayload{}, &bridge.RefNotInCacheError{Ref: ref}
 	}
 	return h.inspectByBackendNodeID(ctx, target.BackendNodeID, kind)
 }

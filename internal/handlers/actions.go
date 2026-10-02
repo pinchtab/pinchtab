@@ -87,7 +87,7 @@ func writeTargetNotFound(w http.ResponseWriter, tabID string, err error, rr *rec
 	if rr != nil {
 		details["recovery"] = rr
 	}
-	httpx.ErrorCode(w, http.StatusNotFound, "ref_not_found", err.Error(), false, details)
+	httpx.ErrorCode(w, http.StatusNotFound, CodeRefNotFound, err.Error(), false, details)
 }
 
 // writeNoOptionMatch classifies a select whose value matched no option as a

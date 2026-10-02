@@ -101,7 +101,7 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 		// named code included; a clip failure is still a server fault and keeps
 		// the crash annotation, which is what that path exists for.
 		if clipErr.status == http.StatusNotFound {
-			respondSelectorFailure(w, clipErr.err)
+			h.respondSelectorFailure(w, resolvedTabID, clipErr.err)
 			return
 		}
 		h.errorWithCrashContext(w, clipErr.status, clipErr.err)

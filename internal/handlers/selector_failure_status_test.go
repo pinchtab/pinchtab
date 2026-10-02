@@ -111,9 +111,9 @@ func assertSelectorAnswers(t *testing.T, probes []selectorProbe) {
 			t.Errorf("%s answers %d for a selector that matched nothing; the request was well formed and the page simply lacks the element, so every read verb answers 404 — a 5xx files a caller-side probe as a server fault and gets retried, a 400 calls a valid request malformed",
 				probe.path, probe.missStatus)
 		}
-		if probe.missCode != CodeElementNotFound {
-			t.Errorf("%s answers code %q, want %q so an agent can branch on the class instead of matching prose",
-				probe.path, probe.missCode, CodeElementNotFound)
+		if probe.missCode != CodeRefNotFound {
+			t.Errorf("%s answers code %q for a ref missing from the snapshot, want %q — the code and remedy /action gives for the same ref",
+				probe.path, probe.missCode, CodeRefNotFound)
 		}
 	}
 }
@@ -124,6 +124,7 @@ func TestTheEnumerationRedsOnAVerbWithTheWrongStatus(t *testing.T) {
 		{"/planted-html", 200, http.StatusInternalServerError, "error"},
 		{"/planted-capture", 200, http.StatusBadRequest, "error"},
 		{"/planted-code", 200, http.StatusNotFound, "error"},
+		{"/planted-element-code", 200, http.StatusNotFound, CodeElementNotFound},
 	} {
 		fake := &testing.T{}
 		assertSelectorAnswers(fake, []selectorProbe{planted})

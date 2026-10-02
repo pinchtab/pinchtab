@@ -302,7 +302,7 @@ func (h *Handlers) collectSnapshot(w http.ResponseWriter, tCtx context.Context, 
 		return res, false
 	}
 	if err := cmp.Or(scopeErr, workErr); err != nil {
-		respondSelectorFailure(w, err)
+		h.respondSelectorFailure(w, tabID, err)
 		return res, false
 	}
 

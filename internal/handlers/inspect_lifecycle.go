@@ -105,7 +105,7 @@ func (h *Handlers) inspectElement(w http.ResponseWriter, r *http.Request, tabID 
 	result, err := fn(tCtx, resolvedTabID)
 	h.publishVocabIfReepoched(w, resolvedTabID, vocabBefore)
 	if err != nil {
-		respondSelectorFailure(w, err)
+		h.respondSelectorFailure(w, resolvedTabID, err)
 		return
 	}
 	httpx.JSON(w, 200, result)

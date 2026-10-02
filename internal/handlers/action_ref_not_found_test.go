@@ -248,3 +248,47 @@ func decodeJSONMap(t *testing.T, raw []byte) map[string]any {
 	}
 	return out
 }
+
+func readAbsentRef(t *testing.T, path string) (*httptest.ResponseRecorder, map[string]any) {
+	t.Helper()
+	mb := &mockBridge{refCache: &bridge.RefCache{Refs: map[string]int64{"e1": 7}}}
+	h := New(mb, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+	w := httptest.NewRecorder()
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux, nil)
+	mux.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+	return w, decodeJSONMap(t, w.Body.Bytes())
+}
+
+func TestAReadNamingAnAbsentRefAnswersAsAnActionDoes(t *testing.T) {
+	click, clickBody := postAbsentRef(t, &bridge.RefCache{Refs: map[string]int64{"e1": 7}})
+	clickError, _ := clickBody["error"].(string)
+	for _, path := range []string{"/box?tabId=tab1&selector=e99", "/screenshot?tabId=tab1&format=png&selector=e99"} {
+		t.Run(path, func(t *testing.T) {
+			w, body := readAbsentRef(t, path)
+
+			if w.Code != click.Code || body["code"] != clickBody["code"] {
+				t.Fatalf("status = %d code = %v, want %d %v as on /action: %s", w.Code, body["code"], click.Code, clickBody["code"], w.Body.String())
+			}
+			got, _ := body["error"].(string)
+			if want := "ref e99 not found - take a /snapshot first"; got != want || !strings.HasPrefix(clickError, want) {
+				t.Errorf("error = %q, want %q, the sentence /action opens with (%q)", got, want, clickError)
+			}
+			details, _ := body["details"].(map[string]any)
+			if details["tabId"] != "tab1" {
+				t.Errorf("details.tabId = %v, want tab1: %s", details["tabId"], w.Body.String())
+			}
+		})
+	}
+}
+
+func TestASelectorMatchingNothingKeepsElementNotFound(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	w := httptest.NewRecorder()
+
+	h.respondSelectorFailure(w, "tab1", fmt.Errorf("%w: %q: %w", ErrElementNotFound, "#missing", bridge.ErrSelectorNoMatch))
+
+	if body := decodeJSONMap(t, w.Body.Bytes()); w.Code != http.StatusNotFound || body["code"] != CodeElementNotFound {
+		t.Errorf("status = %d code = %v, want 404 %s: %s", w.Code, body["code"], CodeElementNotFound, w.Body.String())
+	}
+}
