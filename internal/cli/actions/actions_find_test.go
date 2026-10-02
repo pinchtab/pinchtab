@@ -176,3 +176,30 @@ func runFindNoMatchChild(refOnly bool) {
 	}
 	Find(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, "a unicorn that does not exist", cmd)
 }
+
+const findTieChildEnv = "PINCHTAB_TEST_FIND_TIE"
+
+func TestFind_RefOnlyRefusesAnAmbiguousTie(t *testing.T) {
+	if os.Getenv(findTieChildEnv) != "" {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(`{"best_ref":"e3","confidence":"ambiguous","tied_refs":["e3","e1","e2"]}`))
+		}))
+		defer srv.Close()
+		cmd := newFindCmd()
+		_ = cmd.Flags().Set("ref-only", "true")
+		Find(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, "Add button for Blue cup", cmd)
+		return
+	}
+
+	child := exec.Command(os.Args[0], "-test.run=TestFind_RefOnlyRefusesAnAmbiguousTie", "-test.timeout=60s") // #nosec G204 -- re-executes this test binary.
+	child.Env = append(os.Environ(), findTieChildEnv+"=1")
+	raw, err := child.CombinedOutput()
+
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("--ref-only exited with %v on a tie, want non-zero; output:\n%s", err, raw)
+	}
+	if !strings.Contains(string(raw), "e3, e1, e2") {
+		t.Errorf("output does not name the tied refs:\n%s", raw)
+	}
+}

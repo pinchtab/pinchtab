@@ -27,6 +27,7 @@ type findRequest struct {
 type findResponse struct {
 	BestRef      string                  `json:"best_ref"`
 	Confidence   string                  `json:"confidence"`
+	TiedRefs     []string                `json:"tied_refs,omitempty"`
 	Score        float64                 `json:"score"`
 	Matches      []semantic.ElementMatch `json:"matches"`
 	Strategy     string                  `json:"strategy"`
@@ -218,10 +219,39 @@ func (h *Handlers) scanFindCorpusForIDPI(w http.ResponseWriter, ctx context.Cont
 	return scanResult.Warning, false
 }
 
+const (
+	confidenceAmbiguous = "ambiguous"
+	tieScoreMargin      = 0.01
+)
+
+func tiedTopRefs(matches []semantic.ElementMatch) []string {
+	if len(matches) < 2 {
+		return nil
+	}
+	top := matches[0]
+	tied := []string{top.Ref}
+	for _, m := range matches[1:] {
+		sameElement := m.Role == top.Role && m.Name == top.Name
+		if sameElement || top.Score-m.Score <= tieScoreMargin {
+			tied = append(tied, m.Ref)
+		}
+	}
+	if len(tied) < 2 {
+		return nil
+	}
+	return tied
+}
+
 func buildFindResponse(req findRequest, result semantic.FindResult, idpiWarning string, start time.Time) findResponse {
+	confidence := result.ConfidenceLabel()
+	tied := tiedTopRefs(result.Matches)
+	if tied != nil {
+		confidence = confidenceAmbiguous
+	}
 	resp := findResponse{
 		BestRef:      result.BestRef,
-		Confidence:   result.ConfidenceLabel(),
+		Confidence:   confidence,
+		TiedRefs:     tied,
 		Score:        result.BestScore,
 		Matches:      result.Matches,
 		Strategy:     result.Strategy,

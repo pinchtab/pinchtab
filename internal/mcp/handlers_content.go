@@ -72,11 +72,15 @@ func handleFind(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.Call
 
 		bestRef, _ := resp["best_ref"].(string)
 		bestRef = strings.TrimSpace(bestRef)
-		if bestRef != "" {
+		tied, _ := resp["tied_refs"].([]any)
+		switch {
+		case len(tied) > 0:
+			resp["nextActionHint"] = fmt.Sprintf("Ambiguous: refs %v match equally well, so none is safe to act on. Retry pinchtab_find with a query naming what sets the intended one apart (its row, label or position).", tied)
+		case bestRef != "":
 			resp["bestRef"] = bestRef
 			resp["selector"] = bestRef
 			resp["nextActionHint"] = fmt.Sprintf("Use selector %q in pinchtab_click/type/fill/hover. Reuse this ref until page changes; refresh snapshot only after navigation or stale-ref errors.", bestRef)
-		} else {
+		default:
 			resp["nextActionHint"] = "No high-confidence ref found. Consider pinchtab_snapshot compact mode once, then retry pinchtab_find with a more specific query."
 		}
 

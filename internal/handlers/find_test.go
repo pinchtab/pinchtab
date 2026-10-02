@@ -5,13 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
-	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -491,5 +492,99 @@ func TestHandleFind_EmbeddingMatcher(t *testing.T) {
 	}
 	if len(resp.Matches) == 0 {
 		t.Error("expected at least one match from embedding matcher")
+	}
+}
+
+func threeRowCartCache() *bridge.RefCache {
+	return &bridge.RefCache{
+		Nodes: []bridge.A11yNode{
+			{Ref: "e0", Role: "listitem", Name: "Red mug $12"},
+			{Ref: "e1", Role: "button", Name: "Add"},
+			{Ref: "e2", Role: "listitem", Name: "Blue cup $9"},
+			{Ref: "e3", Role: "button", Name: "Add"},
+			{Ref: "e4", Role: "listitem", Name: "Green bowl $15"},
+			{Ref: "e5", Role: "button", Name: "Add"},
+			{Ref: "e6", Role: "button", Name: "Checkout"},
+		},
+		Refs: map[string]int64{"e0": 1, "e1": 2, "e2": 3, "e3": 4, "e4": 5, "e5": 6, "e6": 7},
+	}
+}
+
+func postFind(t *testing.T, h *Handlers, body string) findResponse {
+	t.Helper()
+	w := httptest.NewRecorder()
+	h.HandleFind(w, httptest.NewRequest("POST", "/find", strings.NewReader(body)))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp findResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	return resp
+}
+
+func TestHandleFind_IndistinguishableTopMatchesAreAmbiguous(t *testing.T) {
+	h := newFindTestHandler(threeRowCartCache(), false)
+
+	resp := postFind(t, h, `{"query": "Add button for Blue cup", "threshold": 0.1, "topK": 3}`)
+
+	if resp.Confidence != confidenceAmbiguous {
+		t.Errorf("confidence = %q, want %q (matches %+v)", resp.Confidence, confidenceAmbiguous, resp.Matches)
+	}
+	want := map[string]bool{"e1": true, "e3": true, "e5": true}
+	if len(resp.TiedRefs) != len(want) {
+		t.Fatalf("tied_refs = %v, want the three Add buttons", resp.TiedRefs)
+	}
+	for _, ref := range resp.TiedRefs {
+		if !want[ref] {
+			t.Errorf("tied_refs = %v, want only the three Add buttons", resp.TiedRefs)
+		}
+	}
+}
+
+func TestHandleFind_DistinctMatchKeepsItsScoreLabel(t *testing.T) {
+	h := newFindTestHandler(threeRowCartCache(), false)
+
+	resp := postFind(t, h, `{"query": "Checkout button", "threshold": 0.1, "topK": 3}`)
+
+	if resp.BestRef != "e6" {
+		t.Fatalf("best_ref = %q, want e6", resp.BestRef)
+	}
+	if resp.Confidence != semantic.CalibrateConfidence(resp.Score) {
+		t.Errorf("confidence = %q, want the score label %q", resp.Confidence, semantic.CalibrateConfidence(resp.Score))
+	}
+	if resp.TiedRefs != nil {
+		t.Errorf("tied_refs = %v, want none", resp.TiedRefs)
+	}
+}
+
+func TestTiedTopRefs(t *testing.T) {
+	cases := []struct {
+		name    string
+		matches []semantic.ElementMatch
+		want    []string
+	}{
+		{"single", []semantic.ElementMatch{{Ref: "e1", Score: 0.9, Role: "button", Name: "Go"}}, nil},
+		{"clear gap", []semantic.ElementMatch{
+			{Ref: "e1", Score: 0.9, Role: "button", Name: "Go"},
+			{Ref: "e2", Score: 0.5, Role: "link", Name: "Help"},
+		}, nil},
+		{"same role and name", []semantic.ElementMatch{
+			{Ref: "e1", Score: 0.9, Role: "button", Name: "Add"},
+			{Ref: "e2", Score: 0.5, Role: "button", Name: "Add"},
+		}, []string{"e1", "e2"}},
+		{"scores within margin", []semantic.ElementMatch{
+			{Ref: "e3", Score: 0.67842, Role: "button", Name: "Add mug"},
+			{Ref: "e1", Score: 0.67832, Role: "button", Name: "Add cup"},
+			{Ref: "e2", Score: 0.5, Role: "link", Name: "Help"},
+		}, []string{"e3", "e1"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tiedTopRefs(tc.matches); fmt.Sprint(got) != fmt.Sprint(tc.want) {
+				t.Errorf("tiedTopRefs = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

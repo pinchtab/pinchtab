@@ -124,3 +124,31 @@ func TestHandleFindAddsSelectorHints(t *testing.T) {
 		t.Fatal("expected nextActionHint in response")
 	}
 }
+
+func TestHandleFindAmbiguousTieWithholdsSelector(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"best_ref":   "e3",
+			"confidence": "ambiguous",
+			"tied_refs":  []string{"e3", "e1", "e2"},
+		})
+	}))
+	defer srv.Close()
+
+	req := mcp.CallToolRequest{}
+	req.Params.Name = "pinchtab_find"
+	req.Params.Arguments = map[string]any{"query": "Add button for Blue cup"}
+	result, err := handleFind(NewClient(srv.URL, ""))(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	resp := resultJSON(t, result)
+	if _, ok := resp["selector"]; ok {
+		t.Errorf("selector = %v, want none for an ambiguous tie", resp["selector"])
+	}
+	hint, _ := resp["nextActionHint"].(string)
+	if !strings.Contains(hint, "Ambiguous") || !strings.Contains(hint, "e1") || strings.Contains(hint, "Use selector") {
+		t.Errorf("nextActionHint = %q, want an ambiguity hint naming the tied refs", hint)
+	}
+}

@@ -2,6 +2,7 @@ package actions
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -42,6 +43,9 @@ func Find(conn apiclient.Conn, query string, cmd *cobra.Command) {
 
 	if refOnly {
 		result := conn.PostQuiet(path, body, capture)
+		if tied := stringList(result["tied_refs"]); len(tied) > 0 {
+			cli.Fatal("Ambiguous match for %q: %s are indistinguishable; refine the query", query, strings.Join(tied, ", "))
+		}
 		if ref, ok := result["best_ref"].(string); ok && ref != "" {
 			fmt.Println(ref)
 			return
