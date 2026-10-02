@@ -857,7 +857,7 @@ Wait body fields:
   - `ms` — fixed sleep in milliseconds, max 30000 (escape hatch; prefer condition-based waits)
 - optional `tabId`
 - optional `timeout` — ms, default 10000, clamped 100–30000
-- optional `state`, for `selector` only — `visible` (default) or `hidden`. With any other condition it is refused with `400`; to wait for text to disappear use `notText`
+- optional `state`, for `selector` only — `visible` (default; a match is rendered: a non-empty box, not `display:none`, `visibility:hidden`, `opacity:0` or the `hidden` attribute), `hidden` (nothing matches or no match is rendered), `attached` (a match is in the DOM, rendered or not) or `detached` (nothing matches). Any other value is refused with `400` naming the four. With any other condition it is refused with `400`; to wait for text to disappear use `notText`
 - optional `idleFor` for `load: network-idle` — ms quiet period, default 500, clamped 0–10000
 
 Network query parameters:

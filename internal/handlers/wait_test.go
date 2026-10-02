@@ -2,13 +2,17 @@ package handlers
 
 import (
 	"bytes"
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 func TestHandleWait_InvalidJSON(t *testing.T) {
@@ -122,6 +126,8 @@ func TestWaitRequest_Mode(t *testing.T) {
 	}{
 		{"selector", waitRequest{Selector: "#foo"}, "selector"},
 		{"selector with state", waitRequest{Selector: "#foo", State: "hidden"}, "selector"},
+		{"selector attached", waitRequest{Selector: "#foo", State: "attached"}, "selector"},
+		{"selector detached", waitRequest{Selector: "#foo", State: "detached"}, "selector"},
 		{"text", waitRequest{Text: "hello"}, "text"},
 		{"notText", waitRequest{NotText: "Loading..."}, "notText"},
 		{"url", waitRequest{URL: "**/dash"}, "url"},
@@ -452,50 +458,60 @@ func TestBuildSelectorJS_CSSPrefix(t *testing.T) {
 	}
 }
 
-func TestBuildSelectorJS_XPath(t *testing.T) {
-	js, _ := buildSelectorJS("xpath://div[@id='test']", "")
-	if js == "" {
-		t.Error("expected non-empty JS for xpath")
+func TestHandleWait_SelectorStatesAgainstEachElementCondition(t *testing.T) {
+	ctx, cancel := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancel)
+	html := `<p id="shown">label-shown</p><p id="none" style="display:none">label-none</p><p id="attr" hidden>label-attr</p>`
+	if err := chromedp.Run(ctx, chromedp.Navigate("data:text/html;base64,"+base64.StdEncoding.EncodeToString([]byte(html)))); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.RuntimeConfig{DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
+	b := browserBridge(ctx, cfg)
+	b.RegisterTab("tab-wait", ctx)
+	h := New(b, cfg, nil, nil, nil)
+
+	selectors := map[string]func(id string) string{
+		"css":   func(id string) string { return "#" + id },
+		"xpath": func(id string) string { return "xpath://*[@id='" + id + "']" },
+		"text":  func(id string) string { return "text:label-" + id },
+	}
+	want := map[string]map[string]bool{
+		"visible":  {"removed": false, "none": false, "attr": false, "shown": true},
+		"hidden":   {"removed": true, "none": true, "attr": true, "shown": false},
+		"attached": {"removed": false, "none": true, "attr": true, "shown": true},
+		"detached": {"removed": true, "none": false, "attr": false, "shown": false},
+	}
+	for kind, selectorFor := range selectors {
+		for state, byElement := range want {
+			for element, waited := range byElement {
+				t.Run(kind+"/"+state+"/"+element, func(t *testing.T) {
+					body, _ := json.Marshal(map[string]any{"tabId": "tab-wait", "selector": selectorFor(element), "state": state, "timeout": 100})
+					w := httptest.NewRecorder()
+					h.HandleWait(w, httptest.NewRequest("POST", "/wait", bytes.NewReader(body)))
+					var got waitResponse
+					if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || w.Code != 200 {
+						t.Fatalf("status %d body %s", w.Code, w.Body.String())
+					}
+					if got.Waited != waited {
+						t.Errorf("waited = %v, want %v: %s", got.Waited, waited, w.Body.String())
+					}
+				})
+			}
+		}
 	}
 }
 
-func TestBuildSelectorJS_XPathBare(t *testing.T) {
-	js, _ := buildSelectorJS("//div[@id='test']", "")
-	if js == "" {
-		t.Error("expected non-empty JS for bare xpath")
+func TestHandleWait_RejectsUnknownState(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
+	w := httptest.NewRecorder()
+	h.HandleWait(w, httptest.NewRequest("POST", "/wait", bytes.NewReader([]byte(`{"selector":"#d","state":"gone"}`))))
+	if w.Code != 400 {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
-}
-
-func TestBuildSelectorJS_Text(t *testing.T) {
-	js, _ := buildSelectorJS("text:Submit", "")
-	if js == "" {
-		t.Error("expected non-empty JS for text selector")
-	}
-}
-
-func TestBuildSelectorJS_Hidden(t *testing.T) {
-	js, _ := buildSelectorJS("#spinner", "hidden")
-	if js == "" {
-		t.Error("expected non-empty JS for hidden state")
-	}
-	// Hidden should check for null
-	jsVisible, _ := buildSelectorJS("#spinner", "")
-	if js == jsVisible {
-		t.Error("hidden JS should differ from visible JS")
-	}
-}
-
-func TestBuildSelectorJS_HiddenXPath(t *testing.T) {
-	js, _ := buildSelectorJS("xpath://div", "hidden")
-	if js == "" {
-		t.Error("expected non-empty JS for hidden xpath")
-	}
-}
-
-func TestBuildSelectorJS_HiddenText(t *testing.T) {
-	js, _ := buildSelectorJS("text:Loading", "hidden")
-	if js == "" {
-		t.Error("expected non-empty JS for hidden text")
+	for _, state := range selectorStates {
+		if !bytes.Contains(w.Body.Bytes(), []byte(state)) {
+			t.Errorf("400 does not name accepted state %q: %s", state, w.Body.String())
+		}
 	}
 }
 

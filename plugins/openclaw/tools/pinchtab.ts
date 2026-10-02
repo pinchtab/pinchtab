@@ -44,7 +44,7 @@ export const pinchtabToolSchema = {
     screenshotFormat: { type: "string", enum: ["jpeg", "png"], description: "Screenshot format" },
     mode: { type: "string", enum: ["readability", "raw"], description: "Text extraction mode" },
     ms: { type: "number", description: "Wait milliseconds" },
-    state: { type: "string", enum: ["visible", "hidden", "attached", "detached"], description: "Wait state" },
+    state: { type: "string", enum: ["visible", "hidden", "attached", "detached"], description: "Selector wait state: visible (default; a match is rendered), hidden (nothing matches or no match is rendered), attached (a match is in the DOM), detached (nothing matches)" },
     load: { type: "string", enum: ["load", "domcontentloaded", "networkidle"], description: "Document load state" },
     fn: { type: "string", description: "JavaScript predicate for wait" },
     humanReason: { type: "string", description: "Reason for manual handoff" },

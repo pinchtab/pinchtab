@@ -299,7 +299,7 @@ func allTools() []mcp.Tool {
 			mcp.WithString("value", mcp.Required(), mcp.Description("What to wait for, read as 'for' says: a millisecond count, a selector, page text, a URL glob pattern, a load state, or a JavaScript expression")),
 			timeoutMsParam(),
 			numberAliasParam("timeout", "timeoutMs"),
-			mcp.WithString("state", mcp.Description("Element state to wait for with for='selector': 'visible' (default) or 'hidden'")),
+			mcp.WithString("state", mcp.Description("for='selector': visible (default; a match rendered), hidden (none rendered), attached/detached (in DOM or not)")),
 			tabIDParam(),
 			browserParam(),
 		),

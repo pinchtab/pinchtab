@@ -32,7 +32,7 @@ func Wait(conn apiclient.Conn, args []string, cmd *cobra.Command) {
 		}
 	}
 	if len(body) == 0 {
-		fmt.Println("Usage: pinchtab wait <selector|ms> [--text|--not-text|--url|--load|--fn] [--state visible|hidden] [--timeout-ms ms] [--tab id]")
+		fmt.Println("Usage: pinchtab wait <selector|ms> [--text|--not-text|--url|--load|--fn] [--state visible|hidden|attached|detached] [--timeout-ms ms] [--tab id]")
 		return
 	}
 	if state, _ := cmd.Flags().GetString("state"); state != "" {

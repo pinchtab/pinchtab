@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -30,7 +31,7 @@ const (
 type waitRequest struct {
 	TabID    string `json:"tabId,omitempty"`
 	Selector string `json:"selector,omitempty"` // CSS/XPath/text selector
-	State    string `json:"state,omitempty"`    // "visible" (default) or "hidden"
+	State    string `json:"state,omitempty"`    // "visible" (default) | "hidden" | "attached" | "detached"
 	Text     string `json:"text,omitempty"`     // wait for text on page
 	NotText  string `json:"notText,omitempty"`  // wait for text to disappear from page
 	URL      string `json:"url,omitempty"`      // wait for URL glob match
@@ -79,8 +80,19 @@ func (wr *waitRequest) mode() (string, error) {
 		return "", fmt.Errorf("wait takes exactly one condition, got %s", strings.Join(set, ", "))
 	case wr.State != "" && set[0] != "selector":
 		return "", fmt.Errorf("state applies to selector waits only, not %s; to wait for text to disappear use notText", set[0])
+	case !slices.Contains(selectorStates, wr.selectorState()):
+		return "", fmt.Errorf("unsupported state: %s (supported: %s)", wr.State, strings.Join(selectorStates, ", "))
 	}
 	return set[0], nil
+}
+
+var selectorStates = []string{"visible", "hidden", "attached", "detached"}
+
+func (wr *waitRequest) selectorState() string {
+	if wr.State == "" {
+		return "visible"
+	}
+	return wr.State
 }
 
 func (wr *waitRequest) resolvedTimeout() time.Duration {
@@ -195,7 +207,7 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 
 	switch mode {
 	case "selector":
-		js, matchLabel = buildSelectorJS(req.Selector, req.State)
+		js, matchLabel = buildSelectorJS(req.Selector, req.selectorState())
 	case "text":
 		js = fmt.Sprintf(`document.body && document.body.innerText.includes(%s)`, jsonStr(req.Text))
 		matchLabel = req.Text
@@ -312,43 +324,28 @@ func (h *Handlers) waitNetworkIdle(ctx context.Context, tabID string, idleFor ti
 // buildSelectorJS builds a JS expression for selector wait.
 // Supports css:, xpath:, text: prefixes and bare CSS selectors.
 func buildSelectorJS(sel, state string) (string, string) {
-	hidden := state == "hidden"
+	anyVisible := `m.some(function(e){return (` + elementVisibleJS + `).call(e)})`
+	predicate := map[string]string{
+		"attached": `return m.length>0`,
+		"detached": `return m.length===0`,
+		"visible":  `return ` + anyVisible,
+		"hidden":   `return !` + anyVisible,
+	}[state]
+	return fmt.Sprintf(`(function(){var m;try{m=%s}catch(e){m=[]}%s})()`, selectorMatchesJS(sel), predicate), sel
+}
 
-	var js string
+func selectorMatchesJS(sel string) string {
+	const xpathMatches = `(function(x){var r=document.evaluate(x,document,null,XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,null),a=[];for(var i=0;i<r.snapshotLength;i++){var n=r.snapshotItem(i);n=n.nodeType===1?n:n.parentElement;if(n)a.push(n)}return a})(%s)`
 	switch {
 	case hasPrefix(sel, "xpath:"):
-		xpath := sel[len("xpath:"):]
-		if hidden {
-			js = fmt.Sprintf(`(function(){try{var r=document.evaluate(%s,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);return r.singleNodeValue===null}catch(e){return true}})()`, jsonStr(xpath))
-		} else {
-			js = fmt.Sprintf(`(function(){try{var r=document.evaluate(%s,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);return r.singleNodeValue!==null}catch(e){return false}})()`, jsonStr(xpath))
-		}
+		return fmt.Sprintf(xpathMatches, jsonStr(sel[len("xpath:"):]))
 	case hasPrefix(sel, "//") || hasPrefix(sel, "(//"):
-		if hidden {
-			js = fmt.Sprintf(`(function(){try{var r=document.evaluate(%s,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);return r.singleNodeValue===null}catch(e){return true}})()`, jsonStr(sel))
-		} else {
-			js = fmt.Sprintf(`(function(){try{var r=document.evaluate(%s,document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null);return r.singleNodeValue!==null}catch(e){return false}})()`, jsonStr(sel))
-		}
+		return fmt.Sprintf(xpathMatches, jsonStr(sel))
 	case hasPrefix(sel, "text:"):
-		text := sel[len("text:"):]
-		if hidden {
-			js = fmt.Sprintf(`(function(){var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);while(w.nextNode()){if(w.currentNode.textContent.includes(%s))return false}return true})()`, jsonStr(text))
-		} else {
-			js = fmt.Sprintf(`(function(){var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);while(w.nextNode()){if(w.currentNode.textContent.includes(%s))return true}return false})()`, jsonStr(text))
-		}
+		return fmt.Sprintf(`(function(t){var a=[];if(!document.body)return a;var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);while(w.nextNode()){var p=w.currentNode.parentElement;if(p&&w.currentNode.textContent.includes(t))a.push(p)}return a})(%s)`, jsonStr(sel[len("text:"):]))
 	default:
-		css := sel
-		if hasPrefix(sel, "css:") {
-			css = sel[len("css:"):]
-		}
-		if hidden {
-			js = fmt.Sprintf(`document.querySelector(%s) === null`, jsonStr(css))
-		} else {
-			js = fmt.Sprintf(`document.querySelector(%s) !== null`, jsonStr(css))
-		}
+		return fmt.Sprintf(`Array.from(document.querySelectorAll(%s))`, jsonStr(strings.TrimPrefix(sel, "css:")))
 	}
-
-	return js, sel
 }
 
 func matchURLPattern(pattern, url string) bool {

@@ -290,8 +290,10 @@ pinchtab keyboard type <text>           # Type at the focused element
 pinchtab keyboard inserttext <text>     # Insert text without key events
 pinchtab keydown <key>                  # Hold a key down
 pinchtab keyup <key>                    # Release a key
-pinchtab wait <selector>                # Wait for selector to be visible
-pinchtab wait <selector> --state hidden # Wait for selector to disappear
+pinchtab wait <selector>                # Wait for a match to be rendered (--state visible)
+pinchtab wait <selector> --state hidden # Wait until nothing matches or no match is rendered
+pinchtab wait <selector> --state attached # Wait for a match in the DOM, rendered or not
+pinchtab wait <selector> --state detached # Wait until nothing matches
 pinchtab wait <ms>                      # Fixed duration sleep (escape hatch; max 30000ms — prefer condition-based waits)
 pinchtab wait --text <text>             # Wait for page text to appear
 pinchtab wait --not-text <text>         # Wait for page text to disappear
@@ -333,6 +335,9 @@ pinchtab cache status                   # Check if cache can be cleared
 `--text`, `--not-text`, `--url`, `--load`, `--fn`. Giving two is refused with an
 error naming them rather than waiting on one and ignoring the other. `--state`
 applies to a selector only; to wait for text to disappear use `--not-text`.
+Rendered means a non-empty box that `display:none`, `visibility:hidden`,
+`opacity:0` and the `hidden` attribute do not suppress, so `--state hidden`
+completes when a modal or spinner is hidden by CSS as well as when it is removed.
 
 Manual handoff and resume are available via CLI and API:
 

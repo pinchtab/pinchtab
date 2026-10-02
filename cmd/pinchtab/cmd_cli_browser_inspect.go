@@ -433,7 +433,7 @@ func configureBrowserInspectFlags() {
 	waitCmd.Flags().String("url", "", "Wait for URL glob match")
 	waitCmd.Flags().String("load", "", "Wait for load state (networkidle)")
 	waitCmd.Flags().String("fn", "", "Wait for JS expression to be truthy")
-	waitCmd.Flags().String("state", "", "Element state: visible (default) or hidden")
+	waitCmd.Flags().String("state", "", "Element state: visible (default), hidden, attached or detached")
 	waitCmd.Flags().Int("timeout-ms", 0, "Timeout in milliseconds (default 10000, max 30000)")
 	// --timeout on wait is milliseconds, but the same bare flag is SECONDS on
 	// nav/scrape — a 1000x footgun. Keep it for back-compat as a deprecated alias
