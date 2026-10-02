@@ -22,6 +22,7 @@ type DialogState struct {
 	Message           string `json:"message"`
 	DefaultPrompt     string `json:"defaultPrompt,omitempty"`
 	HasBrowserHandler bool   `json:"-"`
+	submitPrompt      string
 }
 
 // DialogManager tracks pending JavaScript dialogs per tab.
@@ -191,7 +192,7 @@ func HandlePendingDialog(ctx context.Context, tabID string, dm *DialogManager, a
 		return &DialogResult{Type: "unknown", Message: "", Handled: true}, nil
 	}
 
-	if err := handleDialogAction(ctx, accept, resolvePromptText(accept, promptText, state.DefaultPrompt)); err != nil {
+	if err := handleDialogAction(ctx, accept, resolvePromptText(accept, promptText, state.submitPrompt)); err != nil {
 		if isNoDialogOpenError(err) {
 			// Dialog may already be handled/closed by browser auto-handler.
 			return handledResult(state), nil
@@ -227,6 +228,9 @@ func normalizeDialogState(state *DialogState) *DialogState {
 	}
 
 	copyState := *state
+	if copyState.submitPrompt == "" {
+		copyState.submitPrompt = copyState.DefaultPrompt
+	}
 	copyState.Type = sanitize.TruncateUTF8BytesWithEllipsis(copyState.Type, 32)
 	copyState.Message = sanitize.TruncateUTF8BytesWithEllipsis(copyState.Message, maxDialogTextBytes)
 	copyState.DefaultPrompt = sanitize.TruncateUTF8BytesWithEllipsis(copyState.DefaultPrompt, maxDialogTextBytes)

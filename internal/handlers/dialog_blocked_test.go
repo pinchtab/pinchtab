@@ -294,3 +294,15 @@ func TestBatchClickThatOpensADialogSucceedsAndTheNextStepIsBlocked(t *testing.T)
 		})
 	}
 }
+
+func TestDialogDetails_DefaultPromptOnlyWhenSet(t *testing.T) {
+	withDefault := dialogDetails(dialogBlockedHint, "tab1", &bridge.DialogState{Type: "prompt", Message: "Your name?", DefaultPrompt: "anon"})
+	if got := withDefault["defaultPrompt"]; got != "anon" {
+		t.Fatalf("defaultPrompt = %v, want anon", got)
+	}
+
+	withoutDefault := dialogDetails(dialogBlockedHint, "tab1", &bridge.DialogState{Type: "alert", Message: "hi"})
+	if _, ok := withoutDefault["defaultPrompt"]; ok {
+		t.Fatalf("defaultPrompt present for a dialog without one: %v", withoutDefault)
+	}
+}

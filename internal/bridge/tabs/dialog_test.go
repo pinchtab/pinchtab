@@ -3,6 +3,7 @@ package tabs
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -131,31 +132,34 @@ func TestDialogAccept_PromptDefaultIsTheSameOnArmedAndPendingPaths(t *testing.T)
 		submitted <- promptText
 		return nil
 	}
-	opening := &page.EventJavascriptDialogOpening{Type: page.DialogTypePrompt, Message: "Your name?", DefaultPrompt: "anon"}
 
-	armedDM := NewDialogManager()
-	armedDM.ArmAutoHandler("tab1", "accept", "")
-	onDialogOpening(context.Background(), "tab1", armedDM, false, opening)
-	var armedText string
-	select {
-	case armedText = <-submitted:
-	case <-time.After(5 * time.Second):
-		t.Fatal("armed handler never answered the dialog")
-	}
+	for _, defaultPrompt := range []string{"anon", strings.Repeat("x", maxDialogTextBytes+100)} {
+		opening := &page.EventJavascriptDialogOpening{Type: page.DialogTypePrompt, Message: "Your name?", DefaultPrompt: defaultPrompt}
 
-	pendingDM := NewDialogManager()
-	onDialogOpening(context.Background(), "tab1", pendingDM, false, opening)
-	result, err := HandlePendingDialog(context.Background(), "tab1", pendingDM, true, "")
-	if err != nil {
-		t.Fatalf("HandlePendingDialog() error = %v", err)
-	}
-	pendingText := <-submitted
+		armedDM := NewDialogManager()
+		armedDM.ArmAutoHandler("tab1", "accept", "")
+		onDialogOpening(context.Background(), "tab1", armedDM, false, opening)
+		var armedText string
+		select {
+		case armedText = <-submitted:
+		case <-time.After(5 * time.Second):
+			t.Fatal("armed handler never answered the dialog")
+		}
 
-	if armedText != "anon" || pendingText != armedText {
-		t.Fatalf("armed submitted %q, pending submitted %q, want both %q", armedText, pendingText, "anon")
-	}
-	if result.DefaultPrompt != "anon" {
-		t.Fatalf("result.DefaultPrompt = %q, want anon", result.DefaultPrompt)
+		pendingDM := NewDialogManager()
+		onDialogOpening(context.Background(), "tab1", pendingDM, false, opening)
+		result, err := HandlePendingDialog(context.Background(), "tab1", pendingDM, true, "")
+		if err != nil {
+			t.Fatalf("HandlePendingDialog() error = %v", err)
+		}
+		pendingText := <-submitted
+
+		if armedText != defaultPrompt || pendingText != armedText {
+			t.Fatalf("armed submitted %d bytes, pending submitted %d bytes, want both the %d-byte default", len(armedText), len(pendingText), len(defaultPrompt))
+		}
+		if result.DefaultPrompt == "" || len(result.DefaultPrompt) > maxDialogTextBytes {
+			t.Fatalf("result.DefaultPrompt is %d bytes, want a non-empty display value capped at %d", len(result.DefaultPrompt), maxDialogTextBytes)
+		}
 	}
 }
 
