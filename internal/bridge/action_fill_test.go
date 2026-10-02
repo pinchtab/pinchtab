@@ -207,3 +207,31 @@ func TestFillOnATextInputKeepsTheTypeHintWhenThePageDropsTheValue(t *testing.T) 
 		t.Errorf("warning = %q, want the unchanged type hint", warning)
 	}
 }
+
+func TestFillNamesTheISOFormatForEveryDateTimeInputType(t *testing.T) {
+	ctx := openTimeInputPage(t)
+	formats := map[string]string{
+		"date":           "YYYY-MM-DD",
+		"time":           "HH:MM",
+		"datetime-local": "YYYY-MM-DDTHH:MM",
+		"month":          "YYYY-MM",
+		"week":           "YYYY-Www",
+	}
+	for inputType, format := range formats {
+		t.Run(inputType, func(t *testing.T) {
+			if err := chromedp.Run(ctx, chromedp.SetAttributeValue("#delivery", "type", inputType, chromedp.ByQuery)); err != nil {
+				t.Fatalf("set type=%s: %v", inputType, err)
+			}
+
+			_, err := (&Bridge{}).actionFill(ctx, ActionRequest{Selector: "#delivery", Text: "half past", HasText: true})
+			if !errors.Is(err, ErrInvalidActionRequest) {
+				t.Fatalf("error = %v, want an invalid request", err)
+			}
+			for _, want := range []string{`type="` + inputType + `"`, "ISO format " + format} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error = %q, want it to mention %q", err, want)
+				}
+			}
+		})
+	}
+}
