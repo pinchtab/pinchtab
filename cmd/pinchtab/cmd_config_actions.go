@@ -84,6 +84,17 @@ func handleConfigGet(path string) {
 	}
 
 	fmt.Println(displayConfigValue(path, value))
+	printConfigAdvisories(maskedValueAdvisories(path))
+}
+
+func maskedValueAdvisories(path string) []string {
+	if !isSensitiveConfigPath(path) {
+		return nil
+	}
+	if strings.EqualFold(strings.TrimSpace(path), "server.token") {
+		return []string{"server.token is masked; print the usable token with `pinchtab config token --stdout`"}
+	}
+	return []string{fmt.Sprintf("%s is masked; read the full value from %s", path, config.ConfigFilePath())}
 }
 
 func handleConfigSet(path, value string) error {

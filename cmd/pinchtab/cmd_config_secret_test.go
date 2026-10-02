@@ -1,6 +1,12 @@
 package main
 
-import "testing"
+import (
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/config"
+)
 
 // `pinchtab config get <path>` prints the value, and `config set` echoes it
 // back, so every config path holding secret material must be masked. The
@@ -46,5 +52,44 @@ func TestIsSensitiveConfigPathLeavesOrdinarySettingsVisible(t *testing.T) {
 		if isSensitiveConfigPath(path) {
 			t.Errorf("isSensitiveConfigPath(%q) = true, want false — ordinary setting would be masked", path)
 		}
+	}
+}
+
+func TestConfigGetNotesWhenValueIsMasked(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "pinchtab", "config.json")
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+	fc := config.DefaultFileConfig()
+	fc.Server.Token = "test-token-for-masked-get-0000000"
+	if err := config.SaveFileConfig(&fc, configPath); err != nil {
+		t.Fatalf("SaveFileConfig() error = %v", err)
+	}
+
+	var stdout string
+	stderr := captureStderr(t, func() {
+		stdout = captureStdout(t, func() { handleConfigGet("server.token") })
+	})
+
+	if want := config.MaskToken(fc.Server.Token) + "\n"; stdout != want {
+		t.Errorf("stdout = %q, want %q", stdout, want)
+	}
+	if strings.Count(stderr, "Note:") != 1 || !strings.Contains(stderr, "pinchtab config token --stdout") {
+		t.Errorf("stderr = %q, want one Note naming pinchtab config token --stdout", stderr)
+	}
+}
+
+func TestConfigGetAddsNothingToStderrForOrdinaryPath(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "pinchtab", "config.json")
+	t.Setenv("PINCHTAB_CONFIG", configPath)
+	fc := config.DefaultFileConfig()
+	if err := config.SaveFileConfig(&fc, configPath); err != nil {
+		t.Fatalf("SaveFileConfig() error = %v", err)
+	}
+
+	stderr := captureStderr(t, func() {
+		_ = captureStdout(t, func() { handleConfigGet("server.port") })
+	})
+
+	if stderr != "" {
+		t.Errorf("stderr = %q, want empty", stderr)
 	}
 }
