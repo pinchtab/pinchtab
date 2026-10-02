@@ -343,6 +343,7 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 		return recRes, "", &rr, nil
 	}
 
+	mintedIn := h.refFrameID(resolvedTabID, req.Ref)
 	result, backend, err := h.executeAction(ctx, *req, cfg)
 	if err != nil && !submitClick && shouldRetryPointerAction(*req, err) {
 		if (req.Ref != "" || req.ToSelector != "") && bridge.IsStaleNodeError(err) {
@@ -370,6 +371,9 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 			recovery.ClassifyFailure(err),
 			func(c context.Context, _ string, nodeID int64) (map[string]any, error) {
 				req.NodeID = nodeID
+				if h.matchLeftRefFrame(resolvedTabID, mintedIn, nodeID) {
+					return nil, errRefFrameReplaced
+				}
 				if secErr := h.refreshActionSecondaryTargets(c, resolvedTabID, req); secErr != nil {
 					return nil, secErr
 				}
@@ -378,14 +382,39 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 			},
 		)
 		rr = &r2
-		if recErr == nil {
+		switch {
+		case recErr == nil:
 			result, err = recRes, nil
+		case errors.Is(recErr, errRefFrameReplaced):
+			err = fmt.Errorf("%w: %w", refNotFound(req.Ref), recErr)
 		}
 	}
 	if err != nil && !submitClick && req.Ref != "" && bridge.IsStaleNodeError(err) {
 		err = fmt.Errorf("%w: %w", refNotFound(req.Ref), err)
 	}
 	return result, backend, rr, err
+}
+
+// errRefFrameReplaced refuses a recovery match outside the frame the ref was minted in:
+// a replaced iframe is a new document, so a lookalike there is a different field.
+var errRefFrameReplaced = errors.New("the frame the ref was in has been replaced")
+
+func (h *Handlers) refFrameID(tabID, ref string) string {
+	target, _ := h.Bridge.GetRefCache(tabID).Lookup(ref)
+	return target.FrameID
+}
+
+func (h *Handlers) matchLeftRefFrame(tabID, mintedIn string, nodeID int64) bool {
+	cache := h.Bridge.GetRefCache(tabID)
+	if mintedIn == "" || cache == nil {
+		return false
+	}
+	for _, target := range cache.Targets {
+		if target.BackendNodeID == nodeID {
+			return target.FrameID != mintedIn
+		}
+	}
+	return true
 }
 
 func switchedTabFromActionResult(result map[string]any) string {

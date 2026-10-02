@@ -16,6 +16,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chromedp/cdproto/dom"
+	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
@@ -1703,6 +1706,89 @@ func TestFocusFailingOnAConnectedNodeIsNotStale(t *testing.T) {
 	}
 	if bridge.IsStaleNodeError(err) {
 		t.Errorf("a connected non-focusable node was reported stale: %v", err)
+	}
+}
+
+func newIframeRerenderFixture(t *testing.T) (context.Context, *Handlers) {
+	t.Helper()
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancelTimeout)
+	html := `<iframe id="live" srcdoc="<label for=f>Legacy field</label><input id=f>"></iframe>`
+	if err := chromedp.Run(ctx, chromedp.Navigate("data:text/html,"+url.PathEscape(html))); err != nil {
+		t.Fatal(err)
+	}
+	var input int64
+	var frameID string
+	err := chromedp.Run(ctx, chromedp.Poll(`document.getElementById("live").contentDocument.getElementById("f") !== null`, nil),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			obj, _, err := runtime.Evaluate(`document.getElementById("live").contentDocument.getElementById("f")`).Do(ctx)
+			if err != nil {
+				return err
+			}
+			node, err := dom.DescribeNode().WithObjectID(obj.ObjectID).Do(ctx)
+			if err != nil {
+				return err
+			}
+			tree, err := page.GetFrameTree().Do(ctx)
+			if err != nil {
+				return err
+			}
+			input, frameID = int64(node.BackendNodeID), string(tree.ChildFrames[0].Frame.ID)
+			return nil
+		}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.RuntimeConfig{ActionTimeout: 30 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
+	b := browserBridge(ctx, cfg)
+	b.RegisterTab("tab-iframe", ctx)
+	b.SetRefCache("tab-iframe", &bridge.RefCache{
+		Targets: map[string]bridge.RefTarget{"e0": {BackendNodeID: input, FrameID: frameID}},
+		Nodes:   []bridge.A11yNode{{Ref: "e0", Role: "textbox", Name: "Legacy field", NodeID: input, FrameID: frameID}},
+	})
+	return ctx, New(b, cfg, nil, nil, nil)
+}
+
+func liveFrameInputValue(t *testing.T, ctx context.Context) string {
+	t.Helper()
+	var value string
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.getElementById("live").contentDocument.querySelector("input").value`, &value)); err != nil {
+		t.Fatal(err)
+	}
+	return value
+}
+
+func TestFillOnARefFromAReplacedIframeAsksForASnapshot(t *testing.T) {
+	ctx, h := newIframeRerenderFixture(t)
+	replace := `new Promise(loaded => { const next = document.createElement("iframe"); next.id = "live"; next.srcdoc = "<label for=g>Fresh field</label><input id=g>"; next.onload = () => loaded(true); document.getElementById("live").replaceWith(next); })`
+	if err := chromedp.Run(ctx, chromedp.Evaluate(replace, nil, func(p *runtime.EvaluateParams) *runtime.EvaluateParams { return p.WithAwaitPromise(true) })); err != nil {
+		t.Fatal(err)
+	}
+
+	w := postRerenderAction(t, h, `{"kind":"fill","ref":"e0","text":"stale","tabId":"tab-iframe"}`)
+
+	if w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "snapshot") || !strings.Contains(w.Body.String(), "frame") {
+		t.Fatalf("fill on a ref from a replaced iframe: status=%d body=%s, want 404 naming the replaced frame and asking for a snapshot", w.Code, w.Body.String())
+	}
+	if value := liveFrameInputValue(t, ctx); value != "" {
+		t.Errorf("the replacement frame's field was filled with %q", value)
+	}
+}
+
+func TestFillOnAnInputRerenderedInsideItsIframeRecovers(t *testing.T) {
+	ctx, h := newIframeRerenderFixture(t)
+	rerender := `document.getElementById("live").contentDocument.body.innerHTML = "<label for=f>Legacy field</label><input id=f>"`
+	if err := chromedp.Run(ctx, chromedp.Evaluate(rerender, nil)); err != nil {
+		t.Fatal(err)
+	}
+
+	w := postRerenderAction(t, h, `{"kind":"fill","ref":"e0","text":"hello","tabId":"tab-iframe"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("fill on an input re-rendered in the same frame: status=%d body=%s", w.Code, w.Body.String())
+	}
+	if value := liveFrameInputValue(t, ctx); value != "hello" {
+		t.Errorf("re-created input value = %q, want hello", value)
 	}
 }
 
