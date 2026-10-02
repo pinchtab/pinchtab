@@ -90,11 +90,11 @@ The same 40 realistic interactive nodes, rendered through each output path:
 ```
   compact     1644 bytes  ~ 411 tokens   1.0x
   text        2060 bytes  ~ 515 tokens   1.3x
-  json        8211 bytes  ~2052 tokens   5.0x
-  yaml       17467 bytes  ~4366 tokens  10.6x
+  json        7616 bytes  ~1904 tokens   4.6x
+  yaml        8810 bytes  ~2202 tokens   5.4x
 ```
 
-55% of that JSON body is the DOM-derived descriptor fields — `tag`, `label`, `placeholder`,
+51% of that JSON body is the DOM-derived descriptor fields — `tag`, `label`, `placeholder`,
 `alt`, `title`, `testid`, `text` — which exist to feed the server-side semantic matcher.
 `compact` and `text` render `ref`, `role`, `name`, `value` and the state flags and nothing
 else, so those fields cannot appear there at all. The DOM pass that fills them is therefore
@@ -142,12 +142,11 @@ reserved and what is sent cannot drift apart.
 `json` and `yaml` budget the node array only; their envelope is a small fixed cost next to
 nodes that run to hundreds of bytes each.
 
-Formats are not interchangeable for a given budget. `yaml` is roughly three times the size
-of `json` for the same nodes, because the node struct carries JSON field tags and no YAML
-ones, so YAML emits every field including the empty ones. The same `maxTokens` therefore
-returns far fewer nodes in `yaml` than in `json` — which is the budget working, not a
-regression. Prefer `compact` when the budget is tight: it fits several times more nodes
-into the same tokens than either structured format.
+Formats are not interchangeable for a given budget. `yaml` carries the same keys as `json`
+and omits the same empty fields, but its per-line indentation under `nodes:` makes it about
+15% larger, so the same `maxTokens` returns slightly fewer nodes in `yaml` than in `json`.
+Prefer `compact` when the budget is tight: it fits several times more nodes into the same
+tokens than either structured format.
 
 ## Control state on a node
 

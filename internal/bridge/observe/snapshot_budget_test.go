@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/srccensus"
-	"gopkg.in/yaml.v3"
 )
 
 // minObserveSourceFiles is the vacuity floor: the package already has more non-test
@@ -62,11 +61,7 @@ func renderedTokens(t *testing.T, nodes []A11yNode, format string) int {
 	case "text":
 		return estimateTokens(len(FormatSnapshotText(nodes)))
 	case "yaml":
-		out, err := yaml.Marshal(nodes)
-		if err != nil {
-			t.Fatalf("marshal yaml: %v", err)
-		}
-		return estimateTokens(len(out))
+		return estimateTokens(yamlNodeBytes(t, nodes))
 	default:
 		out, err := json.Marshal(nodes)
 		if err != nil {
@@ -161,6 +156,29 @@ func TestBudgetDeliveryBandIsWorthDocumenting(t *testing.T) {
 	}
 }
 
+func yamlNodeBytes(t *testing.T, nodes []A11yNode) int {
+	t.Helper()
+	out, err := MarshalYAMLInJSONShape(YAMLNodesDocument(nodes))
+	if err != nil {
+		t.Fatalf("marshal yaml: %v", err)
+	}
+	return len(out) - len(yamlNodesKeyLine)
+}
+
+func TestConstrainedYAMLBudgetIsSpentOnTheShapeTheHandlerWrites(t *testing.T) {
+	nodes := budgetProbeNodes(40)
+	for _, budget := range []int{300, 1000} {
+		kept, truncated := TruncateToTokens(nodes, budget, "yaml")
+		if !truncated {
+			t.Fatalf("budget=%d kept all %d nodes; the probe no longer constrains yaml", budget, len(nodes))
+		}
+		if got := estimateTokens(yamlNodeBytes(t, kept)); got*100 < budget*85 {
+			t.Errorf("budget=%d kept %d/%d yaml nodes rendering ~%d tokens, under 85%% of the budget: nodes are over-charged",
+				budget, len(kept), len(nodes), got)
+		}
+	}
+}
+
 func percentOff(actual, budget int) int {
 	if budget == 0 {
 		return 0
@@ -243,11 +261,7 @@ func renderedBytes(t *testing.T, nodes []A11yNode, format string) int {
 	case "text":
 		return len(FormatSnapshotText(nodes))
 	case "yaml":
-		out, err := yaml.Marshal(nodes)
-		if err != nil {
-			t.Fatalf("marshal yaml: %v", err)
-		}
-		return len(out)
+		return yamlNodeBytes(t, nodes)
 	default:
 		out, err := json.Marshal(nodes)
 		if err != nil {

@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/httpx"
-	"gopkg.in/yaml.v3"
 )
 
 func (res snapshotResult) wireNodes(nodes []bridge.A11yNode) []bridge.A11yNode {
@@ -117,7 +117,7 @@ func marshalSnapshotFile(q snapshotQuery, res snapshotResult, prevNodes []bridge
 		snapshotDiffFields(data, prevNodes, res)
 	}
 	if q.format == "yaml" {
-		content, err := marshalYAMLInJSONShape(data)
+		content, err := observe.MarshalYAMLInJSONShape(data)
 		if err != nil {
 			return "", nil, err
 		}
@@ -160,24 +160,8 @@ func (h *Handlers) writeSnapshotDiff(w http.ResponseWriter, q snapshotQuery, res
 	}
 }
 
-func marshalYAMLInJSONShape(data any) ([]byte, error) {
-	asJSON, err := json.Marshal(data)
-	if err != nil {
-		return nil, fmt.Errorf("marshal yaml: %w", err)
-	}
-	var jsonShaped any
-	if err := yaml.Unmarshal(asJSON, &jsonShaped); err != nil {
-		return nil, fmt.Errorf("marshal yaml: %w", err)
-	}
-	content, err := yaml.Marshal(jsonShaped)
-	if err != nil {
-		return nil, fmt.Errorf("marshal yaml: %w", err)
-	}
-	return content, nil
-}
-
 func writeSnapshotYAML(w http.ResponseWriter, data map[string]any, ignored []string) {
-	content, err := marshalYAMLInJSONShape(attachIgnoredParams(data, ignored))
+	content, err := observe.MarshalYAMLInJSONShape(attachIgnoredParams(data, ignored))
 	if err != nil {
 		httpx.Error(w, 500, err)
 		return

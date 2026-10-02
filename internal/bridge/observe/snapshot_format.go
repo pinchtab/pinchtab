@@ -2,6 +2,7 @@ package observe
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -176,11 +177,11 @@ func nodeCost(format string) func(A11yNode) int {
 		return renderedNodeCost(textNodeStyle)
 	case "yaml":
 		return func(n A11yNode) int {
-			out, err := yaml.Marshal([]A11yNode{n})
+			out, err := MarshalYAMLInJSONShape(YAMLNodesDocument([]A11yNode{n}))
 			if err != nil {
 				return 0
 			}
-			return len(out)
+			return len(out) - len(yamlNodesKeyLine)
 		}
 	default:
 		return func(n A11yNode) int {
@@ -193,6 +194,32 @@ func nodeCost(format string) func(A11yNode) int {
 			return len(out) + 1
 		}
 	}
+}
+
+const yamlNodesKeyLine = "nodes:\n"
+
+// YAMLNodesDocument nests nodes under the "nodes" key, as the snapshot response does;
+// the nesting indents every node line, so a node priced outside it is under-charged.
+func YAMLNodesDocument(nodes []A11yNode) map[string]any {
+	return map[string]any{"nodes": nodes}
+}
+
+// MarshalYAMLInJSONShape emits YAML with the JSON field names and omitempty rules, since
+// the node struct carries json tags only and a raw yaml.Marshal would list every field.
+func MarshalYAMLInJSONShape(data any) ([]byte, error) {
+	asJSON, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("marshal yaml: %w", err)
+	}
+	var jsonShaped any
+	if err := yaml.Unmarshal(asJSON, &jsonShaped); err != nil {
+		return nil, fmt.Errorf("marshal yaml: %w", err)
+	}
+	content, err := yaml.Marshal(jsonShaped)
+	if err != nil {
+		return nil, fmt.Errorf("marshal yaml: %w", err)
+	}
+	return content, nil
 }
 
 func renderedNodeCost(style nodeStyle) func(A11yNode) int {
