@@ -63,11 +63,10 @@ func captureFromSurface(goos string, beyondViewport bool, clip *page.Viewport) b
 // it. Coordinates are page-relative, hence the scroll offsets.
 //
 // The cost is stated rather than hidden: a clipped capture takes fromSurface=true, so
-// the default /capture gives up the read-the-view fast path this file documents and an
-// idle headed browser can stall it until the action deadline. /screenshot and the
-// screencast keep the fast path — they publish no coordinate contract to break — so the
-// latency trade is paid only by the endpoint whose whole purpose is mapping refs onto
-// pixels.
+// every viewport capture gives up the read-the-view fast path this file documents and an
+// idle headed browser can stall it until the action deadline. The trade is taken
+// everywhere because the fast path's image is sized by the host screen, at up to four
+// times the pixels of the page it shows.
 func ViewportClip(scrollX, scrollY, width, height float64) *page.Viewport {
 	if width <= 0 || height <= 0 {
 		return nil

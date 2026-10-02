@@ -70,17 +70,10 @@ type ScreenshotOpts struct {
 	Clip           *page.Viewport
 	BeyondViewport bool
 
-	// Scale rescales the rendered output bitmap. 1 (or 0) = native. 0.5
-	// halves the image in each axis (quarter of the pixels). Applied via
-	// CDP's clip.scale; when no Clip is otherwise set we synthesize one
-	// covering the viewport so the parameter takes effect.
+	// Scale rescales the rendered output bitmap relative to CSS pixels.
+	// 1 (or 0) = native. 0.5 halves the image in each axis. Applied via
+	// CDP's clip.scale.
 	Scale float64
-
-	// ViewportWidth/ViewportHeight are used only when Scale != 1 and Clip is
-	// nil — to build a viewport-covering clip. Callers fetch these from
-	// observe.FetchLayout (or similar) before invoking CaptureScreenshot.
-	ViewportWidth  float64
-	ViewportHeight float64
 
 	// DisableActivation suppresses the Page.bringToFront call that wakes a
 	// backgrounded tab's compositor before capturing (the inverse of
@@ -92,29 +85,34 @@ type ScreenshotOpts struct {
 	DisableActivation bool
 }
 
-func scaledScreenshotClip(opts ScreenshotOpts, viewportWidth, viewportHeight, documentWidth, documentHeight float64) *page.Viewport {
-	if opts.Scale <= 0 || opts.Scale == 1 {
-		return cdptk.NormalizedViewport(opts.Clip)
+func effectiveScale(scale float64) float64 {
+	if scale <= 0 {
+		return 1
 	}
+	return scale
+}
+
+// screenshotClip routes every capture through a CSS-pixel clip except an unscaled
+// beyond-viewport one: an unclipped viewport capture returns the window surface at
+// the host's device scale, not the page's.
+func screenshotClip(opts ScreenshotOpts, viewport cdptk.LayoutMetrics, documentWidth, documentHeight float64) *page.Viewport {
+	scale := effectiveScale(opts.Scale)
 	if opts.Clip != nil {
 		clip := *cdptk.NormalizedViewport(opts.Clip)
-		clip.Scale *= opts.Scale
+		clip.Scale *= scale
 		return &clip
 	}
-
-	width, height := viewportWidth, viewportHeight
 	if opts.BeyondViewport {
-		width, height = documentWidth, documentHeight
+		if scale == 1 || documentWidth <= 0 || documentHeight <= 0 {
+			return nil
+		}
+		return &page.Viewport{Width: documentWidth, Height: documentHeight, Scale: scale}
 	}
-	if width <= 0 || height <= 0 {
-		return nil
+	clip := cdptk.ViewportClip(viewport.ScrollX, viewport.ScrollY, viewport.Width, viewport.Height)
+	if clip != nil {
+		clip.Scale = scale
 	}
-	return &page.Viewport{
-		X: 0, Y: 0,
-		Width:  width,
-		Height: height,
-		Scale:  opts.Scale,
-	}
+	return clip
 }
 
 // captureScreenshotWithoutActivation wakes a background renderer before
@@ -146,26 +144,22 @@ func captureScreenshotWithoutActivation(ctx context.Context, shot *page.CaptureS
 // CaptureScreenshot runs Page.captureScreenshot with the supplied options.
 // Quality is applied only for JPEG; clip and beyondViewport are mutually
 // exclusive (clip wins) — the same rule the handler enforces on input.
-//
-// When Scale is non-default (not 0 and not 1), the function ensures a clip is
-// passed to CDP — either by reusing the supplied one with Scale multiplied in,
-// or by synthesizing a viewport-covering clip from ViewportWidth/Height. CDP's
-// top-level capture call has no scale parameter outside of clip, so this is
-// the only way to apply a render-time rescale.
 func CaptureScreenshot(ctx context.Context, opts ScreenshotOpts) ([]byte, error) {
 	// Known issue: two back-to-back /capture?scale=<n!=1> on the same
 	// tab without nav between can hang on the second call. Workaround:
 	// nav between captures (see e2e cli/capture-basic.sh).
-	viewportWidth, viewportHeight := opts.ViewportWidth, opts.ViewportHeight
+	var viewport cdptk.LayoutMetrics
 	documentWidth, documentHeight := 0.0, 0.0
-	if opts.Scale > 0 && opts.Scale != 1 && opts.Clip == nil {
+	if opts.Clip == nil {
 		if opts.BeyondViewport {
-			documentWidth, documentHeight = fetchDocumentSize(ctx)
-		} else if viewportWidth == 0 || viewportHeight == 0 {
-			viewportWidth, viewportHeight = fetchViewportSize(ctx)
+			if effectiveScale(opts.Scale) != 1 {
+				documentWidth, documentHeight = fetchDocumentSize(ctx)
+			}
+		} else {
+			viewport, _ = cdptk.Layout(ctx)
 		}
 	}
-	clip := scaledScreenshotClip(opts, viewportWidth, viewportHeight, documentWidth, documentHeight)
+	clip := screenshotClip(opts, viewport, documentWidth, documentHeight)
 
 	fromSurface := cdptk.CaptureFromSurface(opts.BeyondViewport, clip)
 

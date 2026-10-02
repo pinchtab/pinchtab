@@ -103,13 +103,8 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 	res.FrameID = pre.Frame.ID
 	res.LoaderID = pre.Frame.LoaderID
 
-	// Layout metrics: captured BEFORE the screenshot so opts.Image.Scale can
-	// synthesize a viewport-covering clip when no other clip is set. Also
-	// populates the response viewport / devicePixelRatio for clients.
 	if vp, err := FetchLayout(ctx); err == nil {
 		res.Viewport = vp
-		opts.Image.ViewportWidth = vp.Width
-		opts.Image.ViewportHeight = vp.Height
 	}
 
 	// Image first. Order matters only when BeyondViewport is true (P3 concern);

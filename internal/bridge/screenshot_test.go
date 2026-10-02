@@ -10,6 +10,7 @@ import (
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/cdptk"
 )
 
@@ -126,12 +127,14 @@ func TestProjectBoundsToClip(t *testing.T) {
 	}
 }
 
-func TestScaledScreenshotClip(t *testing.T) {
+func TestScreenshotClip(t *testing.T) {
+	scrolled := cdptk.LayoutMetrics{Width: 1280, Height: 720, ScrollX: 15, ScrollY: 400, DevicePixelRatio: 2}
+
 	t.Run("scales existing clip", func(t *testing.T) {
-		clip := scaledScreenshotClip(ScreenshotOpts{
+		clip := screenshotClip(ScreenshotOpts{
 			Clip:  &page.Viewport{X: 10, Y: 20, Width: 30, Height: 40, Scale: 2},
 			Scale: 0.5,
-		}, 0, 0, 0, 0)
+		}, scrolled, 0, 0)
 		if clip == nil {
 			t.Fatal("expected clip")
 		}
@@ -143,34 +146,52 @@ func TestScaledScreenshotClip(t *testing.T) {
 		}
 	})
 
-	t.Run("uses viewport size for scaled viewport capture", func(t *testing.T) {
-		clip := scaledScreenshotClip(ScreenshotOpts{Scale: 0.25}, 1280, 720, 0, 0)
-		if clip == nil {
-			t.Fatal("expected clip")
+	for _, tc := range []struct {
+		name      string
+		scale     float64
+		wantScale float64
+	}{
+		{name: "default", scale: 0, wantScale: 1},
+		{name: "explicit native", scale: 1, wantScale: 1},
+		{name: "rescaled", scale: 0.5, wantScale: 0.5},
+	} {
+		t.Run(tc.name+" viewport capture clips the scrolled viewport in CSS pixels", func(t *testing.T) {
+			clip := screenshotClip(ScreenshotOpts{Scale: tc.scale}, scrolled, 0, 0)
+			want := page.Viewport{X: 15, Y: 400, Width: 1280, Height: 720, Scale: tc.wantScale}
+			if clip == nil || *clip != want {
+				t.Fatalf("clip = %+v, want %+v", clip, want)
+			}
+		})
+	}
+
+	t.Run("unmeasured viewport falls back to an unclipped capture", func(t *testing.T) {
+		if clip := screenshotClip(ScreenshotOpts{}, cdptk.LayoutMetrics{}, 0, 0); clip != nil {
+			t.Fatalf("expected nil clip, got %+v", clip)
 		}
-		if clip.Width != 1280 || clip.Height != 720 || clip.Scale != 0.25 {
-			t.Fatalf("clip = %+v", clip)
+	})
+
+	t.Run("native beyond-viewport capture leaves the full page to CDP", func(t *testing.T) {
+		if clip := screenshotClip(ScreenshotOpts{BeyondViewport: true}, scrolled, 4096, 8192); clip != nil {
+			t.Fatalf("expected nil clip, got %+v", clip)
 		}
 	})
 
 	t.Run("uses document size for scaled beyond-viewport capture", func(t *testing.T) {
-		clip := scaledScreenshotClip(ScreenshotOpts{
+		clip := screenshotClip(ScreenshotOpts{
 			Scale:          0.25,
 			BeyondViewport: true,
-		}, 1280, 720, 4096, 8192)
-		if clip == nil {
-			t.Fatal("expected clip")
-		}
-		if clip.Width != 4096 || clip.Height != 8192 || clip.Scale != 0.25 {
-			t.Fatalf("clip = %+v", clip)
+		}, scrolled, 4096, 8192)
+		want := page.Viewport{Width: 4096, Height: 8192, Scale: 0.25}
+		if clip == nil || *clip != want {
+			t.Fatalf("clip = %+v, want %+v", clip, want)
 		}
 	})
 
 	t.Run("keeps full-page semantics when document size is unavailable", func(t *testing.T) {
-		clip := scaledScreenshotClip(ScreenshotOpts{
+		clip := screenshotClip(ScreenshotOpts{
 			Scale:          0.25,
 			BeyondViewport: true,
-		}, 1280, 720, 0, 0)
+		}, scrolled, 0, 0)
 		if clip != nil {
 			t.Fatalf("expected nil clip, got %+v", clip)
 		}
@@ -198,7 +219,7 @@ func TestEveryCapturePathNormalisesAZeroScaleClip(t *testing.T) {
 		{name: "Bridge.CaptureScreenshot converts through cdptk first", clip: cdptk.ClipViewport(&cdptk.ScreenshotClip{X: 40, Y: 60, Width: 120, Height: 60}), optsScale: 0, wantScale: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := scaledScreenshotClip(ScreenshotOpts{Clip: tc.clip, Scale: tc.optsScale}, 0, 0, 0, 0)
+			got := screenshotClip(ScreenshotOpts{Clip: tc.clip, Scale: tc.optsScale}, cdptk.LayoutMetrics{}, 0, 0)
 			if got == nil {
 				t.Fatal("expected a clip")
 			}
@@ -209,5 +230,33 @@ func TestEveryCapturePathNormalisesAZeroScaleClip(t *testing.T) {
 				t.Fatalf("geometry changed: %+v", got)
 			}
 		})
+	}
+}
+
+// An unclipped viewport capture returns the window surface, sized by the host screen
+// and untouched by device-metrics emulation, so on a HiDPI host the default shot came
+// back at twice the page size while every other mode answered in CSS pixels.
+func TestDefaultScreenshotMatchesTheEmulatedViewport(t *testing.T) {
+	ctx := newClipFixture(t)
+	const width, height = 400, 300
+	if err := chromedp.Run(ctx, chromedp.EmulateViewport(width, height)); err != nil {
+		t.Fatalf("emulate viewport: %v", err)
+	}
+
+	for _, tc := range []struct {
+		scale        float64
+		wantW, wantH int
+	}{
+		{scale: 0, wantW: width, wantH: height},
+		{scale: 1, wantW: width, wantH: height},
+		{scale: 0.5, wantW: width / 2, wantH: height / 2},
+	} {
+		buf, err := CaptureScreenshot(ctx, ScreenshotOpts{Format: ScreenshotFormatPng, Scale: tc.scale})
+		if err != nil {
+			t.Fatalf("capture at scale %v: %v", tc.scale, err)
+		}
+		if w, h := imageSize(t, buf); w != tc.wantW || h != tc.wantH {
+			t.Errorf("scale %v capture is %dx%d, want %dx%d", tc.scale, w, h, tc.wantW, tc.wantH)
+		}
 	}
 }
