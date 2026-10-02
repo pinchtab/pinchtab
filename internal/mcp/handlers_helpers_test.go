@@ -291,17 +291,17 @@ func TestStripTrivialRouteDropsOnlyTheRouteMember(t *testing.T) {
 }
 
 func TestStripTrivialRoutePassesEverythingElseThroughByteIdentical(t *testing.T) {
-	escalated := `{"requestedProvider":"cloak","usedProvider":"ghost-chrome","escalated":true,"reason":"challenge","fallbackAttempts":1,"attempts":[{"provider":"cloak","accepted":false},{"provider":"ghost-chrome","accepted":true}]}`
-	downgraded := `{"requestedProvider":"ghost-chrome","usedProvider":"cloak","escalated":false,"reason":"ghost-chrome unavailable"}`
+	oneAttempt := `"attempts":[{"provider":"cloak","accepted":true}]`
 	for name, in := range map[string]string{
-		"escalated":      `{"ok":true,"route":` + escalated + `}`,
-		"downgraded":     `{"ok":true,"route":` + downgraded + `}`,
-		"reason only":    `{"ok":true,"route":{"requestedProvider":"cloak","usedProvider":"cloak","escalated":false,"reason":"x"}}`,
-		"two attempts":   `{"ok":true,"route":{"requestedProvider":"cloak","usedProvider":"cloak","escalated":false,"attempts":[{},{}]}}`,
-		"route-less":     `{"ok":true,"tabId":"t1"}`,
-		"non-JSON":       "plain text\nsecond line",
-		"array body":     `[{"route":` + trivialRoute + `}]`,
-		"route not JSON": `{"ok":true,"route":"cloak"}`,
+		"downgraded":        `{"ok":true,"route":{"requestedProvider":"ghost-chrome","usedProvider":"cloak","escalated":false,` + oneAttempt + `}}`,
+		"escalated":         `{"ok":true,"route":{"requestedProvider":"cloak","usedProvider":"cloak","escalated":true,` + oneAttempt + `}}`,
+		"reason":            `{"ok":true,"route":{"requestedProvider":"cloak","usedProvider":"cloak","escalated":false,"reason":"x",` + oneAttempt + `}}`,
+		"fallback attempts": `{"ok":true,"route":{"requestedProvider":"cloak","usedProvider":"cloak","escalated":false,"fallbackAttempts":1,` + oneAttempt + `}}`,
+		"two attempts":      `{"ok":true,"route":{"requestedProvider":"cloak","usedProvider":"cloak","escalated":false,"attempts":[{},{}]}}`,
+		"route-less":        `{"ok":true,"tabId":"t1"}`,
+		"non-JSON":          "plain text\nsecond line",
+		"array body":        `[{"route":` + trivialRoute + `}]`,
+		"route not JSON":    `{"ok":true,"route":"cloak"}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if got := string(stripTrivialRoute([]byte(in))); got != in {

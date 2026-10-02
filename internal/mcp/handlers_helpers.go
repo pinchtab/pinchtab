@@ -260,9 +260,6 @@ func (b routeBlock) trivial() bool {
 		b.FallbackAttempts == 0 && len(b.Attempts) <= 1
 }
 
-// stripTrivialRoute drops a top-level "route" member whose block says only that the
-// requested provider served the call. Anything else about the body stays byte-identical,
-// so the HTTP API's own encoding is never re-marshalled here.
 func stripTrivialRoute(body []byte) []byte {
 	start, end, value, ok := topLevelMemberSpan(body, "route")
 	if !ok {
@@ -277,8 +274,6 @@ func stripTrivialRoute(body []byte) []byte {
 	return append(out, body[end:]...)
 }
 
-// topLevelMemberSpan locates key in a JSON object. [start, end) covers the member and the
-// separator comma that goes with it, so cutting that span leaves a valid object.
 func topLevelMemberSpan(body []byte, key string) (start, end int, value json.RawMessage, ok bool) {
 	dec := json.NewDecoder(bytes.NewReader(body))
 	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
