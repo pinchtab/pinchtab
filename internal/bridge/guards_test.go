@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -200,5 +202,39 @@ func TestExecuteActionClassifiesStaleError(t *testing.T) {
 	_, err := b.ExecuteAction(context.Background(), ActionType, ActionRequest{})
 	if !errors.Is(err, ErrElementStale) {
 		t.Fatalf("expected ErrElementStale, got %v", err)
+	}
+}
+
+func TestAClickThatOpensADialogNeverReadsThePageBehindIt(t *testing.T) {
+	reads := 0
+	b := &Bridge{
+		Config: &config.RuntimeConfig{},
+		URLReader: func(context.Context) (string, error) {
+			reads++
+			if reads > 1 {
+				time.Sleep(time.Second)
+			}
+			return "https://a.example", nil
+		},
+		Actions: map[string]ActionFunc{
+			ActionClick: func(context.Context, ActionRequest) (map[string]any, error) {
+				return map[string]any{OpenedDialogResultKey: &bridgetabs.DialogState{Type: "alert", Message: "x"}}, nil
+			},
+		},
+	}
+
+	start := time.Now()
+	res, err := b.ExecuteAction(context.Background(), ActionClick, ActionRequest{})
+	if err != nil {
+		t.Fatalf("a click that opened a dialog reported failure: %v", err)
+	}
+	if OpenedDialog(res) == nil {
+		t.Fatalf("the opened dialog was dropped from the result: %v", res)
+	}
+	if reads != 1 {
+		t.Fatalf("the page url was read %d times; a read behind an open dialog blocks until the action times out", reads)
+	}
+	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
+		t.Fatalf("a click that opened a dialog took %v to answer", elapsed)
 	}
 }

@@ -357,6 +357,8 @@ func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionReque
 			return nil, classifyActionError(err)
 		}
 		res = actionResultFor(kind)
+	} else if OpenedDialog(res) != nil {
+		return res, nil
 	} else {
 		nav.awaitCommit(ctx)
 	}
