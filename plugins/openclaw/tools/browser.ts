@@ -20,6 +20,7 @@ export const browserToolSchema = {
     selector: { type: "string", description: "CSS selector for snapshot scope" },
     format: { type: "string", enum: ["compact", "json", "text", "yaml"], description: "Output format" },
     maxTokens: { type: "number", description: "Truncate output to ~N tokens" },
+    screenshotFormat: { type: "string", enum: ["jpeg", "png"], description: "Screenshot format" },
     quality: { type: "number", description: "Screenshot JPEG quality 1-100" },
     tabId: { type: "string", description: "Target tab ID" },
     tabAction: { type: "string", enum: ["list", "new", "close"], description: "Tab operation (for action=tabs)" },
@@ -35,7 +36,7 @@ export const browserToolDescription = `OpenClaw-compatible browser control (back
 Actions:
 - navigate: go to URL (url, profile?, newTab?)
 - snapshot: accessibility tree for interactions (selector?, format?, maxTokens?)
-- screenshot: capture page image (quality?, format?)
+- screenshot: capture page image (quality?, screenshotFormat?)
 - click/type/fill/press/hover/scroll/select: element actions (ref, text?, key?, value?)
 - tabs: list/new/close tabs (tabAction?, url?, tabId?)
 - pdf: export page as PDF (landscape?, scale?)
@@ -107,7 +108,7 @@ export async function executeBrowserAction(rawCfg: PluginConfig, rawParams: any,
   if (action === "screenshot") {
     const query = new URLSearchParams();
     if (params.tabId) query.set("tabId", params.tabId);
-    const fmt = params.format === "png" ? "png" : (cfg.screenshotFormat || "jpeg");
+    const fmt = params.screenshotFormat || cfg.screenshotFormat || "jpeg";
     if (fmt === "png") query.set("format", "png");
     query.set("quality", String(params.quality || cfg.screenshotQuality || 80));
     try {
