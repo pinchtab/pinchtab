@@ -305,6 +305,40 @@ func TestACachedStaleRefOnALinkStillRecoversAndClicks(t *testing.T) {
 	}
 }
 
+func TestTheEndpointRefusesACachedStaleSubmitRefWithNoOrderAndNoRecoveryRecord(t *testing.T) {
+	f := newOrderFixture(t)
+	h, ctx, tabID := staleSubmitHandlers(t, f)
+	click := cachedClick(t, h, ctx, tabID, "button", "Place order")
+	rerenderElement(t, ctx, "b")
+
+	body := `{"kind":"click","ref":"` + click.Ref + `","tabId":"` + tabID + `"}`
+	rec := httptest.NewRecorder()
+	h.HandleAction(rec, httptest.NewRequest(http.MethodPost, "/action", strings.NewReader(body)))
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404: %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Code    string         `json:"code"`
+		Details map[string]any `json:"details"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode refusal: %v (%s)", err, rec.Body.String())
+	}
+	if resp.Code != "submit_target_not_found" {
+		t.Errorf("code = %q, want submit_target_not_found: %s", resp.Code, rec.Body.String())
+	}
+	if dispatched, ok := resp.Details["dispatched"].(bool); !ok || dispatched {
+		t.Errorf("details.dispatched = %v, want false", resp.Details["dispatched"])
+	}
+	if strings.Contains(rec.Body.String(), "recovery") {
+		t.Errorf("the refusal carries a recovery record for a click that never happened: %s", rec.Body.String())
+	}
+	if placed := f.settleForOrder(); placed != 0 {
+		t.Errorf("%d order(s) placed by a refused request", placed)
+	}
+}
+
 // The wire shape a caller actually sees. The helper-level tests above pin the behaviour at
 // the shared owner; this pins that the refusal survives the endpoint as a 404 naming the
 // snapshot, with dispatch state on it — and that following the printed remedy from the
