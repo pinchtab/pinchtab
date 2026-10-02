@@ -90,8 +90,10 @@ pinchtab forward                        # Go forward in the active tab
 pinchtab reload                         # Reload the active tab
 ```
 
-`back`, `forward` and `reload` always report the URL the page actually landed on,
-so a redirect, a login wall or an error page is visible without `--snap`.
+`back` and `forward` report the URL the page actually landed on, so a redirect,
+a login wall or an error page is visible without `--snap`. When the tab is at the
+edge of history and nothing moved, they print `OK no history` and still exit 0.
+`reload` is unchanged: it always reports the landed URL.
 
 `nav` is different, because its stdout is a value other commands consume: it
 prints the tab ID first, and adds the landed URL only when stdout is a terminal.

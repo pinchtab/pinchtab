@@ -137,6 +137,9 @@ Important behavior:
   they refuse identically on a retry. A `newTab` navigation that fails this way closes the
   tab it created. The CLI therefore exits non-zero and an MCP tool reports an error with
   no change on either surface, and a loaded page keeps exactly the `200` it always had
+- `POST /back` and `POST /forward` answer `{tabId, url, navigated}`; `navigated` is
+  `false` when the tab was at the edge of history and did not move, so `url` is the
+  page it was already on. `POST /reload` answers `{tabId, url}` and omits `navigated`
 - `POST /tab` supports `new` and `focus`
 - `POST /close` closes the `tabId` supplied in the JSON body, or the caller's current/default tab when `tabId` is omitted
 

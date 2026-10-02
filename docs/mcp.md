@@ -132,9 +132,9 @@ PinchTab currently exposes 47 tools:
 ### Navigation
 
 - `pinchtab_navigate`
-- `pinchtab_back` — go back one history entry; returns the tab ID and the URL landed on
-- `pinchtab_forward` — go forward one history entry; returns the tab ID and the URL landed on
-- `pinchtab_reload` — reload the current page; returns the tab ID and the URL landed on
+- `pinchtab_back` — go back one history entry; returns the tab ID, the URL landed on and `navigated`, which is `false` when the tab was at the edge of history and did not move
+- `pinchtab_forward` — go forward one history entry; same response as `pinchtab_back`
+- `pinchtab_reload` — reload the current page; returns the tab ID and the URL landed on, without `navigated`
 - `pinchtab_snapshot`
 - `pinchtab_frame`
 - `pinchtab_screenshot`
