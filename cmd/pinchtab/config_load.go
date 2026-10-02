@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/pinchtab/pinchtab/internal/config"
 )
@@ -29,15 +30,29 @@ func loadConfigDeferringDiagnostics() (*config.RuntimeConfig, []config.LoadDiagn
 	return config.LoadDeferringDiagnostics()
 }
 
+var emittedLoadDiagnostics sync.Map
+
 func loadLocalConfig() *config.RuntimeConfig {
-	return config.Load()
+	cfg, diags := config.LoadDeferringDiagnostics()
+	config.EmitLoadDiagnostics(loadDiagnosticsNotYetEmitted(diags))
+	return cfg
+}
+
+func loadDiagnosticsNotYetEmitted(diags []config.LoadDiagnostic) []config.LoadDiagnostic {
+	var fresh []config.LoadDiagnostic
+	for _, d := range diags {
+		if _, emitted := emittedLoadDiagnostics.LoadOrStore(fmt.Sprint(d.Level, d.Message, d.Attrs), struct{}{}); !emitted {
+			fresh = append(fresh, d)
+		}
+	}
+	return fresh
 }
 
 func loadConfigWithMandatoryToken() (*config.RuntimeConfig, error) {
 	if err := ensureMandatoryToken(); err != nil {
 		return nil, err
 	}
-	return config.Load(), nil
+	return loadLocalConfig(), nil
 }
 
 func ensureMandatoryToken() error {

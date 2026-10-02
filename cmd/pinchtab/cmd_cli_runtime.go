@@ -154,7 +154,7 @@ func resolveDefaultCLIBase(cfg *config.RuntimeConfig) string {
 // refuse properly at its own site. Either way the config token does not leave the
 // machine; the probe simply learns less.
 var resolveTabStateEndpoint = func() (base, token string) {
-	cfg := config.Load()
+	cfg := loadLocalConfig()
 	base, err := resolveBaseURL(resolveDefaultCLIBase(cfg))
 	if err != nil {
 		return "", ""

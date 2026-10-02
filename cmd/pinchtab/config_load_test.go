@@ -91,3 +91,20 @@ func TestLoadConfigWithMandatoryToken_ExplicitConfigRequiresToken(t *testing.T) 
 		t.Fatalf("error = %q, want explicit token requirement", err)
 	}
 }
+
+func TestTabStateResolverEmitsARepeatedLoadDiagnosticOnce(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	body := `{"server":{"port":"19772","token":"file-token"},"multiInstance":{"allocationPolicy":"fcfs"}}`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PINCHTAB_CONFIG", path)
+	logs := captureRunLog(t)
+
+	resolveTabStateEndpoint()
+	resolveTabStateEndpoint()
+
+	if got := strings.Count(logs.String(), "config setting has no effect"); got != 1 {
+		t.Errorf("retired-key diagnostic emitted %d times over two resolves, want 1: %s", got, logs.String())
+	}
+}
