@@ -206,6 +206,17 @@ func TestEveryCredentialBranchRecordsTheBaseItSendsTo(t *testing.T) {
 	}
 }
 
+func TestTheCLIConnCarriesTheSourceOfItsToken(t *testing.T) {
+	clearCredentialEnv(t)
+	t.Setenv("PINCHTAB_TOKEN", "env-secret")
+	t.Setenv("PINCHTAB_SERVER", "http://203.0.113.9:9867")
+
+	conn := newCLIConn(&config.RuntimeConfig{Port: "9867", Token: "local-secret"})
+	if !strings.Contains(conn.TokenSource, "PINCHTAB_TOKEN") {
+		t.Errorf("Conn.TokenSource = %q, want it to name PINCHTAB_TOKEN; a 401 on this Conn would print no provenance", conn.TokenSource)
+	}
+}
+
 func TestSubcommandHelpListsTheGlobalFlags(t *testing.T) {
 	target, _, err := rootCmd.Find([]string{"tabs"})
 	if err != nil {

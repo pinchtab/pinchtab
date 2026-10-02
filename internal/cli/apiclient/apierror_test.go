@@ -326,6 +326,28 @@ func runTerminalChild(mode string) {
 	os.Exit(9)
 }
 
+func TestConnExitWithAPIErrorNamesTheRejectedTokenPairing(t *testing.T) {
+	if os.Getenv(terminalChildEnv) == "RejectedToken" {
+		w := httptest.NewRecorder()
+		httpx.Unauthorized(w, httpx.CodeBadToken, "deadbeef")
+		Conn{Base: "http://203.0.113.9:9867", TokenSource: "the PINCHTAB_TOKEN environment variable"}.ExitWithAPIError(http.StatusUnauthorized, w.Body.Bytes())
+		os.Exit(9)
+	}
+
+	child := exec.Command(os.Args[0], "-test.run=TestConnExitWithAPIErrorNamesTheRejectedTokenPairing", "-test.timeout=60s") // #nosec G204 -- re-executes this test binary.
+	child.Env = append(os.Environ(), terminalChildEnv+"=RejectedToken")
+	raw, err := child.CombinedOutput()
+
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
+		t.Fatalf("child exited with %v, want the terminal path's os.Exit(1); output:\n%s", err, raw)
+	}
+	want := "came from the PINCHTAB_TOKEN environment variable and was sent to http://203.0.113.9:9867"
+	if !strings.Contains(string(raw), want) {
+		t.Errorf("terminal bad-token output lost the Conn's pairing, want %q in:\n%s", want, raw)
+	}
+}
+
 // The past-tense sentence is a claim about a completed deletion, so it may only be
 // emitted when the file is actually gone. A removal that fails must stay silent
 // rather than tell the user to retry a command that will fail the same way.
