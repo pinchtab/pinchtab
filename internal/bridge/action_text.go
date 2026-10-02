@@ -43,15 +43,26 @@ func refuseNonEditable(ctx context.Context, req ActionRequest, err error) error 
 	if err == nil {
 		return nil
 	}
+	if refusal := nonEditableRefusal(ctx, req, err); refusal != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidActionRequest, refusal)
+	}
+	return err
+}
+
+func nonEditableRefusal(ctx context.Context, req ActionRequest, err error) *bridgecdpops.NotFillableError {
+	var refusal *bridgecdpops.NotFillableError
+	if errors.As(err, &refusal) {
+		return refusal
+	}
 	nodeID, resolveErr := targetNodeID(ctx, req.NodeID, req.Selector)
 	if resolveErr != nil || nodeID <= 0 {
-		return err
+		return nil
 	}
 	refusal, checkErr := bridgecdpops.NotFillable(ctx, nodeID)
-	if checkErr != nil || refusal == nil {
-		return err
+	if checkErr != nil {
+		return nil
 	}
-	return fmt.Errorf("%w: %w", ErrInvalidActionRequest, refusal)
+	return refusal
 }
 
 func (b *Bridge) actionFill(ctx context.Context, req ActionRequest) (map[string]any, error) {
@@ -76,11 +87,7 @@ func (b *Bridge) actionFill(ctx context.Context, req ActionRequest) (map[string]
 	}
 	if req.NodeID > 0 {
 		if err := bridgecdpops.FillByNodeID(ctx, req.NodeID, text); err != nil {
-			var notFillable *bridgecdpops.NotFillableError
-			if errors.As(err, &notFillable) {
-				return nil, fmt.Errorf("%w: %w", ErrInvalidActionRequest, err)
-			}
-			return nil, err
+			return nil, refuseNonEditable(ctx, req, err)
 		}
 		if err := checkFillLanded(ctx, req.NodeID, text, result); err != nil {
 			return nil, err

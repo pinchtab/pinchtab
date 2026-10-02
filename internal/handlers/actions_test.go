@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -1710,14 +1711,22 @@ func TestFocusFailingOnAConnectedNodeIsNotStale(t *testing.T) {
 }
 
 func TestAnActionOnTheWrongElementTypeIsAnInvalidRequestNotARetryableFault(t *testing.T) {
-	for _, kind := range []string{"check", "uncheck", "fill", "type"} {
-		t.Run(kind, func(t *testing.T) {
+	for name, target := range map[string]string{
+		"check":                      `"kind":"check","ref":"e1"`,
+		"uncheck":                    `"kind":"uncheck","ref":"e1"`,
+		"fill by ref":                `"kind":"fill","ref":"e1"`,
+		"fill by selector":           `"kind":"fill","selector":"#plain"`,
+		"type by ref":                `"kind":"type","ref":"e1"`,
+		"humanized type by ref":      `"kind":"type","ref":"e1","humanize":true`,
+		"humanized type by selector": `"kind":"type","selector":"#plain","humanize":true`,
+	} {
+		t.Run(name, func(t *testing.T) {
 			_, _, h := newRerenderFixture(t)
 
-			w := postRerenderAction(t, h, `{"kind":"`+kind+`","ref":"e1","text":"x","tabId":"tab-rerender"}`)
+			w := postRerenderAction(t, h, `{`+target+`,"text":"x","tabId":"tab-rerender"}`)
 
 			if w.Code != http.StatusBadRequest {
-				t.Fatalf("%s on a plain div: status=%d body=%s, want 400", kind, w.Code, w.Body.String())
+				t.Fatalf("%s on a plain div: status=%d body=%s, want 400", name, w.Code, w.Body.String())
 			}
 			var body struct {
 				Code      string `json:"code"`
@@ -1732,6 +1741,27 @@ func TestAnActionOnTheWrongElementTypeIsAnInvalidRequestNotARetryableFault(t *te
 			}
 			if !strings.Contains(body.Error, "div") || strings.Contains(body.Error, "-32000") {
 				t.Errorf("error = %q, want it to name the div and not the raw CDP error", body.Error)
+			}
+		})
+	}
+}
+
+func TestTextEntryBySelectorOnTheWrongElementTypeIsAnInvalidRequest(t *testing.T) {
+	humanize := true
+	for name, req := range map[string]bridge.ActionRequest{
+		"fill":           {Kind: bridge.ActionFill, Selector: "#plain", Text: "x"},
+		"humanized type": {Kind: bridge.ActionType, Selector: "#plain", Text: "x", Humanize: &humanize},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx, b, _ := newRerenderFixture(t)
+
+			_, err := b.ExecuteAction(ctx, req.Kind, req)
+
+			if !errors.Is(err, bridge.ErrInvalidActionRequest) {
+				t.Fatalf("%s on a plain div by selector: err=%v, want ErrInvalidActionRequest", name, err)
+			}
+			if !strings.Contains(err.Error(), "<div>") {
+				t.Errorf("error = %q, want it to name the div", err)
 			}
 		})
 	}
