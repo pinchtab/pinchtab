@@ -12,9 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/srccensus"
+	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 // A nodeId keeps selector resolution out of CDP so the endpoint can be driven with the
@@ -290,5 +292,90 @@ func TestASelectorMatchingNothingKeepsElementNotFound(t *testing.T) {
 
 	if body := decodeJSONMap(t, w.Body.Bytes()); w.Code != http.StatusNotFound || body["code"] != CodeElementNotFound {
 		t.Errorf("status = %d code = %v, want 404 %s: %s", w.Code, body["code"], CodeElementNotFound, w.Body.String())
+	}
+}
+
+func newUnsnapshottedTab(t *testing.T) *Handlers {
+	t.Helper()
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancelTimeout)
+	if err := chromedp.Run(ctx, chromedp.Navigate("data:text/html,<button>Go</button>")); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.RuntimeConfig{ActionTimeout: 10 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
+	b := browserBridge(ctx, cfg)
+	b.RegisterTab("tab1", ctx)
+	return New(b, cfg, nil, nil, nil)
+}
+
+func serveOnUnsnapshottedTab(t *testing.T, handle http.HandlerFunc, path, body string) (*httptest.ResponseRecorder, map[string]any) {
+	t.Helper()
+	w := httptest.NewRecorder()
+	handle(w, httptest.NewRequest("POST", path, strings.NewReader(body)))
+	return w, decodeJSONMap(t, w.Body.Bytes())
+}
+
+func requireRefNotFoundOnTab1(t *testing.T, w *httptest.ResponseRecorder, body map[string]any) {
+	t.Helper()
+	if w.Code != http.StatusNotFound || body["code"] != "ref_not_found" {
+		t.Fatalf("status = %d code = %v, want 404 ref_not_found: %s", w.Code, body["code"], w.Body.String())
+	}
+	details, _ := body["details"].(map[string]any)
+	if got := details["tabId"]; got != "tab1" {
+		t.Errorf("details.tabId = %v, want tab1 — the remedy does not say which tab to snapshot: %s", got, w.Body.String())
+	}
+}
+
+const noSnapshotOnTab1 = "ref e99 not found - tab tab1 has no snapshot - take a /snapshot first"
+
+func TestASingleActionWithRecoveryOffNamesTheUnsnapshottedTab(t *testing.T) {
+	h := newUnsnapshottedTab(t)
+	h.Recovery = nil
+
+	w, body := serveOnUnsnapshottedTab(t, h.HandleAction, "/action", `{"kind":"click","ref":"e99","tabId":"tab1"}`)
+
+	requireRefNotFoundOnTab1(t, w, body)
+	if got := body["error"]; got != noSnapshotOnTab1 {
+		t.Errorf("error = %q, want %q", got, noSnapshotOnTab1)
+	}
+}
+
+func TestAnAbsentDragDestinationNamesTheTabItSearched(t *testing.T) {
+	h := newUnsnapshottedTab(t)
+
+	w, body := serveOnUnsnapshottedTab(t, h.HandleAction, "/action", `{"kind":"drag","selector":"text:Go","toSelector":"e99","tabId":"tab1"}`)
+
+	requireRefNotFoundOnTab1(t, w, body)
+	if got, _ := body["error"].(string); !strings.HasPrefix(got, "drag destination e99 not found") {
+		t.Errorf("error = %q, want it to name the drag destination", got)
+	}
+}
+
+func TestABatchStepWithRecoveryOffNamesTheUnsnapshottedTab(t *testing.T) {
+	h := newUnsnapshottedTab(t)
+	h.Recovery = nil
+
+	w, body := serveOnUnsnapshottedTab(t, h.HandleActions, "/actions", `{"tabId":"tab1","actions":[{"kind":"click","ref":"e99"}]}`)
+
+	results, _ := body["results"].([]any)
+	if len(results) != 1 {
+		t.Fatalf("results = %v, want one step: %s", body["results"], w.Body.String())
+	}
+	step, _ := results[0].(map[string]any)
+	if got, _ := step["error"].(string); !strings.HasPrefix(got, noSnapshotOnTab1) {
+		t.Errorf("step error = %q, want it to open with %q", got, noSnapshotOnTab1)
+	}
+}
+
+// Live traffic refreshes the ref cache before this seam runs, so the tab only reads as
+// unsnapshotted here when that refresh failed to fetch the accessibility tree.
+func TestADragDestinationMissedAfterAFailedRefreshNamesTheUnsnapshottedTab(t *testing.T) {
+	h := New(&mockBridge{}, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+	req := bridge.ActionRequest{Kind: bridge.ActionDrag, ToSelector: "e99", TabID: "tab1"}
+
+	err := h.refreshActionSecondaryTargets(context.Background(), "tab1", &req)
+
+	if want := "drag destination e99 not found - tab tab1 has no snapshot - take a /snapshot first"; err == nil || err.Error() != want {
+		t.Errorf("err = %v, want %q", err, want)
 	}
 }
