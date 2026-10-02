@@ -48,7 +48,7 @@ e12:textbox val="updated" [~]
 `[+]` = added, `[~]` = changed, removed refs listed at end. All valid refs are shown — no need to remember previous snapshot. Do not follow with redundant `snap`; only call `text` when you need prose content.
 
 Fallback observation (when `--snap` wasn't used):
-- `pinchtab snap` — interactive elements + headings in compact format (default).
+- `pinchtab snap` — interactive elements plus headings, images, table cells and non-empty alert/status messages, compact (default).
 - `pinchtab snap [selector]` — scope the current-tab snapshot to one element.
 - `pinchtab snap --full` — all nodes as JSON (for debugging).
 - `pinchtab text` — content only (use when snap is missing prose you need).
@@ -164,7 +164,7 @@ pinchtab find <query>                               # semantic search; --ref-onl
 
 Guidance:
 
-- `snap` — default observation (compact + interactive). Returns interactive elements + headings. Prefer this over separate `text` calls.
+- `snap` — default observation (compact + interactive, shows form errors). Prefer it over `text`.
 - `snap --full` — all nodes as JSON; for debugging or when you need the full tree.
 - `snap -d` — standalone diff from previous snapshot. Use only when you need a diff without performing an action; for any click/fill/select/back/forward/reload, `--snap-diff` on the action itself already gives you the authoritative post-action state.
 - `text` — reading articles/dashboards when you won't act on refs. Falls back to `--full` when Readability drops content you need.

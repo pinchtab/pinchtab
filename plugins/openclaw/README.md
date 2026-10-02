@@ -168,7 +168,7 @@ One tool definition, many actions — keeps context lean:
 4. pinchtab({ action: "type", ref: "e5", text: "pinchtab" })
 5. pinchtab({ action: "press", key: "Enter" })
 6. pinchtab({ action: "snapshot", diff: true, format: "compact" })
-   → Only changes since last snapshot
+   → Lists all nodes, marking [+] added, [~] changed and removed refs
 7. pinchtab({ action: "text" })
    → Readable results (~800 tokens)
 ```
