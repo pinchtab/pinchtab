@@ -148,7 +148,7 @@ func cachedTabFile(t *testing.T, tabID string) string {
 // render — including the ones a poll loop throws away — cleared persistent state.
 func TestRenderingAStaleTab404TwiceLeavesTheCacheIntact(t *testing.T) {
 	path := cachedTabFile(t, "CACHED-TAB")
-	body := []byte(`{"code":"tab_not_found","error":"tab CACHED-TAB not found"}`)
+	body := []byte(`{"code":"error","error":"tab CACHED-TAB not found"}`)
 
 	first := renderAPIErrorBody(http.StatusNotFound, body)
 	second := renderAPIErrorBody(http.StatusNotFound, body)
@@ -181,13 +181,74 @@ func TestUnrelatedTabNotFoundGetsNoRemedy(t *testing.T) {
 	}
 }
 
+func wireNotFoundBody(t *testing.T, write func(http.ResponseWriter)) []byte {
+	t.Helper()
+	w := httptest.NewRecorder()
+	write(w)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("fixture answered %d, want 404", w.Code)
+	}
+	return w.Body.Bytes()
+}
+
+func TestOnlyAMissingTab404MarksTheCachedTabStale(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		write func(http.ResponseWriter)
+		stale bool
+	}{
+		{"bridge missing tab", func(w http.ResponseWriter) {
+			httpx.Error(w, http.StatusNotFound, fmt.Errorf("tab %s not found", "CACHED-TAB"))
+		}, true},
+		{"orchestrator missing tab", func(w http.ResponseWriter) {
+			httpx.Error(w, http.StatusNotFound, fmt.Errorf("tab %q not found", "CACHED-TAB"))
+		}, true},
+		{"tab lost to a browser crash", func(w http.ResponseWriter) {
+			httpx.ErrorCode(w, http.StatusNotFound, "browser_crashed", "tab CACHED-TAB not found: the browser crashed", false, nil)
+		}, true},
+		{"ref miss naming the live tab", func(w http.ResponseWriter) {
+			httpx.ErrorCode(w, http.StatusNotFound, "ref_not_found",
+				"ref e99 not found - tab CACHED-TAB has no snapshot - take a /snapshot first", false,
+				map[string]any{"tabId": "CACHED-TAB"})
+		}, false},
+		{"submit target miss naming the live tab", func(w http.ResponseWriter) {
+			httpx.ErrorCode(w, http.StatusNotFound, "submit_target_not_found", "ref e99 not found in tab CACHED-TAB", false, nil)
+		}, false},
+		{"uncoded 404 naming the tab only in details", func(w http.ResponseWriter) {
+			httpx.ErrorCode(w, http.StatusNotFound, "error", "no such download", false, map[string]any{"tabId": "CACHED-TAB"})
+		}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := cachedTabFile(t, "CACHED-TAB")
+			body := wireNotFoundBody(t, tc.write)
+
+			rendered := renderAPIErrorBody(http.StatusNotFound, body)
+			cleared := clearCachedTabOnFailure(http.StatusNotFound, body)
+			_, statErr := os.Stat(path)
+
+			if got := strings.Contains(rendered, "cached current tab"); got != tc.stale {
+				t.Errorf("stale-tab hint printed = %v, want %v:\n%s", got, tc.stale, rendered)
+			}
+			if got := strings.Contains(rendered, "pinchtab nav"); got != tc.stale {
+				t.Errorf("nav remedy printed = %v, want %v:\n%s", got, tc.stale, rendered)
+			}
+			if got := cleared != ""; got != tc.stale {
+				t.Errorf("clearing reported = %v, want %v: %q", got, tc.stale, cleared)
+			}
+			if got := os.IsNotExist(statErr); got != tc.stale {
+				t.Errorf("cache file removed = %v, want %v (%v)", got, tc.stale, statErr)
+			}
+		})
+	}
+}
+
 // Conn.Raw returns instead of terminating — one caller polls it
 // ten times a second — so rendering its error must leave the cache alone.
 func TestReturningRequestPathsLeaveTheCacheIntact(t *testing.T) {
 	path := cachedTabFile(t, "CACHED-TAB")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"code":"tab_not_found","error":"tab CACHED-TAB not found"}`))
+		_, _ = w.Write([]byte(`{"code":"error","error":"tab CACHED-TAB not found"}`))
 	}))
 	defer srv.Close()
 
@@ -304,7 +365,7 @@ func TestTerminalPathsClearTheCachedTabAndSayTheyDid(t *testing.T) {
 // runTerminalChild drives a real terminal path with a real cached-tab context, and
 // exits through it.
 func runTerminalChild(mode string) {
-	body := []byte(`{"code":"tab_not_found","error":"tab CACHED-TAB not found"}`)
+	body := []byte(`{"code":"error","error":"tab CACHED-TAB not found"}`)
 	UseCachedTab(CachedTab{
 		TabID:     "CACHED-TAB",
 		Base:      "http://127.0.0.1:9867",

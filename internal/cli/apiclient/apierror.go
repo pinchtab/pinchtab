@@ -1,7 +1,6 @@
 package apiclient
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -106,12 +105,26 @@ var cachedTab CachedTab
 // already resolved — not while an error is being formatted.
 func UseCachedTab(c CachedTab) { cachedTab = c }
 
+// missingTabCodes are the codes a 404 for a tab that no longer exists carries on the
+// wire: uncoded from the bridge and the orchestrator, browser_crashed when the tab died
+// with its browser. Every other coded 404 that names the tab (ref_not_found puts it in
+// its message) is about something inside a tab that is still alive.
+var missingTabCodes = map[string]bool{"": true, genericErrorCode: true, "browser_crashed": true}
+
 // namesCachedTab is the one classifier both consumers share: the formatter for the
 // wording, the terminal path for the clearing. Pure.
 func namesCachedTab(statusCode int, body []byte) bool {
-	return statusCode == http.StatusNotFound &&
-		cachedTab.TabID != "" &&
-		bytes.Contains(body, []byte(cachedTab.TabID))
+	if statusCode != http.StatusNotFound || cachedTab.TabID == "" {
+		return false
+	}
+	var refusal struct {
+		Error string `json:"error"`
+		Code  string `json:"code"`
+	}
+	if json.Unmarshal(body, &refusal) != nil {
+		return false
+	}
+	return missingTabCodes[refusal.Code] && strings.Contains(refusal.Error, cachedTab.TabID)
 }
 
 // A fresh tab is the one command this CLI-side advice can name. The prose that used to
