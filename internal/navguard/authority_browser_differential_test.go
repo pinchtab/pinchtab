@@ -25,8 +25,6 @@ import (
 // CI has no browser, so this skips there; TestTheGuardAgreesWithTheRecordedBrowserAnswers
 // is its browserless twin over the same generated table.
 func TestTheBrowserResolvesTheHostTheGuardExtracts(t *testing.T) {
-	chromePath := testbrowser.Path(t)
-
 	var mu sync.Mutex
 	requested := map[string]bool{}
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -43,21 +41,8 @@ func TestTheBrowserResolvesTheHostTheGuardExtracts(t *testing.T) {
 	// rather than on the parser question this test is about.
 	authority := strings.TrimPrefix(srv.URL, "https://")
 
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("ignore-certificate-errors", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 120*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx, cancel := context.WithTimeout(testbrowser.Launch(t, chromedp.Flag("ignore-certificate-errors", true)), 120*time.Second)
+	t.Cleanup(cancel)
 
 	for _, spelling := range authoritySpellings(authority + "/probe") {
 		t.Run(spelling.raw, func(t *testing.T) {
@@ -108,22 +93,8 @@ func TestTheGuardAgreesWithTheRecordedBrowserAnswers(t *testing.T) {
 // scheme-ful "https:////10.0.0.5/x" that Chrome does navigate and the guard read as
 // hostless. That is why the fix belongs in the normaliser.
 func TestARawProtocolRelativeTargetIsNotNavigableWithoutABase(t *testing.T) {
-	chromePath := testbrowser.Path(t)
-
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx, cancel := context.WithTimeout(testbrowser.Tab(t), 30*time.Second)
+	t.Cleanup(cancel)
 
 	if err := chromedp.Run(ctx, chromedp.Navigate("//127.0.0.1:9/probe")); err == nil {
 		t.Error("a raw protocol-relative target navigated; the note above about where the bypass came from is wrong and should be corrected")

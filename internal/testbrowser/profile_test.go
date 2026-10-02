@@ -72,157 +72,53 @@ func (r *cleanupRecorder) Error(...any)          { r.failed = true }
 func (r *cleanupRecorder) Fatal(...any)          { r.failed = true }
 func (r *cleanupRecorder) Cleanup(f func())      { f() }
 
-// A Chrome profile handed to t.TempDir is the defect itself: t.TempDir asserts its
-// own RemoveAll succeeded, and a browser still flushing its cache makes that fail on
-// an unrelated card's gate. The rule is checked over the whole module, because the
-// next browser test is as likely to be written in a package that has none today.
-// The subject is the tests themselves, so the enumeration comes from srccensus.TestTree
-// rather than a walk written here: the nested-checkout exclusion is the part a bespoke walk
-// silently loses, and it has one owner.
-func TestNoBrowserProfileIsPointedAtATestTempDir(t *testing.T) {
-	sites := 0
-
+// A test that builds its own allocator picks its own profile directory and launch wait,
+// which is how a profile landed on t.TempDir and launches flaked at chromedp's 20s
+// default. With testbrowser the only caller both have one owner. The rule is module-wide
+// because the next browser test is as likely to land in a package that has none today.
+func TestOnlyTestbrowserLaunchesATestChrome(t *testing.T) {
 	for _, file := range srccensus.TestTree(t, "../..", moduleTestFileFloor) {
-		found, violations := profileDirSites(t, file.Path, file.Text)
-		sites += found
-		for _, at := range violations {
-			t.Errorf("%s hands a Chrome profile to t.TempDir at %s; use testbrowser.ProfileDir(t) — t.TempDir fails the test when the browser is still flushing its cache", file.Name, at)
+		for _, at := range ownLaunchSites(file.Path, file.Text) {
+			t.Errorf("%s builds its own Chrome at %s; use testbrowser.Tab, or testbrowser.Launch(t, flags...) for a browser-wide flag", file.Name, at)
 		}
-	}
-
-	if sites < userDataDirSiteFloor {
-		t.Fatalf("found only %d chromedp.UserDataDir call sites; the census matched almost nothing and would pass vacuously", sites)
 	}
 }
 
-// profileDirSites counts the chromedp.UserDataDir calls in one file and names the ones whose
-// directory comes from t.TempDir.
-//
-// The argument is resolved through a local variable, because most sites in the tree hold the
-// path in one — they need it again for their own cleanup — so a rule reading only the
-// argument expression is blind to the majority of the call sites it appears to police.
-func profileDirSites(t *testing.T, path, src string) (int, []string) {
-	t.Helper()
+func ownLaunchSites(path, src string) []string {
 	fset := token.NewFileSet()
 	parsed, err := parser.ParseFile(fset, path, src, 0)
 	if err != nil {
-		return 0, nil
-	}
-
-	whole := 0
-	ast.Inspect(parsed, func(n ast.Node) bool {
-		if isUserDataDirCall(n) != nil {
-			whole++
-		}
-		return true
-	})
-
-	sites := 0
-	var violations []string
-	ast.Inspect(parsed, func(n ast.Node) bool {
-		fn, ok := n.(*ast.FuncDecl)
-		if !ok || fn.Body == nil {
-			return true
-		}
-		locals := tempDirLocals(fn.Body)
-		ast.Inspect(fn.Body, func(n ast.Node) bool {
-			call := isUserDataDirCall(n)
-			if call == nil {
-				return true
-			}
-			sites++
-			if fromTempDir(call.Args[0], locals) {
-				violations = append(violations, fset.Position(call.Pos()).String())
-			}
-			return true
-		})
-		return true
-	})
-
-	// Resolving a local means walking function bodies, which is where every site sits today.
-	// A site outside one — a package-level option slice — would be counted by the whole-file
-	// pass and silently skipped by this one, so the two counts must agree or the census is
-	// quietly narrower than it reads.
-	if sites != whole {
-		t.Errorf("%s has %d chromedp.UserDataDir calls but only %d inside a function; a site outside a function body is not being checked", path, whole, sites)
-	}
-	return sites, violations
-}
-
-func isUserDataDirCall(n ast.Node) *ast.CallExpr {
-	call, ok := n.(*ast.CallExpr)
-	if !ok || !isSelectorCall(call.Fun, "chromedp", "UserDataDir") || len(call.Args) != 1 {
 		return nil
 	}
-	return call
-}
-
-// tempDirLocals names the variables a function assigns from t.TempDir(), by := or by =.
-func tempDirLocals(body *ast.BlockStmt) map[string]bool {
-	locals := map[string]bool{}
-	ast.Inspect(body, func(n ast.Node) bool {
-		assign, ok := n.(*ast.AssignStmt)
-		if !ok || len(assign.Lhs) != 1 || len(assign.Rhs) != 1 {
-			return true
-		}
-		name, ok := assign.Lhs[0].(*ast.Ident)
-		if !ok {
-			return true
-		}
-		if fromTempDir(assign.Rhs[0], nil) {
-			locals[name.Name] = true
+	var sites []string
+	ast.Inspect(parsed, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if ok && (isSelectorCall(call.Fun, "chromedp", "NewExecAllocator") || isSelectorCall(call.Fun, "chromedp", "UserDataDir")) {
+			sites = append(sites, fset.Position(call.Pos()).String())
 		}
 		return true
 	})
-	return locals
+	return sites
 }
 
-func fromTempDir(expr ast.Expr, locals map[string]bool) bool {
-	switch e := expr.(type) {
-	case *ast.CallExpr:
-		return isMethodCall(e.Fun, "TempDir")
-	case *ast.Ident:
-		return locals[e.Name]
-	}
-	return false
-}
-
-// The two spellings a browser test actually uses, pinned as a pair: the module walk can only
-// report what the predicate recognises, so a rule reading the argument expression alone passes
-// over every site that holds the path in a variable — which is most of them, and is how a real
-// bare t.TempDir survived the sweep that was meant to remove them all.
-func TestTheProfileCensusReadsBothSpellingsOfTheDirectory(t *testing.T) {
+func TestTheLaunchCensusRecognisesAnOwnAllocator(t *testing.T) {
 	for _, tc := range []struct {
-		name      string
-		body      string
-		violation bool
+		body string
+		own  bool
 	}{
-		{name: "t.TempDir inline", body: `chromedp.UserDataDir(t.TempDir())`, violation: true},
-		{name: "t.TempDir through a local", body: "profile := t.TempDir()\n\tchromedp.UserDataDir(profile)", violation: true},
-		{name: "ProfileDir inline", body: `chromedp.UserDataDir(testbrowser.ProfileDir(t))`},
-		{name: "ProfileDir through a local", body: "profile := testbrowser.ProfileDir(t)\n\tchromedp.UserDataDir(profile)"},
+		{body: `chromedp.NewExecAllocator(ctx, opts...)`, own: true},
+		{body: `chromedp.UserDataDir(dir)`, own: true},
+		{body: `testbrowser.Launch(t, chromedp.Flag("ignore-certificate-errors", true))`},
+		{body: `testbrowser.Tab(t)`},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			src := "package p\n\nfunc f(t *testing.T) {\n\t" + tc.body + "\n}\n"
-			sites, violations := profileDirSites(t, "probe_test.go", src)
-			if sites != 1 {
-				t.Fatalf("counted %d UserDataDir sites in %q, want 1 — the census cannot report what it did not see", sites, tc.body)
-			}
-			if got := len(violations) > 0; got != tc.violation {
-				t.Errorf("violation = %v, want %v for %q", got, tc.violation, tc.body)
-			}
-		})
+		src := "package p\n\nfunc f(t *testing.T) {\n\t" + tc.body + "\n}\n"
+		if got := len(ownLaunchSites("probe_test.go", src)) > 0; got != tc.own {
+			t.Errorf("own launch = %v, want %v for %q", got, tc.own, tc.body)
+		}
 	}
 }
 
-// Two floors, because they fail for different reasons: the TestTree floor catches a walk that
-// stopped seeing files at all, and the site floor catches a rule that stopped matching what
-// it polices. Both are set well under the real counts so ordinary growth or deletion does not
-// trip them.
-const (
-	moduleTestFileFloor  = 200
-	userDataDirSiteFloor = 2
-)
+const moduleTestFileFloor = 200
 
 func isSelectorCall(fun ast.Expr, pkg, name string) bool {
 	sel, ok := fun.(*ast.SelectorExpr)
@@ -231,9 +127,4 @@ func isSelectorCall(fun ast.Expr, pkg, name string) bool {
 	}
 	ident, ok := sel.X.(*ast.Ident)
 	return ok && ident.Name == pkg
-}
-
-func isMethodCall(fun ast.Expr, name string) bool {
-	sel, ok := fun.(*ast.SelectorExpr)
-	return ok && sel.Sel.Name == name
 }
