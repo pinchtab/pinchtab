@@ -459,16 +459,18 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 
 	result, backend, err := h.executeAction(ctx, *req, cfg)
 	if err != nil && !submitClick && shouldRetryPointerAction(*req, err) {
-		if (req.Ref != "" || req.ToSelector != "") && bridge.IsStaleNodeError(err) {
+		stale := (req.Ref != "" || req.ToSelector != "") && bridge.IsStaleNodeError(err)
+		if stale {
 			recordStaleRefRetry()
 			h.refreshRefCache(ctx, resolvedTabID)
 		}
-		h.refreshActionNodeIDFromSelector(ctx, req)
-		if secErr := h.refreshActionSecondaryTargets(ctx, resolvedTabID, req); secErr != nil {
-			err = secErr
-		} else {
-			time.Sleep(pointerRetryDelay)
-			result, backend, err = h.executeAction(ctx, *req, cfg)
+		if !stale || !onlyRecoveryCanRepoint(*req) {
+			h.refreshActionNodeIDFromSelector(ctx, req)
+			if secErr := h.refreshActionSecondaryTargets(ctx, resolvedTabID, req); secErr != nil {
+				err = secErr
+			} else if waitFor(ctx, pointerRetryDelay) == nil {
+				result, backend, err = h.executeAction(ctx, *req, cfg)
+			}
 		}
 	}
 
@@ -569,15 +571,20 @@ func shouldRetryPointerAction(req bridge.ActionRequest, err error) bool {
 	return bridge.IsStaleNodeError(err)
 }
 
+// onlyRecoveryCanRepoint reports a request whose dead primary node nothing in the
+// retry arm can replace: a ref carries no selector to re-resolve, and with no
+// secondary target the arm has nothing else to refresh, so re-dispatching at the
+// same node id is a guaranteed failure that recovery's descriptor match then heals.
+func onlyRecoveryCanRepoint(req bridge.ActionRequest) bool {
+	return req.Ref != "" && strings.TrimSpace(req.Selector) == "" && strings.TrimSpace(req.ToSelector) == ""
+}
+
 // refreshActionSecondaryTargets re-resolves every selector-bearing field the request
-// carries BEYOND the primary target, against the current snapshot. The primary is
-// re-resolved by the caller (recovery's descriptor match, or the ref-cache lookup on
-// the pointer retry); everything else must be re-derived rather than carried over,
-// because a node id resolved before a refresh can denote a node the DOM change
-// destroyed. Today the only secondary field is the drag destination; a future
-// selector-bearing field is re-resolved by adding it HERE, not at each site — the
-// census in action_drag_destination_test.go pins that every re-resolution site calls
-// this.
+// carries BEYOND the primary target. A node id resolved before a refresh can denote a
+// node the DOM change destroyed, so these are re-derived, never carried over. Today
+// the only secondary field is the drag destination; a future selector-bearing field
+// is re-resolved by adding it HERE, not at each site — the census in
+// action_drag_destination_test.go pins that every re-resolution site calls this.
 //
 // A destination ref that no longer resolves is re-found by EXACT identity — the
 // unique node in the refreshed snapshot with the intent-cached descriptor's role and

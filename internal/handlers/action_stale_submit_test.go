@@ -554,6 +554,7 @@ type navigatingBridge struct {
 	refCache     *bridge.RefCache
 	actionErr    error
 	actionResult map[string]any
+	failFirst    error
 	dispatches   atomic.Int64
 }
 
@@ -561,7 +562,9 @@ func (m *navigatingBridge) GetRefCache(string) *bridge.RefCache  { return m.refC
 func (m *navigatingBridge) SetRefCache(string, *bridge.RefCache) {}
 
 func (m *navigatingBridge) ExecuteAction(context.Context, string, bridge.ActionRequest) (map[string]any, error) {
-	m.dispatches.Add(1)
+	if m.dispatches.Add(1) == 1 && m.failFirst != nil {
+		return nil, m.failFirst
+	}
 	return m.actionResult, m.actionErr
 }
 
@@ -643,5 +646,56 @@ func TestANavigationClassifiedFailureThatNeverDispatchedStillHeals(t *testing.T)
 				t.Errorf("%d dispatch(es) for %s; recovery must still heal a failure whose action never took effect", got, name)
 			}
 		})
+	}
+}
+
+// A ref carries nothing the retry arm can re-resolve: the node id stays the dead one,
+// so a second dispatch there is a round trip spent to learn what the first already said.
+// Recovery is the heal. The first dispatch fails stale; every later one succeeds, so the
+// count says whether a doomed retry went out before recovery's single dispatch.
+func TestAStaleRefIsNotRedispatchedAtTheDeadNodeBeforeRecovery(t *testing.T) {
+	mb, h, tabID := navigatingHandlers(t, nil)
+	mb.actionResult = map[string]any{"ok": true}
+	mb.failFirst = errors.New("node is detached")
+
+	req := &bridge.ActionRequest{Kind: bridge.ActionClick, Ref: "e6", NodeID: 18}
+	_, _, rr, err := h.executeActionResilient(context.Background(), req, h.Config, tabID, false)
+
+	if err != nil {
+		t.Fatalf("recovery did not heal the stale ref: %v", err)
+	}
+	if rr == nil || !rr.Recovered {
+		t.Fatalf("the click did not come through recovery: %+v", rr)
+	}
+	if got := mb.dispatches.Load(); got != 2 {
+		t.Errorf("%d dispatches; want the failed one and recovery's, with no retry at the dead node between", got)
+	}
+}
+
+// With a drag destination the retry IS the heal for that destination: recovery only
+// re-matches the source, so the arm still re-resolves the destination and retries.
+func TestAStaleDragWithADestinationStillRetriesBeforeRecovery(t *testing.T) {
+	mb, h, tabID := navigatingHandlers(t, nil)
+	mb.availableActions = append(mb.availableActions, bridge.ActionDrag)
+	mb.actionResult = map[string]any{"ok": true}
+	mb.failFirst = errors.New("node is detached")
+	mb.refCache.Refs["e9"] = 77
+	mb.refCache.Nodes = append(mb.refCache.Nodes, bridge.A11yNode{Ref: "e9", Role: "listitem", Name: "Done", NodeID: 77})
+	h.Recovery.RecordIntent(tabID, "e9", recovery.IntentEntry{
+		Descriptor: semantic.ElementDescriptor{Ref: "e9", Role: "listitem", Name: "Done"},
+		CachedAt:   time.Now(),
+	})
+
+	req := &bridge.ActionRequest{Kind: bridge.ActionDrag, Ref: "e6", NodeID: 18, ToSelector: "e9", ToNodeID: 77}
+	_, _, rr, err := h.executeActionResilient(context.Background(), req, h.Config, tabID, false)
+
+	if err != nil {
+		t.Fatalf("the retry did not heal the drag: %v", err)
+	}
+	if rr != nil {
+		t.Errorf("recovery ran for a drag the retry arm healed: %+v", rr)
+	}
+	if got := mb.dispatches.Load(); got != 2 {
+		t.Errorf("%d dispatches; want the failed one and the retry", got)
 	}
 }

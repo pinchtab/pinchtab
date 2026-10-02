@@ -26,3 +26,12 @@ func pollUntil(ctx context.Context, interval time.Duration, check func() (bool, 
 		}
 	}
 }
+
+func waitFor(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
+	}
+}
