@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os/exec"
 	"reflect"
 	"strconv"
 	"strings"
@@ -22,6 +23,7 @@ import (
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -1814,8 +1816,8 @@ func TestClickOnANativeSelectOptionPointsToSelectInsteadOf500(t *testing.T) {
 	if body.Code != "invalid_action_request" || body.Retryable {
 		t.Errorf("code=%q retryable=%v, want invalid_action_request and not retryable", body.Code, body.Retryable)
 	}
-	if !strings.Contains(body.Details.Hint, `select e2 "Large"`) {
-		t.Errorf("hint = %q, want it to name select e2 \"Large\"", body.Details.Hint)
+	if !strings.Contains(body.Details.Hint, `select e2 'Large'`) {
+		t.Errorf("hint = %q, want it to name select e2 'Large'", body.Details.Hint)
 	}
 	if strings.Contains(w.Body.String(), "-32000") {
 		t.Errorf("body leaks the raw CDP error: %s", w.Body.String())
@@ -2028,5 +2030,22 @@ func TestBatchWaitNavClickOnANavigatingSubmitReportsTheLandingWithoutProbing(t *
 	}
 	if len(b.probedNodeIDs) != 0 {
 		t.Fatalf("probed node IDs = %v, want no validation probe after a navigation", b.probedNodeIDs)
+	}
+}
+
+func TestOptionHintSurvivesAShellPasteVerbatim(t *testing.T) {
+	text := "$(echo PWNED) `id` it's \"big\""
+	hint := availableOptionsHint([]bridgecdpops.SelectOption{{Value: text, Text: text}})
+	arg, ok := strings.CutPrefix(hint, "available options: ")
+	if !ok {
+		t.Fatalf("hint = %q, want the available options prefix", hint)
+	}
+
+	out, err := exec.Command("/bin/sh", "-c", "printf %s "+arg).Output()
+	if err != nil {
+		t.Fatalf("sh rejected the hint argument %s: %v", arg, err)
+	}
+	if string(out) != text {
+		t.Errorf("pasting the hint argument printed %q, want the option text %q unchanged", out, text)
 	}
 }

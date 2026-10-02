@@ -110,7 +110,7 @@ func (h *Handlers) invalidActionDetails(actionErr error, tabID string) map[strin
 	}
 	return map[string]any{
 		"dispatched": false,
-		"hint":       fmt.Sprintf("choose the option on its <select> instead: select %s %q", h.refForNode(tabID, closedOption.SelectBackendNodeID), closedOption.OptionText),
+		"hint":       fmt.Sprintf("choose the option on its <select> instead: select %s %s", h.refForNode(tabID, closedOption.SelectBackendNodeID), shellQuote(closedOption.OptionText)),
 	}
 }
 
@@ -132,12 +132,16 @@ func availableOptionsHint(options []bridgecdpops.SelectOption) string {
 	rendered := make([]string, len(options))
 	for i, o := range options {
 		if o.Text == "" || o.Text == o.Value {
-			rendered[i] = fmt.Sprintf("%q", o.Value)
+			rendered[i] = shellQuote(o.Value)
 			continue
 		}
-		rendered[i] = fmt.Sprintf("%q (%s)", o.Value, o.Text)
+		rendered[i] = fmt.Sprintf("%s (%s)", shellQuote(o.Value), shellQuote(o.Text))
 	}
 	return "available options: " + strings.Join(rendered, ", ")
+}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // actionFailureIsRetryable answers the only question the flag promises: could repeating the
