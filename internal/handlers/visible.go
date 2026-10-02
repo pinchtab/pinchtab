@@ -47,11 +47,13 @@ func (h *Handlers) HandleTabGetVisible(w http.ResponseWriter, r *http.Request) {
 
 const elementVisibleJS = `function() {
   var el = this;
-  var style = window.getComputedStyle(el);
-  if (!el.offsetParent && style.position !== 'fixed' && style.position !== 'sticky') return false;
-  if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
   var rect = el.getBoundingClientRect();
-  return rect.width > 0 && rect.height > 0;
+  if (rect.width <= 0 || rect.height <= 0) return false;
+  if (el.checkVisibility) return el.checkVisibility({opacityProperty: true, visibilityProperty: true, checkOpacity: true, checkVisibilityCSS: true});
+  var style = window.getComputedStyle(el);
+  var isRoot = el === document.body || el === document.documentElement;
+  if (!el.offsetParent && !isRoot && style.position !== 'fixed' && style.position !== 'sticky') return false;
+  return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
 }`
 
 func (h *Handlers) elementRendered(ctx context.Context, nodeID int64) (bool, error) {

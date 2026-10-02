@@ -501,6 +501,40 @@ func TestHandleWait_SelectorStatesAgainstEachElementCondition(t *testing.T) {
 	}
 }
 
+func TestHandleWait_VisibleAcceptsBodyAndTextDirectlyInBody(t *testing.T) {
+	ctx, cancel := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancel)
+	html := `<body>Bare body text here<div style="opacity:0"><p id="kid">faded</p></div></body>`
+	if err := chromedp.Run(ctx, chromedp.Navigate("data:text/html;base64,"+base64.StdEncoding.EncodeToString([]byte(html)))); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.RuntimeConfig{DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
+	b := browserBridge(ctx, cfg)
+	b.RegisterTab("tab-wait", ctx)
+	h := New(b, cfg, nil, nil, nil)
+
+	for selector, waited := range map[string]bool{
+		"body":                true,
+		"html":                true,
+		"xpath://body":        true,
+		"text:Bare body text": true,
+		"#kid":                false,
+	} {
+		t.Run(selector, func(t *testing.T) {
+			body, _ := json.Marshal(map[string]any{"tabId": "tab-wait", "selector": selector, "state": "visible", "timeout": 100})
+			w := httptest.NewRecorder()
+			h.HandleWait(w, httptest.NewRequest("POST", "/wait", bytes.NewReader(body)))
+			var got waitResponse
+			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || w.Code != 200 {
+				t.Fatalf("status %d body %s", w.Code, w.Body.String())
+			}
+			if got.Waited != waited {
+				t.Errorf("waited = %v, want %v: %s", got.Waited, waited, w.Body.String())
+			}
+		})
+	}
+}
+
 func TestHandleWait_RejectsUnknownState(t *testing.T) {
 	h := New(&mockBridge{}, &config.RuntimeConfig{}, nil, nil, nil)
 	w := httptest.NewRecorder()

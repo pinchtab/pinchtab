@@ -75,7 +75,8 @@ const visibleFixtureHTML = `<style>
 <div id="displayNone" style="display:none">display none</div>
 <div id="visibilityHidden" style="visibility:hidden; width:120px; height:40px">visibility hidden</div>
 <div id="opacityZero" style="opacity:0; width:120px; height:40px">opacity zero</div>
-<div id="zeroSize" style="width:0; height:0">zero size</div>`
+<div id="zeroSize" style="width:0; height:0">zero size</div>
+<div style="opacity:0"><div id="insideOpacityZero" style="width:120px; height:40px">inside a transparent ancestor</div></div>`
 
 func runElementVisibleJS(t *testing.T, ctx context.Context, selector string) bool {
 	t.Helper()
@@ -118,26 +119,42 @@ func TestTheVisibleEndpointReadsThePositionCSSComputed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, tc := range []struct {
+	type visibleCase struct {
 		selector string
 		want     bool
 		why      string
-	}{
+	}
+	cases := []visibleCase{
 		{selector: "#fixedByStylesheet", want: true, why: "fixed by a stylesheet rule: the case that reported not visible while on screen"},
 		{selector: "#fixedInline", want: true, why: "fixed by the style attribute: what worked before, and must not regress"},
 		{selector: "#stickyByStylesheet", want: true, why: "sticky by a stylesheet rule"},
 		{selector: "#stickyInline", want: true, why: "sticky by the style attribute"},
 		{selector: "#normalFlow", want: true, why: "an ordinary in-flow element never needed the positioned branch"},
+		{selector: "body", want: true, why: "body has a box but never an offsetParent"},
+		{selector: "html", want: true, why: "the root element has a box but never an offsetParent"},
 		{selector: "#displayNone", want: false, why: "display:none"},
 		{selector: "#visibilityHidden", want: false, why: "visibility:hidden"},
 		{selector: "#opacityZero", want: false, why: "opacity:0"},
 		{selector: "#opaqueByStylesheet", want: false, why: "fixed and positioned, but transparent: reaching the positioned branch must not skip the hidden checks"},
 		{selector: "#zeroSize", want: false, why: "zero-size box"},
-	} {
-		if got := runElementVisibleJS(t, ctx, tc.selector); got != tc.want {
-			t.Errorf("%s reported visible=%v, want %v — %s", tc.selector, got, tc.want, tc.why)
+	}
+	check := func(t *testing.T, cases []visibleCase) {
+		for _, tc := range cases {
+			if got := runElementVisibleJS(t, ctx, tc.selector); got != tc.want {
+				t.Errorf("%s reported visible=%v, want %v — %s", tc.selector, got, tc.want, tc.why)
+			}
 		}
 	}
+
+	t.Run("checkVisibility", func(t *testing.T) {
+		check(t, append(cases, visibleCase{selector: "#insideOpacityZero", want: false, why: "an opacity:0 ancestor hides its subtree"}))
+	})
+	t.Run("without checkVisibility", func(t *testing.T) {
+		if err := chromedp.Run(ctx, chromedp.Evaluate(`delete Element.prototype.checkVisibility`, nil)); err != nil {
+			t.Fatal(err)
+		}
+		check(t, cases)
+	})
 }
 
 // The browser-backed table above does not run where no browser is installed.
