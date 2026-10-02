@@ -82,9 +82,17 @@ pinchtab extract --schema amounts.schema.json --scope role:table
 | `--json` | Print the full response envelope instead of `data` |
 | `--tab <id>` | Target a tab through `POST /tabs/{id}/extract` |
 
-Missing required fields and a truncated array are reported on stderr; the command still
-exits 0, because the page answered. A schema the server refuses exits non-zero with the
-server's `400` message, which names the offending path.
+Three things are reported on stderr, never on stdout, so piping `data` into `jq` is
+unaffected. The command still exits 0, because the page answered:
+
+| Stderr line | When |
+| --- | --- |
+| `unmatched: items (no_field_match); rerun with --explain` | One line per top-level property absent from `data`, carrying that field's `reason`; not printed with `--explain`, whose table already shows it |
+| `missing required fields: name, price` | A `required` property did not resolve |
+| `truncated: an array hit its item cap; ...` | An array stopped at `--max-items` or the schema's `maxItems` |
+
+A schema the server refuses exits non-zero with the server's `400` message, which names
+the offending path.
 
 The CLI keeps the vocabulary the extract minted, so a field's ref can be clicked next
 without a snapshot in between:

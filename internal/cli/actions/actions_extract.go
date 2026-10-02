@@ -54,6 +54,13 @@ func Extract(conn apiclient.Conn, cmd *cobra.Command) {
 			fmt.Println(row)
 		}
 	}
+	if !explain {
+		data, _ := result["data"].(map[string]any)
+		fields, _ := result["fields"].(map[string]any)
+		for _, line := range extractUnmatchedLines(data, fields) {
+			fmt.Fprintln(os.Stderr, line)
+		}
+	}
 	if missing := stringList(result["missing"]); len(missing) > 0 {
 		fmt.Fprintf(os.Stderr, "missing required fields: %s\n", strings.Join(missing, ", "))
 	}
@@ -83,6 +90,24 @@ func readExtractSchema(path string, stdin io.Reader) (json.RawMessage, error) {
 		return nil, fmt.Errorf("--schema from %s is not valid JSON", source)
 	}
 	return json.RawMessage(raw), nil
+}
+
+func extractUnmatchedLines(data, fields map[string]any) []string {
+	names := make([]string, 0, len(fields))
+	for name := range fields {
+		if _, matched := data[name]; !matched {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+
+	lines := make([]string, 0, len(names))
+	for _, name := range names {
+		field, _ := fields[name].(map[string]any)
+		reason, _ := field["reason"].(string)
+		lines = append(lines, "unmatched: "+name+" ("+orDash(reason)+"); rerun with --explain")
+	}
+	return lines
 }
 
 func extractFieldRows(fields map[string]any, prefix string, explain bool) []string {

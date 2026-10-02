@@ -134,6 +134,41 @@ func TestExtractFieldsAppendsTheRefTableAndExplainAddsScores(t *testing.T) {
 	}
 }
 
+func TestExtractNamesEachUnmatchedPropertyOnStderrWithItsReason(t *testing.T) {
+	const unmatched = `{"data":{"title":"Mugs"},"fields":{"title":{"ref":"e1","score":1,"confidence":"high","source":"text"},"items":{"ref":"e4","confidence":"low","reason":"no_field_match"},"brand":{"confidence":"low","reason":"no_match"}},"missing":[],"truncated":false}`
+	for _, tc := range []struct {
+		name, response, flag, wantStdout, wantStderr string
+	}{
+		{"empty data", `{"data":{},"fields":{"items":{"confidence":"low","reason":"no_field_match"}},"missing":[],"truncated":false}`, "", "{}\n", "unmatched: items (no_field_match); rerun with --explain\n"},
+		{"one line per property, sorted", unmatched, "", "{\n  \"title\": \"Mugs\"\n}\n", "unmatched: brand (no_match); rerun with --explain\nunmatched: items (no_field_match); rerun with --explain\n"},
+		{"fully matched", extractTestResponse, "", "", ""},
+		{"explain already shows the reason", unmatched, "explain", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMockServer()
+			m.response = tc.response
+			defer m.close()
+
+			set := map[string]string{}
+			if tc.flag != "" {
+				set[tc.flag] = "true"
+			}
+			var stdout string
+			stderr := captureStderr(t, func() {
+				stdout = captureStdout(t, func() {
+					Extract(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, newExtractCmd(writeSchemaFile(t, extractTestSchema), set))
+				})
+			})
+			if stderr != tc.wantStderr {
+				t.Errorf("stderr = %q, want %q", stderr, tc.wantStderr)
+			}
+			if tc.wantStdout != "" && stdout != tc.wantStdout {
+				t.Errorf("stdout = %q, want the data object alone %q", stdout, tc.wantStdout)
+			}
+		})
+	}
+}
+
 func TestExtractFieldRowsListArrayItemsUnderTheirIndex(t *testing.T) {
 	var fields map[string]any
 	_ = json.Unmarshal([]byte(`{"products":{"ref":"e20","confidence":"high","items":[{"ref":"e21","fields":{"name":{"ref":"e22","confidence":"high"}}}]}}`), &fields)
