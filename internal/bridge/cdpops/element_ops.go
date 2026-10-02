@@ -29,7 +29,7 @@ func (e *NoOptionMatchError) Error() string {
 	return fmt.Sprintf("no option matched %q by value or visible text", e.Value)
 }
 
-// NotFillableError reports a fill target that holds no value of its own, such as
+// NotFillableError reports a text-entry target that holds no value of its own, such as
 // one segment of a date or time input. Host names the input it belongs to, when
 // the target sits in that input's shadow tree.
 type NotFillableError struct {
@@ -48,18 +48,57 @@ func (e *NotFillableError) Error() string {
 	}
 	target += ">"
 	if e.Host == nil {
-		return fmt.Sprintf("fill target %s is not an input, textarea, select or contenteditable element", target)
+		return fmt.Sprintf("target %s is not an input, textarea, select or contenteditable element", target)
 	}
 	return fmt.Sprintf(
-		"fill target %s is a part of <%s type=%q>, not a field; fill the host input by selector with the whole value in ISO format (e.g. 12:30, 2026-10-02)",
+		"target %s is a part of <%s type=%q>, not a field; fill the host input by selector with the whole value in ISO format (e.g. 12:30, 2026-10-02)",
 		target, e.Host.Tag, e.Host.Type,
 	)
+}
+
+const notFillableJS = `function() {
+	if (this instanceof window.HTMLTextAreaElement || this instanceof window.HTMLInputElement ||
+		this instanceof window.HTMLSelectElement || this.isContentEditable) {
+		return null;
+	}
+	var root = this.getRootNode && this.getRootNode();
+	var host = root && root.host;
+	return {
+		tag: (this.localName || this.nodeName || '').toLowerCase(),
+		role: (this.getAttribute && this.getAttribute('role')) || '',
+		host: host ? {tag: host.localName, type: host.getAttribute('type') || ''} : null
+	};
+}`
+
+func NotFillable(ctx context.Context, nodeID int64) (*NotFillableError, error) {
+	objectID, err := ResolveNodeObjectID(ctx, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	return notFillable(ctx, objectID)
+}
+
+func notFillable(ctx context.Context, objectID string) (*NotFillableError, error) {
+	var refusal *NotFillableError
+	if err := cdptk.CallFunctionOn(ctx, objectID, notFillableJS, nil, &refusal); err != nil {
+		return nil, err
+	}
+	return refusal, nil
 }
 
 func FillByNodeID(ctx context.Context, nodeID int64, value string) error {
 	objectID, err := ResolveNodeObjectID(ctx, nodeID)
 	if err != nil {
 		return err
+	}
+	// DOM.focus refuses a non-field with a bare "not focusable", so the target is
+	// judged before it is focused.
+	refusal, err := notFillable(ctx, objectID)
+	if err != nil {
+		return err
+	}
+	if refusal != nil {
+		return refusal
 	}
 	if err := FocusBackendNode(ctx, nodeID); err != nil {
 		return err
@@ -77,29 +116,13 @@ func FillByNodeID(ctx context.Context, nodeID int64, value string) error {
 				}
 				if (proto) {
 					Object.getOwnPropertyDescriptor(proto, 'value').set.call(this, v);
-				} else if (this.isContentEditable) {
-					this.textContent = v;
 				} else {
-					var root = this.getRootNode && this.getRootNode();
-					var host = root && root.host;
-					return {
-						tag: (this.localName || this.nodeName || '').toLowerCase(),
-						role: (this.getAttribute && this.getAttribute('role')) || '',
-						host: host ? {tag: host.localName, type: host.getAttribute('type') || ''} : null
-					};
+					this.textContent = v;
 				}
 				this.dispatchEvent(new Event('input', {bubbles: true}));
 				this.dispatchEvent(new Event('change', {bubbles: true}));
-				return null;
 			}`
-	var refusal *NotFillableError
-	if err := cdptk.CallFunctionOn(ctx, objectID, js, []map[string]any{{"value": value}}, &refusal); err != nil {
-		return err
-	}
-	if refusal != nil {
-		return refusal
-	}
-	return nil
+	return cdptk.CallFunctionOn(ctx, objectID, js, []map[string]any{{"value": value}}, nil)
 }
 
 type RejectedValueError struct {

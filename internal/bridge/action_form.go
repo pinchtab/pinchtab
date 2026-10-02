@@ -41,7 +41,7 @@ func readCheckableState(ctx context.Context, objectID string) (checkableState, e
 		return checkableState{}, err
 	}
 	if state.Error != "" {
-		return checkableState{}, fmt.Errorf("%s", state.Error)
+		return checkableState{}, NewInvalidActionRequestError(state.Error)
 	}
 	return state, nil
 }

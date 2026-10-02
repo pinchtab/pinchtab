@@ -34,9 +34,24 @@ func (b *Bridge) actionType(ctx context.Context, req ActionRequest) (map[string]
 		)
 	}
 	if req.NodeID > 0 {
-		return textEntryResult("typed", req.Text), TypeByNodeID(ctx, req.NodeID, req.Text)
+		return textEntryResult("typed", req.Text), refuseNonEditable(ctx, req, TypeByNodeID(ctx, req.NodeID, req.Text))
 	}
 	return nil, NewInvalidActionRequestError("need selector or ref")
+}
+
+func refuseNonEditable(ctx context.Context, req ActionRequest, err error) error {
+	if err == nil {
+		return nil
+	}
+	nodeID, resolveErr := targetNodeID(ctx, req.NodeID, req.Selector)
+	if resolveErr != nil || nodeID <= 0 {
+		return err
+	}
+	refusal, checkErr := bridgecdpops.NotFillable(ctx, nodeID)
+	if checkErr != nil || refusal == nil {
+		return err
+	}
+	return fmt.Errorf("%w: %w", ErrInvalidActionRequest, refusal)
 }
 
 func (b *Bridge) actionFill(ctx context.Context, req ActionRequest) (map[string]any, error) {
@@ -48,7 +63,7 @@ func (b *Bridge) actionFill(ctx context.Context, req ActionRequest) (map[string]
 			chromedp.Focus(req.Selector, chromedp.ByQuery),
 			chromedp.Nodes(req.Selector, &nodes, chromedp.ByQuery),
 		); err != nil {
-			return nil, err
+			return nil, refuseNonEditable(ctx, req, err)
 		}
 		setErr := chromedp.Run(ctx, chromedp.SetValue(req.Selector, text, chromedp.ByQuery))
 		if err := checkFillLanded(ctx, int64(nodes[0].BackendNodeID), text, result); err != nil {
@@ -168,11 +183,11 @@ func (b *Bridge) actionHumanizedType(ctx context.Context, req ActionRequest) (ma
 
 	if req.Selector != "" {
 		if err := chromedp.Run(ctx, chromedp.Focus(req.Selector, chromedp.ByQuery)); err != nil {
-			return nil, err
+			return nil, refuseNonEditable(ctx, req, err)
 		}
 	} else if req.NodeID > 0 {
 		if err := bridgecdpops.FocusBackendNode(ctx, req.NodeID); err != nil {
-			return nil, err
+			return nil, refuseNonEditable(ctx, req, err)
 		}
 	} else {
 		return nil, NewInvalidActionRequestError("need selector, ref, or nodeId")

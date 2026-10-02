@@ -1709,6 +1709,34 @@ func TestFocusFailingOnAConnectedNodeIsNotStale(t *testing.T) {
 	}
 }
 
+func TestAnActionOnTheWrongElementTypeIsAnInvalidRequestNotARetryableFault(t *testing.T) {
+	for _, kind := range []string{"check", "uncheck", "fill", "type"} {
+		t.Run(kind, func(t *testing.T) {
+			_, _, h := newRerenderFixture(t)
+
+			w := postRerenderAction(t, h, `{"kind":"`+kind+`","ref":"e1","text":"x","tabId":"tab-rerender"}`)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("%s on a plain div: status=%d body=%s, want 400", kind, w.Code, w.Body.String())
+			}
+			var body struct {
+				Code      string `json:"code"`
+				Error     string `json:"error"`
+				Retryable bool   `json:"retryable"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if body.Code != "invalid_action_request" || body.Retryable {
+				t.Errorf("code=%q retryable=%v, want invalid_action_request and not retryable", body.Code, body.Retryable)
+			}
+			if !strings.Contains(body.Error, "div") || strings.Contains(body.Error, "-32000") {
+				t.Errorf("error = %q, want it to name the div and not the raw CDP error", body.Error)
+			}
+		})
+	}
+}
+
 func newIframeRerenderFixture(t *testing.T) (context.Context, *Handlers) {
 	t.Helper()
 	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
