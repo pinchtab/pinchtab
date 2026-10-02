@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -92,10 +93,18 @@ func TestRunRefusesWhileLockHeldAndStartsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer lock.release()
+	calls := 0
+	counting := func(Args, io.Writer, io.Writer) int {
+		calls++
+		return 0
+	}
 
 	var stdout, stderr bytes.Buffer
-	if code := runUnderLock(Args{Suite: "cli"}, path, &stdout, &stderr, runProvider); code != 1 {
+	code := runUnderLock(Args{Suite: "cli"}, path, &stdout, &stderr, counting)
+	if calls != 0 {
+		t.Fatalf("a refused run started the provider %d times, want 0", calls)
+	}
+	if code != 1 {
 		t.Fatalf("Run = %d, want 1", code)
 	}
 	if !strings.HasPrefix(stderr.String(), "e2e already running: lock "+path) {
@@ -103,6 +112,14 @@ func TestRunRefusesWhileLockHeldAndStartsNothing(t *testing.T) {
 	}
 	if stdout.Len() != 0 {
 		t.Fatalf("a refused run must start nothing, stdout:\n%s", stdout.String())
+	}
+
+	lock.release()
+	if code := runUnderLock(Args{Suite: "cli"}, path, &stdout, &stderr, counting); code != 0 {
+		t.Fatalf("Run with the lock free = %d, want 0, stderr: %s", code, stderr.String())
+	}
+	if calls != 1 {
+		t.Fatalf("a run with the lock free started the provider %d times, want 1", calls)
 	}
 }
 
