@@ -384,7 +384,7 @@ var dateTimeHostRoles = map[string]bool{
 //
 // Keep this set tight:
 //   - Include: headings (structure), tables (cell/columnheader/rowheader), media (image/figure/caption),
-//     live regions (alert/status), which carry the outcome of the last action
+//     live regions (alert/status) and dialogs (dialog/alertdialog), which carry the outcome of the last action
 //   - Exclude: StaticText (duplicates parent names), paragraph/listitem (container noise),
 //     landmarks (banner/main/navigation/region add no content)
 var ContextRoles = map[string]bool{
@@ -397,6 +397,8 @@ var ContextRoles = map[string]bool{
 	"figure":       true,
 	"alert":        true,
 	"status":       true,
+	"dialog":       true,
+	"alertdialog":  true,
 }
 
 // Chrome leaves these roles unnamed and puts the message in descendant text,
@@ -405,6 +407,14 @@ var liveRegionRoles = map[string]bool{
 	"alert":  true,
 	"status": true,
 }
+
+var dialogRoles = map[string]bool{
+	"dialog":      true,
+	"alertdialog": true,
+}
+
+// A form dialog would otherwise inline every label it holds.
+const maxDialogTextRunes = 200
 
 const FilterInteractive = "interactive"
 
@@ -648,8 +658,11 @@ func (b *snapshotBuilder) filteredName(n RawAXNode) (name string, keep bool) {
 		return n.Name.String(), true
 	}
 	if liveRegionRoles[role] {
-		text := b.descendantText(n.NodeID)
+		text := b.descendantText(n.NodeID, everyNode)
 		return text, text != ""
+	}
+	if dialogRoles[role] {
+		return b.dialogName(n), !b.isHidden(n.NodeID)
 	}
 	if role == "spinbutton" && b.hasDateTimeHostAncestor(n.NodeID) {
 		return "", false
@@ -672,7 +685,32 @@ func (b *snapshotBuilder) hasDateTimeHostAncestor(nodeID string) bool {
 	return false
 }
 
-func (b *snapshotBuilder) descendantText(nodeID string) string {
+func (b *snapshotBuilder) dialogName(n RawAXNode) string {
+	label := n.Name.String()
+	text := truncateRunes(b.descendantText(n.NodeID, isNonInteractive), maxDialogTextRunes)
+	switch {
+	case text == "":
+		return label
+	case label == "" || strings.HasPrefix(text, label):
+		return text
+	default:
+		return label + ": " + text
+	}
+}
+
+func everyNode(RawAXNode) bool { return true }
+
+func isNonInteractive(n RawAXNode) bool { return !InteractiveRoles[n.Role.String()] }
+
+func truncateRunes(s string, limit int) string {
+	runes := []rune(s)
+	if len(runes) <= limit {
+		return s
+	}
+	return strings.TrimSpace(string(runes[:limit])) + "…"
+}
+
+func (b *snapshotBuilder) descendantText(nodeID string, include func(RawAXNode) bool) string {
 	var parts []string
 	seen := map[string]bool{nodeID: true}
 	var walk func(id string)
@@ -683,6 +721,9 @@ func (b *snapshotBuilder) descendantText(nodeID string) string {
 			}
 			seen[childID] = true
 			child := b.nodeByID[childID]
+			if !include(child) {
+				continue
+			}
 			if child.Role.String() == "StaticText" {
 				parts = append(parts, child.Name.String())
 				continue

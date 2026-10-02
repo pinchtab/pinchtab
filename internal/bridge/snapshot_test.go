@@ -635,3 +635,57 @@ func TestBuildSnapshotRedactsNewPassword(t *testing.T) {
 		t.Errorf("new-password value = %q, want redacted", flat[1].Value)
 	}
 }
+
+func axNode(id, role, name string, childIDs ...string) RawAXNode {
+	quoted := func(s string) *bridgeobserve.RawAXValue {
+		v, _ := json.Marshal(s)
+		return &bridgeobserve.RawAXValue{Value: v}
+	}
+	return RawAXNode{NodeID: id, Role: quoted(role), Name: quoted(name), ChildIDs: childIDs}
+}
+
+func TestInteractiveSnapshotNamesOpenDialogsFromTheirText(t *testing.T) {
+	hidden := axNode("closed", "dialog", "Settings", "closed-text")
+	hidden.Properties = []bridgeobserve.RawAXProp{{Name: "hidden", Value: &bridgeobserve.RawAXValue{Value: json.RawMessage(`true`)}}}
+	longText := strings.Repeat("Label ", 100)
+	nodes := []RawAXNode{
+		axNode("root", "RootWebArea", "Orders", "detail", "confirm", "form", "closed"),
+		axNode("detail", "dialog", "Order detail", "detail-p", "close"),
+		axNode("detail-p", "paragraph", "", "detail-text"),
+		axNode("detail-text", "StaticText", "Detail for #1003 — Cy Diaz"),
+		axNode("close", "button", "Close", "close-text"),
+		axNode("close-text", "StaticText", "Close"),
+		axNode("confirm", "alertdialog", "", "confirm-text", "ok"),
+		axNode("confirm-text", "StaticText", "Delete order #1003?"),
+		axNode("ok", "button", "OK"),
+		axNode("form", "dialog", "Edit", "form-text"),
+		axNode("form-text", "StaticText", longText),
+		hidden,
+		axNode("closed-text", "StaticText", "Never shown"),
+	}
+
+	flat, _ := BuildSnapshot(nodes, FilterInteractive, -1)
+
+	got := make([]string, 0, len(flat))
+	for _, n := range flat {
+		got = append(got, n.Role+" "+n.Name)
+	}
+	want := []string{
+		"dialog Order detail: Detail for #1003 — Cy Diaz",
+		"button Close",
+		"alertdialog Delete order #1003?",
+		"button OK",
+	}
+	if len(got) != len(want)+1 {
+		t.Fatalf("interactive snapshot = %q, want %q plus the capped form dialog", got, want)
+	}
+	for i, w := range want {
+		if got[i] != w {
+			t.Errorf("node %d = %q, want %q", i, got[i], w)
+		}
+	}
+	form := []rune(flat[len(want)].Name)
+	if !strings.HasPrefix(string(form), "Edit: Label") || len(form) > len("Edit: ")+201 {
+		t.Errorf("form dialog name = %q (%d runes), want a capped prefix of its text", string(form), len(form))
+	}
+}
