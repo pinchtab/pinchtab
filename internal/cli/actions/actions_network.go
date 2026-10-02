@@ -143,7 +143,7 @@ func NetworkStream(conn apiclient.Conn, cmd *cobra.Command) {
 
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024*1024))
-		apiclient.ExitWithAPIError(resp.StatusCode, body)
+		conn.ExitWithAPIError(resp.StatusCode, body)
 	}
 
 	scanner := bufio.NewScanner(resp.Body)

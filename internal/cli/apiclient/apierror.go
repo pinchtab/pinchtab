@@ -48,7 +48,7 @@ func renderAPIError(r request, statusCode int, body []byte) string {
 	if isRouteNotFound(statusCode, body) {
 		return routeNotFoundMessage(r.method, r.url)
 	}
-	return renderAPIErrorBody(statusCode, body)
+	return renderCredentialedError(r.tokenSource, r.base, statusCode, body)
 }
 
 // isRouteNotFound reports whether a 404 came from the HTTP mux (no such
@@ -71,9 +71,14 @@ func routeNotFoundMessage(method, rawURL string) string {
 }
 
 // ExitWithAPIError is the other terminal path. See exitOnAPIError.
-func ExitWithAPIError(statusCode int, body []byte) {
-	fmt.Fprint(os.Stderr, renderAPIErrorBody(statusCode, body)+clearCachedTabOnFailure(statusCode, body))
+func (c Conn) ExitWithAPIError(statusCode int, body []byte) {
+	fmt.Fprint(os.Stderr, renderCredentialedError(c.TokenSource, c.Base, statusCode, body)+clearCachedTabOnFailure(statusCode, body))
 	os.Exit(1)
+}
+
+func renderCredentialedError(tokenSource, destination string, statusCode int, body []byte) string {
+	return renderAPIErrorBody(statusCode, body) +
+		renderGuidance(rejectedTokenProvenance(tokenSource, destination, statusCode, body), remedy.None)
 }
 
 // CachedTab is what the CLI knows before it issues a request and the server does
@@ -185,24 +190,21 @@ func renderAPIErrorBody(statusCode int, body []byte) string {
 		line, _ := errResp.Details["remedy"].(string)
 		b.WriteString(renderGuidance(hint, remedy.Remedy(line)))
 	}
-	b.WriteString(renderGuidance(rejectedTokenProvenance(statusCode, errResp.Code), remedy.None))
 	b.WriteString(renderGuidance(staleTabAdvice(statusCode, body)))
 	return b.String()
 }
 
-// The pairing is recorded when the credential is resolved, so rendering an
-// error performs no I/O. The zero value asks for nothing.
-var tokenSource, tokenDestination string
-
-func UseTokenPairing(source, destination string) {
-	tokenSource, tokenDestination = source, destination
-}
-
-func rejectedTokenProvenance(statusCode int, code string) string {
-	if statusCode != http.StatusUnauthorized || code != "bad_token" || tokenSource == "" {
+func rejectedTokenProvenance(tokenSource, destination string, statusCode int, body []byte) string {
+	if statusCode != http.StatusUnauthorized || tokenSource == "" {
 		return ""
 	}
-	return fmt.Sprintf("the rejected token came from %s and was sent to %s", tokenSource, tokenDestination)
+	var errResp struct {
+		Code string `json:"code"`
+	}
+	if json.Unmarshal(body, &errResp) != nil || errResp.Code != "bad_token" {
+		return ""
+	}
+	return fmt.Sprintf("the rejected token came from %s and was sent to %s", tokenSource, destination)
 }
 
 // renderGuidance is the ONE writer of both guidance slots, so a second producer cannot
@@ -227,7 +229,3 @@ func fatal(format string, args ...any) {
 // the command layer's tests: the handoff is the seam between the two packages, and
 // asserting on it is what pins that the CLI still performs it.
 func AnnouncedCachedTab() CachedTab { return cachedTab }
-
-func AnnouncedTokenPairing() (source, destination string) {
-	return tokenSource, tokenDestination
-}

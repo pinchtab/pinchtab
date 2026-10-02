@@ -53,7 +53,7 @@ func printEnforcedDriftWarning(cfg *config.RuntimeConfig) {
 	if cfg == nil {
 		return
 	}
-	localToken, err := resolveCLIToken(cfg, resolveDefaultCLIBase(cfg))
+	localToken, _, err := resolveCLIToken(cfg, resolveDefaultCLIBase(cfg))
 	if err != nil {
 		return
 	}

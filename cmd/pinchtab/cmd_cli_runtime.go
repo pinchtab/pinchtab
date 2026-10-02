@@ -100,10 +100,12 @@ func preflightBrowserBinary(cfg *config.RuntimeConfig) error {
 
 func newCLIConn(cfg *config.RuntimeConfig) apiclient.Conn {
 	base := resolveCLIBase(cfg)
+	token, tokenSource := tokenForBaseOrExit(cfg, base)
 	return apiclient.Conn{
-		Client: newCLIHTTPClient(resolveCLIAgentID()),
-		Base:   base,
-		Token:  tokenForBaseOrExit(cfg, base),
+		Client:      newCLIHTTPClient(resolveCLIAgentID()),
+		Base:        base,
+		Token:       token,
+		TokenSource: tokenSource,
 	}
 }
 
@@ -159,7 +161,7 @@ var resolveTabStateEndpoint = func() (base, token string) {
 	if err != nil {
 		return "", ""
 	}
-	token, err = resolveCLIToken(cfg, base)
+	token, _, err = resolveCLIToken(cfg, base)
 	if err != nil {
 		return base, ""
 	}
@@ -193,14 +195,12 @@ func canAutoStartServerForCLI(cfg *config.RuntimeConfig, baseURL string) bool {
 // The config file's server.token is a secret for the LOCAL server: it is only
 // ever sent to a loopback base, so a typo'd or hostile --server host cannot
 // receive it — an explicit env credential travels anywhere the caller says.
-func resolveCLIToken(cfg *config.RuntimeConfig, base string) (string, error) {
+func resolveCLIToken(cfg *config.RuntimeConfig, base string) (token, source string, err error) {
 	if s := os.Getenv("PINCHTAB_SESSION"); s != "" {
-		apiclient.UseTokenPairing("the PINCHTAB_SESSION environment variable", base)
-		return s, nil
+		return s, "the PINCHTAB_SESSION environment variable", nil
 	}
 	if t := os.Getenv("PINCHTAB_TOKEN"); t != "" {
-		apiclient.UseTokenPairing("the PINCHTAB_TOKEN environment variable", base)
-		return t, nil
+		return t, "the PINCHTAB_TOKEN environment variable", nil
 	}
 	// The emptiness test comes FIRST: with no server.token there is nothing to withhold, so
 	// refusing would name a secret that does not exist and would break a legitimate flow —
@@ -208,24 +208,23 @@ func resolveCLIToken(cfg *config.RuntimeConfig, base string) (string, error) {
 	// the loopback predicate itself was chosen by. With no credential the remote answers its
 	// own honest 401.
 	if cfg.Token == "" {
-		return "", nil
+		return "", "", nil
 	}
 	if !loopbackBase(base) {
-		return "", fmt.Errorf("refusing to send the local config's server.token to %s: set PINCHTAB_TOKEN (or PINCHTAB_SESSION) with the credential for that host", base)
+		return "", "", fmt.Errorf("refusing to send the local config's server.token to %s: set PINCHTAB_TOKEN (or PINCHTAB_SESSION) with the credential for that host", base)
 	}
-	apiclient.UseTokenPairing("server.token in "+config.ConfigFilePath(), base)
-	return cfg.Token, nil
+	return cfg.Token, "server.token in " + config.ConfigFilePath(), nil
 }
 
 // tokenForBaseOrExit is the terminal wrapper for command paths: the refusal
 // happens here, before any client or request exists.
-func tokenForBaseOrExit(cfg *config.RuntimeConfig, base string) string {
-	token, err := resolveCLIToken(cfg, base)
+func tokenForBaseOrExit(cfg *config.RuntimeConfig, base string) (token, source string) {
+	token, source, err := resolveCLIToken(cfg, base)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "pinchtab: %v\n", err)
 		osExit(1)
 	}
-	return token
+	return token, source
 }
 
 var osExit = os.Exit

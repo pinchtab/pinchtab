@@ -17,14 +17,15 @@ import (
 // Content-Type is set only when body is non-nil). headers are extra per-call
 // headers applied after the standard client headers.
 type request struct {
-	method  string
-	url     string
-	query   url.Values
-	body    any
-	headers map[string]string
-	base    string
-	quiet   bool
-	vocab   *vocabCapture
+	method      string
+	url         string
+	query       url.Values
+	body        any
+	headers     map[string]string
+	base        string
+	tokenSource string
+	quiet       bool
+	vocab       *vocabCapture
 }
 
 type vocabCapture struct {

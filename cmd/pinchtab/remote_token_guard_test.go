@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -123,7 +122,7 @@ func TestTheConfigTokenStillServesEveryLoopbackShape(t *testing.T) {
 		"other 127/8 loopback":     "http://127.0.0.2:9867",
 	} {
 		t.Run(name, func(t *testing.T) {
-			token, err := resolveCLIToken(cfg, base)
+			token, _, err := resolveCLIToken(cfg, base)
 			if err != nil || token != "local-secret" {
 				t.Fatalf("token = %q, err = %v; a loopback destination keeps today's behaviour exactly", token, err)
 			}
@@ -142,7 +141,7 @@ func TestAnEmptyConfigTokenIsNotRefused(t *testing.T) {
 	clearCredentialEnv(t)
 	cfg := &config.RuntimeConfig{Port: "9867"}
 
-	token, err := resolveCLIToken(cfg, "http://203.0.113.9:9867")
+	token, _, err := resolveCLIToken(cfg, "http://203.0.113.9:9867")
 	if err != nil {
 		t.Fatalf("a tokenless config was refused against a remote host: %v — nothing would have been sent, so this is breakage with no security gain", err)
 	}
@@ -157,7 +156,7 @@ func TestAPresentConfigTokenIsStillRefusedForTheSameHost(t *testing.T) {
 	clearCredentialEnv(t)
 	cfg := &config.RuntimeConfig{Port: "9867", Token: "local-secret"}
 
-	token, err := resolveCLIToken(cfg, "http://203.0.113.9:9867")
+	token, _, err := resolveCLIToken(cfg, "http://203.0.113.9:9867")
 	if err == nil {
 		t.Fatal("a config token was handed to a remote host; that is the leak this card closes")
 	}
@@ -174,14 +173,13 @@ func TestAnEnvCredentialTravelsToAnyHost(t *testing.T) {
 	t.Setenv("PINCHTAB_TOKEN", "remote-secret")
 	cfg := &config.RuntimeConfig{Port: "9867", Token: "local-secret"}
 
-	token, err := resolveCLIToken(cfg, "http://203.0.113.9:9867")
+	token, _, err := resolveCLIToken(cfg, "http://203.0.113.9:9867")
 	if err != nil || token != "remote-secret" {
 		t.Fatalf("token = %q, err = %v; an explicit env credential is the deliberate way to authenticate to a named host", token, err)
 	}
 }
 
 func TestEveryCredentialBranchRecordsTheBaseItSendsTo(t *testing.T) {
-	t.Cleanup(func() { apiclient.UseTokenPairing("", "") })
 	cfg := &config.RuntimeConfig{Port: "9867", Token: "local-secret"}
 
 	for _, tc := range []struct {
@@ -196,18 +194,13 @@ func TestEveryCredentialBranchRecordsTheBaseItSendsTo(t *testing.T) {
 			if tc.env != "" {
 				t.Setenv(tc.env, "env-secret")
 			}
-			apiclient.UseTokenPairing("", "")
 
-			if _, err := resolveCLIToken(cfg, tc.base); err != nil {
+			_, source, err := resolveCLIToken(cfg, tc.base)
+			if err != nil {
 				t.Fatal(err)
 			}
-
-			source, destination := apiclient.AnnouncedTokenPairing()
-			if destination != tc.base {
-				t.Errorf("recorded destination = %q, want %q; a 401 hint would name the wrong server", destination, tc.base)
-			}
 			if !strings.Contains(source, tc.wantSource) {
-				t.Errorf("recorded source = %q, want it to name %s", source, tc.wantSource)
+				t.Errorf("returned source = %q, want it to name %s; a 401 hint would name the wrong credential", source, tc.wantSource)
 			}
 		})
 	}
@@ -230,7 +223,7 @@ func TestTheConfigTokenIsRefusedForALocalhostSubdomain(t *testing.T) {
 	clearCredentialEnv(t)
 	cfg := &config.RuntimeConfig{Port: "9867", Token: "local-secret"}
 
-	if token, err := resolveCLIToken(cfg, "http://foo.localhost:9867"); err == nil || token != "" {
+	if token, _, err := resolveCLIToken(cfg, "http://foo.localhost:9867"); err == nil || token != "" {
 		t.Fatalf("token = %q, err = %v; a *.localhost name can resolve off-host on pure-Go builds", token, err)
 	}
 }

@@ -313,7 +313,7 @@ func runTerminalChild(mode string) {
 
 	switch mode {
 	case "ExitWithAPIError":
-		ExitWithAPIError(http.StatusNotFound, body)
+		Conn{}.ExitWithAPIError(http.StatusNotFound, body)
 	case "GetRaw":
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
@@ -377,22 +377,38 @@ func TestACodedErrorWithNoDetailsSurfacesItsCode(t *testing.T) {
 	}
 }
 
-func TestARejectedTokenNamesItsSourceAndDestination(t *testing.T) {
-	t.Cleanup(func() { UseTokenPairing("", "") })
+func TestARejectedTokenNamesItsSourceAndTheBaseThatRejectedIt(t *testing.T) {
+	rejecting := func(code, presented string) *httptest.Server {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			httpx.Unauthorized(w, code, presented)
+		}))
+		t.Cleanup(srv.Close)
+		return srv
+	}
+	local := rejecting(httpx.CodeBadToken, "deadbeef")
+	remote := rejecting(httpx.CodeBadToken, "deadbeef")
+	localConn := Conn{Client: local.Client(), Base: local.URL, Token: "deadbeef", TokenSource: "server.token in the config file"}
+	remoteConn := Conn{Client: remote.Client(), Base: remote.URL, Token: "deadbeef", TokenSource: "the PINCHTAB_TOKEN environment variable"}
 
-	for _, base := range []string{"http://127.0.0.1:9867", "https://remote.example:8443"} {
-		UseTokenPairing("the PINCHTAB_TOKEN environment variable", base)
+	_, err := remoteConn.Raw(http.MethodGet, "/health")
+	want := "the rejected token came from the PINCHTAB_TOKEN environment variable and was sent to " + remote.URL
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("remote bad-token error = %v, want %q", err, want)
+	}
+	if strings.Contains(err.Error(), local.URL) || strings.Contains(err.Error(), localConn.TokenSource) {
+		t.Errorf("remote bad-token error = %q names the other connection's pairing", err)
+	}
 
-		bad := renderAPIErrorBody(401, wireUnauthorizedBody(t, httpx.CodeBadToken, "deadbeef"))
-		want := "the rejected token came from the PINCHTAB_TOKEN environment variable and was sent to " + base
-		if !strings.Contains(bad, want) {
-			t.Errorf("bad-token render = %q, want %q", bad, want)
-		}
+	_, err = localConn.Raw(http.MethodGet, "/health")
+	want = "the rejected token came from server.token in the config file and was sent to " + local.URL
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("local bad-token error = %v, want %q", err, want)
+	}
 
-		missing := renderAPIErrorBody(401, wireUnauthorizedBody(t, httpx.CodeMissingToken, ""))
-		if strings.Contains(missing, "came from") || strings.Contains(missing, base) {
-			t.Errorf("missing-token render = %q names a pairing for a credential that was never sent", missing)
-		}
+	missing := rejecting(httpx.CodeMissingToken, "")
+	_, err = Conn{Client: missing.Client(), Base: missing.URL, TokenSource: "the PINCHTAB_TOKEN environment variable"}.Raw(http.MethodGet, "/health")
+	if err == nil || strings.Contains(err.Error(), "came from") {
+		t.Errorf("missing-token error = %v names a pairing for a credential that was never sent", err)
 	}
 }
 

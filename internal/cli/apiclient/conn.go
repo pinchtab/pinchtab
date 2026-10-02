@@ -6,13 +6,16 @@ import (
 )
 
 type Conn struct {
-	Client *http.Client
-	Base   string
-	Token  string
+	Client      *http.Client
+	Base        string
+	Token       string
+	TokenSource string
 }
 
 func (c Conn) request(method, path string, opts ...RequestOption) request {
-	return newRequest(method, c.Base, path, opts...)
+	r := newRequest(method, c.Base, path, opts...)
+	r.tokenSource = c.TokenSource
+	return r
 }
 
 func (c Conn) Get(path string, params url.Values, opts ...RequestOption) map[string]any {

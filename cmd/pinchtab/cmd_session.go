@@ -124,7 +124,7 @@ func init() {
 				statusCode, rawBody, _ := rt.PostQuietWithStatus("/sessions", body)
 				if statusCode >= 400 {
 					exitSessionUnavailable(rawBody)
-					apiclient.ExitWithAPIError(statusCode, rawBody)
+					rt.ExitWithAPIError(statusCode, rawBody)
 				}
 				var result sessionCreateResult
 				if err := json.Unmarshal(rawBody, &result); err != nil {

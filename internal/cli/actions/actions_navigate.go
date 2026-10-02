@@ -241,7 +241,7 @@ func postNavigate(conn apiclient.Conn, req navigateRequest, printResponse bool) 
 		statusCode, respBody, result = conn.PostQuietWithStatus("/navigate", req.body)
 	}
 	if statusCode >= 400 {
-		apiclient.ExitWithAPIError(statusCode, respBody)
+		conn.ExitWithAPIError(statusCode, respBody)
 	}
 	if printResponse {
 		return apiclient.PrintAndDecode(respBody), usedFallback
