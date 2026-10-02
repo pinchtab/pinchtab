@@ -190,23 +190,19 @@ func renderAPIErrorBody(statusCode int, body []byte) string {
 	return b.String()
 }
 
-// TokenSource is where the credential the CLI just sent came from — resolved at
-// the moment of resolution, recorded as data so rendering an error performs no
-// I/O. The zero value asks for nothing.
-var tokenSource string
+// The pairing is recorded when the credential is resolved, so rendering an
+// error performs no I/O. The zero value asks for nothing.
+var tokenSource, tokenDestination string
 
-// UseTokenSource records the provenance of the token the following requests
-// carry (an env var name, or the config file path the token was read from).
-func UseTokenSource(source string) { tokenSource = source }
+func UseTokenPairing(source, destination string) {
+	tokenSource, tokenDestination = source, destination
+}
 
-// rejectedTokenProvenance names where a rejected credential came from. That
-// single sentence is the fix in the common remote case: the CLI silently sent
-// the LOCAL machine's token to the host --server pointed at.
 func rejectedTokenProvenance(statusCode int, code string) string {
 	if statusCode != http.StatusUnauthorized || code != "bad_token" || tokenSource == "" {
 		return ""
 	}
-	return fmt.Sprintf("the rejected token came from %s", tokenSource)
+	return fmt.Sprintf("the rejected token came from %s and was sent to %s", tokenSource, tokenDestination)
 }
 
 // renderGuidance is the ONE writer of both guidance slots, so a second producer cannot

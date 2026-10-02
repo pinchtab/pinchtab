@@ -195,11 +195,11 @@ func canAutoStartServerForCLI(cfg *config.RuntimeConfig, baseURL string) bool {
 // receive it — an explicit env credential travels anywhere the caller says.
 func resolveCLIToken(cfg *config.RuntimeConfig, base string) (string, error) {
 	if s := os.Getenv("PINCHTAB_SESSION"); s != "" {
-		apiclient.UseTokenSource("the PINCHTAB_SESSION environment variable")
+		apiclient.UseTokenPairing("the PINCHTAB_SESSION environment variable", base)
 		return s, nil
 	}
 	if t := os.Getenv("PINCHTAB_TOKEN"); t != "" {
-		apiclient.UseTokenSource("the PINCHTAB_TOKEN environment variable")
+		apiclient.UseTokenPairing("the PINCHTAB_TOKEN environment variable", base)
 		return t, nil
 	}
 	// The emptiness test comes FIRST: with no server.token there is nothing to withhold, so
@@ -213,7 +213,7 @@ func resolveCLIToken(cfg *config.RuntimeConfig, base string) (string, error) {
 	if !loopbackBase(base) {
 		return "", fmt.Errorf("refusing to send the local config's server.token to %s: set PINCHTAB_TOKEN (or PINCHTAB_SESSION) with the credential for that host", base)
 	}
-	apiclient.UseTokenSource("server.token in " + config.ConfigFilePath())
+	apiclient.UseTokenPairing("server.token in "+config.ConfigFilePath(), base)
 	return cfg.Token, nil
 }
 

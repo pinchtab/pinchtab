@@ -377,18 +377,22 @@ func TestACodedErrorWithNoDetailsSurfacesItsCode(t *testing.T) {
 	}
 }
 
-func TestARejectedTokenNamesItsSource(t *testing.T) {
-	UseTokenSource("the PINCHTAB_TOKEN environment variable")
-	t.Cleanup(func() { UseTokenSource("") })
+func TestARejectedTokenNamesItsSourceAndDestination(t *testing.T) {
+	t.Cleanup(func() { UseTokenPairing("", "") })
 
-	bad := renderAPIErrorBody(401, wireUnauthorizedBody(t, httpx.CodeBadToken, "deadbeef"))
-	if !strings.Contains(bad, "the rejected token came from the PINCHTAB_TOKEN environment variable") {
-		t.Errorf("bad-token render = %q, want the credential's provenance named", bad)
-	}
+	for _, base := range []string{"http://127.0.0.1:9867", "https://remote.example:8443"} {
+		UseTokenPairing("the PINCHTAB_TOKEN environment variable", base)
 
-	missing := renderAPIErrorBody(401, wireUnauthorizedBody(t, httpx.CodeMissingToken, ""))
-	if strings.Contains(missing, "came from") {
-		t.Errorf("missing-token render = %q names a provenance for a credential that was never sent", missing)
+		bad := renderAPIErrorBody(401, wireUnauthorizedBody(t, httpx.CodeBadToken, "deadbeef"))
+		want := "the rejected token came from the PINCHTAB_TOKEN environment variable and was sent to " + base
+		if !strings.Contains(bad, want) {
+			t.Errorf("bad-token render = %q, want %q", bad, want)
+		}
+
+		missing := renderAPIErrorBody(401, wireUnauthorizedBody(t, httpx.CodeMissingToken, ""))
+		if strings.Contains(missing, "came from") || strings.Contains(missing, base) {
+			t.Errorf("missing-token render = %q names a pairing for a credential that was never sent", missing)
+		}
 	}
 }
 
