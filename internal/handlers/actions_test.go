@@ -1879,6 +1879,47 @@ func TestSelectOnANonSelectTargetIsAnInvalidRequestThatWritesNothing(t *testing.
 	}
 }
 
+const selectMatchFixtureHTML = `<select id="size" onchange="document.body.dataset.changed=this.value"><option value="Large">Small</option><option value="B2">LARGE</option><option value="b">Large</option><option value="c0">Medium Rare</option><option value="c"> MEDIUM </option><option value="d">Extra Wide</option></select>`
+
+func TestSelectPicksTheOptionByEachMatchStrategyInPrecedenceOrder(t *testing.T) {
+	for _, tc := range []struct{ name, input, want string }{
+		{"value beats text", "Large", "Large"},
+		{"exact text beats case-insensitive", "Large ", "b"},
+		{"case-insensitive beats substring", "medium", "c"},
+		{"substring as last resort", "wide", "d"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+			t.Cleanup(cancel)
+			if err := chromedp.Run(ctx, chromedp.Navigate("data:text/html,"+url.PathEscape(selectMatchFixtureHTML))); err != nil {
+				t.Fatal(err)
+			}
+			cfg := &config.RuntimeConfig{ActionTimeout: 30 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
+			b := browserBridge(ctx, cfg)
+			b.RegisterTab("tab-match", ctx)
+			nodeID, err := bridge.ResolveCSSToNodeID(ctx, "#size")
+			if err != nil {
+				t.Fatal(err)
+			}
+			b.SetRefCache("tab-match", &bridge.RefCache{Targets: map[string]bridge.RefTarget{"e1": {BackendNodeID: nodeID}}})
+			value, _ := json.Marshal(tc.input)
+
+			w := postRerenderAction(t, New(b, cfg, nil, nil, nil), `{"kind":"select","ref":"e1","value":`+string(value)+`,"tabId":"tab-match"}`)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("select %q: status=%d body=%s, want 200", tc.input, w.Code, w.Body.String())
+			}
+			var state string
+			if err := chromedp.Run(ctx, chromedp.Evaluate(`document.getElementById('size').value + '|' + (document.body.dataset.changed || '')`, &state)); err != nil {
+				t.Fatal(err)
+			}
+			if state != tc.want+"|"+tc.want {
+				t.Errorf("select %q: value|changed=%q, want %q", tc.input, state, tc.want+"|"+tc.want)
+			}
+		})
+	}
+}
+
 func TestClickOnACustomListboxOptionStillClicks(t *testing.T) {
 	ctx, h := newSelectOptionFixture(t)
 
