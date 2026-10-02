@@ -943,7 +943,7 @@ func TestProviderMatrixHoldsTheRunLockBetweenProviders(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 	args := Args{Suite: "api", Providers: []string{"chrome", "cloak"}}
-	if code := runProviderMatrix(args, path, &stdout, &stderr, competing); code != 0 {
+	if code := runUnderLock(args, path, &stdout, &stderr, competing); code != 0 {
 		t.Fatalf("matrix = %d, stderr: %s", code, stderr.String())
 	}
 	if !slices.Equal(ran, []string{"chrome", "cloak"}) {

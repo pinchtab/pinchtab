@@ -83,11 +83,11 @@ func Run(argv []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	if len(args.Providers) > 1 {
-		return runProviderMatrix(args, defaultRunLockPath(), stdout, stderr, runMatrixProvider)
-	}
+	return runUnderLock(args, defaultRunLockPath(), stdout, stderr, runProvider)
+}
 
-	r, err := NewRunner(args, stdout, stderr)
+func runProvider(single Args, stdout, stderr io.Writer) int {
+	r, err := NewRunner(single, stdout, stderr)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "e2e: %v\n", err)
 		return 1
@@ -95,20 +95,14 @@ func Run(argv []string, stdout, stderr io.Writer) int {
 	return r.Run()
 }
 
-func runMatrixProvider(single Args, stdout, stderr io.Writer) int {
-	r, err := NewRunner(single, stdout, stderr)
-	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "e2e: browser %s: %v\n", single.Provider, err)
-		return 1
-	}
-	return r.runUnlocked()
-}
-
 type providerRun func(single Args, stdout, stderr io.Writer) int
 
-func runProviderMatrix(args Args, lockPath string, stdout, stderr io.Writer, runProvider providerRun) int {
+func runUnderLock(args Args, lockPath string, stdout, stderr io.Writer, run providerRun) int {
 	return underRunLock(args.DryRun, lockPath, stderr, func() int {
-		return runEachProvider(args, stdout, stderr, runProvider)
+		if len(args.Providers) > 1 {
+			return runEachProvider(args, stdout, stderr, run)
+		}
+		return run(args, stdout, stderr)
 	})
 }
 

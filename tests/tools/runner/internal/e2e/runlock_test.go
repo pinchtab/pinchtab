@@ -95,8 +95,7 @@ func TestRunRefusesWhileLockHeldAndStartsNothing(t *testing.T) {
 	defer lock.release()
 
 	var stdout, stderr bytes.Buffer
-	r := &Runner{suite: "cli", stdout: &stdout, stderr: &stderr, lockPath: path}
-	if code := r.Run(); code != 1 {
+	if code := runUnderLock(Args{Suite: "cli"}, path, &stdout, &stderr, runProvider); code != 1 {
 		t.Fatalf("Run = %d, want 1", code)
 	}
 	if !strings.HasPrefix(stderr.String(), "e2e already running: lock "+path) {
@@ -117,15 +116,32 @@ func TestDryRunIgnoresTheRunLock(t *testing.T) {
 	defer lock.release()
 
 	var stdout, stderr bytes.Buffer
-	r, err := NewRunner(Args{Suite: "cli", DryRun: true}, &stdout, &stderr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r.lockPath = path
-	if code := r.Run(); code != 0 {
+	if code := runUnderLock(Args{Suite: "cli", DryRun: true}, path, &stdout, &stderr, runProvider); code != 0 {
 		t.Fatalf("dry run = %d under a held lock, stderr: %s", code, stderr.String())
 	}
 	if pid, ok := runLockHolder(path); !ok || pid != os.Getpid() {
 		t.Fatalf("dry run disturbed the held lock: holder = %d (ok=%v)", pid, ok)
+	}
+}
+
+func TestDryRunMatrixIgnoresTheRunLock(t *testing.T) {
+	t.Setenv("E2E_LOGS", "")
+	path := filepath.Join(t.TempDir(), "e2e.lock")
+	lock, err := acquireRunLock(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.release()
+
+	var stdout, stderr bytes.Buffer
+	args := Args{Suite: "api", DryRun: true, Providers: []string{"chrome", "cloak"}}
+	if code := runUnderLock(args, path, &stdout, &stderr, runProvider); code != 0 {
+		t.Fatalf("dry-run matrix = %d under a held lock, stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Browser matrix completed: all 2 browsers passed") {
+		t.Fatalf("dry-run matrix did not run both browsers:\n%s", stdout.String())
+	}
+	if pid, ok := runLockHolder(path); !ok || pid != os.Getpid() {
+		t.Fatalf("dry-run matrix disturbed the held lock: holder = %d (ok=%v)", pid, ok)
 	}
 }

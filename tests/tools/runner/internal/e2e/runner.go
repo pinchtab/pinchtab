@@ -25,7 +25,6 @@ type Runner struct {
 	stderr    io.Writer
 	repoRoot  string
 	compose   []string
-	lockPath  string
 	logsMode  string
 	overall   overallReportData
 	overrides *providerOverrides
@@ -98,16 +97,11 @@ func NewRunner(args Args, stdout, stderr io.Writer) (*Runner, error) {
 		stderr:   stderr,
 		repoRoot: resolveRepoRoot(),
 		compose:  compose,
-		lockPath: defaultRunLockPath(),
 		logsMode: logsMode,
 	}, nil
 }
 
 func (r *Runner) Run() int {
-	return underRunLock(r.args.DryRun, r.lockPath, r.stderr, r.runUnlocked)
-}
-
-func (r *Runner) runUnlocked() int {
 	started := time.Now()
 	overrides, err := r.prepareProviderOverrides()
 	if err != nil {
