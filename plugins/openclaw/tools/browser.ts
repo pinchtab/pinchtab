@@ -18,7 +18,7 @@ export const browserToolSchema = {
     key: { type: "string", description: "Key to press (Enter, Tab, Escape)" },
     value: { type: "string", description: "Value for select" },
     selector: { type: "string", description: "CSS selector for snapshot scope" },
-    format: { type: "string", enum: ["compact", "json", "text"], description: "Output format" },
+    format: { type: "string", enum: ["compact", "json", "text", "yaml"], description: "Output format" },
     maxTokens: { type: "number", description: "Truncate output to ~N tokens" },
     quality: { type: "number", description: "Screenshot JPEG quality 1-100" },
     tabId: { type: "string", description: "Target tab ID" },

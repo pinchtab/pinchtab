@@ -8,6 +8,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -373,6 +377,68 @@ func equalStrings(got, want []string) bool {
 		}
 	}
 	return true
+}
+
+var (
+	tsFormatEnum  = regexp.MustCompile(`(?m)^\s*format:\s*\{[^}\n]*\benum:\s*\[([^\]\n]*)\]`)
+	quotedLiteral = regexp.MustCompile(`"([^"]*)"`)
+)
+
+func tsSnapshotFormatEnum(t *testing.T, src []byte) []string {
+	t.Helper()
+	matches := tsFormatEnum.FindAllSubmatch(src, -1)
+	if len(matches) != 1 {
+		t.Fatalf("found %d `format: { ... enum: [...] }` properties, want exactly one", len(matches))
+	}
+	var enum []string
+	for _, lit := range quotedLiteral.FindAllSubmatch(matches[0][1], -1) {
+		enum = append(enum, string(lit[1]))
+	}
+	return enum
+}
+
+func manifestSnapshotFormatEnum(t *testing.T, src []byte) []string {
+	t.Helper()
+	var manifest struct {
+		ConfigSchema struct {
+			Properties struct {
+				DefaultSnapshotFormat struct {
+					Enum []string `json:"enum"`
+				} `json:"defaultSnapshotFormat"`
+			} `json:"properties"`
+		} `json:"configSchema"`
+	}
+	if err := json.Unmarshal(src, &manifest); err != nil {
+		t.Fatalf("not valid JSON: %v", err)
+	}
+	return manifest.ConfigSchema.Properties.DefaultSnapshotFormat.Enum
+}
+
+func TestOpenClawPluginAdvertisesExactlyTheServedSnapshotFormats(t *testing.T) {
+	want := slices.Sorted(slices.Values(snapshotFormats))
+	for _, source := range []struct {
+		file    string
+		extract func(*testing.T, []byte) []string
+	}{
+		{"tools/pinchtab.ts", tsSnapshotFormatEnum},
+		{"tools/browser.ts", tsSnapshotFormatEnum},
+		{"openclaw.plugin.json", manifestSnapshotFormatEnum},
+	} {
+		t.Run(source.file, func(t *testing.T) {
+			src, err := os.ReadFile(filepath.Join("..", "..", "plugins", "openclaw", filepath.FromSlash(source.file)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := source.extract(t, src)
+			if len(got) == 0 {
+				t.Fatalf("plugins/openclaw/%s yields no snapshot format enum, so this guard is checking nothing", source.file)
+			}
+			slices.Sort(got)
+			if !equalStrings(got, want) {
+				t.Errorf("plugins/openclaw/%s advertises snapshot formats %v, the server serves %v (snapshotFormats)", source.file, got, want)
+			}
+		})
+	}
 }
 
 type snapshotStubBridge struct {
