@@ -110,3 +110,25 @@ func TestFillOnAPlainElementRefuses(t *testing.T) {
 		t.Fatalf("error = %v, want an invalid-request refusal naming the <div>", err)
 	}
 }
+
+func TestFillOnAContentEditableWritesItsText(t *testing.T) {
+	ctx := openTimeInputPage(t)
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector("#label").contentEditable = "true"`, nil)); err != nil {
+		t.Fatalf("make editable: %v", err)
+	}
+
+	result, err := (&Bridge{}).actionFill(ctx, ActionRequest{NodeID: backendNodeID(t, ctx, "#label"), Text: "Front door", HasText: true})
+	if err != nil {
+		t.Fatalf("fill on a contenteditable: %v", err)
+	}
+	if warning, ok := result["warning"]; ok {
+		t.Errorf("fill warned %q, want the read-back to see the written text", warning)
+	}
+	var text string
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector("#label").textContent`, &text)); err != nil {
+		t.Fatalf("read text: %v", err)
+	}
+	if text != "Front door" {
+		t.Errorf("textContent = %q, want %q", text, "Front door")
+	}
+}
