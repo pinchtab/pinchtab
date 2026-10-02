@@ -19,6 +19,7 @@ const (
 	reasonRefNotFound     = "ref_not_found"
 	reasonScopeNotFound   = "scope_not_found"
 	reasonNoRepeatedGroup = "no_repeated_group"
+	reasonNoFieldMatch    = "no_field_match"
 	reasonTooFewItems     = "too_few_items"
 )
 

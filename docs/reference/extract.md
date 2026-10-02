@@ -124,6 +124,10 @@ pinchtab click e7
   `role:`, `text:` or other semantic selector. Add one when a field comes back `low`.
 - `x-pinchtab-scope` on an array pins its container, for example `role:table`, when the
   page has more than one repeated group.
+- An array the page has no repeated group for is missing with reason `no_repeated_group`
+  and no ref. When groups exist but no item field matches inside any of them, the reason
+  is `no_field_match` and `ref` is the closest candidate container, which may be a nav
+  menu rather than the list you meant; add an `x-pinchtab-hint` to the item fields.
 - The request-level `scope` confines the whole schema to one subtree; a scope that
   matches nothing leaves every field unresolved with reason `scope_not_found`.
 

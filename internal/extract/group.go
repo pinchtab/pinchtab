@@ -84,11 +84,18 @@ func chooseGroup(prop Property, v view, opts Options) (group, FieldResult, bool)
 		}
 		return a.container < b.container
 	})
-	if len(candidates) == 0 || (!scoped && candidates[0].score == 0) {
+	if len(candidates) == 0 {
 		return group{}, FieldResult{Confidence: semantic.CalibrateConfidence(0), Reason: reasonNoRepeatedGroup}, false
 	}
 	best := candidates[0]
-	return best, FieldResult{Ref: best.v.nodes[best.container].Ref, Score: best.score, Confidence: semantic.CalibrateConfidence(best.score)}, true
+	if !scoped && best.score == 0 {
+		return group{}, FieldResult{Ref: best.containerRef(), Confidence: semantic.CalibrateConfidence(0), Reason: reasonNoFieldMatch}, false
+	}
+	return best, FieldResult{Ref: best.containerRef(), Score: best.score, Confidence: semantic.CalibrateConfidence(best.score)}, true
+}
+
+func (g group) containerRef() string {
+	return g.v.nodes[g.container].Ref
 }
 
 func scopedGroups(v view) []group {

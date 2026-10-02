@@ -2,6 +2,7 @@ package extract
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -267,7 +268,7 @@ func TestView_ChildrenAndSubtreeFromDepth(t *testing.T) {
 	}
 }
 
-func TestResolveArray_GroupResolvingNoFieldIsNoRepeatedGroup(t *testing.T) {
+func TestResolveArray_GroupResolvingNoFieldIsNoFieldMatch(t *testing.T) {
 	schema := mustSchema(t, `{"type":"object","properties":{
 		"results":{"type":"array","items":{"type":"object","properties":{
 			"price":{"type":"number","x-pinchtab-hint":"role:link"}}}}}}`)
@@ -275,8 +276,32 @@ func TestResolveArray_GroupResolvingNoFieldIsNoRepeatedGroup(t *testing.T) {
 	if _, present := got.Data["results"]; present {
 		t.Fatalf("a group whose items resolve no field must not be returned: %v", got.Data["results"])
 	}
-	if got.Fields["results"].Reason != reasonNoRepeatedGroup || got.Fields["results"].Ref != "" {
-		t.Errorf("field = %+v", got.Fields["results"])
+	if fr := got.Fields["results"]; fr.Reason != reasonNoFieldMatch || fr.Ref != "e2" {
+		t.Errorf("field = %+v", fr)
+	}
+}
+
+func TestResolveArray_UnmatchedProductListIsNoFieldMatch(t *testing.T) {
+	nodes := []observe.A11yNode{{Ref: "e1", Role: "list", Depth: 0}}
+	for i := range 3 {
+		base := 2 + i*4
+		nodes = append(nodes,
+			observe.A11yNode{Ref: fmt.Sprintf("e%d", base), Role: "listitem", Depth: 1},
+			observe.A11yNode{Ref: fmt.Sprintf("e%d", base+1), Role: "link", Name: "Widget", Depth: 2},
+			observe.A11yNode{Ref: fmt.Sprintf("e%d", base+2), Role: "StaticText", Name: "$9.99", Depth: 2},
+			observe.A11yNode{Ref: fmt.Sprintf("e%d", base+3), Role: "button", Name: "Add to cart", Depth: 2},
+		)
+	}
+	schema := mustSchema(t, `{"type":"object","properties":{
+		"products":{"type":"array","items":{"type":"object","properties":{
+			"name":{"type":"string"},
+			"price":{"type":"number"}}}}}}`)
+	got := Resolve(schema, nodes, Options{})
+	if _, present := got.Data["products"]; present {
+		t.Fatalf("products must stay missing when no item field matches: %v", got.Data["products"])
+	}
+	if fr := got.Fields["products"]; fr.Reason != reasonNoFieldMatch || fr.Ref != "e1" {
+		t.Errorf("field = %+v", fr)
 	}
 }
 

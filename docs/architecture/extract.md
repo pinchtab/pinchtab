@@ -138,10 +138,14 @@ on those three derivations and nothing else.
 3. **Scoring.** Each candidate is scored by resolving the item schema inside
    its first three items (fewer if it has fewer) and taking the fraction of
    fields filled: `score = filled / (sampled items × fields)`. Candidates are
-   ranked by score, then by item count, then by document order. A best score of
-   `0` — no item field resolves anywhere — reports `no_repeated_group`, as
-   does a page with no candidate at all. A scoped container skips the `0`
-   check: the agent chose it.
+   ranked by score, then by item count, then by document order. A page with
+   no candidate at all reports `no_repeated_group` with no ref. A best score of
+   `0` — candidates exist but no item field resolves in any of them — reports
+   `no_field_match` with the top-ranked candidate's container as `ref`. That is
+   the closest candidate, which may be a nav menu rather than the list the
+   agent meant; the remedy is an `x-pinchtab-hint` on the item fields, not a
+   different scope. A scoped container skips the `0` check: the agent chose
+   it.
 
 The ranking is what disambiguates a page with several repeated groups: a nav
 menu of links scores `0` against a product item schema whose fields want a
