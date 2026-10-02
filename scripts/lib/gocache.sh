@@ -38,14 +38,16 @@ trim_repo_go_cache() {
   root="$(repo_cache_root "$1")"
   [ "$GOCACHE" = "$root/.gocache" ] || return 0
   [ -d "$GOCACHE" ] || return 0
-  local max_gb size_kb
+  local max_gb max_kb size_kb
   max_gb="$(repo_go_cache_max_gb)"
+  max_kb=$((max_gb * 1024 * 1024))
   size_kb="$(du -sk "$GOCACHE" | cut -f1)"
-  if [ "$size_kb" -gt $((max_gb * 1024 * 1024)) ]; then
-    echo "  ${MUTED:-}Go build cache is $((size_kb / 1024)) MB (cap ${max_gb} GB), clearing $GOCACHE${NC:-}"
-    # The dashboard's module cache under .gocache/mod is read-only and go clean -cache skips it.
-    chmod -R u+w "${GOCACHE:?}"
-    rm -rf "${GOCACHE:?}"
-    mkdir -p "$GOCACHE"
+  [ "$size_kb" -gt "$max_kb" ] || return 0
+  echo "  ${MUTED:-}Go build cache is $((size_kb / 1024)) MB (cap ${max_gb} GB), deleting entries idle for over 2h${NC:-}"
+  # Go refreshes an entry's mtime on use once it is an hour old, so older entries belong to no running build.
+  find "$GOCACHE" -type f \( -name '*-a' -o -name '*-d' \) -mmin +120 -not -path "$GOCACHE/mod/*" -delete
+  size_kb="$(du -sk "$GOCACHE" | cut -f1)"
+  if [ "$size_kb" -gt "$max_kb" ]; then
+    echo "  ${ACCENT:-}Go build cache is still $((size_kb / 1024)) MB (cap ${max_gb} GB): the rest was used in the last 2h, kept for running builds${NC:-}"
   fi
 }
