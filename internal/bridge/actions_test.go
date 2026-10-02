@@ -539,6 +539,59 @@ func TestClickAction_HumanizedCoordinateClick(t *testing.T) {
 	}
 }
 
+func TestClickAction_HumanizedRoutesThroughClickTarget(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name        string
+		req         ActionRequest
+		wantNode    []cdp.BackendNodeID
+		wantPoints  [][2]float64
+		wantInvalid bool
+	}{
+		{name: "nodeId", req: ActionRequest{NodeID: 42}, wantNode: []cdp.BackendNodeID{42}},
+		{name: "coordinates", req: ActionRequest{HasXY: true, X: 3, Y: 4}, wantPoints: [][2]float64{{3, 4}}},
+		{name: "no target", req: ActionRequest{}, wantInvalid: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ops := defaultPointerOps()
+			var nodes []cdp.BackendNodeID
+			var points [][2]float64
+			ops.clickElement = func(ctx context.Context, id cdp.BackendNodeID) error {
+				nodes = append(nodes, id)
+				return nil
+			}
+			ops.humanClickCoordinate = func(ctx context.Context, x, y float64) error {
+				points = append(points, [2]float64{x, y})
+				return nil
+			}
+			b := New(context.TODO(), nil, &config.RuntimeConfig{Humanize: true})
+			b.pointerOps = ops
+
+			req := tc.req
+			req.Kind = ActionClick
+			res, err := b.ExecuteAction(context.Background(), ActionClick, req)
+
+			if tc.wantInvalid {
+				if !errors.Is(err, ErrInvalidActionRequest) {
+					t.Fatalf("err = %v, want invalid action request", err)
+				}
+			} else if err != nil {
+				t.Fatalf("humanized click returned error: %v", err)
+			} else if res["clicked"] != true || res["human"] != true {
+				t.Fatalf("result = %#v, want clicked and human", res)
+			}
+			if len(nodes) != len(tc.wantNode) || (len(nodes) > 0 && nodes[0] != tc.wantNode[0]) {
+				t.Fatalf("clickElement calls = %v, want %v", nodes, tc.wantNode)
+			}
+			if len(points) != len(tc.wantPoints) || (len(points) > 0 && points[0] != tc.wantPoints[0]) {
+				t.Fatalf("humanClickCoordinate calls = %v, want %v", points, tc.wantPoints)
+			}
+		})
+	}
+}
+
 func TestClickAction_HumanizedHonoursWaitNav(t *testing.T) {
 	t.Parallel()
 	ops := defaultPointerOps()

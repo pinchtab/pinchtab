@@ -729,33 +729,24 @@ func (r ActionRequest) hasDragDestination() bool {
 func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (result map[string]any, err error) {
 	auto := b.beginAutoSwitch(req)
 	defer func() { result = auto.settle(ctx, result, err) }()
-	nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
-	if err != nil {
-		return nil, err
-	}
-	var click func(context.Context) error
-	switch {
-	case nodeID > 0:
-		if auto != nil {
-			auto.prepareNode(ctx, nodeID)
-		}
-		click = b.pointer().humanClickNode(cdp.BackendNodeID(nodeID))
-	case req.HasXY:
-		x, y := req.X, req.Y
-		click = func(ctx context.Context) error { return b.pointer().humanClickCoordinate(ctx, x, y) }
-	default:
-		return nil, NewInvalidActionRequestError("need selector, ref, nodeId, or x/y coordinates")
-	}
 
-	if err := b.runWatchingDialogs(ctx, req, click); err != nil {
+	if err := b.runWatchingDialogs(ctx, req, func(clickCtx context.Context) error {
+		p := b.pointer()
+		return p.clickTarget(clickCtx, req, auto, p.humanClickGesture())
+	}); err != nil {
 		return nil, err
 	}
 	b.waitNavIfRequested(ctx, req)
 	return map[string]any{"clicked": true, "human": true}, nil
 }
 
-func (p *pointerOps) humanClickNode(backendNodeID cdp.BackendNodeID) func(context.Context) error {
-	return func(ctx context.Context) error { return p.clickElement(ctx, backendNodeID) }
+func (p *pointerOps) humanClickGesture() pointerGesture {
+	return pointerGesture{
+		onNode: func(ctx context.Context, nodeID int64) error {
+			return p.clickElement(ctx, cdp.BackendNodeID(nodeID))
+		},
+		onPoint: p.humanClickCoordinate,
+	}
 }
 
 func (b *Bridge) actionScrollIntoView(ctx context.Context, req ActionRequest) (map[string]any, error) {
