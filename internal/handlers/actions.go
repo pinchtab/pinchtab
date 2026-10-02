@@ -664,7 +664,8 @@ func watchesFormValidation(req bridge.ActionRequest, submitClick bool) bool {
 }
 
 func (h *Handlers) armFormValidationWatch(tabCtx, tCtx context.Context, req bridge.ActionRequest, submitClick bool) (armed bool, disarm func()) {
-	if !watchesFormValidation(req, submitClick) || !h.armSubmitInvalidWatch(tCtx, req.NodeID) {
+	requireSubmitter := !submitClick && !isWaitNavClick(req)
+	if !watchesFormValidation(req, submitClick) || !h.armSubmitInvalidWatch(tCtx, req.NodeID, requireSubmitter) {
 		return false, func() {}
 	}
 	return true, func() { h.disarmSubmitInvalidWatch(tabCtx, req.NodeID) }

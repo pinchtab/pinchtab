@@ -73,12 +73,16 @@ func (b *submitActionBridge) ExecuteAction(ctx context.Context, kind string, req
 	return map[string]any{"clicked": true}, nil
 }
 
-func (b *submitActionBridge) CallFunctionOnNode(_ context.Context, nodeID int64, functionDecl string, _ []map[string]any, result any) error {
+func (b *submitActionBridge) CallFunctionOnNode(_ context.Context, nodeID int64, functionDecl string, args []map[string]any, result any) error {
 	switch functionDecl {
 	case armSubmitInvalidWatchJS:
-		b.armedNodeIDs = append(b.armedNodeIDs, nodeID)
+		requireSubmitter := len(args) > 0 && args[0]["value"] == true
+		armed := !requireSubmitter || !b.notSubmitter
+		if armed {
+			b.armedNodeIDs = append(b.armedNodeIDs, nodeID)
+		}
 		b.actionCallsAtArm = b.actionCalls
-		*result.(*bool) = !b.notSubmitter
+		*result.(*bool) = armed
 	case disarmSubmitInvalidWatchJS:
 		b.disarmedNodeIDs = append(b.disarmedNodeIDs, nodeID)
 	case submitInvalidFieldsJS:

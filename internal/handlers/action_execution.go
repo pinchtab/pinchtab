@@ -30,12 +30,12 @@ const submitControlOfNodeJS = `(this.closest ? this.closest("button, input") : n
 
 // The watch listens on the form's root in the capture phase: invalid events do not bubble,
 // and a control tied to the form by a form= attribute sits outside the form's subtree.
-const armSubmitInvalidWatchJS = `function() {
+const armSubmitInvalidWatchJS = `function(requireSubmitter) {
 	const key = ` + submitInvalidWatchKeyJS + `;
 	if (this[key]) this[key].disarm();
 	const control = ` + submitControlOfNodeJS + `;
 	const submitter = control && (control.type === "submit" || control.type === "image");
-	const form = submitter && control.form;
+	const form = control && (submitter || !requireSubmitter) && control.form;
 	if (!form) return false;
 	const root = form.getRootNode();
 	const watch = { fired: false };
@@ -232,9 +232,10 @@ func pendingSubmitPostState(before, after submitStateSnapshot, dispatch string, 
 
 const submitInvalidWatchDisarmTimeout = 2 * time.Second
 
-func (h *Handlers) armSubmitInvalidWatch(ctx context.Context, nodeID int64) bool {
+func (h *Handlers) armSubmitInvalidWatch(ctx context.Context, nodeID int64, requireSubmitter bool) bool {
 	var armed bool
-	if err := h.Bridge.CallFunctionOnNode(ctx, nodeID, armSubmitInvalidWatchJS, nil, &armed); err != nil {
+	args := []map[string]any{{"value": requireSubmitter}}
+	if err := h.Bridge.CallFunctionOnNode(ctx, nodeID, armSubmitInvalidWatchJS, args, &armed); err != nil {
 		return false
 	}
 	return armed

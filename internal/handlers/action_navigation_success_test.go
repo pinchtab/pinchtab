@@ -372,3 +372,40 @@ func TestBrowserPlainClickOnAnInvalidEmailSubmitIsValidationBlocked(t *testing.T
 		t.Fatalf("postState = %+v, want validation_blocked on the email field", post)
 	}
 }
+
+func TestWaitNavClickOnANonSubmitterControlStillWatchesItsForm(t *testing.T) {
+	b := newSubmitActionBridge(t.Context())
+	b.notSubmitter = true
+	b.invalidFields = []submitInvalidField{{Name: "email", Message: "Please include an '@' in the email address."}}
+
+	got := postWaitNavClick(t, b)
+
+	if got.PostState == nil || got.PostState.Signal != "validation_blocked" {
+		t.Fatalf("postState = %+v, want validation_blocked for a requestSubmit button", got.PostState)
+	}
+}
+
+const requestSubmitButtonForm = `
+	<form action="/done"><input name="name" required value="Ada"><input type="email" name="email" value="not-an-email">
+	<button type="button" id="b" onclick="this.form.requestSubmit()">Send</button></form>`
+
+func TestBrowserWaitNavClickOnARequestSubmitButtonIsValidationBlocked(t *testing.T) {
+	h, tabID := submitFormHandlers(t, requestSubmitButtonForm)
+
+	result := postPlainClick(t, h, `{"kind":"click","tabId":"`+tabID+`","selector":"#b","waitNav":true}`)
+
+	post := plainClickPostState(t, result)
+	if post == nil || post.Signal != "validation_blocked" || len(post.InvalidFields) != 1 || post.InvalidFields[0].Name != "email" {
+		t.Fatalf("postState = %+v, want validation_blocked on the email field", post)
+	}
+}
+
+func TestBrowserSubmitClickOnARequestSubmitButtonIsValidationBlocked(t *testing.T) {
+	h, tabID := submitFormHandlers(t, requestSubmitButtonForm)
+
+	post := clickSubmitButton(t, h, tabID)
+
+	if post.Signal != "validation_blocked" || len(post.InvalidFields) != 1 || post.InvalidFields[0].Name != "email" {
+		t.Fatalf("postState = %+v, want validation_blocked on the email field", post)
+	}
+}
