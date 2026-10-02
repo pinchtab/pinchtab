@@ -2,9 +2,13 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 )
 
 func readSkillFile(t *testing.T, parts ...string) string {
@@ -153,6 +157,40 @@ func TestTheCookiesReferenceStatesTheBrowserWideClearEffect(t *testing.T) {
 	for _, stale := range []string{"no `--key`", "omit it and the whole store is cleared", "pinchtab storage delete  "} {
 		if strings.Contains(storage, stale) {
 			t.Errorf("the storage section still says %q, teaching a bare `storage delete` wipe the CLI now refuses", stale)
+		}
+	}
+}
+
+// Either anchor alone finds a copy, so a one-word edit to the phrase keeps the file in
+// the set and the failure names it instead of silently shrinking the set.
+func compactDiffDocCopies(t *testing.T) []string {
+	t.Helper()
+	out, err := exec.Command("git", "-C", filepath.Join("..", ".."), "grep", "-l", "-F",
+		"-e", "[~] changed and removed refs", "-e", "[+] added", "--", ":!*.go").Output()
+	if err != nil {
+		t.Fatalf("git grep for compact-diff doc copies: %v", err)
+	}
+	return strings.Fields(string(out))
+}
+
+func TestCompactDiffDocCopiesMatchTheSummary(t *testing.T) {
+	copies := compactDiffDocCopies(t)
+	const floor = 6
+	if len(copies) < floor {
+		t.Fatalf("found %d compact-diff doc copies %v, want at least %d", len(copies), copies, floor)
+	}
+	for _, required := range []string{"skills/pinchtab/references/api.md", "skills/pinchtab/references/commands.md"} {
+		if !slices.Contains(copies, required) {
+			t.Errorf("%s no longer describes the compact diff; discovered %v", required, copies)
+		}
+	}
+	for _, path := range copies {
+		raw, err := os.ReadFile(filepath.Join("..", "..", path))
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		if !strings.Contains(string(raw), observe.CompactDiffSummary) {
+			t.Errorf("%s drifted from observe.CompactDiffSummary %q", path, observe.CompactDiffSummary)
 		}
 	}
 }

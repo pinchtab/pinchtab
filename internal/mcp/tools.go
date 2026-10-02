@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/scroll"
 )
 
@@ -50,7 +51,7 @@ func allTools() []mcp.Tool {
 			mcp.WithBoolean("interactive", mcp.Description("Interactive elements plus headings, images, table cells, alert/status text")),
 			mcp.WithBoolean("compact", mcp.Description("Compact format (default; false=JSON)")),
 			mcp.WithString("format", mcp.Description("Output format: 'compact' or 'text'")),
-			mcp.WithBoolean("diff", mcp.Description("Diff vs last snapshot. Compact lists all nodes, marking [+] added, [~] changed and removed refs; other formats return only changes")),
+			mcp.WithBoolean("diff", mcp.Description("Diff vs last snapshot. Compact lists "+observe.CompactDiffSummary+"; other formats return only changes")),
 			mcp.WithString("selector", mcp.Description("Unified selector to scope the snapshot (ref, CSS, XPath, text, find, role, label, placeholder, alt, title, testid, first/last/nth). Selectors resolve in the current frame scope; use pinchtab_frame for iframe content."+positionalWrapperGrammar)),
 			mcp.WithNumber("maxTokens", mcp.Description("Maximum estimated tokens in response (e.g. 300)")),
 			mcp.WithNumber("depth", mcp.Description("Maximum tree depth (e.g. 3)")),

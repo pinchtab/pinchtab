@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/spf13/cobra"
 )
 
@@ -197,16 +198,16 @@ func TestPostActionFlagsBundle(t *testing.T) {
 	}
 
 	wantUsage(clickCmd, "snap", "Output interactive snapshot after action")
-	wantUsage(clickCmd, "snap-diff", "Output snapshot diff after action (all nodes, marking [+] added, [~] changed and removed refs)")
+	wantUsage(clickCmd, "snap-diff", "Output snapshot diff after action ("+observe.CompactDiffSummary+")")
 	wantUsage(clickCmd, "text", "Output page text after action (for verification)")
 	wantUsage(clickCmd, "submit", "Dispatch one DOM click and report bounded post-submit state")
 
 	wantUsage(reloadCmd, "snap", "Output interactive snapshot after reload")
-	wantUsage(reloadCmd, "snap-diff", "Output snapshot diff after reload (all nodes, marking [+] added, [~] changed and removed refs)")
+	wantUsage(reloadCmd, "snap-diff", "Output snapshot diff after reload ("+observe.CompactDiffSummary+")")
 	wantUsage(reloadCmd, "text", "Output page text after reload (for verification)")
 
 	wantUsage(navCmd, "snap", "Output interactive snapshot after navigation")
-	wantUsage(navCmd, "snap-diff", "Output snapshot diff after navigation (all nodes, marking [+] added, [~] changed and removed refs)")
+	wantUsage(navCmd, "snap-diff", "Output snapshot diff after navigation ("+observe.CompactDiffSummary+")")
 	// nav has --text because landing on a page is exactly when reading it is
 	// useful, and reload — which lands on a page the same way — always had it.
 	wantUsage(navCmd, "text", "Output page text after navigation (for verification)")

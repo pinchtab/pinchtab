@@ -110,6 +110,10 @@ func FormatSnapshotCompact(nodes []A11yNode) string {
 	return formatNodes(nodes, compactNodeStyle, nil)
 }
 
+// CompactDiffSummary is the single source for the help text describing
+// FormatSnapshotCompactDiff; agent-facing docs are held to it by a sync test.
+const CompactDiffSummary = "all nodes, marking [+] added, [~] changed and removed refs"
+
 // FormatSnapshotCompactDiff outputs all current nodes in compact format with
 // change markers: [+] for added, [~] for changed. Removed refs are listed at
 // the end as [- ref]. This gives agents the full valid ref set plus change info.
