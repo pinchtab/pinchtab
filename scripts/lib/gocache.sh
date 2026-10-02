@@ -2,11 +2,25 @@
 
 DEFAULT_GOCACHE_MAX_GB=5
 
+repo_cache_root() {
+  local dir toplevel common
+  dir="$(cd "$1" && pwd -P)"
+  toplevel="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null || true)"
+  if [ -n "$toplevel" ] && [ "$(cd "$toplevel" && pwd -P)" = "$dir" ]; then
+    common="$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir)"
+    (cd "$(dirname "$common")" && pwd -P)
+  else
+    echo "$dir"
+  fi
+}
+
 use_repo_go_caches() {
-  local repo="$1"
-  export GOCACHE="${GOCACHE:-$repo/.gocache}"
-  export GOTMPDIR="${GOTMPDIR:-$repo/.tmp/go}"
-  mkdir -p "$GOCACHE" "$GOTMPDIR"
+  local root
+  root="$(repo_cache_root "$1")"
+  export GOCACHE="${GOCACHE:-$root/.gocache}"
+  export GOTMPDIR="${GOTMPDIR:-$root/.tmp/go}"
+  export GOLANGCI_LINT_CACHE="${GOLANGCI_LINT_CACHE:-$root/.cache/golangci-lint}"
+  mkdir -p "$GOCACHE" "$GOTMPDIR" "$GOLANGCI_LINT_CACHE"
 }
 
 repo_go_cache_max_gb() {
@@ -20,8 +34,9 @@ repo_go_cache_max_gb() {
 }
 
 trim_repo_go_cache() {
-  local repo="$1"
-  [ "$GOCACHE" = "$repo/.gocache" ] || return 0
+  local root
+  root="$(repo_cache_root "$1")"
+  [ "$GOCACHE" = "$root/.gocache" ] || return 0
   [ -d "$GOCACHE" ] || return 0
   local max_gb size_kb
   max_gb="$(repo_go_cache_max_gb)"

@@ -51,6 +51,7 @@ COMMANDS=(
   "  agent-browser:📊:Run agent-browser benchmark via Anthropic Messages API"
   "  browserbench:📊:Run BrowserBench CSV tasks through PinchTab"
   "doctor:🩺:Setup dev environment"
+  "worktree:🌿:Scratch worktree under .tmp/worktrees sharing the Go caches (<name> [rev] | prune)"
   "zombie:🧟:Run long Docker zombie-process soak smoke"
   "install:📦:Build & install to ~/.local/bin (override with PINCHTAB_INSTALL_DIR)"
   "  skills:📦:Symlink ./skills/* into ./.claude/skills (override with CLAUDE_SKILLS_DIR)"
@@ -464,6 +465,7 @@ run_command() {
       ;;
     "run")          exec bash scripts/run.sh ;;
     "doctor")       exec bash scripts/doctor.sh ;;
+    "worktree")     exec bash scripts/dev-worktree.sh ;;
     "zombie")       exec bash scripts/docker-zombie-soak-smoke.sh ;;
     "hooks")        exec bash scripts/install-hooks.sh ;;
     *)
@@ -653,6 +655,7 @@ if [ $# -gt 0 ]; then
         exec bash scripts/dev-opt.sh help
       fi
       ;;
+    worktree) exec bash scripts/dev-worktree.sh "${@:2}" ;;
     bench)
       if [ $# -gt 1 ]; then
         exec bash scripts/dev-bench.sh "${@:2}"

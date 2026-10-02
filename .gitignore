@@ -21,6 +21,7 @@
 .DS_Store
 .gocache
 /.tmp/
+/.cache/
 .gomodcache/
 .openclaw/
 .tools/
