@@ -185,10 +185,8 @@ func dispatchKeyChord(ctx context.Context, key, code string, vk int64, text stri
 }
 
 func TypeByNodeID(ctx context.Context, nodeID int64, text string) error {
-	return chromedp.Run(ctx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", map[string]any{"backendNodeId": nodeID}, nil)
-		}),
-		bridgecdpops.TrustedInputAction(chromedp.KeyEvent(text)),
-	)
+	if err := bridgecdpops.FocusBackendNode(ctx, nodeID); err != nil {
+		return err
+	}
+	return chromedp.Run(ctx, bridgecdpops.TrustedInputAction(chromedp.KeyEvent(text)))
 }

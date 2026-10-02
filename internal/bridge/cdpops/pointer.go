@@ -464,13 +464,10 @@ func DoubleClickByNodeID(ctx context.Context, nodeID int64) error {
 		return err
 	}
 
-	actions := []chromedp.Action{
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", map[string]any{"backendNodeId": nodeID}, nil)
-		}),
+	if err := FocusBackendNode(ctx, nodeID); err != nil {
+		return err
 	}
-	actions = append(actions, mousePressReleaseActions(x, y, 2)...)
-	return chromedp.Run(WithTrustedInput(ctx), actions...)
+	return chromedp.Run(WithTrustedInput(ctx), mousePressReleaseActions(x, y, 2)...)
 }
 
 func DragByNodeID(ctx context.Context, nodeID int64, dx, dy int, button string) error {

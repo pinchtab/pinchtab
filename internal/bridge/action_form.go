@@ -51,7 +51,7 @@ func (b *Bridge) actionFocus(ctx context.Context, req ActionRequest) (map[string
 		return map[string]any{"focused": true}, chromedp.Run(ctx, chromedp.Focus(req.Selector, chromedp.ByQuery))
 	}
 	if req.NodeID > 0 {
-		return map[string]any{"focused": true}, focusBackendNode(ctx, req.NodeID)
+		return map[string]any{"focused": true}, bridgecdpops.FocusBackendNode(ctx, req.NodeID)
 	}
 	return map[string]any{"focused": true}, nil
 }

@@ -3,6 +3,7 @@ package cdpops
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/chromedp/chromedp"
@@ -60,7 +61,7 @@ func FillByNodeID(ctx context.Context, nodeID int64, value string) error {
 	if err != nil {
 		return err
 	}
-	if err := focusNode(ctx, nodeID); err != nil {
+	if err := FocusBackendNode(ctx, nodeID); err != nil {
 		return err
 	}
 	// The native setter of the concrete element type bypasses framework-patched
@@ -144,10 +145,27 @@ func RejectedISOValue(ctx context.Context, nodeID int64, text string) (*Rejected
 	return &RejectedValueError{InputType: emptyInputType, Format: format}, nil
 }
 
-func focusNode(ctx context.Context, nodeID int64) error {
-	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+// ErrElementStale reports a backend node that was removed from the document,
+// typically because the page re-rendered it after the snapshot.
+var ErrElementStale = errors.New("element reference is stale")
+
+// FocusBackendNode focuses a node by its backend id. DOM.focus answers a
+// detached node with the same "not focusable" error as a connected div, so a
+// failure is reported as stale only when the node has left the document.
+func FocusBackendNode(ctx context.Context, nodeID int64) error {
+	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", map[string]any{"backendNodeId": nodeID}, nil)
 	}))
+	if err == nil || !nodeDetached(ctx, nodeID) {
+		return err
+	}
+	return fmt.Errorf("%w: %w", ErrElementStale, err)
+}
+
+func nodeDetached(ctx context.Context, nodeID int64) bool {
+	var connected bool
+	err := CallFunctionOnNode(ctx, nodeID, `function() { return this.isConnected; }`, nil, &connected)
+	return err == nil && !connected
 }
 
 // SelectByNodeID sets the value of a <select> element, with a forgiving
@@ -177,7 +195,7 @@ func SelectByNodeID(ctx context.Context, nodeID int64, value string) error {
 	if err != nil {
 		return err
 	}
-	if err := focusNode(ctx, nodeID); err != nil {
+	if err := FocusBackendNode(ctx, nodeID); err != nil {
 		return err
 	}
 	// Return a structured object so the caller can inspect (a) the match

@@ -1609,3 +1609,99 @@ func TestCaptureSubmitStateReadsOnlyRenderedLiveRegionsInARealPage(t *testing.T)
 		t.Fatalf("signal = %q text = %q, want live_region_changed with the new status", signal, text)
 	}
 }
+
+const rerenderFixtureHTML = `<div id="app"><input placeholder="Search"></div><div id="plain">plain</div>`
+
+func newRerenderFixture(t *testing.T) (context.Context, *bridge.Bridge, *Handlers) {
+	t.Helper()
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancelTimeout)
+	if err := chromedp.Run(ctx, chromedp.Navigate("data:text/html,"+url.PathEscape(rerenderFixtureHTML))); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.RuntimeConfig{ActionTimeout: 30 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
+	b := browserBridge(ctx, cfg)
+	b.RegisterTab("tab-rerender", ctx)
+	h := New(b, cfg, nil, nil, nil)
+
+	input, err := bridge.ResolveCSSToNodeID(ctx, "#app input")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := bridge.ResolveCSSToNodeID(ctx, "#plain")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.SetRefCache("tab-rerender", &bridge.RefCache{
+		Targets: map[string]bridge.RefTarget{"e0": {BackendNodeID: input}, "e1": {BackendNodeID: plain}},
+		Nodes: []bridge.A11yNode{
+			{Ref: "e0", Role: "textbox", Name: "Search", NodeID: input},
+			{Ref: "e1", Role: "generic", Name: "plain", NodeID: plain},
+		},
+	})
+	return ctx, b, h
+}
+
+func rerenderApp(t *testing.T, ctx context.Context, html string) {
+	t.Helper()
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.getElementById("app").innerHTML = `+strconv.Quote(html), nil)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func postRerenderAction(t *testing.T, h *Handlers, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	w := httptest.NewRecorder()
+	h.HandleAction(w, httptest.NewRequest("POST", "/action", strings.NewReader(body)))
+	return w
+}
+
+func TestFillAndTypeOnARerenderedInputRecoverByTheOldRef(t *testing.T) {
+	for _, kind := range []string{"fill", "type"} {
+		t.Run(kind, func(t *testing.T) {
+			ctx, _, h := newRerenderFixture(t)
+			rerenderApp(t, ctx, `<input placeholder="Search">`)
+
+			w := postRerenderAction(t, h, `{"kind":"`+kind+`","ref":"e0","text":"hello","tabId":"tab-rerender"}`)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("%s on a re-rendered input: status=%d body=%s", kind, w.Code, w.Body.String())
+			}
+			var value string
+			if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector("#app input").value`, &value)); err != nil {
+				t.Fatal(err)
+			}
+			if value != "hello" {
+				t.Errorf("re-created input value = %q, want hello", value)
+			}
+		})
+	}
+}
+
+func TestFillOnARemovedInputAsksForASnapshotInsteadOf500(t *testing.T) {
+	ctx, _, h := newRerenderFixture(t)
+	rerenderApp(t, ctx, `<p>nothing to fill</p>`)
+
+	w := postRerenderAction(t, h, `{"kind":"fill","ref":"e0","text":"hello","tabId":"tab-rerender"}`)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("fill on a removed input: status=%d body=%s, want 404", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "snapshot") {
+		t.Errorf("stale-ref error does not tell the caller to re-snapshot: %s", w.Body.String())
+	}
+}
+
+func TestFocusFailingOnAConnectedNodeIsNotStale(t *testing.T) {
+	ctx, b, _ := newRerenderFixture(t)
+	target, _ := b.GetRefCache("tab-rerender").Lookup("e1")
+
+	_, err := b.ExecuteAction(ctx, bridge.ActionFocus, bridge.ActionRequest{Kind: bridge.ActionFocus, NodeID: target.BackendNodeID})
+
+	if err == nil {
+		t.Fatal("focusing a plain div succeeded; the fixture no longer exercises a non-focusable node")
+	}
+	if bridge.IsStaleNodeError(err) {
+		t.Errorf("a connected non-focusable node was reported stale: %v", err)
+	}
+}

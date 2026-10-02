@@ -345,7 +345,7 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 
 	result, backend, err := h.executeAction(ctx, *req, cfg)
 	if err != nil && !submitClick && shouldRetryPointerAction(*req, err) {
-		if (req.Ref != "" || req.ToSelector != "") && shouldRetryStaleRef(err) {
+		if (req.Ref != "" || req.ToSelector != "") && bridge.IsStaleNodeError(err) {
 			recordStaleRefRetry()
 			h.refreshRefCache(ctx, resolvedTabID)
 			if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil && req.Ref != "" {
@@ -382,6 +382,9 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 			result, err = recRes, nil
 		}
 	}
+	if err != nil && !submitClick && req.Ref != "" && bridge.IsStaleNodeError(err) {
+		err = fmt.Errorf("%w: %w", refNotFound(req.Ref), err)
+	}
 	return result, backend, rr, err
 }
 
@@ -412,7 +415,7 @@ func shouldRetryPointerAction(req bridge.ActionRequest, err error) bool {
 		return true
 	}
 
-	return shouldRetryStaleRef(err)
+	return bridge.IsStaleNodeError(err)
 }
 
 // refreshActionSecondaryTargets re-resolves every selector-bearing field the request
@@ -489,25 +492,6 @@ func (h *Handlers) refreshActionNodeIDFromSelector(ctx context.Context, req *bri
 		return
 	}
 	req.NodeID = nid
-}
-
-func shouldRetryStaleRef(err error) bool {
-	if err == nil {
-		return false
-	}
-	if errors.Is(err, bridge.ErrElementStale) {
-		return true
-	}
-	// Fallback string matching is still needed for stale failures that can bypass
-	// bridge.ExecuteAction classification (for example, static paths or other
-	// non-bridge error surfaces that return raw backend-node messages).
-	// "is detached" is CDP's spelling for a node that was removed and re-created —
-	// measured from a drag against a re-rendered list ("Node is detached from
-	// document (-32000)") — and without it neither the retry nor recovery ever ran
-	// for exactly the DOM change stale-ref recovery exists for.
-	e := strings.ToLower(err.Error())
-	return strings.Contains(e, "could not find node") || strings.Contains(e, "node with given id") ||
-		strings.Contains(e, "no node") || strings.Contains(e, "is detached")
 }
 
 func (h *Handlers) refreshRefCache(ctx context.Context, tabID string) {

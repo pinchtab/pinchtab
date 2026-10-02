@@ -8,11 +8,11 @@ import (
 	"strings"
 
 	"github.com/chromedp/chromedp"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 )
 
 var (
-	// ErrElementStale indicates the targeted DOM/backend node is no longer valid.
-	ErrElementStale         = errors.New("element reference is stale")
+	ErrElementStale         = bridgecdpops.ErrElementStale
 	ErrInvalidActionRequest = errors.New("invalid action request")
 )
 
@@ -35,20 +35,35 @@ func defaultActionURLReader(ctx context.Context) (string, error) {
 }
 
 func classifyActionError(err error) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, ErrElementStale) {
+	if err == nil || errors.Is(err, ErrElementStale) || !IsStaleNodeError(err) {
 		return err
 	}
-	e := strings.ToLower(err.Error())
-	if strings.Contains(e, "could not find node") ||
-		strings.Contains(e, "node with given id") ||
-		strings.Contains(e, "no node") ||
-		strings.Contains(e, "node with given identifier does not exist") {
-		return fmt.Errorf("%w: %w", ErrElementStale, err)
+	return fmt.Errorf("%w: %w", ErrElementStale, err)
+}
+
+var staleNodeMessages = []string{
+	"could not find node",
+	"node with given id",
+	"no node",
+	"node is detached",
+}
+
+// IsStaleNodeError also matches raw CDP messages from paths that bypass
+// classifyActionError.
+func IsStaleNodeError(err error) bool {
+	if err == nil {
+		return false
 	}
-	return err
+	if errors.Is(err, ErrElementStale) {
+		return true
+	}
+	e := strings.ToLower(err.Error())
+	for _, msg := range staleNodeMessages {
+		if strings.Contains(e, msg) {
+			return true
+		}
+	}
+	return false
 }
 
 // navigationChanged reports whether an action moved the page. It used to return

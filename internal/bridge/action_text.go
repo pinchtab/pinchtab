@@ -115,7 +115,7 @@ func (b *Bridge) actionPress(ctx context.Context, req ActionRequest) (map[string
 		req.Key, req.Modifiers = key, chordModifiers
 	}
 	if req.NodeID > 0 {
-		if err := focusBackendNode(ctx, req.NodeID); err != nil {
+		if err := bridgecdpops.FocusBackendNode(ctx, req.NodeID); err != nil {
 			return nil, err
 		}
 	} else if req.Selector != "" {
@@ -171,11 +171,7 @@ func (b *Bridge) actionHumanizedType(ctx context.Context, req ActionRequest) (ma
 			return nil, err
 		}
 	} else if req.NodeID > 0 {
-		// req.NodeID is a BackendNodeID from the accessibility tree.
-		// Must use DOM.focus with backendNodeId, not dom.Focus().WithNodeID() which
-		// expects a DOM NodeID — a different ID space. Using the wrong type causes
-		// "Could not find node with given id (-32000)". See issue #226.
-		if err := focusBackendNode(ctx, req.NodeID); err != nil {
+		if err := bridgecdpops.FocusBackendNode(ctx, req.NodeID); err != nil {
 			return nil, err
 		}
 	} else {
