@@ -3,6 +3,7 @@ package e2e
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -85,6 +86,19 @@ func processAlive(pid int) bool {
 	}
 	err = proc.Signal(syscall.Signal(0))
 	return err == nil || errors.Is(err, syscall.EPERM)
+}
+
+func underRunLock(dryRun bool, path string, stderr io.Writer, run func() int) int {
+	if dryRun {
+		return run()
+	}
+	lock, err := acquireRunLock(path)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, err)
+		return 1
+	}
+	defer lock.release()
+	return run()
 }
 
 func (l *runLock) release() {

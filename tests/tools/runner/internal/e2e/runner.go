@@ -104,15 +104,11 @@ func NewRunner(args Args, stdout, stderr io.Writer) (*Runner, error) {
 }
 
 func (r *Runner) Run() int {
+	return underRunLock(r.args.DryRun, r.lockPath, r.stderr, r.runUnlocked)
+}
+
+func (r *Runner) runUnlocked() int {
 	started := time.Now()
-	if !r.args.DryRun {
-		lock, err := acquireRunLock(r.lockPath)
-		if err != nil {
-			_, _ = fmt.Fprintln(r.stderr, err)
-			return 1
-		}
-		defer lock.release()
-	}
 	overrides, err := r.prepareProviderOverrides()
 	if err != nil {
 		_, _ = fmt.Fprintf(r.stderr, "e2e: %v\n", err)

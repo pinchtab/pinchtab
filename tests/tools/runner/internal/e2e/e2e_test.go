@@ -3,6 +3,7 @@ package e2e
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -921,6 +922,38 @@ func TestDryRunProviderMatrixCommaSeparated(t *testing.T) {
 			t.Fatalf("comma-separated matrix dry-run output missing %q:\n%s", want, out)
 		}
 	}
+}
+
+func TestProviderMatrixHoldsTheRunLockBetweenProviders(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "e2e.lock")
+	var ran []string
+	competing := func(single Args, _, _ io.Writer) int {
+		ran = append(ran, single.Provider)
+		lock, err := acquireRunLock(path)
+		if err == nil {
+			lock.release()
+			t.Errorf("a competing run took the lock before provider %s", single.Provider)
+		}
+		var held *runLockHeldError
+		if err != nil && !errors.As(err, &held) {
+			t.Errorf("competing acquire before provider %s = %v, want the already-running refusal", single.Provider, err)
+		}
+		return 0
+	}
+
+	var stdout, stderr bytes.Buffer
+	args := Args{Suite: "api", Providers: []string{"chrome", "cloak"}}
+	if code := runProviderMatrix(args, path, &stdout, &stderr, competing); code != 0 {
+		t.Fatalf("matrix = %d, stderr: %s", code, stderr.String())
+	}
+	if !slices.Equal(ran, []string{"chrome", "cloak"}) {
+		t.Fatalf("providers run = %v, want chrome then cloak", ran)
+	}
+	lock, err := acquireRunLock(path)
+	if err != nil {
+		t.Fatalf("the matrix kept the lock after it finished: %v", err)
+	}
+	lock.release()
 }
 
 func TestRejectsUnknownProvider(t *testing.T) {

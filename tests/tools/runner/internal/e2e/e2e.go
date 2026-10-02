@@ -84,7 +84,7 @@ func Run(argv []string, stdout, stderr io.Writer) int {
 	}
 
 	if len(args.Providers) > 1 {
-		return runProviderMatrix(args, stdout, stderr)
+		return runProviderMatrix(args, defaultRunLockPath(), stdout, stderr, runMatrixProvider)
 	}
 
 	r, err := NewRunner(args, stdout, stderr)
@@ -95,7 +95,24 @@ func Run(argv []string, stdout, stderr io.Writer) int {
 	return r.Run()
 }
 
-func runProviderMatrix(args Args, stdout, stderr io.Writer) int {
+func runMatrixProvider(single Args, stdout, stderr io.Writer) int {
+	r, err := NewRunner(single, stdout, stderr)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "e2e: browser %s: %v\n", single.Provider, err)
+		return 1
+	}
+	return r.runUnlocked()
+}
+
+type providerRun func(single Args, stdout, stderr io.Writer) int
+
+func runProviderMatrix(args Args, lockPath string, stdout, stderr io.Writer, runProvider providerRun) int {
+	return underRunLock(args.DryRun, lockPath, stderr, func() int {
+		return runEachProvider(args, stdout, stderr, runProvider)
+	})
+}
+
+func runEachProvider(args Args, stdout, stderr io.Writer, runProvider providerRun) int {
 	_, _ = fmt.Fprintf(stdout, "runner e2e (Go) - browser matrix: %s\n\n",
 		strings.Join(args.Providers, ", "))
 
@@ -112,13 +129,7 @@ func runProviderMatrix(args Args, stdout, stderr io.Writer) int {
 		single.Provider = provider
 		single.Providers = []string{provider}
 
-		r, err := NewRunner(single, stdout, stderr)
-		if err != nil {
-			_, _ = fmt.Fprintf(stderr, "e2e: browser %s: %v\n", provider, err)
-			worstCode = 1
-			continue
-		}
-		if code := r.Run(); code != 0 {
+		if code := runProvider(single, stdout, stderr); code != 0 {
 			worstCode = code
 		}
 	}
