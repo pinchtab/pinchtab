@@ -2,9 +2,9 @@
   {
     "surface": "mcp:allTools",
     "minBytes": 18092,
-    "maxBytes": 47730,
+    "maxBytes": 47843,
     "takenOn": "2026-10-02",
-    "commit": "bc1cc2b1"
+    "commit": "5df11608"
   },
   {
     "surface": "skills/pinchtab-mcp/SKILL.md",
