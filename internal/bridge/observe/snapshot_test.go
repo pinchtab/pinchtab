@@ -3,6 +3,7 @@ package observe
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -181,5 +182,73 @@ func TestSnapshotDiffKeepsEqualNodeIDsInDifferentFramesApart(t *testing.T) {
 	added, changed, removed := DiffSnapshot(before, before)
 	if len(added)+len(changed)+len(removed) != 0 {
 		t.Fatalf("added %v changed %v removed %v, want an unchanged snapshot to diff empty", added, changed, removed)
+	}
+}
+
+const dateTimeFixtureHTML = `<form id="dates">
+<label>Start date <input type="date" value="2026-10-02"></label>
+<label>End date <input type="date"></label>
+<label>Opens at <input type="time" value="09:30"></label>
+<label>Closes at <input type="time"></label>
+<label>Meeting <input type="datetime-local"></label>
+<label>Billing month <input type="month"></label>
+<label>Sprint week <input type="week"></label>
+</form>`
+
+func interactiveSnapshot(t *testing.T, ctx context.Context) []A11yNode {
+	t.Helper()
+	raw, err := FetchAXTree(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodes, _ := BuildSnapshot(raw, FilterInteractive, -1)
+	return nodes
+}
+
+func TestInteractiveSnapshotListsDateTimeInputsByLabelAndISOValue(t *testing.T) {
+	ctx := fixtureTab(t, dateTimeFixtureHTML, "dates")
+	labels := map[string]bool{
+		"Start date": true, "End date": true, "Opens at": true, "Closes at": true,
+		"Meeting": true, "Billing month": true, "Sprint week": true,
+	}
+
+	var got []string
+	roles := map[string]bool{}
+	for _, n := range interactiveSnapshot(t, ctx) {
+		if n.Role == "spinbutton" {
+			t.Errorf("interactive snapshot kept segment spinbutton %q, want it folded into its date/time host", n.Name)
+		}
+		if labels[n.Name] {
+			got = append(got, n.Role+" "+strconv.Quote(n.Name)+" val="+strconv.Quote(n.Value))
+			roles[n.Role] = true
+		}
+	}
+	want := []string{
+		`Date "Start date" val="2026-10-02"`,
+		`Date "End date" val=""`,
+		`InputTime "Opens at" val="09:30"`,
+		`InputTime "Closes at" val=""`,
+		`DateTime "Meeting" val=""`,
+		`DateTime "Billing month" val=""`,
+		`DateTime "Sprint week" val=""`,
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("date/time hosts = %q, want %q", got, want)
+	}
+	if !maps.Equal(roles, dateTimeHostRoles) {
+		t.Fatalf("Chrome host roles = %v, want dateTimeHostRoles to list exactly those: %v", roles, dateTimeHostRoles)
+	}
+	for role := range dateTimeHostRoles {
+		if !InteractiveRoles[role] {
+			t.Errorf("InteractiveRoles is missing date/time host role %q", role)
+		}
+	}
+}
+
+func TestFullSnapshotKeepsDateTimeSegments(t *testing.T) {
+	ctx := fixtureTab(t, dateTimeFixtureHTML, "dates")
+
+	if len(nodesByRole(snapshotNodes(t, ctx), "spinbutton")) == 0 {
+		t.Fatal("full snapshot dropped the date/time segment spinbuttons, want them kept outside the interactive filter")
 	}
 }

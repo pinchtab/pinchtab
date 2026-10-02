@@ -369,6 +369,12 @@ var InteractiveRoles = map[string]bool{
 	"radio": true, "switch": true, "slider": true, "spinbutton": true,
 	"menuitem": true, "menuitemcheckbox": true, "menuitemradio": true,
 	"tab": true, "treeitem": true, "iframe": true, "Iframe": true,
+	"Date": true, "InputTime": true, "DateTime": true,
+}
+
+// Chrome's roles for native date, time, datetime-local, month and week inputs.
+var dateTimeHostRoles = map[string]bool{
+	"Date": true, "InputTime": true, "DateTime": true,
 }
 
 // ContextRoles are non-actionable but content-bearing roles that give an agent
@@ -645,7 +651,25 @@ func (b *snapshotBuilder) filteredName(n RawAXNode) (name string, keep bool) {
 		text := b.descendantText(n.NodeID)
 		return text, text != ""
 	}
+	if role == "spinbutton" && b.hasDateTimeHostAncestor(n.NodeID) {
+		return "", false
+	}
 	return n.Name.String(), InteractiveRoles[role] || ContextRoles[role]
+}
+
+func (b *snapshotBuilder) hasDateTimeHostAncestor(nodeID string) bool {
+	cur := nodeID
+	for range b.maxAncestorWalk {
+		p, ok := b.parentMap[cur]
+		if !ok {
+			return false
+		}
+		if dateTimeHostRoles[b.nodeByID[p].Role.String()] {
+			return true
+		}
+		cur = p
+	}
+	return false
 }
 
 func (b *snapshotBuilder) descendantText(nodeID string) string {
