@@ -101,3 +101,24 @@ func TestSmoothScrollingPageStillReportsTheMoveInRealBrowser(t *testing.T) {
 		t.Fatalf("scroll on a smooth-scrolling page = %#v, want scrolled:true at scrollY 500", result)
 	}
 }
+
+func TestScrollOverAnInnerScrollerAtItsEndMovesThePageInRealBrowser(t *testing.T) {
+	ctx := newScrollPositionTab(t)
+	listEnd := evalFloat(t, ctx, `(function() {
+		var list = document.getElementById('list');
+		list.scrollTop = list.scrollHeight;
+		return list.scrollTop;
+	})()`)
+
+	result := scrollAt(t, ctx, 100, 100, 300)
+
+	if result["scrolled"] != true || result["scrollY"] != 300.0 {
+		t.Fatalf("scroll over an exhausted list = %#v, want the page to move to scrollY 300", result)
+	}
+	if windowY := evalFloat(t, ctx, `window.scrollY`); windowY != 300 {
+		t.Fatalf("window.scrollY = %v, want 300", windowY)
+	}
+	if listY := evalFloat(t, ctx, `document.getElementById('list').scrollTop`); listY != listEnd {
+		t.Fatalf("list scrollTop = %v, want it left at its end %v", listY, listEnd)
+	}
+}

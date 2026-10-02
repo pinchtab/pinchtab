@@ -376,19 +376,22 @@ func ScrollByCoordinate(ctx context.Context, x, y float64, deltaX, deltaY, modif
 	// Synthetic Input.dispatchMouseEvent(mouseWheel) in --headless=new no
 	// longer reliably fires `wheel` JS listeners and can stall on the
 	// compositor ack chain. Dispatch a real WheelEvent at the point under
-	// the cursor so listeners run, then scroll the nearest wheel-scrollable
-	// ancestor if no listener called preventDefault(). Held modifiers (Shift
-	// for horizontal scroll, Ctrl for zoom intent) are reflected on the event
-	// init. The scroll is instant because a smooth one has not moved yet when
+	// the cursor so listeners run, then scroll the nearest ancestor that can
+	// still move in the delta's direction if no listener called
+	// preventDefault(). Held modifiers (Shift for horizontal scroll, Ctrl for
+	// zoom intent) are reflected on the event init. The scroll is instant because a smooth one has not moved yet when
 	// the position is read, and a hidden page skips the frame wait because it
 	// never renders one.
 	expr := fmt.Sprintf(`(async function() {
 		var dx = %d, dy = %d, cx = %f, cy = %f;
 		var target = document.elementFromPoint(cx, cy) || document.documentElement;
+		var hasRoom = function(delta, offset, viewport, extent) {
+			return delta > 0 ? Math.ceil(offset) + viewport < extent : delta < 0 && offset > 0;
+		};
 		var wheelScrolls = function(el) {
 			var style = getComputedStyle(el), overflows = /auto|scroll|overlay/;
-			return (dy !== 0 && overflows.test(style.overflowY) && el.scrollHeight > el.clientHeight) ||
-				(dx !== 0 && overflows.test(style.overflowX) && el.scrollWidth > el.clientWidth);
+			return (overflows.test(style.overflowY) && hasRoom(dy, el.scrollTop, el.clientHeight, el.scrollHeight)) ||
+				(overflows.test(style.overflowX) && hasRoom(dx, el.scrollLeft, el.clientWidth, el.scrollWidth));
 		};
 		var scroller = document.scrollingElement || document.documentElement;
 		for (var el = target; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {

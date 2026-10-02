@@ -35,8 +35,9 @@ Notes:
   axis (`--dy 0 --dx 500`) is a real scroll and passes through. Only a request with no delta
   and no target at all scrolls down by the default 120px
 - a direction keyword (`up`, `down`, `left`, `right`) scrolls 800px per step
-- the scroll moves the nearest scrollable ancestor of the element at `targetX`/`targetY` — an
-  inner list or panel under that point — or the page when there is none. `scrollX`/`scrollY` in
+- the scroll moves the nearest ancestor of the element at `targetX`/`targetY` that can still move
+  in the requested direction — an inner list or panel under that point — or the page when there is
+  none, so a list already at its end passes the scroll on to the page. `scrollX`/`scrollY` in
   the result are that scroller's position afterwards, clamped to its extent, not the delta asked for
 - `scrolled` is `true` only when that position changed, so a scroll at the end of the page or list
   answers `scrolled:false` — the stop condition for a "scroll until nothing new loads" loop
