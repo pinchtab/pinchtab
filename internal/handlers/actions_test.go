@@ -1767,7 +1767,7 @@ func TestTextEntryBySelectorOnTheWrongElementTypeIsAnInvalidRequest(t *testing.T
 	}
 }
 
-const selectOptionFixtureHTML = `<label>Size <select id="native"><option value="sm">Small</option><option value="lg">Large</option></select></label>
+const selectOptionFixtureHTML = `<label>Size <select id="native" onchange="document.body.dataset.changed='1'"><option value="sm">Small</option><option value="lg">Large</option></select></label>
 <div role="listbox" id="custom"><div role="option" id="custom-lg" onclick="document.body.dataset.picked='lg'">Large</div></div>`
 
 func newSelectOptionFixture(t *testing.T) (context.Context, *Handlers) {
@@ -1793,7 +1793,7 @@ func newSelectOptionFixture(t *testing.T) (context.Context, *Handlers) {
 }
 
 func TestClickOnANativeSelectOptionPointsToSelectInsteadOf500(t *testing.T) {
-	_, h := newSelectOptionFixture(t)
+	ctx, h := newSelectOptionFixture(t)
 
 	w := postRerenderAction(t, h, `{"kind":"click","ref":"e4","tabId":"tab-select"}`)
 
@@ -1819,6 +1819,13 @@ func TestClickOnANativeSelectOptionPointsToSelectInsteadOf500(t *testing.T) {
 	}
 	if strings.Contains(w.Body.String(), "-32000") {
 		t.Errorf("body leaks the raw CDP error: %s", w.Body.String())
+	}
+	var state string
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.getElementById('native').value + '|' + (document.body.dataset.changed || '')`, &state)); err != nil {
+		t.Fatal(err)
+	}
+	if state != "sm|" {
+		t.Errorf("refused click still reached the page: value|changed=%q, want %q", state, "sm|")
 	}
 }
 
