@@ -251,3 +251,55 @@ func TestWait_ExitCodeTracksOutcomeNotTheFlag(t *testing.T) {
 		})
 	}
 }
+
+const waitNoConditionChildEnv = "PINCHTAB_TEST_WAIT_NO_CONDITION"
+
+const waitNoConditionMessage = "one of selector, text, notText, url, load, fn, or ms is required"
+
+func runWaitNoConditionChild(mode string) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if _, sentText := body["text"]; sentText {
+			_ = json.NewEncoder(w).Encode(map[string]any{"waited": true})
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": waitNoConditionMessage})
+	}))
+	defer srv.Close()
+
+	cmd := newWaitCmd()
+	if mode == "empty-text" {
+		_ = cmd.Flags().Set("text", "")
+		_ = cmd.Flags().Set("state", "hidden")
+	}
+	Wait(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, nil, cmd)
+	os.Exit(0)
+}
+
+func TestWait_WithoutConditionFailsWithTheServerMessage(t *testing.T) {
+	if mode := os.Getenv(waitNoConditionChildEnv); mode != "" {
+		runWaitNoConditionChild(mode)
+		return
+	}
+
+	for _, mode := range []string{"no-args", "empty-text"} {
+		t.Run(mode, func(t *testing.T) {
+			child := exec.Command(os.Args[0], "-test.run=TestWait_WithoutConditionFailsWithTheServerMessage", "-test.timeout=60s") // #nosec G204 -- re-executes this test binary.
+			child.Env = append(os.Environ(), waitNoConditionChildEnv+"="+mode)
+			var stdout, stderr bytes.Buffer
+			child.Stdout = &stdout
+			child.Stderr = &stderr
+
+			err := child.Run()
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) || exitErr.ExitCode() == 0 {
+				t.Fatalf("%s: err = %v, want a non-zero exit (stdout=%q stderr=%q)", mode, err, stdout.String(), stderr.String())
+			}
+			if !strings.Contains(stderr.String(), waitNoConditionMessage) {
+				t.Errorf("%s stderr = %q, want the server's message", mode, stderr.String())
+			}
+		})
+	}
+}

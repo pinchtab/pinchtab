@@ -1,7 +1,6 @@
 package actions
 
 import (
-	"fmt"
 	"strconv"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -30,10 +29,6 @@ func Wait(conn apiclient.Conn, args []string, cmd *cobra.Command) {
 		} else {
 			body["selector"] = args[0]
 		}
-	}
-	if len(body) == 0 {
-		fmt.Println("Usage: pinchtab wait <selector|ms> [--text|--not-text|--url|--load|--fn] [--state visible|hidden|attached|detached] [--timeout-ms ms] [--tab id]")
-		return
 	}
 	if state, _ := cmd.Flags().GetString("state"); state != "" {
 		body["state"] = state
