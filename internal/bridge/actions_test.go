@@ -1385,3 +1385,58 @@ func TestSelectorActions_ClickReachesAShadowDOMTarget(t *testing.T) {
 		t.Fatalf("shadow button clicks = %d, want 1", clicks)
 	}
 }
+
+func TestClickActions_NodeIDWinsOverSelector(t *testing.T) {
+	t.Parallel()
+	const wantNode = int64(7)
+
+	tests := []struct {
+		name string
+		kind string
+		req  ActionRequest
+		fake func(ops *pointerOps, record func(context.Context, int64) error)
+	}{
+		{
+			name: "click",
+			kind: ActionClick,
+			req:  ActionRequest{Humanize: new(false)},
+			fake: func(ops *pointerOps, record func(context.Context, int64) error) { ops.clickByNodeID = record },
+		},
+		{
+			name: "double-click",
+			kind: ActionDoubleClick,
+			fake: func(ops *pointerOps, record func(context.Context, int64) error) { ops.doubleClickByNodeID = record },
+		},
+		{
+			name: "submit click",
+			kind: ActionClick,
+			req:  ActionRequest{Submit: true},
+			fake: func(ops *pointerOps, record func(context.Context, int64) error) { ops.jsClickByBackendNode = record },
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ops := defaultPointerOps()
+			ops.clickFloatingFlyoutItem = func(context.Context, int64) (bool, error) { return false, nil }
+			var dispatched []int64
+			tc.fake(ops, func(_ context.Context, nodeID int64) error {
+				dispatched = append(dispatched, nodeID)
+				return nil
+			})
+			b := New(context.TODO(), nil, &config.RuntimeConfig{})
+			b.pointerOps = ops
+
+			req := tc.req
+			req.Kind = tc.kind
+			req.NodeID = wantNode
+			req.Selector = "#x"
+			if _, err := b.Actions[tc.kind](context.Background(), req); err != nil {
+				t.Fatalf("%s with nodeId and selector returned error: %v", tc.name, err)
+			}
+			if len(dispatched) != 1 || dispatched[0] != wantNode {
+				t.Fatalf("%s dispatched at nodes %v, want [%d]", tc.name, dispatched, wantNode)
+			}
+		})
+	}
+}

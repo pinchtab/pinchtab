@@ -334,12 +334,12 @@ func (p *pointerOps) clickTarget(ctx context.Context, req ActionRequest, auto *a
 			auto.prepareNode(ctx, nodeID)
 		}
 	}
+	nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
+	if err != nil {
+		return err
+	}
 	switch {
 	case req.Submit && gesture.onSubmitNode != nil:
-		nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
-		if err != nil {
-			return err
-		}
 		if nodeID <= 0 {
 			return fmt.Errorf("click submit requires a selector, ref, or nodeId")
 		}
@@ -347,16 +347,9 @@ func (p *pointerOps) clickTarget(ctx context.Context, req ActionRequest, auto *a
 		// One DOM click only. In particular, do not use the trusted-click
 		// timeout fallback: its second dispatch can double-submit a slow SPA.
 		return gesture.onSubmitNode(ctx, nodeID)
-	case req.Selector != "":
-		nodeID, err := ResolveCSSToNodeID(ctx, req.Selector)
-		if err != nil {
-			return err
-		}
+	case nodeID > 0:
 		prepare(nodeID)
 		return gesture.onNode(ctx, nodeID)
-	case req.NodeID > 0:
-		prepare(req.NodeID)
-		return gesture.onNode(ctx, req.NodeID)
 	case req.HasXY:
 		return gesture.onPoint(ctx, req.X, req.Y)
 	default:
@@ -766,15 +759,12 @@ func (p *pointerOps) humanClickNode(backendNodeID cdp.BackendNodeID) func(contex
 }
 
 func (b *Bridge) actionScrollIntoView(ctx context.Context, req ActionRequest) (map[string]any, error) {
-	if req.NodeID > 0 {
-		return ScrollIntoViewAndGetBox(ctx, req.NodeID)
+	nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
+	if err != nil {
+		return nil, err
 	}
-	if req.Selector != "" {
-		nid, err := ResolveCSSToNodeID(ctx, req.Selector)
-		if err != nil {
-			return nil, err
-		}
-		return ScrollIntoViewAndGetBox(ctx, nid)
+	if nodeID <= 0 {
+		return nil, NewInvalidActionRequestError("need selector or ref")
 	}
-	return nil, NewInvalidActionRequestError("need selector or ref")
+	return ScrollIntoViewAndGetBox(ctx, nodeID)
 }
