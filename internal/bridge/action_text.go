@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 )
@@ -42,11 +43,19 @@ func (b *Bridge) actionFill(ctx context.Context, req ActionRequest) (map[string]
 	text, _ := FillText(req)
 	result := textEntryResult("filled", text)
 	if req.Selector != "" {
+		var nodes []*cdp.Node
 		if err := chromedp.Run(ctx,
 			chromedp.Focus(req.Selector, chromedp.ByQuery),
-			chromedp.SetValue(req.Selector, text, chromedp.ByQuery),
+			chromedp.Nodes(req.Selector, &nodes, chromedp.ByQuery),
 		); err != nil {
 			return nil, err
+		}
+		setErr := chromedp.Run(ctx, chromedp.SetValue(req.Selector, text, chromedp.ByQuery))
+		if err := refuseRejectedISOValue(ctx, int64(nodes[0].BackendNodeID), text); err != nil {
+			return nil, err
+		}
+		if setErr != nil {
+			return nil, setErr
 		}
 		return finishFill(ctx, result, req.Submit)
 	}
@@ -62,11 +71,25 @@ func (b *Bridge) actionFill(ctx context.Context, req ActionRequest) (map[string]
 		// did not land is reported too. ValidateFillAction has already refused the
 		// nothing-was-supplied case, which is what used to disable this check.
 		if actual, err := bridgecdpops.ReadInputValue(ctx, req.NodeID); err == nil && actual != text {
+			if err := refuseRejectedISOValue(ctx, req.NodeID, text); err != nil {
+				return nil, err
+			}
 			result["warning"] = "fill may not have been picked up by the page (e.g. React controlled input); try 'type' instead"
 		}
 		return finishFill(ctx, result, req.Submit)
 	}
 	return nil, NewInvalidActionRequestError("need selector or ref")
+}
+
+func refuseRejectedISOValue(ctx context.Context, nodeID int64, text string) error {
+	if text == "" {
+		return nil
+	}
+	rejected, err := bridgecdpops.RejectedISOValue(ctx, nodeID)
+	if err != nil || rejected == nil {
+		return nil
+	}
+	return fmt.Errorf("%w: %w", ErrInvalidActionRequest, rejected)
 }
 
 func finishFill(ctx context.Context, result map[string]any, submit bool) (map[string]any, error) {

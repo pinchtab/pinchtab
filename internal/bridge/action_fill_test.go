@@ -132,3 +132,78 @@ func TestFillOnAContentEditableWritesItsText(t *testing.T) {
 		t.Errorf("textContent = %q, want %q", text, "Front door")
 	}
 }
+
+func TestFillOnATimeInputRefusesANonISOValue(t *testing.T) {
+	targets := map[string]func(t *testing.T, ctx context.Context) ActionRequest{
+		"by ref": func(t *testing.T, ctx context.Context) ActionRequest {
+			return ActionRequest{NodeID: backendNodeID(t, ctx, "#delivery")}
+		},
+		"by selector": func(*testing.T, context.Context) ActionRequest {
+			return ActionRequest{Selector: "#delivery"}
+		},
+	}
+	for name, target := range targets {
+		t.Run(name, func(t *testing.T) {
+			ctx := openTimeInputPage(t)
+			req := target(t, ctx)
+			req.Text, req.HasText = "half past", true
+
+			result, err := (&Bridge{}).actionFill(ctx, req)
+			if err == nil {
+				t.Fatalf("fill returned %v with no error", result)
+			}
+			if !errors.Is(err, ErrInvalidActionRequest) {
+				t.Errorf("error = %v, want it classified as an invalid request", err)
+			}
+			for _, want := range []string{`type="time"`, "ISO", "HH:MM"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error = %q, want it to mention %q", err, want)
+				}
+			}
+			if strings.Contains(err.Error(), "React") {
+				t.Errorf("error = %q, want no React hint", err)
+			}
+		})
+
+		t.Run(name+" ISO value", func(t *testing.T) {
+			ctx := openTimeInputPage(t)
+			req := target(t, ctx)
+			req.Text, req.HasText = "12:30", true
+
+			result, err := (&Bridge{}).actionFill(ctx, req)
+			if err != nil {
+				t.Fatalf("fill with an ISO value: %v", err)
+			}
+			if result["filled"] != true {
+				t.Errorf("result = %v, want filled:true", result)
+			}
+			if warning, ok := result["warning"]; ok {
+				t.Errorf("fill warned %q, want none for an ISO value", warning)
+			}
+			if got := pageValue(t, ctx, "#delivery"); got != "12:30" {
+				t.Errorf("time input value = %q, want %q", got, "12:30")
+			}
+		})
+	}
+}
+
+func TestFillOnATextInputKeepsTheTypeHintWhenThePageDropsTheValue(t *testing.T) {
+	ctx := openTimeInputPage(t)
+	const makeResettingTextInput = `(() => {
+		const input = document.querySelector("#delivery");
+		input.type = "text";
+		input.addEventListener("input", () => { input.value = ""; });
+	})()`
+	if err := chromedp.Run(ctx, chromedp.Evaluate(makeResettingTextInput, nil)); err != nil {
+		t.Fatalf("make resetting text input: %v", err)
+	}
+
+	result, err := (&Bridge{}).actionFill(ctx, ActionRequest{NodeID: backendNodeID(t, ctx, "#delivery"), Text: "half past", HasText: true})
+	if err != nil {
+		t.Fatalf("fill on a text input: %v", err)
+	}
+	warning, _ := result["warning"].(string)
+	if !strings.Contains(warning, "try 'type' instead") {
+		t.Errorf("warning = %q, want the unchanged type hint", warning)
+	}
+}

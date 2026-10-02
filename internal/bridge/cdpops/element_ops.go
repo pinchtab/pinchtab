@@ -101,6 +101,44 @@ func FillByNodeID(ctx context.Context, nodeID int64, value string) error {
 	return nil
 }
 
+type RejectedValueError struct {
+	InputType string
+	Format    string
+}
+
+func (e *RejectedValueError) Error() string {
+	return fmt.Sprintf(
+		"<input type=%q> rejected the value and is now empty; fill it in ISO format %s",
+		e.InputType, e.Format,
+	)
+}
+
+var isoFormatByInputType = map[string]string{
+	"date":           "YYYY-MM-DD",
+	"time":           "HH:MM",
+	"datetime-local": "YYYY-MM-DDTHH:MM",
+	"month":          "YYYY-MM",
+	"week":           "YYYY-Www",
+}
+
+func RejectedISOValue(ctx context.Context, nodeID int64) (*RejectedValueError, error) {
+	js := `function() {
+		if (!(this instanceof window.HTMLInputElement)) return "";
+		var proto = window.HTMLInputElement.prototype;
+		if (Object.getOwnPropertyDescriptor(proto, 'value').get.call(this) !== "") return "";
+		return Object.getOwnPropertyDescriptor(proto, 'type').get.call(this);
+	}`
+	var emptyInputType string
+	if err := CallFunctionOnNode(ctx, nodeID, js, nil, &emptyInputType); err != nil {
+		return nil, err
+	}
+	format, ok := isoFormatByInputType[emptyInputType]
+	if !ok {
+		return nil, nil
+	}
+	return &RejectedValueError{InputType: emptyInputType, Format: format}, nil
+}
+
 func focusNode(ctx context.Context, nodeID int64) error {
 	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", map[string]any{"backendNodeId": nodeID}, nil)
