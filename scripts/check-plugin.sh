@@ -4,14 +4,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 SCOPE="all"
-CHECK_SKILLS=false
 for arg in "$@"; do
   case "$arg" in
-    --check-skills) CHECK_SKILLS=true ;;
     openclaw|grok|all) SCOPE="$arg" ;;
     *)
       echo "unknown argument: $arg" >&2
-      echo "usage: check-plugin.sh [all|openclaw|grok] [--check-skills]" >&2
+      echo "usage: check-plugin.sh [all|openclaw|grok]" >&2
       exit 1
       ;;
   esac
@@ -46,13 +44,8 @@ check_grok() {
   echo "📦 Grok plugin checks"
   echo ""
 
-  if [ "$CHECK_SKILLS" = true ]; then
-    echo "  Verifying synced skills..."
-    node plugins/sync-skills.mjs grok --check
-  else
-    echo "  Syncing skills..."
-    node plugins/sync-skills.mjs grok
-  fi
+  echo "  Verifying synced skills..."
+  node plugins/sync-skills.mjs grok --check
   echo "  ✓ Skills"
 
   echo ""

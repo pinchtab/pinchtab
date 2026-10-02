@@ -54,7 +54,7 @@ jobs:
           package-manager-cache: false
 
       - name: Check Grok plugin
-        run: bash scripts/check-plugin.sh grok --check-skills
+        run: bash scripts/check-plugin.sh grok
 
   test:
     name: Test OpenClaw Plugin

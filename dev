@@ -264,7 +264,7 @@ run_command() {
       echo ""
       echo "  ${ACCENT}${BOLD}🧪 Plugin checks${NC}"
       echo ""
-      bash scripts/check-plugin.sh --check-skills
+      bash scripts/check-plugin.sh
       local plugin_exit=$?
       if [ $go_exit -ne 0 ] || [ $dash_exit -ne 0 ] || [ $plugin_exit -ne 0 ]; then exit 1; fi
       exit 0
@@ -287,7 +287,7 @@ run_command() {
     "check plugin")
       echo "  ${ACCENT}${BOLD}🧪 Plugin checks${NC}"
       echo ""
-      exec bash scripts/check-plugin.sh --check-skills
+      exec bash scripts/check-plugin.sh
       ;;
     "check security")
       echo "  ${ACCENT}${BOLD}🔒 Security scan${NC}"
@@ -421,7 +421,7 @@ run_command() {
       echo ""
       bash scripts/check.sh || exit 1
       bash scripts/check-dashboard.sh || exit 1
-      bash scripts/check-plugin.sh --check-skills || exit 1
+      bash scripts/check-plugin.sh || exit 1
       bash scripts/test.sh all || exit 1
       exec env E2E_LOGS="${E2E_LOGS:-hide}" go run ./tests/tools/runner e2e --suite extended
       ;;
@@ -439,7 +439,7 @@ run_command() {
       echo ""
       bash scripts/check.sh || exit 1
       bash scripts/check-dashboard.sh || exit 1
-      bash scripts/check-plugin.sh --check-skills || exit 1
+      bash scripts/check-plugin.sh || exit 1
       bash scripts/check-npm.sh || exit 1
       bash scripts/test.sh all || exit 1
       run_e2e_matrix "E2E-browsers summary" \
