@@ -34,7 +34,8 @@ func Reload(conn apiclient.Conn, cmd *cobra.Command) {
 // historyNav is the one body behind back, forward and reload. The server answers
 // all three from a single handler returning {"tabId","url"}, so the CLI reports
 // the landed URL the same way for each rather than keeping three copies that
-// drift — reload used to discard the response and print a bare OK.
+// drift — reload used to discard the response and print a bare OK. Back and
+// forward also carry "navigated"; false means the tab was at the edge of history.
 func historyNav(conn apiclient.Conn, action string, cmd *cobra.Command) {
 	tabID, _ := cmd.Flags().GetString("tab")
 	path := apiclient.TabPath(tabID, action)
@@ -47,7 +48,9 @@ func historyNav(conn apiclient.Conn, action string, cmd *cobra.Command) {
 	}
 
 	result := conn.PostQuiet(path, nil)
-	if landed := landedURL(result); landed != "" {
+	if navigated, reported := result["navigated"].(bool); reported && !navigated {
+		output.Value("OK no history")
+	} else if landed := landedURL(result); landed != "" {
 		output.Value(landed)
 	} else {
 		output.Success()

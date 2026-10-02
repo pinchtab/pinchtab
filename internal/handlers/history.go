@@ -25,9 +25,10 @@ func (h *Handlers) HandleTabReload(w http.ResponseWriter, r *http.Request) {
 // handleHistoryNav runs the shared back/forward/reload flow: browser + tab
 // resolution, then navigate (which performs the per-op settle), then the
 // current-URL JSON response. navigate receives the resolved tab ctx/id and the
-// dismissBanners flag and returns an error mapped to 500.
+// dismissBanners flag and returns an error mapped to 500. A nil navigated means
+// the op has no moved-or-not signal and the response omits the field.
 func (h *Handlers) handleHistoryNav(w http.ResponseWriter, r *http.Request,
-	navigate func(ctx context.Context, resolvedID string, dismissBanners bool) error) {
+	navigate func(ctx context.Context, resolvedID string, dismissBanners bool) (navigated *bool, err error)) {
 	if !h.ensureBrowserOrRespond(w, h.Config) {
 		return
 	}
@@ -37,49 +38,54 @@ func (h *Handlers) handleHistoryNav(w http.ResponseWriter, r *http.Request,
 	if !ok {
 		return
 	}
-	if err := navigate(ctx, resolvedID, dismissBanners); err != nil {
+	navigated, err := navigate(ctx, resolvedID, dismissBanners)
+	if err != nil {
 		httpx.Error(w, 500, err)
 		return
 	}
 	curURL, _ := h.Bridge.CurrentURL(ctx)
-	httpx.JSON(w, 200, map[string]any{"tabId": resolvedID, "url": curURL})
+	resp := map[string]any{"tabId": resolvedID, "url": curURL}
+	if navigated != nil {
+		resp["navigated"] = *navigated
+	}
+	httpx.JSON(w, 200, resp)
 }
 
 // historyMove is the back/forward settle: move, then on a real navigation wait
 // for the document readyState to leave "loading" (bfcache restores return
 // immediately) before running banner dismissal (gated internally by the flag).
 func (h *Handlers) historyMove(ctx context.Context, resolvedID string, dismissBanners bool,
-	move func(context.Context) (bool, error)) error {
+	move func(context.Context) (bool, error)) (*bool, error) {
 	didNavigate, err := move(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if didNavigate {
 		h.waitForReadyState(ctx)
 		h.dismissBanners(ctx, resolvedID, dismissBanners)
 	}
-	return nil
+	return &didNavigate, nil
 }
 
 // HandleBack navigates the current (or specified) tab back in history.
 func (h *Handlers) HandleBack(w http.ResponseWriter, r *http.Request) {
-	h.handleHistoryNav(w, r, func(ctx context.Context, resolvedID string, dismissBanners bool) error {
+	h.handleHistoryNav(w, r, func(ctx context.Context, resolvedID string, dismissBanners bool) (*bool, error) {
 		return h.historyMove(ctx, resolvedID, dismissBanners, h.Bridge.GoBack)
 	})
 }
 
 // HandleForward navigates the current (or specified) tab forward in history.
 func (h *Handlers) HandleForward(w http.ResponseWriter, r *http.Request) {
-	h.handleHistoryNav(w, r, func(ctx context.Context, resolvedID string, dismissBanners bool) error {
+	h.handleHistoryNav(w, r, func(ctx context.Context, resolvedID string, dismissBanners bool) (*bool, error) {
 		return h.historyMove(ctx, resolvedID, dismissBanners, h.Bridge.GoForward)
 	})
 }
 
 // HandleReload reloads the current (or specified) tab.
 func (h *Handlers) HandleReload(w http.ResponseWriter, r *http.Request) {
-	h.handleHistoryNav(w, r, func(ctx context.Context, resolvedID string, dismissBanners bool) error {
+	h.handleHistoryNav(w, r, func(ctx context.Context, resolvedID string, dismissBanners bool) (*bool, error) {
 		if err := h.Bridge.Reload(ctx); err != nil {
-			return err
+			return nil, err
 		}
 		// page.Reload() returns when the nav kicks off, not when the document
 		// commits — wait for the new DOM's readyState to leave "loading" before
@@ -91,7 +97,7 @@ func (h *Handlers) HandleReload(w http.ResponseWriter, r *http.Request) {
 			h.waitForReadyState(ctx)
 			h.dismissBanners(ctx, resolvedID, true)
 		}
-		return nil
+		return nil, nil
 	})
 }
 

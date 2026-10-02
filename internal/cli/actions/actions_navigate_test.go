@@ -482,6 +482,33 @@ func TestHistoryNavigationPrintsTheLandedURLThroughAPipe(t *testing.T) {
 	}
 }
 
+func TestBackAndForwardSayNoHistoryWhenNothingMoved(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		run      func(apiclient.Conn, *cobra.Command)
+		response string
+		want     string
+	}{
+		{name: "back at the edge", run: Back, response: `{"tabId":"ABC123","url":"https://example.com/same","navigated":false}`, want: "OK no history"},
+		{name: "forward at the edge", run: Forward, response: `{"tabId":"ABC123","url":"https://example.com/same","navigated":false}`, want: "OK no history"},
+		{name: "back moved", run: Back, response: `{"tabId":"ABC123","url":"https://example.com/landed","navigated":true}`, want: "https://example.com/landed"},
+		{name: "forward moved", run: Forward, response: `{"tabId":"ABC123","url":"https://example.com/landed","navigated":true}`, want: "https://example.com/landed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMockServer()
+			m.response = tc.response
+			defer m.close()
+
+			out := captureStdout(t, func() {
+				tc.run(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, newHistoryCmd())
+			})
+			if got := strings.TrimSpace(out); got != tc.want {
+				t.Errorf("stdout = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // A response without a url must stay terse rather than print a blank line: OK
 // for the history commands, the bare tab ID for nav.
 func TestLandingReportDegradesWithoutAURL(t *testing.T) {
