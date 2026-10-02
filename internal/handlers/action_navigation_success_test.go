@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -176,5 +178,81 @@ func TestEveryFormOfANavigatingClickCarriesTheOutcomeOverTheWire(t *testing.T) {
 				t.Errorf("result does not say the caller's refs are dead: %v — this is the form whose next action depends on the new page", resp.Result)
 			}
 		})
+	}
+}
+
+type waitNavResult struct {
+	Navigated *bool            `json:"navigated"`
+	URL       string           `json:"url"`
+	PostState *submitPostState `json:"postState"`
+}
+
+func postWaitNavClick(t *testing.T, b *submitActionBridge) waitNavResult {
+	t.Helper()
+	h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+	w := postSubmitRequest(t, h, `{"kind":"click","tabId":"tab1","nodeId":42,"waitNav":true}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Result waitNavResult `json:"result"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	return resp.Result
+}
+
+func TestWaitNavClickOnABlockedSubmitReportsValidationBlocked(t *testing.T) {
+	b := newSubmitActionBridge(t.Context())
+	b.invalidFields = []submitInvalidField{{Name: "name", Label: "Name", Message: "Please fill out this field."}}
+
+	got := postWaitNavClick(t, b)
+
+	if got.Navigated == nil || *got.Navigated {
+		t.Fatalf("navigated = %v, want false", got.Navigated)
+	}
+	if got.PostState == nil || got.PostState.Status != "blocked" || got.PostState.Signal != "validation_blocked" {
+		t.Fatalf("postState = %+v, want blocked validation_blocked", got.PostState)
+	}
+	if len(got.PostState.InvalidFields) != 1 || got.PostState.InvalidFields[0] != b.invalidFields[0] {
+		t.Fatalf("invalid fields = %+v, want %+v", got.PostState.InvalidFields, b.invalidFields)
+	}
+	if !slices.Equal(b.armedNodeIDs, []int64{42}) || b.actionCallsAtArm != 0 {
+		t.Fatalf("armed node IDs = %v after %d dispatches, want node 42 armed before the dispatch", b.armedNodeIDs, b.actionCallsAtArm)
+	}
+	if !slices.Equal(b.disarmedNodeIDs, []int64{42}) {
+		t.Fatalf("disarmed node IDs = %v, want the armed node 42", b.disarmedNodeIDs)
+	}
+}
+
+func TestWaitNavClickOnANavigatingSubmitReportsTheLandingWithoutProbing(t *testing.T) {
+	b := newSubmitActionBridge(t.Context())
+	b.invalidFields = []submitInvalidField{{Name: "name", Message: "Please fill out this field."}}
+	b.executeActionFn = func(context.Context, string, bridge.ActionRequest) (map[string]any, error) {
+		return navigatedActionResult(), nil
+	}
+
+	got := postWaitNavClick(t, b)
+
+	if got.Navigated == nil || !*got.Navigated || got.URL == "" {
+		t.Fatalf("result = %+v, want navigated with a landed URL", got)
+	}
+	if got.PostState != nil {
+		t.Fatalf("postState = %+v, want none on a navigating click", got.PostState)
+	}
+	if len(b.probedNodeIDs) != 0 {
+		t.Fatalf("probed node IDs = %v, want no validation probe after a navigation", b.probedNodeIDs)
+	}
+}
+
+func TestWaitNavClickThatStaysWithoutInvalidFieldsSaysItDidNotNavigate(t *testing.T) {
+	got := postWaitNavClick(t, newSubmitActionBridge(t.Context()))
+
+	if got.Navigated == nil || *got.Navigated {
+		t.Fatalf("navigated = %v, want false", got.Navigated)
+	}
+	if got.PostState != nil {
+		t.Fatalf("postState = %+v, want none when nothing blocked the click", got.PostState)
 	}
 }

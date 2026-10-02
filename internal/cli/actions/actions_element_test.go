@@ -113,6 +113,18 @@ func TestPrintActionResultSubmitValidationBlockedListsInvalidFields(t *testing.T
 	}
 }
 
+func TestPrintActionResultWaitNavWithoutNavigationSaysSo(t *testing.T) {
+	got := captureStdout(t, func() {
+		printActionResult("click", map[string]any{
+			"success": true,
+			"result":  map[string]any{"clicked": true, "navigated": false},
+		})
+	})
+	if got != "OK no navigation\n" {
+		t.Fatalf("no-navigation output = %q, want %q", got, "OK no navigation\n")
+	}
+}
+
 func TestPrintActionResultSubmitSuccessNamesObservedSignal(t *testing.T) {
 	got := captureStdout(t, func() {
 		printActionResult("click", map[string]any{

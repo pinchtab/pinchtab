@@ -134,8 +134,8 @@ type submitPostState struct {
 	LiveRegionBlockReason string               `json:"liveRegionBlockReason,omitempty"`
 	LiveRegionWarning     string               `json:"liveRegionWarning,omitempty"`
 	InvalidFields         []submitInvalidField `json:"invalidFields,omitempty"`
-	Before                submitStateSnapshot  `json:"before"`
-	After                 submitStateSnapshot  `json:"after"`
+	Before                submitStateSnapshot  `json:"before,omitzero"`
+	After                 submitStateSnapshot  `json:"after,omitzero"`
 }
 
 func (h *Handlers) guardLiveRegionText(post *submitPostState) {
@@ -237,6 +237,38 @@ func (h *Handlers) readInvalidSubmitFields(ctx context.Context, nodeID int64) []
 	return fields
 }
 
+func (h *Handlers) probeValidationBlocked(ctx context.Context, nodeID int64, dispatch string, actionTimedOut bool, started time.Time) (submitPostState, bool) {
+	invalid := h.readInvalidSubmitFields(ctx, nodeID)
+	if len(invalid) == 0 {
+		return submitPostState{}, false
+	}
+	return submitPostState{
+		Status:         "blocked",
+		Signal:         "validation_blocked",
+		Dispatch:       dispatch,
+		ActionTimedOut: actionTimedOut,
+		ElapsedMS:      time.Since(started).Milliseconds(),
+		InvalidFields:  invalid,
+	}, true
+}
+
+func (h *Handlers) settleWaitNavOutcome(ctx context.Context, nodeID int64, result map[string]any) map[string]any {
+	if result == nil {
+		result = make(map[string]any)
+	}
+	if result[bridge.ResultNavigated] == true {
+		return result
+	}
+	result[bridge.ResultNavigated] = false
+	if nodeID <= 0 {
+		return result
+	}
+	if blocked, ok := h.probeValidationBlocked(ctx, nodeID, "acknowledged", false, time.Now()); ok {
+		result["postState"] = blocked
+	}
+	return result
+}
+
 // pollSubmitPostState observes only conservative terminal signals. The caller
 // supplies a fresh bounded child of the live tab context, never the action
 // context that may already have reached its deadline.
@@ -268,17 +300,9 @@ func (h *Handlers) pollSubmitPostState(ctx context.Context, tabID string, nodeID
 				h.guardLiveRegionText(&post)
 				return post, nil
 			}
-			if invalid := h.readInvalidSubmitFields(ctx, nodeID); len(invalid) > 0 {
-				return submitPostState{
-					Status:         "blocked",
-					Signal:         "validation_blocked",
-					Dispatch:       dispatch,
-					ActionTimedOut: actionTimedOut,
-					ElapsedMS:      time.Since(started).Milliseconds(),
-					InvalidFields:  invalid,
-					Before:         before,
-					After:          after,
-				}, nil
+			if blocked, ok := h.probeValidationBlocked(ctx, nodeID, dispatch, actionTimedOut, started); ok {
+				blocked.Before, blocked.After = before, after
+				return blocked, nil
 			}
 		} else {
 			lastReadErr = err

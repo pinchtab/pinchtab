@@ -218,6 +218,10 @@ func printActionResult(kind string, result map[string]any) {
 			printStaleRefsHint()
 			return
 		}
+		if actionResult["navigated"] == false {
+			output.Value("OK no navigation")
+			return
+		}
 	}
 
 	output.Success()

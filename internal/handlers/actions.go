@@ -583,6 +583,8 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+	}
+	if watchesFormValidation(req, submitClick) {
 		h.armSubmitInvalidWatch(tCtx, req.NodeID)
 		defer h.disarmSubmitInvalidWatch(ctx, req.NodeID)
 	}
@@ -599,7 +601,14 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		h.writeActionError(w, actionErr, req, resolvedTabID, recoveryResult, submitClick)
 		return
 	}
+	if req.WaitNav && req.Kind == bridge.ActionClick {
+		result = h.settleWaitNavOutcome(tCtx, req.NodeID, result)
+	}
 	h.writeActionSuccess(w, r, tCtx, req, routing, resolvedTabID, result, actionBackend, recoveryResult)
+}
+
+func watchesFormValidation(req bridge.ActionRequest, submitClick bool) bool {
+	return submitClick || (req.WaitNav && req.Kind == bridge.ActionClick && req.NodeID > 0)
 }
 
 func validateActionRequestFields(w http.ResponseWriter, req bridge.ActionRequest) bool {

@@ -63,6 +63,13 @@ and carries the landing alongside it.
 navigation to settle before returning, which is what you want when the next action
 depends on the new page having loaded.
 
+When a `--wait-nav` click ends without a navigation, it says so: the CLI prints
+`OK no navigation` and the JSON result carries `navigated: false`. When the clicked
+control's form was refused by browser validation (an empty `required` field, say), the
+result carries the same `postState` a `--submit` click reports — `status: "blocked"`,
+`signal: "validation_blocked"`, and the `invalidFields` — and the CLI prints
+`BLOCKED validation_blocked` followed by one `name (Label): message` line per field.
+
 ## CLI Flags
 
 | Flag | Description |
