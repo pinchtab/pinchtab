@@ -117,9 +117,9 @@ func marshalSnapshotFile(q snapshotQuery, res snapshotResult, prevNodes []bridge
 		snapshotDiffFields(data, prevNodes, res)
 	}
 	if q.format == "yaml" {
-		content, err := yaml.Marshal(data)
+		content, err := marshalYAMLInJSONShape(data)
 		if err != nil {
-			return "", nil, fmt.Errorf("marshal yaml: %w", err)
+			return "", nil, err
 		}
 		return ".yaml", content, nil
 	}
@@ -146,26 +146,40 @@ func (h *Handlers) writeSnapshotDiff(w http.ResponseWriter, q snapshotQuery, res
 	switch q.format {
 	case "compact", "text":
 		h.writeSnapshotPlainDiff(w, q, res, prevNodes, wrap)
-	case "yaml":
-		data := res.attachRootFrame(res.scope.attach(map[string]any{
-			"url":   res.url,
-			"title": res.title,
-		}))
-		writeSnapshotYAML(w, snapshotDiffFields(data, prevNodes, res), q.controls.Ignored)
 	default:
-		data := res.attachRootFrame(res.scope.attach(map[string]any{
+		data := snapshotDiffFields(res.attachRootFrame(res.scope.attach(map[string]any{
 			"url":   res.url,
 			"title": res.title,
 			"route": res.route,
-		}))
-		httpx.JSON(w, 200, attachIgnoredParams(snapshotDiffFields(data, prevNodes, res), q.controls.Ignored))
+		})), prevNodes, res)
+		if q.format == "yaml" {
+			writeSnapshotYAML(w, data, q.controls.Ignored)
+			return
+		}
+		httpx.JSON(w, 200, attachIgnoredParams(data, q.controls.Ignored))
 	}
 }
 
-func writeSnapshotYAML(w http.ResponseWriter, data map[string]any, ignored []string) {
-	content, err := yaml.Marshal(attachIgnoredParams(data, ignored))
+func marshalYAMLInJSONShape(data any) ([]byte, error) {
+	asJSON, err := json.Marshal(data)
 	if err != nil {
-		httpx.Error(w, 500, fmt.Errorf("marshal yaml: %w", err))
+		return nil, fmt.Errorf("marshal yaml: %w", err)
+	}
+	var jsonShaped any
+	if err := yaml.Unmarshal(asJSON, &jsonShaped); err != nil {
+		return nil, fmt.Errorf("marshal yaml: %w", err)
+	}
+	content, err := yaml.Marshal(jsonShaped)
+	if err != nil {
+		return nil, fmt.Errorf("marshal yaml: %w", err)
+	}
+	return content, nil
+}
+
+func writeSnapshotYAML(w http.ResponseWriter, data map[string]any, ignored []string) {
+	content, err := marshalYAMLInJSONShape(attachIgnoredParams(data, ignored))
+	if err != nil {
+		httpx.Error(w, 500, err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
@@ -181,17 +195,6 @@ func (h *Handlers) writeSnapshot(w http.ResponseWriter, q snapshotQuery, res sna
 	case "text":
 		h.writeSnapshotPlain(w, q, res, snapshotTextHeader(res.title, res.url, len(res.flat), res.scope), res.hint,
 			bridge.FormatSnapshotText(res.flat), idpiResult.WrapContent)
-	case "yaml":
-		data := res.attachRootFrame(res.scope.attach(map[string]any{
-			"url":   res.url,
-			"title": res.title,
-			"nodes": res.wireNodes(res.flat),
-			"count": len(res.flat),
-		}))
-		if res.hint != "" {
-			data["hint"] = res.hint
-		}
-		writeSnapshotYAML(w, data, q.controls.Ignored)
 	default:
 		resp := res.attachRootFrame(res.scope.attach(map[string]any{
 			"url":             res.url,
@@ -208,7 +211,6 @@ func (h *Handlers) writeSnapshot(w http.ResponseWriter, q snapshotQuery, res sna
 		if res.hint != "" {
 			resp["hint"] = res.hint
 		}
-		attachIgnoredParams(resp, q.controls.Ignored)
 		if idpiResult.Threat {
 			resp["idpiWarning"] = idpiResult.Reason
 		}
@@ -216,6 +218,10 @@ func (h *Handlers) writeSnapshot(w http.ResponseWriter, q snapshotQuery, res sna
 			resp["untrustedContent"] = true
 			resp["idpiNotice"] = idpiNoticeText
 		}
-		httpx.JSON(w, 200, resp)
+		if q.format == "yaml" {
+			writeSnapshotYAML(w, resp, q.controls.Ignored)
+			return
+		}
+		httpx.JSON(w, 200, attachIgnoredParams(resp, q.controls.Ignored))
 	}
 }

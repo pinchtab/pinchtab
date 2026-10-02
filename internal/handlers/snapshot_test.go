@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -223,8 +224,90 @@ func TestSnapshotDiffHonoursEveryFormat(t *testing.T) {
 		t.Fatalf("yaml diff does not parse: %v\n%s", err, yamlBody)
 	}
 	for key := range jsonDiff {
-		if _, ok := yamlDiff[key]; !ok && key != "route" {
+		if _, ok := yamlDiff[key]; !ok {
 			t.Errorf("yaml diff lacks the json diff key %q", key)
+		}
+	}
+}
+
+func keysMissingFrom(have, want map[string]any) []string {
+	var missing []string
+	for key := range want {
+		if _, ok := have[key]; !ok {
+			missing = append(missing, key)
+		}
+	}
+	slices.Sort(missing)
+	return missing
+}
+
+func assertSameKeys(t *testing.T, what string, yamlKeys, jsonKeys map[string]any) {
+	t.Helper()
+	if missing := keysMissingFrom(yamlKeys, jsonKeys); len(missing) > 0 {
+		t.Errorf("%s: yaml lacks the json keys %v", what, missing)
+	}
+	if extra := keysMissingFrom(jsonKeys, yamlKeys); len(extra) > 0 {
+		t.Errorf("%s: yaml has keys json does not spell that way: %v", what, extra)
+	}
+}
+
+func firstNode(t *testing.T, what string, snapshot map[string]any, listKey string) map[string]any {
+	t.Helper()
+	nodes, _ := snapshot[listKey].([]any)
+	if len(nodes) == 0 {
+		t.Fatalf("%s has no %s to compare", what, listKey)
+	}
+	node, ok := nodes[0].(map[string]any)
+	if !ok {
+		t.Fatalf("%s: %s[0] is %T, want a mapping", what, listKey, nodes[0])
+	}
+	return node
+}
+
+func TestYAMLSnapshotSpellsEveryKeyAsJSONDoes(t *testing.T) {
+	h, tabID, _ := newFrameDisclosureFixture(t)
+
+	var file struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal([]byte(snapshotQueryBody(t, h, "tabId="+tabID+"&output=file&format=yaml")), &file); err != nil {
+		t.Fatal(err)
+	}
+	savedYAML, err := os.ReadFile(file.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	snapshotQueryBody(t, h, "tabId="+tabID+"&filter=interactive")
+	jsonDiffBody := snapshotQueryBody(t, h, "tabId="+tabID+"&diff=true")
+	snapshotQueryBody(t, h, "tabId="+tabID+"&filter=interactive")
+	yamlDiffBody := snapshotQueryBody(t, h, "tabId="+tabID+"&diff=true&format=yaml")
+
+	for _, emitter := range []struct {
+		name, yamlBody, jsonBody, listKey string
+		topLevelDiffers                   bool
+	}{
+		{name: "snapshot", yamlBody: snapshotBody(t, h, tabID, "yaml"), jsonBody: snapshotBody(t, h, tabID, "json"), listKey: "nodes"},
+		{name: "diff", yamlBody: yamlDiffBody, jsonBody: jsonDiffBody, listKey: "added"},
+		{name: "file", yamlBody: string(savedYAML), jsonBody: snapshotBody(t, h, tabID, "json"), listKey: "nodes", topLevelDiffers: true},
+	} {
+		var asYAML, asJSON map[string]any
+		if err := yaml.Unmarshal([]byte(emitter.yamlBody), &asYAML); err != nil {
+			t.Fatalf("yaml %s does not parse: %v\n%s", emitter.name, err, emitter.yamlBody)
+		}
+		if err := json.Unmarshal([]byte(emitter.jsonBody), &asJSON); err != nil {
+			t.Fatalf("json %s does not parse: %v", emitter.name, err)
+		}
+		if !emitter.topLevelDiffers {
+			assertSameKeys(t, emitter.name+" top level", asYAML, asJSON)
+		}
+		yamlNode := firstNode(t, "yaml "+emitter.name, asYAML, emitter.listKey)
+		assertSameKeys(t, emitter.name+" node", yamlNode, firstNode(t, "json "+emitter.name, asJSON, emitter.listKey))
+		if _, ok := yamlNode["nodeId"]; !ok {
+			t.Errorf("yaml %s node lacks nodeId: %v", emitter.name, yamlNode)
+		}
+		if _, ok := yamlNode["nodeid"]; ok {
+			t.Errorf("yaml %s node spells nodeId as nodeid, the yaml.v3 default for an untagged field", emitter.name)
 		}
 	}
 }
