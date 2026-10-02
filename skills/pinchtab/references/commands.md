@@ -174,7 +174,7 @@ pinchtab snap                   # compact interactive snapshot (default)
 pinchtab snap "#main"           # scoped positional selector
 pinchtab snap -s main           # scoped with --selector
 pinchtab snap --full            # full JSON tree
-pinchtab snap -d                # diff: only changes since last snap (prefer --snap-diff on actions)
+pinchtab snap -d                # diff vs last snapshot. Compact lists all nodes, marking [+] added, [~] changed and removed refs; other formats return only changes (prefer --snap-diff on actions)
 pinchtab snap --max-tokens 2000 # token budget cap
 ```
 

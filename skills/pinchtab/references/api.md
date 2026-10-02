@@ -57,7 +57,7 @@ curl "/snapshot?filter=interactive"
 # Limit depth
 curl "/snapshot?depth=5"
 
-# Smart diff — only changes since last snapshot (massive token savings)
+# Diff vs last snapshot. Compact lists all nodes, marking [+] added, [~] changed and removed refs; other formats return only changes
 curl "/snapshot?diff=true"
 
 # Text format — indented tree, ~40-60% fewer tokens than JSON

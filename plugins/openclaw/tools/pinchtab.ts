@@ -26,7 +26,7 @@ export const pinchtabToolSchema = {
     format: { type: "string", enum: ["json", "compact", "text", "yaml"], description: "Snapshot format" },
     maxTokens: { type: "number", description: "Truncate snapshot to ~N tokens" },
     depth: { type: "number", description: "Max snapshot tree depth" },
-    diff: { type: "boolean", description: "Snapshot diff: only changes since last" },
+    diff: { type: "boolean", description: "Diff vs last snapshot. Compact lists all nodes, marking [+] added, [~] changed and removed refs; other formats return only changes" },
     value: { type: "string", description: "Value for select dropdown" },
     scrollY: { type: "number", description: "Pixels to scroll vertically" },
     x: { type: "number", description: "Mouse X coordinate" },
