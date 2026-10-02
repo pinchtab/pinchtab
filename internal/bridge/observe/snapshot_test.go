@@ -122,7 +122,7 @@ func usersTableAXNodes() []RawAXNode {
 		rawAXNode("col-name-text", "StaticText", "Name"),
 		rawAXNode("col-actions", "columnheader", "Actions", "col-actions-text"),
 		rawAXNode("col-actions-text", "StaticText", "Actions"),
-		rawAXNode("row", "row", "", "select-cell", "name-cell", "owner-cell", "actions-cell", "empty-cell"),
+		rawAXNode("row", "row", "", "select-cell", "name-cell", "owner-cell", "actions-cell", "empty-cell", "hidden-control-cell"),
 		rawAXNode("select-cell", "cell", "Select Ann", "select-box"),
 		rawAXNode("select-box", "checkbox", "Select Ann"),
 		rawAXNode("name-cell", "cell", "Cy Young", "name-link"),
@@ -138,7 +138,14 @@ func usersTableAXNodes() []RawAXNode {
 		rawAXNode("delete", "button", "Delete", "delete-text"),
 		rawAXNode("delete-text", "StaticText", "Delete"),
 		rawAXNode("empty-cell", "cell", ""),
+		rawAXNode("hidden-control-cell", "cell", "", "archive"),
+		hiddenAXNode(rawAXNode("archive", "button", "Archive")),
 	}
+}
+
+func hiddenAXNode(n RawAXNode) RawAXNode {
+	n.Properties = append(n.Properties, RawAXProp{Name: "hidden", Value: &RawAXValue{Value: json.RawMessage("true")}})
+	return n
 }
 
 func roleNameLines(nodes []A11yNode) []string {
@@ -162,6 +169,8 @@ func TestInteractiveSnapshotDropsTableCellsNamedOnlyByTheirControls(t *testing.T
 		`link "Edit"`,
 		`button "Delete"`,
 		`cell ""`,
+		`cell ""`,
+		`button "Archive"`,
 	}
 	if got := roleNameLines(nodes); !slices.Equal(got, want) {
 		t.Fatalf("interactive snapshot = %q, want %q", got, want)
