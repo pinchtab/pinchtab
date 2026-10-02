@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
@@ -13,17 +14,37 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func snapshotDiffFields(data map[string]any, prev, flat []bridge.A11yNode) map[string]any {
-	added, changed, removed := bridge.DiffSnapshot(prev, flat)
+func (res snapshotResult) wireNodes(nodes []bridge.A11yNode) []bridge.A11yNode {
+	if res.rootFrameID == "" {
+		return nodes
+	}
+	wire := slices.Clone(nodes)
+	for i := range wire {
+		if wire[i].FrameID == res.rootFrameID {
+			wire[i].FrameID, wire[i].FrameURL, wire[i].FrameName = "", "", ""
+		}
+	}
+	return wire
+}
+
+func (res snapshotResult) attachRootFrame(payload map[string]any) map[string]any {
+	if res.rootFrameID != "" {
+		payload["frameId"] = res.rootFrameID
+	}
+	return payload
+}
+
+func snapshotDiffFields(data map[string]any, prev []bridge.A11yNode, res snapshotResult) map[string]any {
+	added, changed, removed := bridge.DiffSnapshot(prev, res.flat)
 	data["diff"] = true
-	data["added"] = added
-	data["changed"] = changed
-	data["removed"] = removed
+	data["added"] = res.wireNodes(added)
+	data["changed"] = res.wireNodes(changed)
+	data["removed"] = res.wireNodes(removed)
 	data["counts"] = map[string]int{
 		"added":   len(added),
 		"changed": len(changed),
 		"removed": len(removed),
-		"total":   len(flat),
+		"total":   len(res.flat),
 	}
 	return data
 }
@@ -85,15 +106,15 @@ func marshalSnapshotFile(q snapshotQuery, res snapshotResult, prevNodes []bridge
 		return ".txt", []byte(content), nil
 	}
 
-	data := res.scope.attach(map[string]any{
+	data := res.attachRootFrame(res.scope.attach(map[string]any{
 		"url":       res.url,
 		"title":     res.title,
 		"timestamp": now,
-		"nodes":     res.flat,
+		"nodes":     res.wireNodes(res.flat),
 		"count":     len(res.flat),
-	})
+	}))
 	if q.doDiff && prevNodes != nil {
-		snapshotDiffFields(data, prevNodes, res.flat)
+		snapshotDiffFields(data, prevNodes, res)
 	}
 	if q.format == "yaml" {
 		content, err := yaml.Marshal(data)
@@ -118,12 +139,12 @@ func (h *Handlers) writeSnapshotDiff(w http.ResponseWriter, q snapshotQuery, res
 		return
 	}
 
-	data := res.scope.attach(map[string]any{
+	data := res.attachRootFrame(res.scope.attach(map[string]any{
 		"url":   res.url,
 		"title": res.title,
 		"route": res.route,
-	})
-	httpx.JSON(w, 200, attachIgnoredParams(snapshotDiffFields(data, prevNodes, res.flat), q.controls.Ignored))
+	}))
+	httpx.JSON(w, 200, attachIgnoredParams(snapshotDiffFields(data, prevNodes, res), q.controls.Ignored))
 }
 
 func (h *Handlers) writeSnapshot(w http.ResponseWriter, q snapshotQuery, res snapshotResult, vocabularyToken string, idpiResult snapshotIDPIResult) {
@@ -135,12 +156,12 @@ func (h *Handlers) writeSnapshot(w http.ResponseWriter, q snapshotQuery, res sna
 		h.writeSnapshotPlain(w, q, res, snapshotTextHeader(res.title, res.url, len(res.flat), res.scope), res.hint,
 			bridge.FormatSnapshotText(res.flat), idpiResult.WrapContent)
 	case "yaml":
-		data := res.scope.attach(map[string]any{
+		data := res.attachRootFrame(res.scope.attach(map[string]any{
 			"url":   res.url,
 			"title": res.title,
-			"nodes": res.flat,
+			"nodes": res.wireNodes(res.flat),
 			"count": len(res.flat),
-		})
+		}))
 		if res.hint != "" {
 			data["hint"] = res.hint
 		}
@@ -154,14 +175,14 @@ func (h *Handlers) writeSnapshot(w http.ResponseWriter, q snapshotQuery, res sna
 		w.WriteHeader(200)
 		_, _ = w.Write(content)
 	default:
-		resp := res.scope.attach(map[string]any{
+		resp := res.attachRootFrame(res.scope.attach(map[string]any{
 			"url":             res.url,
 			"title":           res.title,
 			"route":           res.route,
-			"nodes":           res.flat,
+			"nodes":           res.wireNodes(res.flat),
 			"count":           len(res.flat),
 			"vocabularyToken": vocabularyToken,
-		})
+		}))
 		if res.truncated {
 			resp["truncated"] = true
 			resp["maxTokens"] = q.controls.MaxTokens

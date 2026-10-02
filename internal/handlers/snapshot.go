@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -157,6 +159,10 @@ func snapshotFormatCarriesMetadata(format string) bool {
 	return format == "json" || format == "yaml"
 }
 
+func snapshotEmitsWireNodes(q snapshotQuery) bool {
+	return snapshotFormatCarriesMetadata(q.format) || (q.output == "file" && q.format != "text")
+}
+
 type snapshotQuery struct {
 	controls     SnapshotCostControls
 	tabID        string
@@ -170,6 +176,7 @@ type snapshotQuery struct {
 
 type snapshotResult struct {
 	flat        []bridge.A11yNode
+	rootFrameID string
 	url         string
 	title       string
 	scopeNodeID int64
@@ -278,6 +285,9 @@ func (h *Handlers) collectSnapshot(w http.ResponseWriter, tCtx context.Context, 
 		if result.Route != nil {
 			res.route = result.Route
 		}
+		if snapshotEmitsWireNodes(q) {
+			res.rootFrameID = snapshotRootFrameID(tCtx, res.flat)
+		}
 		return res, true
 	}
 
@@ -300,9 +310,24 @@ func (h *Handlers) collectSnapshot(w http.ResponseWriter, tCtx context.Context, 
 	if wireCarriesMetadata {
 		_ = bridge.EnrichA11yNodesWithDOMMetadata(tCtx, res.flat)
 	}
+	if snapshotEmitsWireNodes(q) {
+		res.rootFrameID = snapshotRootFrameID(tCtx, res.flat)
+	}
 	res.url, _ = h.Bridge.CurrentURL(tCtx)
 	res.title, _ = h.Bridge.CurrentTitle(tCtx)
 	return res, true
+}
+
+func snapshotRootFrameID(ctx context.Context, flat []bridge.A11yNode) string {
+	frameTagged := slices.ContainsFunc(flat, func(n bridge.A11yNode) bool { return n.FrameID != "" })
+	if !frameTagged {
+		return ""
+	}
+	tree, err := observe.FetchFrameTree(ctx)
+	if err != nil {
+		return ""
+	}
+	return tree.Frame.ID
 }
 
 func (h *Handlers) scopedEmptyHint(tCtx context.Context, flat []bridge.A11yNode, selector string, scopeNodeID int64) string {

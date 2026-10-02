@@ -374,6 +374,32 @@ Snapshot query parameters:
 
 `selector` on `/snapshot` follows the same rule: it only searches the current frame scope. It does not automatically pierce into iframes, and cross-origin iframe descendants are not inlined.
 
+JSON and YAML snapshots (including `output=file` and `diff=true`) name the main frame once,
+as top-level `frameId`; top-level `url` is that frame's URL. A node carries `frameId`,
+`frameUrl` and `frameName` only when it sits inside an iframe, so a node without them belongs
+to the main frame:
+
+```json
+{
+  "url": "http://127.0.0.1:18798/",
+  "title": "Outer",
+  "frameId": "EB294ACE7B67DE69B1FF9235A8FEE977",
+  "count": 9,
+  "nodes": [
+    { "ref": "e1", "role": "heading", "name": "OuterHeading", "depth": 1 },
+    { "ref": "e4", "role": "Iframe", "name": "", "depth": 1,
+      "childFrameId": "886601397BFA0B332880152438BD0153",
+      "childFrameUrl": "http://127.0.0.1:18798/inner.html" },
+    { "ref": "e6", "role": "heading", "name": "InnerHeading", "depth": 3,
+      "frameId": "886601397BFA0B332880152438BD0153",
+      "frameUrl": "http://127.0.0.1:18798/inner.html" }
+  ]
+}
+```
+
+Top-level `frameId` is always the main frame, never the scope; a scoped read still reports
+its frame under `frame` (below).
+
 Text query parameters:
 
 - `mode=raw` (`mode=full` is an alias), `mode=markdown` (any other value is a 400 naming the accepted ones)
