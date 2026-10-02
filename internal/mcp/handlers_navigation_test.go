@@ -1080,3 +1080,33 @@ func TestHandleNavigateNewTabOpensATab(t *testing.T) {
 		t.Fatalf("a plain navigate changed the tab count: %d -> %d", countAfterNewTab, reuse)
 	}
 }
+
+func TestHandleNavigateSnapStripsTheTrivialRouteButKeepsAnEscalation(t *testing.T) {
+	escalated := `{"requestedProvider":"cloak","usedProvider":"ghost-chrome","escalated":true,"reason":"challenge","attempts":[{"provider":"cloak","accepted":false},{"provider":"ghost-chrome","accepted":true}]}`
+	for name, tc := range map[string]struct{ route, want string }{
+		"trivial":   {trivialRoute, `{"tabId":"t1"}`},
+		"escalated": {escalated, `{"tabId":"t1","route":` + escalated + `}`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/navigate":
+					_, _ = w.Write([]byte(`{"tabId":"t1","route":` + tc.route + `}`))
+				case "/snapshot":
+					_, _ = w.Write([]byte(`{"snapshot":true}`))
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer srv.Close()
+
+			r := callTool(t, "pinchtab_navigate", map[string]any{"url": "https://example.com", "snap": true}, srv)
+			if r.IsError {
+				t.Fatalf("navigate returned error: %s", resultText(t, r))
+			}
+			if got, want := resultText(t, r), tc.want+"\n"+`{"snapshot":true}`; got != want {
+				t.Fatalf("reply:\n got %s\nwant %s", got, want)
+			}
+		})
+	}
+}
