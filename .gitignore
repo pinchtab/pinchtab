@@ -20,6 +20,7 @@
 *.test
 .DS_Store
 .gocache
+/.tmp/
 .gomodcache/
 .openclaw/
 .tools/

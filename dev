@@ -8,6 +8,9 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 source scripts/lib/term.sh
+source scripts/lib/gocache.sh
+
+use_repo_go_caches "$PWD"
 
 # ── Commands ─────────────────────────────────────────────────────────
 # name:emoji:description
@@ -540,6 +543,9 @@ pick_with_select() {
 
 # Direct command with optional subcommand
 if [ $# -gt 0 ]; then
+  case "$1" in
+    test|check|e2e|all|full|e2e-browsers|smoke-browsers) trim_repo_go_cache "$PWD" ;;
+  esac
   case "$1" in
     -h|--help|help) show_help; exit 0 ;;
     -i|--interactive)

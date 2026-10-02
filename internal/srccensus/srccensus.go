@@ -130,7 +130,7 @@ type SourceFile struct {
 // treeSkipDirs are excluded by NAME because they hold no module source: dependency and
 // build output trees. A nested checkout is caught by nestedCheckout instead, since its
 // directory name is arbitrary.
-var treeSkipDirs = map[string]bool{".git": true, "node_modules": true, "dist": true, "vendor": true}
+var treeSkipDirs = map[string]bool{".git": true, "node_modules": true, "dist": true, "vendor": true, ".gocache": true, ".tmp": true}
 
 // Tree enumerates every non-test .go file under root for a census whose rule is
 // module-wide rather than package-scoped, and it exists so the EXCLUSIONS are inherited
