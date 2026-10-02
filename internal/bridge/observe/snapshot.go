@@ -666,7 +666,36 @@ func (b *snapshotBuilder) filteredName(n RawAXNode) (name string, keep bool) {
 	if role == "spinbutton" && b.hasDateTimeHostAncestor(n.NodeID) {
 		return "", false
 	}
+	if tableCellRoles[role] && b.isNamedOnlyByControls(n.NodeID) {
+		return "", false
+	}
 	return n.Name.String(), InteractiveRoles[role] || ContextRoles[role]
+}
+
+var tableCellRoles = map[string]bool{"cell": true, "columnheader": true, "rowheader": true}
+
+func (b *snapshotBuilder) isNamedOnlyByControls(nodeID string) bool {
+	return b.hasVisibleInteractiveDescendant(nodeID) && b.descendantText(nodeID, isNonInteractive) == ""
+}
+
+func (b *snapshotBuilder) hasVisibleInteractiveDescendant(nodeID string) bool {
+	seen := map[string]bool{nodeID: true}
+	pending := []string{nodeID}
+	for len(pending) > 0 {
+		id := pending[len(pending)-1]
+		pending = pending[:len(pending)-1]
+		for _, childID := range b.childMap[id] {
+			if seen[childID] || b.hiddenNodes[childID] {
+				continue
+			}
+			seen[childID] = true
+			if InteractiveRoles[b.nodeByID[childID].Role.String()] {
+				return true
+			}
+			pending = append(pending, childID)
+		}
+	}
+	return false
 }
 
 func (b *snapshotBuilder) hasDateTimeHostAncestor(nodeID string) bool {

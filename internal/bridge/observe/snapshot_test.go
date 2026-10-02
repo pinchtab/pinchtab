@@ -114,6 +114,71 @@ func TestInteractiveSnapshotNamesLiveRegionsFromTheirText(t *testing.T) {
 	}
 }
 
+func usersTableAXNodes() []RawAXNode {
+	return []RawAXNode{
+		rawAXNode("table", "table", "Users", "header-row", "row"),
+		rawAXNode("header-row", "row", "", "col-name", "col-actions"),
+		rawAXNode("col-name", "columnheader", "Name", "col-name-text"),
+		rawAXNode("col-name-text", "StaticText", "Name"),
+		rawAXNode("col-actions", "columnheader", "Actions", "col-actions-text"),
+		rawAXNode("col-actions-text", "StaticText", "Actions"),
+		rawAXNode("row", "row", "", "select-cell", "name-cell", "owner-cell", "actions-cell", "empty-cell"),
+		rawAXNode("select-cell", "cell", "Select Ann", "select-box"),
+		rawAXNode("select-box", "checkbox", "Select Ann"),
+		rawAXNode("name-cell", "cell", "Cy Young", "name-link"),
+		rawAXNode("name-link", "link", "Cy Young", "name-link-text"),
+		rawAXNode("name-link-text", "StaticText", "Cy Young"),
+		rawAXNode("owner-cell", "cell", "Ann Edit", "owner-text", "owner-edit"),
+		rawAXNode("owner-text", "StaticText", "Ann"),
+		rawAXNode("owner-edit", "link", "Edit", "owner-edit-text"),
+		rawAXNode("owner-edit-text", "StaticText", "Edit"),
+		rawAXNode("actions-cell", "cell", "Edit Delete", "edit", "delete"),
+		rawAXNode("edit", "link", "Edit", "edit-text"),
+		rawAXNode("edit-text", "StaticText", "Edit"),
+		rawAXNode("delete", "button", "Delete", "delete-text"),
+		rawAXNode("delete-text", "StaticText", "Delete"),
+		rawAXNode("empty-cell", "cell", ""),
+	}
+}
+
+func roleNameLines(nodes []A11yNode) []string {
+	lines := make([]string, 0, len(nodes))
+	for _, n := range nodes {
+		lines = append(lines, n.Role+" "+strconv.Quote(n.Name))
+	}
+	return lines
+}
+
+func TestInteractiveSnapshotDropsTableCellsNamedOnlyByTheirControls(t *testing.T) {
+	nodes, _ := BuildSnapshot(usersTableAXNodes(), FilterInteractive, -1)
+
+	want := []string{
+		`columnheader "Name"`,
+		`columnheader "Actions"`,
+		`checkbox "Select Ann"`,
+		`link "Cy Young"`,
+		`cell "Ann Edit"`,
+		`link "Edit"`,
+		`link "Edit"`,
+		`button "Delete"`,
+		`cell ""`,
+	}
+	if got := roleNameLines(nodes); !slices.Equal(got, want) {
+		t.Fatalf("interactive snapshot = %q, want %q", got, want)
+	}
+}
+
+func TestFullSnapshotKeepsTableCellsNamedByTheirControls(t *testing.T) {
+	nodes, _ := BuildSnapshot(usersTableAXNodes(), "", -1)
+
+	got := roleNameLines(nodes)
+	for _, cell := range []string{`cell "Select Ann"`, `cell "Cy Young"`, `cell "Ann Edit"`, `cell "Edit Delete"`, `cell ""`} {
+		if !slices.Contains(got, cell) {
+			t.Fatalf("full snapshot = %q, missing %s", got, cell)
+		}
+	}
+}
+
 func TestUnfilteredSnapshotLeavesLiveRegionNamesToTheirChildren(t *testing.T) {
 	raw := []RawAXNode{
 		rawAXNode("alert", "alert", "", "alert-text"),
