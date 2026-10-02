@@ -2,7 +2,6 @@ package readiness
 
 import (
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"sort"
 	"strconv"
@@ -26,10 +25,7 @@ func TestNoDeadlineLoopSleepsOutsideWaitUntil(t *testing.T) {
 	seen := map[string]bool{}
 	for _, file := range srccensus.Tree(t, "../..", moduleGoFileFloor) {
 		fset := token.NewFileSet()
-		parsed, err := parser.ParseFile(fset, file.Name, file.Text, 0)
-		if err != nil {
-			t.Fatalf("parse %s: %v", file.Name, err)
-		}
+		parsed := srccensus.Parse(t, fset, file.Name, file.Text, 0)
 		for _, decl := range parsed.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
 			if !ok || fn.Body == nil || !computesDeadline(fn.Body) {

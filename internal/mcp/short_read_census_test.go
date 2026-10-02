@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"sort"
 	"strings"
@@ -193,10 +192,7 @@ func cappedReadSites(t *testing.T) []cappedSite {
 		if !strings.Contains(file.Text, "io.LimitReader(") {
 			continue
 		}
-		parsed, err := parser.ParseFile(fset, file.Path, file.Text, 0)
-		if err != nil {
-			t.Fatalf("cannot parse %s, so a capped read there would be missed silently: %v", file.Name, err)
-		}
+		parsed := srccensus.Parse(t, fset, file.Path, file.Text, 0)
 		ast.Inspect(parsed, func(node ast.Node) bool {
 			call, ok := node.(*ast.CallExpr)
 			if !ok || qualifiedCalleeName(call.Fun) != "io.LimitReader" {

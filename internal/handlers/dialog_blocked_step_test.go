@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"net/http"
 	"net/http/httptest"
@@ -135,10 +134,7 @@ func TestDialogActionRemedyLiteralHasOneOwnerBesideTheFlagHelp(t *testing.T) {
 		if !strings.HasPrefix(source.Name, "internal/") && !strings.HasPrefix(source.Name, "cmd/") {
 			continue
 		}
-		f, err := parser.ParseFile(token.NewFileSet(), source.Name, source.Text, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
+		f := srccensus.Parse(t, token.NewFileSet(), source.Name, source.Text, 0)
 		ast.Inspect(f, func(n ast.Node) bool {
 			if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING && strings.Contains(lit.Value, literal) {
 				found[source.Name] = true

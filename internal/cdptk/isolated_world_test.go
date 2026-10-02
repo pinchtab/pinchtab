@@ -2,7 +2,6 @@ package cdptk
 
 import (
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"path/filepath"
 	"strings"
@@ -59,11 +58,7 @@ func TestOnlyOneIsolatedWorldNameExists(t *testing.T) {
 
 	for _, file := range srccensus.Tree(t, filepath.Join("..", ".."), moduleGoFileFloor) {
 		fset := token.NewFileSet()
-		parsed, err := parser.ParseFile(fset, file.Name, file.Text, 0)
-		if err != nil {
-			t.Errorf("%s: cannot parse, so this census can neither clear nor flag it: %v", file.Name, err)
-			continue
-		}
+		parsed := srccensus.Parse(t, fset, file.Name, file.Text, 0)
 		ast.Inspect(parsed, func(node ast.Node) bool {
 			switch n := node.(type) {
 			case *ast.BasicLit:

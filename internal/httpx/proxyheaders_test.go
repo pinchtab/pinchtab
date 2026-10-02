@@ -2,7 +2,6 @@ package httpx
 
 import (
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"net/http"
 	"path/filepath"
@@ -108,11 +107,7 @@ func TestNoProxyHopAddsResponseHeadersUnderAKeyItDoesNotName(t *testing.T) {
 
 	helperCalls := 0
 	for _, file := range files {
-		parsed, err := parser.ParseFile(token.NewFileSet(), file.Name, file.Text, 0)
-		if err != nil {
-			t.Errorf("%s: cannot parse, so this census can neither clear nor flag it: %v", file.Name, err)
-			continue
-		}
+		parsed := srccensus.Parse(t, token.NewFileSet(), file.Name, file.Text, 0)
 		ast.Inspect(parsed, func(node ast.Node) bool {
 			call, ok := node.(*ast.CallExpr)
 			if !ok {

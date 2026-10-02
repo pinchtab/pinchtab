@@ -3,7 +3,6 @@ package types
 import (
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"path"
 	"sort"
@@ -61,10 +60,7 @@ func pinchtabHeaderLiterals(t *testing.T, files []srccensus.SourceFile) map[stri
 	t.Helper()
 	out := map[string][]string{}
 	for _, f := range files {
-		parsed, err := parser.ParseFile(token.NewFileSet(), f.Name, f.Text, 0)
-		if err != nil {
-			t.Fatalf("parse %s: %v", f.Name, err)
-		}
+		parsed := srccensus.Parse(t, token.NewFileSet(), f.Name, f.Text, 0)
 		ast.Inspect(parsed, func(n ast.Node) bool {
 			lit, ok := n.(*ast.BasicLit)
 			if !ok || lit.Kind != token.STRING {
@@ -231,10 +227,7 @@ func pinchtabRequestHeaderSets(t *testing.T, files []srccensus.SourceFile) (sets
 	t.Helper()
 	tokenPkgs = map[string]bool{}
 	for _, f := range files {
-		parsed, err := parser.ParseFile(token.NewFileSet(), f.Name, f.Text, 0)
-		if err != nil {
-			t.Fatalf("parse %s: %v", f.Name, err)
-		}
+		parsed := srccensus.Parse(t, token.NewFileSet(), f.Name, f.Text, 0)
 		pkg := path.Dir(f.Name)
 		ast.Inspect(parsed, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)

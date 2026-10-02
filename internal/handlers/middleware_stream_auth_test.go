@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"net/http"
 	"net/http/httptest"
@@ -262,10 +261,7 @@ func basicString(e ast.Expr) string {
 func streamSiteKinds(t *testing.T, name, src string) (sse, upgrade, hijack bool) {
 	t.Helper()
 	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, name, src, 0)
-	if err != nil {
-		t.Fatalf("parse %s: %v", name, err)
-	}
+	f := srccensus.Parse(t, fset, name, src, 0)
 	ast.Inspect(f, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
 		if !ok {

@@ -2,7 +2,6 @@ package stealth
 
 import (
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"regexp"
 	"strconv"
@@ -57,10 +56,7 @@ func TestNoPackageKeepsItsOwnCopyOfTheFallbackBrowserVersion(t *testing.T) {
 		}
 		scanned++
 
-		parsed, err := parser.ParseFile(token.NewFileSet(), file.Path, nil, 0)
-		if err != nil {
-			t.Fatalf("cannot parse %s, so this census would skip it silently: %v", file.Name, err)
-		}
+		parsed := srccensus.Parse(t, token.NewFileSet(), file.Name, file.Text, 0)
 		ast.Inspect(parsed, func(node ast.Node) bool {
 			lit, ok := node.(*ast.BasicLit)
 			if !ok || lit.Kind != token.STRING {
@@ -106,25 +102,21 @@ func TestTheConfigDefaultsLeaveBrowserVersionUnset(t *testing.T) {
 	} {
 		// Load fails when the package yields too few files, so a census pointed at a
 		// directory that moved fatals here instead of finding nothing and passing.
-		pkg := srccensus.Load(t, tc.dir, 3)
-		present := false
-		for _, name := range pkg.Files() {
-			if name == tc.file {
-				present = true
-			}
-		}
+		_, files := srccensus.Load(t, tc.dir, 3).Syntax()
+		file, present := files[tc.file]
 		if !present {
 			t.Fatalf("%s is not in %s; this census is reading the wrong package", tc.file, tc.dir)
 		}
 
-		if _, found := browserVersionFieldValue(t, tc.dir+"/"+tc.file); found {
+		if _, found := browserVersionFieldValue(file); found {
 			t.Errorf("%s sets a BrowserVersion default, so %s pins the version and the launched-binary probe never fires", tc.file, tc.what)
 		}
 	}
 
 	// The fallback lives at the persona layer instead: ReducedBrowserVersion reads the
 	// one owner, so the literal is applied only when the probe cannot answer.
-	if !funcReferencesFallbackConstant(t, "ua.go", "ReducedBrowserVersion") {
+	_, stealthFiles := srccensus.Load(t, ".", 3).Syntax()
+	if !funcReferencesFallbackConstant(stealthFiles["ua.go"], "ReducedBrowserVersion") {
 		t.Error("ReducedBrowserVersion no longer reads browserprobe.FallbackChromeVersion, so the UA fallback comes from somewhere else and the value can drift again")
 	}
 }
@@ -174,24 +166,12 @@ func isFallbackConstant(node ast.Node) bool {
 	return ok && pkg.Name == "browserprobe"
 }
 
-func parseSource(t *testing.T, path string) *ast.File {
-	t.Helper()
-
-	parsed, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
-	if err != nil {
-		t.Fatalf("cannot parse %s: %v", path, err)
-	}
-	return parsed
-}
-
-// browserVersionFieldValue reports whether every BrowserVersion field set in path takes
+// browserVersionFieldValue reports whether every BrowserVersion field set in file takes
 // its value from the owner, and whether any such field was found at all — an absent field
 // and a field set from a literal are different failures and must not collapse.
-func browserVersionFieldValue(t *testing.T, path string) (fromOwner bool, found bool) {
-	t.Helper()
-
+func browserVersionFieldValue(file *ast.File) (fromOwner bool, found bool) {
 	fromOwner = true
-	ast.Inspect(parseSource(t, path), func(node ast.Node) bool {
+	ast.Inspect(file, func(node ast.Node) bool {
 		kv, ok := node.(*ast.KeyValueExpr)
 		if !ok {
 			return true
@@ -209,11 +189,9 @@ func browserVersionFieldValue(t *testing.T, path string) (fromOwner bool, found 
 	return fromOwner, found
 }
 
-func funcReferencesFallbackConstant(t *testing.T, path, funcName string) bool {
-	t.Helper()
-
+func funcReferencesFallbackConstant(file *ast.File, funcName string) bool {
 	found := false
-	for _, decl := range parseSource(t, path).Decls {
+	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok || fn.Name.Name != funcName {
 			continue

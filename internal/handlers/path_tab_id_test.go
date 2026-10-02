@@ -3,11 +3,9 @@ package handlers
 import (
 	"bytes"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -80,15 +78,11 @@ func TestTabPDFRefusesABodyTabIDThatDisagreesWithThePath(t *testing.T) {
 }
 
 func TestThePathTabIDPreludeHasOneOwner(t *testing.T) {
-	fset := token.NewFileSet()
+	_, files := srccensus.Load(t, ".", handlersSourceFileFloor).Syntax()
 	literalSites := map[string]int{}
 	pathValueSites := map[string]int{}
 	missingWording := 0
-	for _, name := range srccensus.Load(t, ".", handlersSourceFileFloor).Files() {
-		f, err := parser.ParseFile(fset, filepath.Join(".", name), nil, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
+	for name, f := range files {
 		ast.Inspect(f, func(n ast.Node) bool {
 			switch x := n.(type) {
 			case *ast.BasicLit:

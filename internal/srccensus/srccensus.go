@@ -97,10 +97,7 @@ func Load(t testing.TB, dir string, minFiles int) *Package {
 		if err != nil {
 			t.Fatalf("cannot read %s, so this census would skip it silently: %v", path, err)
 		}
-		file, err := parser.ParseFile(pkg.fset, path, raw, parser.ParseComments)
-		if err != nil {
-			t.Fatalf("cannot parse %s, so this census would skip it silently: %v", path, err)
-		}
+		file := Parse(t, pkg.fset, path, string(raw), parser.ParseComments)
 		pkg.files[filepath.Base(path)] = file
 		pkg.src[filepath.Base(path)] = blankComments(pkg.fset, file, raw)
 	}
@@ -108,6 +105,17 @@ func Load(t testing.TB, dir string, minFiles int) *Package {
 		t.Fatalf("parsed %d non-test files in %s, want at least %d; the census matched almost nothing and would pass vacuously", len(pkg.files), dir, minFiles)
 	}
 	return pkg
+}
+
+// Parse is the one parse policy for a census: a file it cannot parse is a file it would
+// otherwise report clean, so the test stops and names it.
+func Parse(t testing.TB, fset *token.FileSet, name, src string, mode parser.Mode) *ast.File {
+	t.Helper()
+	file, err := parser.ParseFile(fset, name, src, mode)
+	if err != nil {
+		t.Fatalf("cannot parse %s, so this census would skip it silently: %v", name, err)
+	}
+	return file
 }
 
 // SourceFile is one non-test Go source found by a recursive walk, named the way a

@@ -2,7 +2,6 @@ package bridge
 
 import (
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"slices"
 	"sort"
@@ -44,10 +43,7 @@ type inputDispatchSites struct {
 
 func trustedInputSites(t *testing.T, name, src string) inputDispatchSites {
 	t.Helper()
-	file, err := parser.ParseFile(token.NewFileSet(), name, src, 0)
-	if err != nil {
-		t.Fatalf("parse %s: %v", name, err)
-	}
+	file := srccensus.Parse(t, token.NewFileSet(), name, src, 0)
 	chromedpNames, inputNames := map[string]bool{}, map[string]bool{}
 	for _, imp := range file.Imports {
 		path, _ := strconv.Unquote(imp.Path.Value)

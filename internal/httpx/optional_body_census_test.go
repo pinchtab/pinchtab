@@ -2,7 +2,6 @@ package httpx
 
 import (
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"slices"
 	"sort"
@@ -18,10 +17,7 @@ var optionalBodyOwners = map[string]bool{
 
 func decodeEOFSites(t *testing.T, name, src string) []string {
 	t.Helper()
-	file, err := parser.ParseFile(token.NewFileSet(), name, src, 0)
-	if err != nil {
-		t.Fatalf("parse %s: %v", name, err)
-	}
+	file := srccensus.Parse(t, token.NewFileSet(), name, src, 0)
 	var sites []string
 	scan := func(fnName string, body *ast.BlockStmt) {
 		decodeErrs := decodeErrorNames(body)

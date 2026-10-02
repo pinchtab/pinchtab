@@ -2,7 +2,6 @@ package testbrowser
 
 import (
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
@@ -78,18 +77,16 @@ func (r *cleanupRecorder) Cleanup(f func())      { f() }
 // because the next browser test is as likely to land in a package that has none today.
 func TestOnlyTestbrowserLaunchesATestChrome(t *testing.T) {
 	for _, file := range srccensus.TestTree(t, "../..", moduleTestFileFloor) {
-		for _, at := range ownLaunchSites(file.Path, file.Text) {
+		for _, at := range ownLaunchSites(t, file.Path, file.Text) {
 			t.Errorf("%s builds its own Chrome at %s; use testbrowser.Tab, or testbrowser.Launch(t, flags...) for a browser-wide flag", file.Name, at)
 		}
 	}
 }
 
-func ownLaunchSites(path, src string) []string {
+func ownLaunchSites(t testing.TB, path, src string) []string {
+	t.Helper()
 	fset := token.NewFileSet()
-	parsed, err := parser.ParseFile(fset, path, src, 0)
-	if err != nil {
-		return nil
-	}
+	parsed := srccensus.Parse(t, fset, path, src, 0)
 	var sites []string
 	ast.Inspect(parsed, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
@@ -112,7 +109,7 @@ func TestTheLaunchCensusRecognisesAnOwnAllocator(t *testing.T) {
 		{body: `testbrowser.Tab(t)`},
 	} {
 		src := "package p\n\nfunc f(t *testing.T) {\n\t" + tc.body + "\n}\n"
-		if got := len(ownLaunchSites("probe_test.go", src)) > 0; got != tc.own {
+		if got := len(ownLaunchSites(t, "probe_test.go", src)) > 0; got != tc.own {
 			t.Errorf("own launch = %v, want %v for %q", got, tc.own, tc.body)
 		}
 	}

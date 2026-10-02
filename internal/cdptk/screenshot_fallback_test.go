@@ -166,10 +166,7 @@ func capturesAScreenshot(t *testing.T, name, text string) bool {
 	if !strings.Contains(text, ".CaptureScreenshot(") {
 		return false
 	}
-	parsed, err := parser.ParseFile(token.NewFileSet(), name, text, parser.ImportsOnly)
-	if err != nil {
-		t.Fatalf("parse %s: %v", name, err)
-	}
+	parsed := srccensus.Parse(t, token.NewFileSet(), name, text, parser.ImportsOnly)
 	for _, spec := range parsed.Imports {
 		path, err := strconv.Unquote(spec.Path.Value)
 		if err != nil {

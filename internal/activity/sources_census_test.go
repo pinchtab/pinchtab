@@ -3,7 +3,6 @@ package activity
 import (
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"sort"
 	"strconv"
@@ -50,10 +49,7 @@ func bareSourceLiteralSites(t *testing.T, files []srccensus.SourceFile) []string
 			continue
 		}
 		inActivityPkg := strings.HasPrefix(f.Name, "internal/activity/")
-		parsed, err := parser.ParseFile(token.NewFileSet(), f.Name, f.Text, 0)
-		if err != nil {
-			t.Fatalf("parse %s: %v", f.Name, err)
-		}
+		parsed := srccensus.Parse(t, token.NewFileSet(), f.Name, f.Text, 0)
 		flag := func(node ast.Node, why string) {
 			lit, ok := node.(*ast.BasicLit)
 			if !ok || lit.Kind != token.STRING {

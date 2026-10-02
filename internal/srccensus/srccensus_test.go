@@ -159,6 +159,22 @@ func TestLoadFailsOnSourceItCannotParse(t *testing.T) {
 	}
 }
 
+func TestParseFailsNamingTheFileItCannotParse(t *testing.T) {
+	message := mustFatal(t, func(tb testing.TB) {
+		Parse(tb, token.NewFileSet(), "internal/p/broken.go", "package p\nfunc f( {\n", 0)
+	})
+	if !strings.Contains(message, "internal/p/broken.go") || !strings.Contains(message, "would skip it silently") {
+		t.Errorf("failure %q should name the file and say it is not silently skipped", message)
+	}
+}
+
+func TestParseReturnsTheSyntaxOfValidSource(t *testing.T) {
+	file := Parse(t, token.NewFileSet(), "ok.go", "package p\nfunc f() {}\n", 0)
+	if file.Name.Name != "p" || len(file.Decls) != 1 {
+		t.Fatalf("Parse = package %q with %d decls, want p with 1", file.Name.Name, len(file.Decls))
+	}
+}
+
 func TestCallsFailsWhenThePatternMatchesNothing(t *testing.T) {
 	dir := writePackage(t, map[string]string{"a.go": "package p\n\nfunc f() {}\n"})
 	pkg := Load(t, dir, 1)
