@@ -681,9 +681,19 @@ func TestHandleFind_SeesWhatAClickJustChangedWithoutASnapshot(t *testing.T) {
 	}
 
 	clickFoundRef(t, h, ctx, tabID, detailsRef)
+	selectedClose, err := h.resolveSelectorNodeID(ctx, tabID, "find:Close button")
+	if err != nil {
+		t.Fatalf("find: selector missed the Close button the click just revealed: %v", err)
+	}
+	if closeNode, _ := h.resolveSelectorNodeID(ctx, tabID, "#close"); selectedClose != closeNode {
+		t.Fatalf("find: selector resolved node %d, not the Close button the click just revealed (%d)", selectedClose, closeNode)
+	}
 	closeRef := findButtonRef(t, h, tabID, "Close")
 	if closeRef == "" {
 		t.Fatal("find missed the Close button the click just revealed")
+	}
+	if target, _ := h.Bridge.GetRefCache(tabID).Lookup(closeRef); target.BackendNodeID != selectedClose {
+		t.Errorf("find: selector resolved node %d, find returned %s for node %d", selectedClose, closeRef, target.BackendNodeID)
 	}
 	if again := findButtonRef(t, h, tabID, "Details"); again != detailsRef {
 		t.Errorf("Details ref drifted across the refresh: %s then %s", detailsRef, again)

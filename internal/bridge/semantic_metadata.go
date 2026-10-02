@@ -53,6 +53,34 @@ func EnrichA11yNodesWithDOMMetadata(ctx context.Context, nodes []A11yNode) error
 	}))
 }
 
+// CarryDOMMetadata copies DOM descriptor fields from an earlier read onto the
+// nodes it already enriched, so a refresh pays the per-node CDP round trips only
+// for new nodes. A changed role or name, or an editable field whose value state
+// changes in place, is re-read.
+func CarryDOMMetadata(prev, next []A11yNode) {
+	enriched := make(map[int64]A11yNode, len(prev))
+	for _, node := range prev {
+		if node.NodeID != 0 && hasNodeDOMMetadata(node) {
+			enriched[node.NodeID] = node
+		}
+	}
+	for i := range next {
+		old, ok := enriched[next[i].NodeID]
+		if !ok || old.Role != next[i].Role || old.Name != next[i].Name || editableRoles[next[i].Role] {
+			continue
+		}
+		next[i].Tag = old.Tag
+		next[i].Label = old.Label
+		next[i].Placeholder = old.Placeholder
+		next[i].Alt = old.Alt
+		next[i].Title = old.Title
+		next[i].TestID = old.TestID
+		next[i].Text = old.Text
+	}
+}
+
+var editableRoles = map[string]bool{"textbox": true, "searchbox": true, "combobox": true, "spinbutton": true}
+
 func hasNodeDOMMetadata(node A11yNode) bool {
 	return node.Tag != "" ||
 		node.Label != "" ||

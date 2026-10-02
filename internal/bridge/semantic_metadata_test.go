@@ -161,3 +161,30 @@ func TestEnrichA11yNodesLeavesMaskWhenEnrichmentCannotRun(t *testing.T) {
 		t.Fatalf("value = %q, want the mask to survive a failed enrichment", nodes[0].Value)
 	}
 }
+
+func TestCarryDOMMetadataReusesOnlyUnchangedNonEditableNodes(t *testing.T) {
+	prev := []A11yNode{
+		{NodeID: 1, Role: "button", Name: "Details", Tag: "button", Text: "Details"},
+		{NodeID: 2, Role: "button", Name: "Save", Tag: "button", Text: "Save"},
+		{NodeID: 3, Role: "textbox", Name: "Password", Tag: "input"},
+		{NodeID: 4, Role: "link", Name: "Help"},
+	}
+	next := []A11yNode{
+		{NodeID: 1, Role: "button", Name: "Details"},
+		{NodeID: 2, Role: "button", Name: "Saved"},
+		{NodeID: 3, Role: "textbox", Name: "Password"},
+		{NodeID: 4, Role: "link", Name: "Help"},
+		{NodeID: 5, Role: "button", Name: "Close"},
+	}
+
+	CarryDOMMetadata(prev, next)
+
+	if next[0].Tag != "button" || next[0].Text != "Details" {
+		t.Errorf("unchanged button did not carry its metadata: %+v", next[0])
+	}
+	for _, node := range next[1:] {
+		if hasNodeDOMMetadata(node) {
+			t.Errorf("node %d (%s %q) carried metadata it must re-read: %+v", node.NodeID, node.Role, node.Name, node)
+		}
+	}
+}

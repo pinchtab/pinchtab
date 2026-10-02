@@ -628,8 +628,12 @@ func (h *Handlers) refreshRefCache(ctx context.Context, tabID string) {
 		return
 	}
 	flat, _ := bridge.BuildSnapshot(nodes, bridge.FilterInteractive, -1)
+	prev := h.Bridge.GetRefCache(tabID)
+	if prev != nil {
+		bridge.CarryDOMMetadata(prev.Nodes, flat)
+	}
 	_ = bridge.EnrichA11yNodesWithDOMMetadata(ctx, flat)
-	h.Bridge.SetRefCache(tabID, bridge.EpochRefs(h.Bridge.GetRefCache(tabID), flat))
+	h.Bridge.SetRefCache(tabID, bridge.EpochRefs(prev, flat))
 }
 
 func publishVocab(w http.ResponseWriter, tabID, vocab string) {

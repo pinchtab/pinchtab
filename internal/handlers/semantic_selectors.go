@@ -101,11 +101,6 @@ func (h *Handlers) semanticDescriptorsForTabInFrame(ctx context.Context, tabID, 
 	if len(nodes) == 0 {
 		return nil, fmt.Errorf("semantic selector: no snapshot available; navigate or snapshot first")
 	}
-
-	if cache := h.Bridge.GetRefCache(tabID); cache != nil && len(cache.Nodes) > 0 {
-		_ = bridge.EnrichA11yNodesWithDOMMetadata(ctx, cache.Nodes)
-		nodes = cache.Nodes
-	}
 	nodes = scopeSemanticNodesByFrame(nodes, frameID)
 	if len(nodes) == 0 {
 		return nil, fmt.Errorf("semantic selector: no elements found in current frame")
