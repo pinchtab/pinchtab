@@ -31,6 +31,7 @@ type submitActionBridge struct {
 	executeActionFn func(context.Context, string, bridge.ActionRequest) (map[string]any, error)
 	invalidFields   []submitInvalidField
 	probedNodeIDs   []int64
+	notSubmitter    bool
 
 	armedNodeIDs     []int64
 	disarmedNodeIDs  []int64
@@ -77,6 +78,7 @@ func (b *submitActionBridge) CallFunctionOnNode(_ context.Context, nodeID int64,
 	case armSubmitInvalidWatchJS:
 		b.armedNodeIDs = append(b.armedNodeIDs, nodeID)
 		b.actionCallsAtArm = b.actionCalls
+		*result.(*bool) = !b.notSubmitter
 	case disarmSubmitInvalidWatchJS:
 		b.disarmedNodeIDs = append(b.disarmedNodeIDs, nodeID)
 	case submitInvalidFieldsJS:

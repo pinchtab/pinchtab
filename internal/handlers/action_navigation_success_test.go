@@ -256,3 +256,119 @@ func TestWaitNavClickThatStaysWithoutInvalidFieldsSaysItDidNotNavigate(t *testin
 		t.Fatalf("postState = %+v, want none when nothing blocked the click", got.PostState)
 	}
 }
+
+func postPlainClick(t *testing.T, h *Handlers, body string) map[string]any {
+	t.Helper()
+	w := postSubmitRequest(t, h, body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Result map[string]any `json:"result"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	return resp.Result
+}
+
+func plainClickPostState(t *testing.T, result map[string]any) *submitPostState {
+	t.Helper()
+	raw, ok := result["postState"]
+	if !ok {
+		return nil
+	}
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("encode postState: %v", err)
+	}
+	var post submitPostState
+	if err := json.Unmarshal(encoded, &post); err != nil {
+		t.Fatalf("decode postState: %v", err)
+	}
+	return &post
+}
+
+const plainSubmitterClick = `{"kind":"click","tabId":"tab1","nodeId":42}`
+
+func TestPlainClickOnABlockedSubmitReportsValidationBlocked(t *testing.T) {
+	b := newSubmitActionBridge(t.Context())
+	b.invalidFields = []submitInvalidField{{Name: "email", Label: "Email", Message: "Please include an '@' in the email address."}}
+	h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+
+	post := plainClickPostState(t, postPlainClick(t, h, plainSubmitterClick))
+
+	if post == nil || post.Status != "blocked" || post.Signal != "validation_blocked" {
+		t.Fatalf("postState = %+v, want blocked validation_blocked", post)
+	}
+	if len(post.InvalidFields) != 1 || post.InvalidFields[0] != b.invalidFields[0] {
+		t.Fatalf("invalid fields = %+v, want %+v", post.InvalidFields, b.invalidFields)
+	}
+	if !slices.Equal(b.armedNodeIDs, []int64{42}) || b.actionCallsAtArm != 0 {
+		t.Fatalf("armed node IDs = %v after %d dispatches, want node 42 armed before the dispatch", b.armedNodeIDs, b.actionCallsAtArm)
+	}
+	if !slices.Equal(b.disarmedNodeIDs, []int64{42}) {
+		t.Fatalf("disarmed node IDs = %v, want the armed node 42", b.disarmedNodeIDs)
+	}
+}
+
+func TestPlainClickOnAValidSubmitStaysPlain(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		navigate bool
+	}{
+		{"form that stays", false},
+		{"form that navigates", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := newSubmitActionBridge(t.Context())
+			if tc.navigate {
+				b.invalidFields = []submitInvalidField{{Name: "email", Message: "stale"}}
+				b.executeActionFn = func(context.Context, string, bridge.ActionRequest) (map[string]any, error) {
+					return navigatedActionResult(), nil
+				}
+			}
+			h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+
+			result := postPlainClick(t, h, plainSubmitterClick)
+
+			if post := plainClickPostState(t, result); post != nil {
+				t.Fatalf("postState = %+v, want none on a valid submit", post)
+			}
+			if result["clicked"] != true {
+				t.Fatalf("result = %v, want clicked", result)
+			}
+			if tc.navigate && len(b.probedNodeIDs) != 0 {
+				t.Fatalf("probed node IDs = %v, want no validation probe after a navigation", b.probedNodeIDs)
+			}
+		})
+	}
+}
+
+func TestPlainClickOnANonSubmitterSkipsTheValidationRead(t *testing.T) {
+	b := newSubmitActionBridge(t.Context())
+	b.notSubmitter = true
+	b.invalidFields = []submitInvalidField{{Name: "email", Message: "unreachable"}}
+	h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+
+	result := postPlainClick(t, h, plainSubmitterClick)
+
+	if post := plainClickPostState(t, result); post != nil {
+		t.Fatalf("postState = %+v, want none for a non-submitter", post)
+	}
+	if len(b.probedNodeIDs) != 0 || len(b.disarmedNodeIDs) != 0 {
+		t.Fatalf("probed %v, disarmed %v, want neither call for a non-submitter", b.probedNodeIDs, b.disarmedNodeIDs)
+	}
+}
+
+func TestBrowserPlainClickOnAnInvalidEmailSubmitIsValidationBlocked(t *testing.T) {
+	h, tabID := submitFormHandlers(t, `
+		<form action="/done"><label>Email <input type="email" name="email" value="not-an-email"></label><button id="b">Send</button></form>`)
+
+	result := postPlainClick(t, h, `{"kind":"click","tabId":"`+tabID+`","selector":"#b"}`)
+
+	post := plainClickPostState(t, result)
+	if post == nil || post.Signal != "validation_blocked" || len(post.InvalidFields) != 1 || post.InvalidFields[0].Name != "email" {
+		t.Fatalf("postState = %+v, want validation_blocked on the email field", post)
+	}
+}

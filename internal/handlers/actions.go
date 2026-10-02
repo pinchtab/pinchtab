@@ -204,13 +204,14 @@ func (h *Handlers) runResolvedActionStep(
 	refMissing bool,
 	errFallback func(error) string,
 ) (actionResult, context.Context, string) {
-	defer h.armFormValidationWatch(ctx, tCtx, *step, false)()
+	validationWatched, disarmValidationWatch := h.armFormValidationWatch(ctx, tCtx, *step, false)
+	defer disarmValidationWatch()
 	res, _, _, err := h.executeActionResilient(tCtx, step, cfg, tabID, refMissing)
 	if dialog := h.dialogOpenedByInput(step, tabID, res, err); dialog != nil {
 		return actionResult{Index: index, Success: true, Result: withOpenedDialog(res, tabID, dialog)}, ctx, tabID
 	}
 	if err == nil {
-		res = h.settleWaitNavClick(tCtx, *step, res)
+		res = h.settleClickOutcome(tCtx, *step, validationWatched, res)
 	}
 	nextCtx := ctx
 	nextTabID := tabID
@@ -629,7 +630,8 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	defer h.armFormValidationWatch(ctx, tCtx, req, submitClick)()
+	validationWatched, disarmValidationWatch := h.armFormValidationWatch(ctx, tCtx, req, submitClick)
+	defer disarmValidationWatch()
 
 	result, actionBackend, recoveryResult, actionErr := h.executeActionResilient(tCtx, &req, effectiveCfg, resolvedTabID, refMissing)
 	h.publishVocabIfReepoched(w, resolvedTabID, vocabBefore)
@@ -647,7 +649,9 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		h.writeActionError(w, actionErr, req, resolvedTabID, recoveryResult, submitClick)
 		return
 	}
-	result = h.settleWaitNavClick(tCtx, req, result)
+	if !submitClick {
+		result = h.settleClickOutcome(tCtx, req, validationWatched, result)
+	}
 	h.writeActionSuccess(w, r, tCtx, req, routing, resolvedTabID, result, actionBackend, recoveryResult)
 }
 
@@ -656,22 +660,24 @@ func isWaitNavClick(req bridge.ActionRequest) bool {
 }
 
 func watchesFormValidation(req bridge.ActionRequest, submitClick bool) bool {
-	return submitClick || (isWaitNavClick(req) && req.NodeID > 0)
+	return submitClick || (req.Kind == bridge.ActionClick && req.NodeID > 0)
 }
 
-func (h *Handlers) armFormValidationWatch(tabCtx, tCtx context.Context, req bridge.ActionRequest, submitClick bool) (disarm func()) {
-	if !watchesFormValidation(req, submitClick) {
-		return func() {}
+func (h *Handlers) armFormValidationWatch(tabCtx, tCtx context.Context, req bridge.ActionRequest, submitClick bool) (armed bool, disarm func()) {
+	if !watchesFormValidation(req, submitClick) || !h.armSubmitInvalidWatch(tCtx, req.NodeID) {
+		return false, func() {}
 	}
-	h.armSubmitInvalidWatch(tCtx, req.NodeID)
-	return func() { h.disarmSubmitInvalidWatch(tabCtx, req.NodeID) }
+	return true, func() { h.disarmSubmitInvalidWatch(tabCtx, req.NodeID) }
 }
 
-func (h *Handlers) settleWaitNavClick(ctx context.Context, req bridge.ActionRequest, result map[string]any) map[string]any {
-	if !isWaitNavClick(req) {
+func (h *Handlers) settleClickOutcome(ctx context.Context, req bridge.ActionRequest, validationWatched bool, result map[string]any) map[string]any {
+	if isWaitNavClick(req) {
+		return h.settleWaitNavOutcome(ctx, req.NodeID, result)
+	}
+	if !validationWatched {
 		return result
 	}
-	return h.settleWaitNavOutcome(ctx, req.NodeID, result)
+	return h.attachValidationBlocked(ctx, req.NodeID, result)
 }
 
 func validateActionRequestFields(w http.ResponseWriter, req bridge.ActionRequest) bool {

@@ -34,14 +34,16 @@ const armSubmitInvalidWatchJS = `function() {
 	const key = ` + submitInvalidWatchKeyJS + `;
 	if (this[key]) this[key].disarm();
 	const control = ` + submitControlOfNodeJS + `;
-	const form = control && control.form;
-	if (!form) return;
+	const submitter = control && (control.type === "submit" || control.type === "image");
+	const form = submitter && control.form;
+	if (!form) return false;
 	const root = form.getRootNode();
 	const watch = { fired: false };
 	const onInvalid = (event) => { if (event.target.form === form) watch.fired = true; };
 	watch.disarm = () => root.removeEventListener("invalid", onInvalid, true);
 	root.addEventListener("invalid", onInvalid, true);
 	this[key] = watch;
+	return true;
 }`
 
 const disarmSubmitInvalidWatchJS = `function() {
@@ -230,8 +232,12 @@ func pendingSubmitPostState(before, after submitStateSnapshot, dispatch string, 
 
 const submitInvalidWatchDisarmTimeout = 2 * time.Second
 
-func (h *Handlers) armSubmitInvalidWatch(ctx context.Context, nodeID int64) {
-	_ = h.Bridge.CallFunctionOnNode(ctx, nodeID, armSubmitInvalidWatchJS, nil, nil)
+func (h *Handlers) armSubmitInvalidWatch(ctx context.Context, nodeID int64) bool {
+	var armed bool
+	if err := h.Bridge.CallFunctionOnNode(ctx, nodeID, armSubmitInvalidWatchJS, nil, &armed); err != nil {
+		return false
+	}
+	return armed
 }
 
 func (h *Handlers) disarmSubmitInvalidWatch(tabCtx context.Context, nodeID int64) {
@@ -272,6 +278,16 @@ func (h *Handlers) settleWaitNavOutcome(ctx context.Context, nodeID int64, resul
 	}
 	result[bridge.ResultNavigated] = false
 	if nodeID <= 0 {
+		return result
+	}
+	return h.attachValidationBlocked(ctx, nodeID, result)
+}
+
+func (h *Handlers) attachValidationBlocked(ctx context.Context, nodeID int64, result map[string]any) map[string]any {
+	if result == nil {
+		result = make(map[string]any)
+	}
+	if result[bridge.ResultNavigated] == true {
 		return result
 	}
 	if blocked, ok := h.probeValidationBlocked(ctx, nodeID, "acknowledged", false, time.Now()); ok {

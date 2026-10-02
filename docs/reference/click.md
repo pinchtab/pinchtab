@@ -70,6 +70,11 @@ result carries the same `postState` a `--submit` click reports — `status: "blo
 `signal: "validation_blocked"`, and the `invalidFields` — and the CLI prints
 `BLOCKED validation_blocked` followed by one `name (Label): message` line per field.
 
+A plain ref click on a form's submit button gets the same check: if the browser
+refuses the form for validation, the result carries that `validation_blocked`
+`postState` and the CLI prints the same `BLOCKED` lines instead of `OK`. A click on
+anything that is not a submit button, or a valid submit, still prints plain `OK`.
+
 ## CLI Flags
 
 | Flag | Description |
