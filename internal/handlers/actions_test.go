@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"go/ast"
 	"go/token"
 	"net/http"
@@ -17,10 +16,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/srccensus"
+	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 type failMockBridge struct {
@@ -1411,4 +1413,146 @@ func actionHandlerQueryGetLiterals(t *testing.T) (string, []queryGetLiteral) {
 		return true
 	})
 	return file, found
+}
+
+type liveRegionSubmitBridge struct {
+	*submitActionBridge
+	liveRegions []string
+	liveReads   int
+}
+
+func (b *liveRegionSubmitBridge) EvaluateInFrame(_ context.Context, _ string, _ string, result any, _ bridge.EvalOpts) error {
+	index := min(b.liveReads, len(b.liveRegions)-1)
+	b.liveReads++
+	*(result.(*string)) = b.liveRegions[index]
+	return nil
+}
+
+func TestHandleClickSubmitReportsInPageStatusWithoutWaitingOutThePoll(t *testing.T) {
+	b := &liveRegionSubmitBridge{
+		submitActionBridge: newSubmitActionBridge(t.Context()),
+		liveRegions:        []string{"Cart ready", "Cart ready\nThanks Eve"},
+	}
+	installSubmitModalReader(t, func(context.Context, string) (int64, bool, error) {
+		return 0, false, nil
+	})
+	h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+
+	started := time.Now()
+	w := postSubmitRequest(t, h, `{"kind":"click","tabId":"tab1","nodeId":42,"submit":true}`)
+	elapsed := time.Since(started)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+	var response struct {
+		Result struct {
+			PostState submitPostState `json:"postState"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	post := response.Result.PostState
+	if post.Status != "succeeded" || post.Signal != "live_region_changed" || post.LiveRegionText != "Thanks Eve" {
+		t.Fatalf("unexpected post-state: %+v", post)
+	}
+	if elapsed >= time.Second {
+		t.Fatalf("in-page submit took %v, want under 1s", elapsed)
+	}
+}
+
+func TestNewLiveRegionTextCountsOnlyTextAbsentBeforeTheSubmit(t *testing.T) {
+	read := func(regions string) submitStateSnapshot {
+		return submitStateSnapshot{liveRegions: regions, liveRegionsRead: true}
+	}
+	long := strings.Repeat("é", submitLiveRegionTextLimit+50)
+	tests := []struct {
+		name          string
+		before, after submitStateSnapshot
+		want          string
+	}{
+		{"text already there", read("Cart ready"), read("Cart ready"), ""},
+		{"region emptied", read("Saving"), read(""), ""},
+		{"region rewritten", read("Saving"), read("Saved"), "Saved"},
+		{"second region written", read("Cart ready"), read("Cart ready\nThanks Eve"), "Thanks Eve"},
+		{"baseline never read", submitStateSnapshot{}, read("Thanks Eve"), ""},
+		{"post-state never read", read("Cart ready"), submitStateSnapshot{}, ""},
+		{"capped", read(""), read(long), strings.Repeat("é", submitLiveRegionTextLimit)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := newLiveRegionText(tt.before, tt.after); got != tt.want {
+				t.Fatalf("newLiveRegionText = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSubmitTransitionSignalKeepsURLAndDialogAheadOfLiveRegions(t *testing.T) {
+	before := submitStateSnapshot{URL: "https://example.test/wizard", DialogOpen: true, liveRegionsRead: true}
+	wrote := func(s submitStateSnapshot) submitStateSnapshot {
+		s.liveRegions = "Saved"
+		return s
+	}
+	tests := []struct {
+		name  string
+		after submitStateSnapshot
+		want  string
+	}{
+		{"url change", wrote(submitStateSnapshot{URL: "https://example.test/done", DialogOpen: true, liveRegionsRead: true}), "url_changed"},
+		{"dialog close", wrote(submitStateSnapshot{URL: before.URL, liveRegionsRead: true}), "dialog_closed"},
+		{"status only", wrote(before), "live_region_changed"},
+		{"nothing", before, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got, _ := submitTransitionSignal(before, tt.after); got != tt.want {
+				t.Fatalf("signal = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCaptureSubmitStateReadsOnlyRenderedLiveRegionsInARealPage(t *testing.T) {
+	const page = `<div role="status">Cart ready</div>
+		<div role="timer" id="clock">12:00:00</div>
+		<div role="alert" id="error" hidden>Card declined</div>
+		<div aria-live="polite"><output id="result"></output></div>
+		<form onsubmit="event.preventDefault(); clock.textContent = '12:00:01'; result.textContent = 'Thanks   Eve';">
+			<button id="go">Send</button>
+		</form>`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(page))
+	}))
+	t.Cleanup(server.Close)
+
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancelTimeout)
+	if err := chromedp.Run(ctx, chromedp.Navigate(server.URL), chromedp.WaitVisible("#go", chromedp.ByID)); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.RuntimeConfig{ActionTimeout: 10 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
+	b := browserBridge(ctx, cfg)
+	const tabID = "tab-live-region"
+	b.RegisterTab(tabID, ctx)
+	h := New(b, cfg, nil, nil, nil)
+
+	before, err := h.captureSubmitState(ctx, tabID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !before.liveRegionsRead || before.liveRegions != "Cart ready" {
+		t.Fatalf("baseline live regions = %q (read=%v), want only the rendered status", before.liveRegions, before.liveRegionsRead)
+	}
+	if err := chromedp.Run(ctx, chromedp.Click("#go", chromedp.ByID)); err != nil {
+		t.Fatal(err)
+	}
+	after, err := h.captureSubmitState(ctx, tabID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signal, text := submitTransitionSignal(before, after); signal != "live_region_changed" || text != "Thanks Eve" {
+		t.Fatalf("signal = %q text = %q, want live_region_changed with the new status", signal, text)
+	}
 }

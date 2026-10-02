@@ -19,7 +19,28 @@ import (
 const (
 	postSubmitPollTimeout  = 3 * time.Second
 	postSubmitPollInterval = 250 * time.Millisecond
+
+	submitLiveRegionTextLimit = 500
 )
+
+const submitLiveRegionsJS = `(() => {
+	const live = '[role="status"], [role="alert"], [aria-live="polite"], [aria-live="assertive"], output';
+	const rendered = (el) => el.checkVisibility
+		? el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
+		: el.getClientRects().length > 0;
+	const texts = [];
+	const visit = (root) => {
+		for (const el of root.querySelectorAll(live)) {
+			if (el.getAttribute("aria-live") === "off" || !rendered(el)) continue;
+			if (el.parentElement && el.parentElement.closest(live)) continue;
+			const text = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+			if (text) texts.push(text.slice(0, 200));
+		}
+		for (const el of root.querySelectorAll("*")) if (el.shadowRoot) visit(el.shadowRoot);
+	};
+	visit(document);
+	return texts.slice(0, 20).join("\n");
+})()`
 
 var readTopmostSubmitModal = bridge.TopmostModalNodeIDInFrame
 
@@ -50,6 +71,9 @@ func refNotFound(ref string) error {
 type submitStateSnapshot struct {
 	URL        string `json:"url"`
 	DialogOpen bool   `json:"dialogOpen"`
+
+	liveRegions     string
+	liveRegionsRead bool
 }
 
 type submitPostState struct {
@@ -58,6 +82,7 @@ type submitPostState struct {
 	Dispatch       string              `json:"dispatch"`
 	ActionTimedOut bool                `json:"actionTimedOut"`
 	ElapsedMS      int64               `json:"elapsedMs"`
+	LiveRegionText string              `json:"liveRegionText,omitempty"`
 	Before         submitStateSnapshot `json:"before"`
 	After          submitStateSnapshot `json:"after"`
 }
@@ -71,20 +96,47 @@ func (h *Handlers) captureSubmitState(ctx context.Context, tabID string) (submit
 	if err != nil {
 		return submitStateSnapshot{}, fmt.Errorf("read topmost dialog: %w", err)
 	}
+	// A failed live-region read leaves the snapshot unread rather than failing it: the
+	// frame it runs in can vanish with the very navigation the URL signal reports.
+	var liveRegions string
+	liveErr := h.Bridge.EvaluateInFrame(ctx, h.selectorFrameID(tabID), submitLiveRegionsJS, &liveRegions, bridge.EvalOpts{})
 	return submitStateSnapshot{
-		URL:        strings.TrimSpace(currentURL),
-		DialogOpen: dialogOpen,
+		URL:             strings.TrimSpace(currentURL),
+		DialogOpen:      dialogOpen,
+		liveRegions:     liveRegions,
+		liveRegionsRead: liveErr == nil,
 	}, nil
 }
 
-func submitTransitionSignal(before, after submitStateSnapshot) string {
-	if before.URL != after.URL {
-		return "url_changed"
+func newLiveRegionText(before, after submitStateSnapshot) string {
+	if !before.liveRegionsRead || !after.liveRegionsRead || after.liveRegions == "" {
+		return ""
 	}
-	if before.DialogOpen && !after.DialogOpen {
-		return "dialog_closed"
+	known := make(map[string]bool)
+	for text := range strings.SplitSeq(before.liveRegions, "\n") {
+		known[text] = true
 	}
-	return ""
+	var fresh []string
+	for text := range strings.SplitSeq(after.liveRegions, "\n") {
+		if !known[text] {
+			fresh = append(fresh, text)
+		}
+	}
+	capped, _ := truncateChars(strings.Join(fresh, "\n"), submitLiveRegionTextLimit)
+	return capped
+}
+
+func submitTransitionSignal(before, after submitStateSnapshot) (signal, liveRegionText string) {
+	liveRegionText = newLiveRegionText(before, after)
+	switch {
+	case before.URL != after.URL:
+		return "url_changed", liveRegionText
+	case before.DialogOpen && !after.DialogOpen:
+		return "dialog_closed", liveRegionText
+	case liveRegionText != "":
+		return "live_region_changed", liveRegionText
+	}
+	return "", ""
 }
 
 func pendingSubmitPostState(before, after submitStateSnapshot, dispatch string, actionTimedOut bool, started time.Time) submitPostState {
@@ -116,13 +168,14 @@ func (h *Handlers) pollSubmitPostState(ctx context.Context, tabID string, before
 			observedPostState = true
 			lastReadErr = nil
 			after = observed
-			if signal := submitTransitionSignal(before, after); signal != "" {
+			if signal, liveRegionText := submitTransitionSignal(before, after); signal != "" {
 				return submitPostState{
 					Status:         "succeeded",
 					Signal:         signal,
 					Dispatch:       dispatch,
 					ActionTimedOut: actionTimedOut,
 					ElapsedMS:      time.Since(started).Milliseconds(),
+					LiveRegionText: liveRegionText,
 					Before:         before,
 					After:          after,
 				}, nil
