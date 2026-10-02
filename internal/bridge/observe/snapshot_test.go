@@ -346,3 +346,27 @@ func TestFullSnapshotKeepsDateTimeSegments(t *testing.T) {
 		t.Fatal("full snapshot dropped the date/time segment spinbuttons, want them kept outside the interactive filter")
 	}
 }
+
+const contentEditableFixtureHTML = `<body id="editors">
+<div contenteditable="true" aria-label="Notes">old</div>
+<div contenteditable="plaintext-only" aria-label="Plain">raw</div>
+<div aria-label="Panel">static</div>
+<div contenteditable="true" aria-label="Rich"><span>inner</span></div>
+</body>`
+
+func TestInteractiveSnapshotListsRolelessContentEditableAsTextbox(t *testing.T) {
+	ctx := fixtureTab(t, contentEditableFixtureHTML, "editors")
+
+	var got []string
+	for _, n := range interactiveSnapshot(t, ctx) {
+		got = append(got, n.Role+" "+strconv.Quote(n.Name)+" val="+strconv.Quote(n.Value))
+	}
+	want := []string{
+		`textbox "Notes" val="old"`,
+		`textbox "Plain" val="raw"`,
+		`textbox "Rich" val="inner"`,
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("interactive snapshot = %q, want %q", got, want)
+	}
+}

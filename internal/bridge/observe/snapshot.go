@@ -420,12 +420,28 @@ const FilterInteractive = "interactive"
 // Chrome's accessibility tree marks aria-hidden/display:none nodes via the
 // "hidden" boolean property.
 func isAXNodeHidden(n RawAXNode) bool {
+	return axProperty(n, "hidden") == "true"
+}
+
+func axProperty(n RawAXNode, name string) string {
 	for _, prop := range n.Properties {
-		if prop.Name == "hidden" && prop.Value.String() == "true" {
-			return true
+		if prop.Name == name {
+			return prop.Value.String()
 		}
 	}
-	return false
+	return ""
+}
+
+var editableTextKinds = map[string]bool{"plaintext": true, "richtext": true}
+
+// Chrome gives a contenteditable without a role the AX role "generic"; its
+// focusable root is the editor, while its non-focusable descendants are content.
+func asEditorTextbox(n RawAXNode) RawAXNode {
+	if n.Role.String() != "generic" || axProperty(n, "focusable") != "true" || !editableTextKinds[axProperty(n, "editable")] {
+		return n
+	}
+	n.Role = &RawAXValue{Type: "role", Value: json.RawMessage(`"textbox"`)}
+	return n
 }
 
 type snapshotBuilder struct {
@@ -475,7 +491,7 @@ func (b *snapshotBuilder) indexNodes(nodes []RawAXNode) {
 	seenFrames := make(map[string]bool, 4)
 
 	for _, n := range nodes {
-		b.nodeByID[n.NodeID] = n
+		b.nodeByID[n.NodeID] = asEditorTextbox(n)
 		b.childMap[n.NodeID] = append(b.childMap[n.NodeID], n.ChildIDs...)
 		if n.BackendDOMNodeID != 0 {
 			b.backendToAX[n.BackendDOMNodeID] = n.NodeID
