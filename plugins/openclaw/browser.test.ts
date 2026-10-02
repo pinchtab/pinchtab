@@ -44,4 +44,10 @@ describe("browser screenshot format", () => {
     await executeBrowserAction({ baseUrl: "http://localhost:9867", screenshotFormat: "png" }, { action: "screenshot" });
     assert.strictEqual(screenshotQueries[0].get("format"), "png");
   });
+
+  it("an explicit jpeg overrides a png config", async () => {
+    const result = await executeBrowserAction({ baseUrl: "http://localhost:9867", screenshotFormat: "png" }, { action: "screenshot", screenshotFormat: "jpeg" });
+    assert.strictEqual(screenshotQueries[0].get("format"), null);
+    assert.strictEqual(result.content[0].mimeType, "image/jpeg");
+  });
 });
