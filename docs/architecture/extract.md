@@ -70,7 +70,13 @@ above the threshold (default `0.3`, same as `find`):
    descriptor. The winner is picked here, not taken from the matcher's own
    `best_ref`: scores are rounded to six decimals and the highest wins, ties
    broken by document order, because the combined matcher merges its halves
-   concurrently and its tie ordering is not stable.
+   concurrently and its tie ordering is not stable. When the winner is label
+   text (`StaticText`/`LabelText`) naming a value-bearing control — a
+   textbox, searchbox, combobox, listbox, spinbutton or slider whose
+   accessible name equals the label or starts with it — the field binds to
+   the nearest such control instead, so a wrapping `<label>` yields the
+   control's ref and value rather than its own text. A `ref:` hint is never
+   redirected; text that labels no control resolves as matched.
 3. **Read.** The matched node's value is read in priority order `Value`, `Text`,
    `Name`; booleans consult the accessibility `Checked` state first.
 4. **Coerce.** The raw string is coerced to the schema type. A coercion failure

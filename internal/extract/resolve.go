@@ -166,6 +166,9 @@ func resolveField(prop Property, v view, opts Options) (FieldResult, any, bool) 
 	if !ok {
 		return fr, nil, false
 	}
+	if control, labelled := v.controlLabelledBy(node); prop.hint.kind != targetRef && labelled {
+		node, fr.Ref = control, control.Ref
+	}
 
 	value, source, ok := readValue(prop.Type, node)
 	fr.Source = source
@@ -226,6 +229,47 @@ func (v view) pickBest(matches []semantic.ElementMatch) (semantic.ElementMatch, 
 		}
 	}
 	return best, ok
+}
+
+var labelRoles = map[string]bool{"StaticText": true, "LabelText": true}
+
+var valueControlRoles = map[string]bool{
+	"textbox": true, "searchbox": true, "combobox": true,
+	"listbox": true, "spinbutton": true, "slider": true,
+}
+
+func (v view) controlLabelledBy(label observe.A11yNode) (observe.A11yNode, bool) {
+	text := strings.TrimSpace(label.Name)
+	if !labelRoles[label.Role] || text == "" {
+		return observe.A11yNode{}, false
+	}
+	at := v.index[label.Ref]
+	nearest := -1
+	for i, n := range v.nodes {
+		if !valueControlRoles[n.Role] || !namedBy(n.Name, text) {
+			continue
+		}
+		if nearest < 0 || distance(i, at) < distance(nearest, at) {
+			nearest = i
+		}
+	}
+	if nearest < 0 {
+		return observe.A11yNode{}, false
+	}
+	return v.nodes[nearest], true
+}
+
+func namedBy(name, label string) bool {
+	name = strings.TrimSpace(name)
+	prefix := label + " "
+	return strings.EqualFold(name, label) || len(name) > len(prefix) && strings.EqualFold(name[:len(prefix)], prefix)
+}
+
+func distance(a, b int) int {
+	if a > b {
+		return a - b
+	}
+	return b - a
 }
 
 func roundScore(s float64) float64 {
