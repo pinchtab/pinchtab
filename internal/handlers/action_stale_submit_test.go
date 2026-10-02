@@ -233,6 +233,78 @@ func TestTheRefusalPublishesNoRecoveryRecordWhileTheNavigationDoes(t *testing.T)
 	}
 }
 
+// cachedClick snapshots the live page into the ref cache and returns a click on the named
+// element resolved the way the endpoint resolves it, with the intent a snapshot would have
+// recorded. This is the other cache state an agent can be in: the ref still resolves, to a
+// node the page is about to destroy.
+func cachedClick(t *testing.T, h *Handlers, ctx context.Context, tabID, role, name string) *bridge.ActionRequest {
+	t.Helper()
+	h.refreshRefCache(ctx, tabID)
+	for _, node := range h.Bridge.GetRefCache(tabID).Nodes {
+		if node.Role == role && node.Name == name {
+			h.Recovery.RecordIntent(tabID, node.Ref, recovery.IntentEntry{
+				Descriptor: semantic.ElementDescriptor{Ref: node.Ref, Role: role, Name: name},
+				CachedAt:   time.Now(),
+			})
+			return &bridge.ActionRequest{Kind: bridge.ActionClick, Ref: node.Ref, NodeID: node.NodeID}
+		}
+	}
+	t.Fatalf("no %s named %q in the snapshot", role, name)
+	return nil
+}
+
+func rerenderElement(t *testing.T, ctx context.Context, id string) {
+	t.Helper()
+	js := `(() => { const el = document.getElementById("` + id + `"); el.outerHTML = el.outerHTML; })()`
+	if err := chromedp.Run(ctx, chromedp.Evaluate(js, nil)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestACachedStaleRefOnASubmitControlIsRefusedBeforeAnyOrderIsPlaced(t *testing.T) {
+	f := newOrderFixture(t)
+	h, ctx, tabID := staleSubmitHandlers(t, f)
+	click := cachedClick(t, h, ctx, tabID, "button", "Place order")
+	rerenderElement(t, ctx, "b")
+
+	_, _, rr, err := h.executeActionResilient(ctx, click, h.Config, tabID, false)
+
+	if !errors.Is(err, ErrStaleSubmitTarget) {
+		t.Fatalf("error = %v, want the stale-submit refusal", err)
+	}
+	if errors.Is(err, ErrTargetNotFound) {
+		t.Errorf("the refusal was wrapped as ref-not-found: %v", err)
+	}
+	if rr != nil {
+		t.Errorf("a recovery record was published for a click that never happened: %+v", rr)
+	}
+	if placed := f.settleForOrder(); placed != 0 {
+		t.Errorf("%d order(s) placed by a call that refused", placed)
+	}
+}
+
+func TestACachedStaleRefOnALinkStillRecoversAndClicks(t *testing.T) {
+	f := newOrderFixture(t)
+	h, ctx, tabID := staleSubmitHandlers(t, f)
+	click := cachedClick(t, h, ctx, tabID, "link", "Read the terms")
+	rerenderElement(t, ctx, "t")
+
+	result, _, rr, err := h.executeActionResilient(ctx, click, h.Config, tabID, false)
+
+	if err != nil {
+		t.Fatalf("a cached stale ref on a link was not recovered: %v", err)
+	}
+	if rr == nil || !rr.Recovered {
+		t.Errorf("recovery record = %+v, want recovered", rr)
+	}
+	if landed, _ := result[bridge.ResultLandedURL].(string); !strings.Contains(landed, "/terms") {
+		t.Errorf("landed url = %v, want the link's own target", result[bridge.ResultLandedURL])
+	}
+	if placed := f.settleForOrder(); placed != 0 {
+		t.Errorf("%d order(s) placed by a click on a link", placed)
+	}
+}
+
 // The wire shape a caller actually sees. The helper-level tests above pin the behaviour at
 // the shared owner; this pins that the refusal survives the endpoint as a 404 naming the
 // snapshot, with dispatch state on it — and that following the printed remedy from the

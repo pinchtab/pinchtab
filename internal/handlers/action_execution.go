@@ -350,29 +350,12 @@ func (h *Handlers) executeAction(ctx context.Context, req bridge.ActionRequest, 
 // req.NodeID is mutated in place, as the inline action/batch/macro paths did.
 func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.ActionRequest, cfg *config.RuntimeConfig, resolvedTabID string, refMissing bool) (map[string]any, string, *recovery.RecoveryResult, error) {
 	submitClick := bridge.IsSubmitClick(req.Kind, *req)
+	dispatch := h.recoveryDispatch(req, cfg, resolvedTabID, h.refFrameID(resolvedTabID, req.Ref))
 	if refMissing {
 		if submitClick {
 			return nil, "", nil, ErrStaleSubmitTarget
 		}
-		rr, recRes, recErr := h.Recovery.Attempt(
-			ctx, resolvedTabID, req.Ref, req.Kind,
-			func(c context.Context, _ string, nodeID int64) (map[string]any, error) {
-				req.NodeID = nodeID
-				// The caller did not declare a submit, but whether a click submits a form
-				// is a property of the page. Recovery is about to dispatch at a node it
-				// MATCHED rather than resolved, and a submit dispatched at a guessed
-				// target cannot be taken back — so this refuses before the click rather
-				// than reporting afterwards.
-				if h.recoveredNodeSubmits(c, *req, nodeID) {
-					return nil, ErrStaleSubmitTarget
-				}
-				if secErr := h.refreshActionSecondaryTargets(c, resolvedTabID, req); secErr != nil {
-					return nil, secErr
-				}
-				res, _, err := h.executeAction(c, *req, cfg)
-				return res, err
-			},
-		)
+		rr, recRes, recErr := h.Recovery.Attempt(ctx, resolvedTabID, req.Ref, req.Kind, dispatch)
 		if recErr != nil {
 			// Nothing was dispatched, so there is no recovery record to publish: the
 			// refusal happened before the match was used for anything. Absence cannot be
@@ -385,7 +368,6 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 		return recRes, "", &rr, nil
 	}
 
-	mintedIn := h.refFrameID(resolvedTabID, req.Ref)
 	result, backend, err := h.executeAction(ctx, *req, cfg)
 	if err != nil && !submitClick && shouldRetryPointerAction(*req, err) {
 		if (req.Ref != "" || req.ToSelector != "") && bridge.IsStaleNodeError(err) {
@@ -411,18 +393,11 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 		r2, recRes, recErr := h.Recovery.AttemptWithClassification(
 			ctx, resolvedTabID, req.Ref, req.Kind,
 			recovery.ClassifyFailure(err),
-			func(c context.Context, _ string, nodeID int64) (map[string]any, error) {
-				req.NodeID = nodeID
-				if h.matchLeftRefFrame(resolvedTabID, mintedIn, nodeID) {
-					return nil, errRefFrameReplaced
-				}
-				if secErr := h.refreshActionSecondaryTargets(c, resolvedTabID, req); secErr != nil {
-					return nil, secErr
-				}
-				res, _, e := h.executeAction(c, *req, cfg)
-				return res, e
-			},
+			dispatch,
 		)
+		if errors.Is(recErr, ErrStaleSubmitTarget) {
+			return nil, "", nil, recErr
+		}
 		rr = &r2
 		switch {
 		case recErr == nil:
@@ -435,6 +410,27 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 		err = fmt.Errorf("%w: %w", refNotFound(req.Ref), err)
 	}
 	return result, backend, rr, err
+}
+
+// recoveryDispatch is the one executor both recovery arms hand to the engine. Recovery
+// dispatches at a node it MATCHED rather than resolved, so every guard on a matched node
+// lives here: a guard added to one arm only is how a cached stale ref came to place an
+// order the missing-ref arm refused.
+func (h *Handlers) recoveryDispatch(req *bridge.ActionRequest, cfg *config.RuntimeConfig, tabID, mintedIn string) recovery.ActionExecutor {
+	return func(ctx context.Context, _ string, nodeID int64) (map[string]any, error) {
+		req.NodeID = nodeID
+		if h.matchLeftRefFrame(tabID, mintedIn, nodeID) {
+			return nil, errRefFrameReplaced
+		}
+		if h.recoveredNodeSubmits(ctx, *req, nodeID) {
+			return nil, ErrStaleSubmitTarget
+		}
+		if err := h.refreshActionSecondaryTargets(ctx, tabID, req); err != nil {
+			return nil, err
+		}
+		res, _, err := h.executeAction(ctx, *req, cfg)
+		return res, err
+	}
 }
 
 // errRefFrameReplaced refuses a recovery match outside the frame the ref was minted in:

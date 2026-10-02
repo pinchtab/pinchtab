@@ -219,8 +219,14 @@ func TestEveryReResolutionSiteRefreshesSecondaryTargets(t *testing.T) {
 	pkg := srccensus.Load(t, ".", 80)
 	pkg.MustFunc(t, "refreshActionSecondaryTargets")
 	resilient := pkg.Source(pkg.MustFunc(t, "executeActionResilient"))
-	if got := strings.Count(resilient, "h.refreshActionSecondaryTargets("); got != 3 {
-		t.Errorf("executeActionResilient calls refreshActionSecondaryTargets %d times, want 3 — the recovery-first callback, the pointer retry, and the post-failure heal each re-resolve after the snapshot may have changed", got)
+	if got := strings.Count(resilient, "h.refreshActionSecondaryTargets("); got != 1 {
+		t.Errorf("executeActionResilient calls refreshActionSecondaryTargets %d times, want 1 — the pointer retry re-resolves after the snapshot may have changed", got)
+	}
+	if got := strings.Count(resilient, "dispatch)") + strings.Count(resilient, "dispatch,\n"); got != 2 {
+		t.Errorf("executeActionResilient hands the shared recovery dispatch to %d recovery calls, want 2 — the recovery-first arm and the post-failure heal", got)
+	}
+	if !strings.Contains(pkg.Source(pkg.MustFunc(t, "recoveryDispatch")), "h.refreshActionSecondaryTargets(") {
+		t.Error("recoveryDispatch no longer re-resolves secondary targets, so neither recovery arm does")
 	}
 
 	if !strings.Contains(pkg.Source(pkg.MustFunc(t, "resolveActionDestination")), "h.refreshActionSecondaryTargets(") {
