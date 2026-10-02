@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
+
+	"github.com/chromedp/cdproto/page"
 )
 
 func TestDialogManager_AutoHandlerVisibility(t *testing.T) {
@@ -116,5 +119,62 @@ func TestHandlePendingDialog_Pending_ErrorRequeues(t *testing.T) {
 	}
 	if pending.Type != "confirm" {
 		t.Fatalf("pending.Type = %q, want confirm", pending.Type)
+	}
+}
+
+func TestDialogAccept_PromptDefaultIsTheSameOnArmedAndPendingPaths(t *testing.T) {
+	orig := handleDialogAction
+	t.Cleanup(func() { handleDialogAction = orig })
+
+	submitted := make(chan string, 1)
+	handleDialogAction = func(ctx context.Context, accept bool, promptText string) error {
+		submitted <- promptText
+		return nil
+	}
+	opening := &page.EventJavascriptDialogOpening{Type: page.DialogTypePrompt, Message: "Your name?", DefaultPrompt: "anon"}
+
+	armedDM := NewDialogManager()
+	armedDM.ArmAutoHandler("tab1", "accept", "")
+	onDialogOpening(context.Background(), "tab1", armedDM, false, opening)
+	var armedText string
+	select {
+	case armedText = <-submitted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("armed handler never answered the dialog")
+	}
+
+	pendingDM := NewDialogManager()
+	onDialogOpening(context.Background(), "tab1", pendingDM, false, opening)
+	result, err := HandlePendingDialog(context.Background(), "tab1", pendingDM, true, "")
+	if err != nil {
+		t.Fatalf("HandlePendingDialog() error = %v", err)
+	}
+	pendingText := <-submitted
+
+	if armedText != "anon" || pendingText != armedText {
+		t.Fatalf("armed submitted %q, pending submitted %q, want both %q", armedText, pendingText, "anon")
+	}
+	if result.DefaultPrompt != "anon" {
+		t.Fatalf("result.DefaultPrompt = %q, want anon", result.DefaultPrompt)
+	}
+}
+
+func TestResolvePromptText(t *testing.T) {
+	cases := []struct {
+		name   string
+		accept bool
+		text   string
+		want   string
+	}{
+		{"accept without text submits the default", true, "", "anon"},
+		{"explicit text wins", true, "bob", "bob"},
+		{"dismiss ignores the default", false, "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := resolvePromptText(tc.accept, tc.text, "anon"); got != tc.want {
+				t.Fatalf("resolvePromptText() = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

@@ -43,6 +43,9 @@ func dialogDetails(hint, tabID string, dialog *bridge.DialogState) map[string]an
 	details["tabId"] = tabID
 	details["dialogType"] = dialog.Type
 	details["dialogMessage"] = dialog.Message
+	if dialog.DefaultPrompt != "" {
+		details["defaultPrompt"] = dialog.DefaultPrompt
+	}
 	return details
 }
 
