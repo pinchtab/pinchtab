@@ -106,3 +106,54 @@ func TestMustResolveTabArgPassesAnExplicitOrCachedID(t *testing.T) {
 		t.Fatalf("cached id: got %q, %v — the refusal must not swallow the cache fallback", id, err)
 	}
 }
+
+func TestTabsCommandStarsTheCachedTabOnlyForAnonymousCallers(t *testing.T) {
+	if os.Getenv("PINCHTAB_TABS_STAR_HELPER") == "1" {
+		agentID := os.Getenv("PINCHTAB_AGENT_ID")
+		_ = os.Unsetenv("PINCHTAB_AGENT_ID")
+		WriteTabStateFile("TAB_B")
+		_ = os.Setenv("PINCHTAB_AGENT_ID", agentID)
+		rootCmd.SetArgs([]string{"tabs"})
+		if err := rootCmd.Execute(); err != nil {
+			os.Exit(commandExitCode(err))
+		}
+		return
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/tabs" {
+			_, _ = w.Write([]byte(`{"tabs":[{"id":"TAB_A","url":"https://a.example/","title":"A"},{"id":"TAB_B","url":"https://b.example/","title":"B"}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	for _, tc := range []struct {
+		name, agentID, want string
+	}{
+		{"anonymous", "", "TAB_A\thttps://a.example/\tA\n*TAB_B\thttps://b.example/\tB\n"},
+		{"identified", "agent-env", "TAB_A\thttps://a.example/\tA\nTAB_B\thttps://b.example/\tB\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			child := exec.Command(os.Args[0], "-test.run=^TestTabsCommandStarsTheCachedTabOnlyForAnonymousCallers$", "-test.timeout=30s") // #nosec G204 -- re-executes this test binary with fixed arguments.
+			child.Env = append(os.Environ(),
+				"PINCHTAB_TABS_STAR_HELPER=1",
+				"PINCHTAB_SERVER="+srv.URL,
+				"PINCHTAB_TOKEN=x",
+				"PINCHTAB_SESSION=",
+				"PINCHTAB_AGENT_ID="+tc.agentID,
+				"HOME="+t.TempDir(),
+				"XDG_STATE_HOME="+t.TempDir(),
+			)
+			out, err := child.Output()
+			if err != nil {
+				t.Fatalf("tabs exited with %v; stdout:\n%s", err, out)
+			}
+			if !strings.HasPrefix(string(out), tc.want) {
+				t.Fatalf("tabs stdout = %q, want it to start with %q", out, tc.want)
+			}
+		})
+	}
+}
