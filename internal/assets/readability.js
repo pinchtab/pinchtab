@@ -28,17 +28,24 @@
     return null;
   };
 
-  let root = firstVisible('article') ||
-             firstVisible('[role="main"]') ||
-             firstVisible('main');
+  const source = firstVisible('article') ||
+                 firstVisible('[role="main"]') ||
+                 firstVisible('main');
+  const live = source || document.body;
+  const root = live.cloneNode(true);
 
-  if (!root) {
-    root = document.body.cloneNode(true);
+  // cloneNode does not carry a select's current selection, so read it from the live
+  // select at the same document-order position, before anything is stripped from the clone.
+  const liveSelects = live.querySelectorAll('select');
+  const chosenLabels = new Map();
+  root.querySelectorAll('select').forEach((select, i) => {
+    chosenLabels.set(select, Array.from(liveSelects[i].selectedOptions, o => o.label).join(', '));
+  });
+
+  if (!source) {
     for (const sel of strip) {
       root.querySelectorAll(sel).forEach(el => el.remove());
     }
-  } else {
-    root = root.cloneNode(true);
   }
 
   root.querySelectorAll('script, style, noscript, svg, [hidden]').forEach(el => el.remove());
@@ -91,11 +98,20 @@
       queue('\n');
       return;
     }
+    if (node.tagName === 'SELECT') {
+      queue(' ');
+      write(chosenLabels.get(node));
+      queue(' ');
+      return;
+    }
     const block = BLOCKS.has(node.tagName);
+    const button = node.tagName === 'BUTTON';
+    if (button) queue(' ');
     if (block) queue('\n');
     if (node.tagName === 'TD' || node.tagName === 'TH') queue('\t');
     for (const child of node.childNodes) serialize(child);
     if (block) queue('\n');
+    if (button) queue(' ');
   };
   serialize(root);
 

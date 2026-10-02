@@ -145,6 +145,40 @@ func squeeze(s string) string {
 	return strings.Join(strings.Fields(s), "")
 }
 
+const checkoutPage = `<form><label>Country <select name="c">` +
+	`<option>Afghanistan</option><option>Albania</option><option>Japan</option><option>Sweden</option>` +
+	`</select></label><label>Delivery<select name="d"><option>Standard (3-5 days)</option>` +
+	`<option selected>Express (1 day)</option></select></label><button>Pay</button><button>Cancel</button></form>`
+
+func TestASelectRendersOnlyItsLiveSelectedLabel(t *testing.T) {
+	ctx := readabilityPage(t, checkoutPage)
+	if err := chromedp.Run(ctx, chromedp.SetValue(`select[name=c]`, "Japan", chromedp.ByQuery)); err != nil {
+		t.Fatal(err)
+	}
+	text := extractReadability(t, ctx)
+
+	for _, want := range []string{"Country Japan", "Delivery Express (1 day) Pay Cancel"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("want %q in the extraction, the selected labels read from the live page with every boundary kept:\n%s", want, text)
+		}
+	}
+	for _, unchosen := range []string{"Afghanistan", "Sweden", "Standard"} {
+		if strings.Contains(text, unchosen) {
+			t.Errorf("the unselected option %q leaked into the extraction:\n%s", unchosen, text)
+		}
+	}
+}
+
+func TestAMultiSelectJoinsItsSelectedLabelsAndAnEmptyOneRendersNothing(t *testing.T) {
+	text := extractReadability(t, readabilityPage(t, `<p>Tags<select multiple>`+
+		`<option selected>red</option><option>green</option><option selected>blue</option></select>`+
+		`Sizes<select multiple><option>S</option><option>M</option></select>end</p>`))
+
+	if !strings.Contains(text, "Tags red, blue Sizes end") {
+		t.Errorf("want the selected labels joined by ', ' and nothing for an empty multi-select:\n%s", text)
+	}
+}
+
 // The CI twin. Every guard above needs a browser and skips without one, so a revert of
 // the fix would land green on a machine that has none. This one reds anywhere: the whole
 // defect was reading innerText off a node that has no layout, so the script must not read
@@ -153,7 +187,7 @@ func TestTheScriptDoesNotReadInnerTextFromTheDetachedClone(t *testing.T) {
 	if strings.Contains(assets.ReadabilityJS, "root.innerText") {
 		t.Error("the script reads innerText from the clone again; the clone is detached, so innerText has no layout to consult and silently degrades to textContent — every field boundary is lost. Serialise the clone instead")
 	}
-	for _, required := range []string{"BLOCKS", "queue(", "serialize("} {
+	for _, required := range []string{"BLOCKS", "queue(", "serialize(", "selectedOptions"} {
 		if !strings.Contains(assets.ReadabilityJS, required) {
 			t.Errorf("the separator-aware walk is gone (%q not found); without it adjacent blocks and table cells fuse — re-point this guard at whatever replaced the walk rather than deleting it", required)
 		}
