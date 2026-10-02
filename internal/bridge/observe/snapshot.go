@@ -751,28 +751,45 @@ func FilterSubtree(nodes []RawAXNode, scopeBackendID int64) []RawAXNode {
 	return result
 }
 
+type diffKey struct {
+	frameID string
+	nodeID  int64
+	role    string
+	name    string
+}
+
+func diffKeyOf(n A11yNode) diffKey {
+	if n.NodeID == 0 {
+		return diffKey{frameID: n.FrameID, role: n.Role, name: n.Name}
+	}
+	return diffKey{frameID: n.FrameID, nodeID: n.NodeID}
+}
+
+func nodeChanged(old, n A11yNode) bool {
+	return old.Role != n.Role || old.Name != n.Name || old.Value != n.Value ||
+		old.Focused != n.Focused || old.Disabled != n.Disabled || old.Checked != n.Checked
+}
+
 func DiffSnapshot(prev, curr []A11yNode) (added, changed, removed []A11yNode) {
-	prevMap := make(map[string]A11yNode, len(prev))
+	prevMap := make(map[diffKey]A11yNode, len(prev))
 	for _, n := range prev {
-		key := fmt.Sprintf("%s:%s:%d", n.Role, n.Name, n.NodeID)
-		prevMap[key] = n
+		prevMap[diffKeyOf(n)] = n
 	}
 
-	currMap := make(map[string]bool, len(curr))
+	currKeys := make(map[diffKey]bool, len(curr))
 	for _, n := range curr {
-		key := fmt.Sprintf("%s:%s:%d", n.Role, n.Name, n.NodeID)
-		currMap[key] = true
+		key := diffKeyOf(n)
+		currKeys[key] = true
 		old, existed := prevMap[key]
 		if !existed {
 			added = append(added, n)
-		} else if old.Value != n.Value || old.Focused != n.Focused || old.Disabled != n.Disabled || old.Checked != n.Checked {
+		} else if nodeChanged(old, n) {
 			changed = append(changed, n)
 		}
 	}
 
 	for _, n := range prev {
-		key := fmt.Sprintf("%s:%s:%d", n.Role, n.Name, n.NodeID)
-		if !currMap[key] {
+		if !currKeys[diffKeyOf(n)] {
 			removed = append(removed, n)
 		}
 	}

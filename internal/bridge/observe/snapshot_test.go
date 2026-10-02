@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/chromedp/cdproto/target"
@@ -122,5 +123,63 @@ func TestUnfilteredSnapshotLeavesLiveRegionNamesToTheirChildren(t *testing.T) {
 
 	if len(nodes) != 2 || nodes[0].Name != "" || nodes[1].Name != "Enter a valid email address" {
 		t.Fatalf("unfiltered snapshot = %+v, want an unnamed alert followed by its text", nodes)
+	}
+}
+
+func TestSnapshotDiffTreatsARenamedNodeAsChanged(t *testing.T) {
+	before := []A11yNode{
+		{Ref: "e1", Role: "textbox", Name: "Name", NodeID: 5},
+		{Ref: "e14", Role: "status", Name: "Thanks Bob", NodeID: 9},
+	}
+	after := []A11yNode{
+		{Ref: "e1", Role: "textbox", Name: "Name", NodeID: 5},
+		{Ref: "e14", Role: "status", Name: "Thanks Dee", NodeID: 9},
+	}
+
+	added, changed, removed := DiffSnapshot(before, after)
+	if len(added) != 0 || len(removed) != 0 {
+		t.Fatalf("added %v removed %v, want neither for the same node", added, removed)
+	}
+	if len(changed) != 1 || changed[0].Name != "Thanks Dee" {
+		t.Fatalf("changed = %v, want the renamed status node", changed)
+	}
+
+	rendered := FormatSnapshotCompactDiff(after, added, changed, removed)
+	if !strings.Contains(rendered, `"Thanks Dee" [~]`) || strings.Contains(rendered, "# removed:") {
+		t.Fatalf("compact diff = %q, want the status line marked [~] and no removed footer", rendered)
+	}
+}
+
+func TestSnapshotDiffKeepsNodesWithoutANodeIDApart(t *testing.T) {
+	before := []A11yNode{
+		{Ref: "e1", Role: "StaticText", Name: "Alpha"},
+		{Ref: "e2", Role: "StaticText", Name: "Beta"},
+	}
+	after := []A11yNode{
+		{Ref: "e1", Role: "StaticText", Name: "Alpha"},
+		{Ref: "e2", Role: "StaticText", Name: "Gamma"},
+	}
+
+	added, changed, removed := DiffSnapshot(before, after)
+	if len(changed) != 0 {
+		t.Fatalf("changed = %v, want none", changed)
+	}
+	if len(added) != 1 || added[0].Name != "Gamma" {
+		t.Fatalf("added = %v, want Gamma", added)
+	}
+	if len(removed) != 1 || removed[0].Name != "Beta" {
+		t.Fatalf("removed = %v, want Beta", removed)
+	}
+}
+
+func TestSnapshotDiffKeepsEqualNodeIDsInDifferentFramesApart(t *testing.T) {
+	before := []A11yNode{
+		{Ref: "e1", Role: "button", Name: "Save", NodeID: 4, FrameID: "main"},
+		{Ref: "e2", Role: "link", Name: "Help", NodeID: 4, FrameID: "child"},
+	}
+
+	added, changed, removed := DiffSnapshot(before, before)
+	if len(added)+len(changed)+len(removed) != 0 {
+		t.Fatalf("added %v changed %v removed %v, want an unchanged snapshot to diff empty", added, changed, removed)
 	}
 }
