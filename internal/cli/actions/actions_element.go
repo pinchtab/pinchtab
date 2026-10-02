@@ -112,6 +112,9 @@ func postActionWithHeaders(conn apiclient.Conn, cmd *cobra.Command, req bridge.A
 
 	result := conn.PostQuiet(path, nil, opts...)
 	printActionResult(req.Kind, result)
+	if opened := openedTab(result); opened != "" {
+		tabID = opened
+	}
 
 	snap, _ := cmd.Flags().GetBool("snap")
 	snapDiff, _ := cmd.Flags().GetBool("snap-diff")
@@ -167,6 +170,12 @@ func fetchAndPrintText(conn apiclient.Conn, tabID string) {
 	output.Value(result.Text)
 }
 
+func openedTab(result map[string]any) string {
+	actionResult, _ := result["result"].(map[string]any)
+	opened, _ := actionResult["switchedToTab"].(string)
+	return strings.TrimSpace(opened)
+}
+
 func printActionResult(kind string, result map[string]any) {
 	if success, ok := result["success"].(bool); ok && !success {
 		errMsg := "unknown error"
@@ -208,6 +217,11 @@ func printActionResult(kind string, result map[string]any) {
 				printNavigationOutcome(actionResult)
 				return
 			}
+		}
+		if opened := openedTab(result); opened != "" {
+			output.Value("OK opened tab " + opened)
+			output.Hint("the click opened a new tab — run `pinchtab tab " + opened + "` to switch to it")
+			return
 		}
 		// A click that moved the page succeeded. It used to exit 1 with a 409, which
 		// is the signal every agent loop and CI harness branches on, so the natural

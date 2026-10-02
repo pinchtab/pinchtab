@@ -1123,3 +1123,56 @@ func TestPrintActionResultASubmitThatNavigatedKeepsItsPostStateAndSaysWhereItLan
 		t.Errorf("stderr = %q; nothing tells the caller its refs are dead", hint)
 	}
 }
+
+const popupClickResponse = `{"success":true,"result":{"clicked":true,"switchedToTab":"TAB_NEW"}}`
+
+func TestPrintActionResultAClickThatOpenedATabNamesIt(t *testing.T) {
+	opened := map[string]any{
+		"success": true,
+		"result":  map[string]any{"clicked": true, "switchedToTab": "TAB_NEW"},
+	}
+
+	out := captureStdout(t, func() { printActionResult("click", opened) })
+	if strings.TrimSpace(out) != "OK opened tab TAB_NEW" {
+		t.Errorf("stdout = %q, want OK opened tab TAB_NEW", out)
+	}
+
+	hint := captureStderr(t, func() { printActionResult("click", opened) })
+	if !strings.Contains(hint, "pinchtab tab TAB_NEW") {
+		t.Errorf("stderr = %q; nothing tells the caller how to switch to the new tab", hint)
+	}
+}
+
+func TestClickThatOpenedATabFetchesSnapAndTextFromTheNewTab(t *testing.T) {
+	for _, flag := range []string{"snap", "snap-diff", "text"} {
+		t.Run(flag, func(t *testing.T) {
+			m := newMockServer()
+			defer m.close()
+			m.setResponse("POST", "/action", 200, popupClickResponse)
+
+			cmd := newActionCmd()
+			cmd.Flags().Bool("snap", false, "")
+			cmd.Flags().Bool("snap-diff", false, "")
+			cmd.Flags().Bool("text", false, "")
+			_ = cmd.Flags().Set(flag, "true")
+			captureStdout(t, func() {
+				Action(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "click", "e3", cmd)
+			})
+
+			if len(m.requests) != 2 {
+				t.Fatalf("expected 2 requests (action + follow-up), got %d", len(m.requests))
+			}
+			followUp := m.requests[1]
+			if flag == "text" {
+				if followUp.Path != "/tabs/TAB_NEW/text" {
+					t.Fatalf("text path = %q, want /tabs/TAB_NEW/text", followUp.Path)
+				}
+				return
+			}
+			query, _ := url.ParseQuery(followUp.Query)
+			if followUp.Path != "/snapshot" || query.Get("tabId") != "TAB_NEW" {
+				t.Fatalf("snapshot request = %s?%s, want /snapshot with tabId=TAB_NEW", followUp.Path, followUp.Query)
+			}
+		})
+	}
+}
