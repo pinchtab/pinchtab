@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/idpi"
 	"gopkg.in/yaml.v3"
 )
 
@@ -210,6 +211,9 @@ func TestSnapshotDiffHonoursEveryFormat(t *testing.T) {
 	}
 
 	contentType, jsonBody := diffIn("json")
+	if !strings.HasPrefix(contentType, "application/json") {
+		t.Errorf("json diff Content-Type = %q, want application/json", contentType)
+	}
 	var jsonDiff map[string]any
 	if err := json.Unmarshal([]byte(jsonBody), &jsonDiff); err != nil {
 		t.Fatalf("json diff (%s) does not parse: %v", contentType, err)
@@ -308,6 +312,29 @@ func TestYAMLSnapshotSpellsEveryKeyAsJSONDoes(t *testing.T) {
 		}
 		if _, ok := yamlNode["nodeid"]; ok {
 			t.Errorf("yaml %s node spells nodeId as nodeid, the yaml.v3 default for an untagged field", emitter.name)
+		}
+	}
+}
+
+func TestSnapshotPlainDiffWrapsUntrustedContent(t *testing.T) {
+	h, tabID, _ := newFrameDisclosureFixture(t)
+	idpiCfg := config.IDPIConfig{Enabled: true, WrapContent: true}
+	h.Config.IDPI = idpiCfg
+	h.IDPIGuard = idpi.NewGuard(idpiCfg, nil)
+
+	for _, format := range []string{"text", "compact"} {
+		snapshotQueryBody(t, h, "tabId="+tabID+"&filter=interactive")
+		w := httptest.NewRecorder()
+		h.HandleSnapshot(w, httptest.NewRequest("GET", "/snapshot?tabId="+tabID+"&diff=true&format="+format, nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s diff: status %d body=%s", format, w.Code, w.Body.String())
+		}
+		body := w.Body.String()
+		open := strings.Index(body, "<untrusted_web_content url=")
+		added := strings.Index(body, `"OuterBtn" [+]`)
+		end := strings.LastIndex(body, "</untrusted_web_content>")
+		if open < 0 || added < open || end < added {
+			t.Errorf("%s diff does not wrap its nodes in the untrusted-content block:\n%s", format, body)
 		}
 	}
 }
