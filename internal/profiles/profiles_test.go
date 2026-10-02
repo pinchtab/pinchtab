@@ -16,6 +16,27 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 )
 
+func TestMain(m *testing.M) {
+	if err := pointOSTempDirAtTestFixtureRoot(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
+}
+
+func pointOSTempDirAtTestFixtureRoot() error {
+	fixtureRoot := os.Getenv("GOTMPDIR")
+	if fixtureRoot == "" {
+		return nil
+	}
+	for _, osTempDirEnv := range []string{"TMPDIR", "TMP"} {
+		if err := os.Setenv(osTempDirEnv, fixtureRoot); err != nil {
+			return fmt.Errorf("align %s with GOTMPDIR: %w", osTempDirEnv, err)
+		}
+	}
+	return nil
+}
+
 func TestProfileManagerCreateAndList(t *testing.T) {
 	dir := t.TempDir()
 	pm := NewProfileManager(dir)
