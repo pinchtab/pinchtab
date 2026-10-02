@@ -333,7 +333,14 @@ var directoryRemovers = []directoryRemover{
 		funcs:             []string{"removeProfileDir"},
 		underProfilesBase: false,
 		route:             "test harness only",
-		why:               "removes a t.TempDir-rooted browser profile built for one test",
+		why:               "removes the one browser profile newProfileDir built for the test or the shared browser",
+	},
+	{
+		path:              "internal/testbrowser/profile_root.go",
+		funcs:             []string{"sweepStaleProfiles"},
+		underProfilesBase: false,
+		route:             "test harness only",
+		why:               "removes leaked test profiles by name prefix and age under the repo's .tmp/test-profiles, or os.TempDir when no repo is found; never a user profile base",
 	},
 	{
 		path:              "internal/cli/output/advisory.go",

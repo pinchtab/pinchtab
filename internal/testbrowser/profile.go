@@ -32,7 +32,7 @@ const (
 // cleanup bugs.
 func ProfileDir(t testing.TB) string {
 	t.Helper()
-	dir, err := os.MkdirTemp("", "pinchtab-test-profile-")
+	dir, err := newProfileDir()
 	if err != nil {
 		t.Fatalf("create browser profile dir: %v", err)
 	}

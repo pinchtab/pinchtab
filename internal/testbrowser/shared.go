@@ -96,7 +96,7 @@ func sharedBrowser(t testing.TB) context.Context {
 }
 
 func startShared(binary string) error {
-	profile, err := os.MkdirTemp("", "pinchtab-test-profile-")
+	profile, err := newProfileDir()
 	if err != nil {
 		return fmt.Errorf("create browser profile dir: %w", err)
 	}
