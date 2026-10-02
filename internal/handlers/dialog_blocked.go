@@ -13,6 +13,8 @@ const dialogBlockedCode = "dialog_blocked"
 
 const dialogBlockedHint = "a JavaScript dialog is open on this tab and blocks every page interaction until it is answered. It belongs to this tab, so retrying, activating the tab or opening a fresh one cannot clear it. Use pinchtab dialog dismiss to cancel it instead of accepting, or pass --dialog-action accept|dismiss on the action that opens the dialog."
 
+const dialogOpenedHint = "this click landed and opened a JavaScript dialog, so do not click again. The dialog blocks every page interaction on this tab until it is answered. Use pinchtab dialog dismiss to cancel it instead of accepting."
+
 var dialogBlockedRemedy = remedy.Declare("pinchtab dialog accept")
 
 const dialogBlockedStepRemedy = "answer it with pinchtab dialog accept or pinchtab dialog dismiss, or pass --dialog-action accept on the action that opens the dialog"
@@ -36,12 +38,24 @@ func dialogBlockedMessage(tabID string, dialog *bridge.DialogState) string {
 	return fmt.Sprintf("tab %s is blocked by a JavaScript dialog (%s: %q)", tabID, dialog.Type, dialog.Message)
 }
 
-func dialogBlockedDetails(tabID string, dialog *bridge.DialogState) map[string]any {
-	details := remedy.Details(dialogBlockedHint, dialogBlockedRemedy.Remedy())
+func dialogDetails(hint, tabID string, dialog *bridge.DialogState) map[string]any {
+	details := remedy.Details(hint, dialogBlockedRemedy.Remedy())
 	details["tabId"] = tabID
 	details["dialogType"] = dialog.Type
 	details["dialogMessage"] = dialog.Message
 	return details
+}
+
+func dialogBlockedDetails(tabID string, dialog *bridge.DialogState) map[string]any {
+	return dialogDetails(dialogBlockedHint, tabID, dialog)
+}
+
+func withOpenedDialog(result map[string]any, tabID string, dialog *bridge.DialogState) map[string]any {
+	if result == nil {
+		result = make(map[string]any)
+	}
+	result[bridge.OpenedDialogResultKey] = dialogDetails(dialogOpenedHint, tabID, dialog)
+	return result
 }
 
 func writeDialogBlocked(w http.ResponseWriter, tabID string, dialog *bridge.DialogState, message string) {

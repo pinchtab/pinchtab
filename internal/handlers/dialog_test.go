@@ -197,9 +197,9 @@ func TestIsTimeoutWithPendingDialog(t *testing.T) {
 				dm.SetPending(tc.tabID, tc.pending)
 			}
 
-			got := isTimeoutWithPendingDialog(tc.err, tc.tabID, mb)
+			got := dialogPendingAfterTimeout(tc.err, tc.tabID, mb) != nil
 			if got != tc.expected {
-				t.Errorf("isTimeoutWithPendingDialog() = %v, want %v", got, tc.expected)
+				t.Errorf("dialogPendingAfterTimeout() != nil = %v, want %v", got, tc.expected)
 			}
 		})
 	}

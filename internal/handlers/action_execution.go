@@ -659,12 +659,9 @@ func (h *Handlers) publishVocabIfReepoched(w http.ResponseWriter, tabID, before 
 	}
 }
 
-func isTimeoutWithPendingDialog(err error, tabID string, b bridge.BridgeAPI) bool {
-	if err == nil {
-		return false
-	}
+func dialogPendingAfterTimeout(err error, tabID string, b bridge.BridgeAPI) *bridge.DialogState {
 	if !errors.Is(err, context.DeadlineExceeded) {
-		return false
+		return nil
 	}
-	return pendingTabDialog(b, tabID) != nil
+	return pendingTabDialog(b, tabID)
 }

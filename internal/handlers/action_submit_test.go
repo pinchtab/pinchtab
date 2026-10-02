@@ -283,7 +283,7 @@ func TestHandleClickSubmitPostDispatchErrorIsNotRetryable(t *testing.T) {
 	}
 }
 
-func TestHandleClickSubmitNativeDialogKeepsDialogBlockingContract(t *testing.T) {
+func TestHandleClickSubmitThatOpensANativeDialogReportsItWithoutPollingTheDOM(t *testing.T) {
 	parentCtx := t.Context()
 	b := newSubmitActionBridge(parentCtx)
 	b.executeActionFn = func(ctx context.Context, _ string, _ bridge.ActionRequest) (map[string]any, error) {
@@ -297,8 +297,11 @@ func TestHandleClickSubmitNativeDialogKeepsDialogBlockingContract(t *testing.T) 
 	h := New(b, &config.RuntimeConfig{ActionTimeout: 10 * time.Millisecond}, nil, nil, nil)
 
 	w := postSubmitRequest(t, h, `{"kind":"click","tabId":"tab1","nodeId":42,"submit":true}`)
-	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), `"code":"dialog_blocked"`) {
-		t.Fatalf("native dialog contract changed: status=%d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"dialogMessage":"Continue?"`) {
+		t.Fatalf("submit that opened a dialog did not report it as its result: status=%d body=%s", w.Code, w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "postState") {
+		t.Fatalf("submit reported a post-state it could not observe behind the dialog: %s", w.Body.String())
 	}
 	if b.urlCalls != 1 {
 		t.Fatalf("URL reads = %d, want baseline only (no DOM poll while native dialog blocks)", b.urlCalls)

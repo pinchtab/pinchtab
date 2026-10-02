@@ -112,6 +112,9 @@ func postActionWithHeaders(conn apiclient.Conn, cmd *cobra.Command, req bridge.A
 
 	result := conn.PostQuiet(path, nil, opts...)
 	printActionResult(req.Kind, result)
+	if openedDialog(result) != nil {
+		return
+	}
 	if opened := openedTab(result); opened != "" {
 		tabID = opened
 	}
@@ -176,6 +179,24 @@ func openedTab(result map[string]any) string {
 	return strings.TrimSpace(opened)
 }
 
+func openedDialog(result map[string]any) map[string]any {
+	actionResult, _ := result["result"].(map[string]any)
+	dialog, _ := actionResult[bridge.OpenedDialogResultKey].(map[string]any)
+	return dialog
+}
+
+func printOpenedDialog(result map[string]any) bool {
+	dialog := openedDialog(result)
+	if dialog == nil {
+		return false
+	}
+	dialogType, _ := dialog["dialogType"].(string)
+	message, _ := dialog["dialogMessage"].(string)
+	output.Value(fmt.Sprintf("OK opened %s dialog: %q", dialogType, message))
+	output.Hint("the click landed and opened a JavaScript dialog — answer it with `pinchtab dialog accept` or `pinchtab dialog dismiss`; do not click again")
+	return true
+}
+
 func printActionResult(kind string, result map[string]any) {
 	if success, ok := result["success"].(bool); ok && !success {
 		errMsg := "unknown error"
@@ -190,6 +211,9 @@ func printActionResult(kind string, result map[string]any) {
 			}
 		}
 		output.Error(kind, errMsg, output.ExitNotFound)
+		return
+	}
+	if printOpenedDialog(result) {
 		return
 	}
 	if actionResult, ok := result["result"].(map[string]any); ok {

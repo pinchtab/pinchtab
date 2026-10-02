@@ -1239,3 +1239,47 @@ func TestClickThatOpenedATabFetchesSnapAndTextFromTheNewTab(t *testing.T) {
 		})
 	}
 }
+
+const dialogClickResponse = `{"success":true,"result":{"clicked":true,"dialog":{"tabId":"TAB1","dialogType":"confirm","dialogMessage":"Delete order 1?","remedy":"pinchtab dialog accept"}}}`
+
+func TestPrintActionResultAClickThatOpenedADialogNamesItAndTheNextStep(t *testing.T) {
+	var opened map[string]any
+	if err := json.Unmarshal([]byte(dialogClickResponse), &opened); err != nil {
+		t.Fatal(err)
+	}
+
+	out := captureStdout(t, func() { printActionResult("click", opened) })
+	if strings.TrimSpace(out) != `OK opened confirm dialog: "Delete order 1?"` {
+		t.Errorf("stdout = %q, want the dialog type and message after OK", out)
+	}
+
+	hint := captureStderr(t, func() { printActionResult("click", opened) })
+	for _, next := range []string{"pinchtab dialog accept", "pinchtab dialog dismiss"} {
+		if !strings.Contains(hint, next) {
+			t.Errorf("stderr = %q; nothing tells the caller to run %s", hint, next)
+		}
+	}
+}
+
+func TestClickThatOpenedADialogSkipsTheSnapAndTextTails(t *testing.T) {
+	for _, flag := range []string{"snap", "snap-diff", "text"} {
+		t.Run(flag, func(t *testing.T) {
+			m := newMockServer()
+			defer m.close()
+			m.setResponse("POST", "/action", 200, dialogClickResponse)
+
+			cmd := newActionCmd()
+			cmd.Flags().Bool("snap", false, "")
+			cmd.Flags().Bool("snap-diff", false, "")
+			cmd.Flags().Bool("text", false, "")
+			_ = cmd.Flags().Set(flag, "true")
+			captureStdout(t, func() {
+				Action(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "click", "e3", cmd)
+			})
+
+			if len(m.requests) != 1 {
+				t.Fatalf("got %d requests, want the action alone: a read behind the open dialog answers 409", len(m.requests))
+			}
+		})
+	}
+}

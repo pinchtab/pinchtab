@@ -136,11 +136,28 @@ func (h *Handlers) mapDialogBlockingError(err error, kind, tabID string) (string
 	if errors.As(err, &dialogErr) {
 		return err.Error(), &bridge.DialogState{Type: dialogErr.DialogType, Message: dialogErr.DialogMessage}, true
 	}
-	if isTimeoutWithPendingDialog(err, tabID, h.Bridge) {
-		dialog := pendingTabDialog(h.Bridge, tabID)
+	if dialog := dialogPendingAfterTimeout(err, tabID, h.Bridge); dialog != nil {
 		return fmt.Sprintf("action %s timed out; a JavaScript dialog is blocking (%s: %q)", kind, dialog.Type, dialog.Message), dialog, true
 	}
 	return "", nil, false
+}
+
+func isClickKind(kind string) bool {
+	kind = bridge.CanonicalActionKind(kind)
+	return kind == bridge.ActionClick || kind == bridge.ActionDoubleClick
+}
+
+// dialogOpenedByClick names the dialog a click opened. Every action route refuses
+// a tab whose dialog is already open before dispatching, so a dialog pending when
+// a dispatched click times out was opened by that click.
+func (h *Handlers) dialogOpenedByClick(kind, tabID string, result map[string]any, err error) *bridge.DialogState {
+	if dialog := bridge.OpenedDialog(result); dialog != nil {
+		return dialog
+	}
+	if !isClickKind(kind) {
+		return nil
+	}
+	return dialogPendingAfterTimeout(err, tabID, h.Bridge)
 }
 
 func (h *Handlers) failedStep(index int, kind, tabID string, err error, fallback string) actionResult {
@@ -167,6 +184,9 @@ func (h *Handlers) runResolvedActionStep(
 	errFallback func(error) string,
 ) (actionResult, context.Context, string) {
 	res, _, _, err := h.executeActionResilient(tCtx, step, cfg, tabID, refMissing)
+	if dialog := h.dialogOpenedByClick(step.Kind, tabID, res, err); dialog != nil {
+		return actionResult{Index: index, Success: true, Result: withOpenedDialog(res, tabID, dialog)}, ctx, tabID
+	}
 	nextCtx := ctx
 	nextTabID := tabID
 	if err == nil {
@@ -591,7 +611,11 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 
 	result, actionBackend, recoveryResult, actionErr := h.executeActionResilient(tCtx, &req, effectiveCfg, resolvedTabID, refMissing)
 	h.publishVocabIfReepoched(w, resolvedTabID, vocabBefore)
-	if submitClick && !isTimeoutWithPendingDialog(actionErr, resolvedTabID, h.Bridge) && (actionErr == nil || errors.Is(actionErr, context.DeadlineExceeded)) {
+	if dialog := h.dialogOpenedByClick(req.Kind, resolvedTabID, result, actionErr); dialog != nil {
+		h.writeActionResult(w, r, routing, withOpenedDialog(result, resolvedTabID, dialog), recoveryResult)
+		return
+	}
+	if submitClick && (actionErr == nil || errors.Is(actionErr, context.DeadlineExceeded)) {
 		if result, ok = h.runSubmitClick(w, r, ctx, resolvedTabID, req.NodeID, submitBefore, result, actionErr); !ok {
 			return
 		}
@@ -773,6 +797,10 @@ func (h *Handlers) writeActionSuccess(w http.ResponseWriter, r *http.Request, tC
 		h.markCreatedTab(w, r, switched)
 		h.recordResolvedTab(r, switched)
 	}
+	h.writeActionResult(w, r, routing, result, recoveryResult)
+}
+
+func (h *Handlers) writeActionResult(w http.ResponseWriter, r *http.Request, routing browserRouting, result map[string]any, recoveryResult *recovery.RecoveryResult) {
 	actionRoute := routeMetadataFor(routing)
 	h.recordActivity(r, activity.Update{Route: actionRoute})
 	resp := map[string]any{"success": true, "result": result, "route": actionRoute}

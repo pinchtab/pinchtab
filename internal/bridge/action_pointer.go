@@ -220,26 +220,32 @@ func viewportCenter(ctx context.Context) (float64, float64, error) {
 	return max(1, math.Floor(l.Width/2)), max(1, math.Floor(l.Height/2)), nil
 }
 
-// settle finalizes the popup auto-switch from a deferred call in the click
-// handlers: on success it adopts/focuses any opened tab and augments result; on
-// error it cancels — without restore when the error is a blocking dialog, so
-// the popup isn't torn down mid-dialog. nil-safe so handlers can defer it
-// unconditionally. Centralizes the finish/cancel branching that actionClick,
-// actionDoubleClick, and actionHumanizedClick would otherwise each copy.
-func (s *autoSwitchSession) settle(ctx context.Context, result map[string]any, err error) map[string]any {
+// settle finalizes the popup auto-switch from runClick's deferred call: on
+// success it adopts/focuses any opened tab and augments result; on error it
+// cancels. A dialog the click opened blocks page JS, so that case cancels
+// without the window.open restore script, which would hang. nil-safe.
+func (s *autoSwitchSession) settle(ctx context.Context, result map[string]any, openedDialog *bridgetabs.DialogState, err error) map[string]any {
 	if s == nil {
 		return result
 	}
-	if err == nil {
-		return s.finish(ctx, result)
-	}
-	var dialogErr *ErrDialogBlocking
-	if errors.As(err, &dialogErr) {
+	switch {
+	case openedDialog != nil:
 		s.cancelWithoutRestore()
-	} else {
+	case err == nil:
+		return s.finish(ctx, result)
+	default:
 		s.cancel(ctx)
 	}
 	return result
+}
+
+const OpenedDialogResultKey = "dialog"
+
+// OpenedDialog returns the JavaScript dialog a click opened, nil when the
+// click result names none.
+func OpenedDialog(result map[string]any) *bridgetabs.DialogState {
+	dialog, _ := result[OpenedDialogResultKey].(*bridgetabs.DialogState)
+	return dialog
 }
 
 func (b *Bridge) armDialogAutoHandler(req ActionRequest) (*bridgetabs.DialogManager, bool) {
@@ -279,25 +285,36 @@ func scaleScreencastCoords(ctx context.Context, req *ActionRequest) {
 	req.Y = req.Y * vh / req.FrameH
 }
 
-func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (result map[string]any, err error) {
+func (b *Bridge) actionClick(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	scaleScreencastCoords(ctx, &req)
 	if !req.Submit && b.effectiveHumanize(req) {
 		return b.actionHumanizedClick(ctx, req)
 	}
+	gesture := func(p *pointerOps) pointerGesture { return p.clickGesture(req) }
+	return b.runClick(ctx, req, gesture, map[string]any{"clicked": true})
+}
 
-	// Arm popup-aware auto-switch: if this click opens a new tab, we adopt
-	// + focus it and surface the new tab ID on the response.
+// runClick dispatches one click gesture with popup auto-switch armed: a tab the
+// click opens is adopted and named on the result, and a JavaScript dialog the
+// click opens is named on the result instead of failing a click that landed.
+func (b *Bridge) runClick(ctx context.Context, req ActionRequest, gesture func(*pointerOps) pointerGesture, clicked map[string]any) (result map[string]any, err error) {
 	auto := b.beginAutoSwitch(req)
-	defer func() { result = auto.settle(ctx, result, err) }()
+	var openedDialog *bridgetabs.DialogState
+	defer func() { result = auto.settle(ctx, result, openedDialog, err) }()
 
-	if err := b.runWatchingDialogs(ctx, req, func(clickCtx context.Context) error {
+	openedDialog, err = b.runWatchingDialogs(ctx, req, func(clickCtx context.Context) error {
 		p := b.pointer()
-		return p.clickTarget(clickCtx, req, auto, p.clickGesture(req))
-	}); err != nil {
+		return p.clickTarget(clickCtx, req, auto, gesture(p))
+	})
+	if err != nil {
 		return nil, err
 	}
+	if openedDialog != nil {
+		clicked[OpenedDialogResultKey] = openedDialog
+		return clicked, nil
+	}
 	b.waitNavIfRequested(ctx, req)
-	return map[string]any{"clicked": true}, nil
+	return clicked, nil
 }
 
 type pointerGesture struct {
@@ -359,19 +376,23 @@ func (p *pointerOps) clickTarget(ctx context.Context, req ActionRequest, auto *a
 
 // runWatchingDialogs runs click with a one-shot dialog auto-handler armed when
 // the request names a DialogAction, so the click does not hang waiting for the
-// dialog to be handled from a separate request. Otherwise it polls for an
-// unexpected blocking dialog so that surfaces as ErrDialogBlocking rather than
-// hanging the renderer for the full action timeout.
-func (b *Bridge) runWatchingDialogs(ctx context.Context, req ActionRequest, click func(context.Context) error) error {
+// dialog to be handled from a separate request. Otherwise a dialog already open
+// refuses the click undispatched with ErrDialogBlocking, and a dialog that
+// opens once the click is dispatched is returned as the click's outcome rather
+// than hanging the renderer for the full action timeout.
+func (b *Bridge) runWatchingDialogs(ctx context.Context, req ActionRequest, click func(context.Context) error) (*bridgetabs.DialogState, error) {
 	dm, armedDialog := b.armDialogAutoHandler(req)
 	if armedDialog || req.TabID == "" || dm == nil {
 		if err := click(ctx); err != nil {
-			return err
+			return nil, err
 		}
 		if armedDialog {
 			waitForArmedDialogSettle(ctx, dm, req.TabID)
 		}
-		return nil
+		return nil, nil
+	}
+	if err := dialogBlocking(dm, req.TabID); err != nil {
+		return nil, err
 	}
 
 	clickCtx, cancel := context.WithCancel(ctx)
@@ -384,13 +405,16 @@ func (b *Bridge) runWatchingDialogs(ctx context.Context, req ActionRequest, clic
 	for {
 		select {
 		case err := <-resultCh:
-			return err
+			if err != nil {
+				return nil, err
+			}
+			return dm.GetPending(req.TabID), nil
 		case <-ticker.C:
-			if err := dialogBlocking(dm, req.TabID); err != nil {
-				return err
+			if opened := dm.GetPending(req.TabID); opened != nil {
+				return opened, nil
 			}
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		}
 	}
 }
@@ -420,19 +444,9 @@ func waitForArmedDialogSettle(ctx context.Context, dm *bridgetabs.DialogManager,
 	_ = dm.TakeAutoHandler(tabID)
 }
 
-func (b *Bridge) actionDoubleClick(ctx context.Context, req ActionRequest) (result map[string]any, err error) {
+func (b *Bridge) actionDoubleClick(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	scaleScreencastCoords(ctx, &req)
-	auto := b.beginAutoSwitch(req)
-	defer func() { result = auto.settle(ctx, result, err) }()
-
-	p := b.pointer()
-	if err := b.runWatchingDialogs(ctx, req, func(clickCtx context.Context) error {
-		return p.clickTarget(clickCtx, req, auto, p.doubleClickGesture())
-	}); err != nil {
-		return nil, err
-	}
-	b.waitNavIfRequested(ctx, req)
-	return map[string]any{"doubleclicked": true}, nil
+	return b.runClick(ctx, req, (*pointerOps).doubleClickGesture, map[string]any{"doubleclicked": true})
 }
 
 func (b *Bridge) actionHover(ctx context.Context, req ActionRequest) (map[string]any, error) {
@@ -728,18 +742,8 @@ func (r ActionRequest) hasDragDestination() bool {
 	return r.ToNodeID > 0 || r.ToSelector != "" || r.HasToXY
 }
 
-func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (result map[string]any, err error) {
-	auto := b.beginAutoSwitch(req)
-	defer func() { result = auto.settle(ctx, result, err) }()
-
-	if err := b.runWatchingDialogs(ctx, req, func(clickCtx context.Context) error {
-		p := b.pointer()
-		return p.clickTarget(clickCtx, req, auto, p.humanClickGesture())
-	}); err != nil {
-		return nil, err
-	}
-	b.waitNavIfRequested(ctx, req)
-	return map[string]any{"clicked": true, "human": true}, nil
+func (b *Bridge) actionHumanizedClick(ctx context.Context, req ActionRequest) (map[string]any, error) {
+	return b.runClick(ctx, req, (*pointerOps).humanClickGesture, map[string]any{"clicked": true, "human": true})
 }
 
 func (p *pointerOps) humanClickGesture() pointerGesture {

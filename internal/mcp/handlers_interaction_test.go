@@ -191,6 +191,25 @@ func TestHandleClickDialogActionPassThrough(t *testing.T) {
 	}
 }
 
+func TestHandleClickThatOpensADialogIsATextResultNamingTheDialog(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true,"result":{"clicked":true,"dialog":{"dialogType":"confirm","dialogMessage":"Delete order 1?","remedy":"pinchtab dialog accept"}}}`))
+	}))
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_click", map[string]any{"ref": "e5"}, srv)
+	if r.IsError {
+		t.Fatalf("click that opened a dialog is an MCP error: %s", resultText(t, r))
+	}
+	text := resultText(t, r)
+	for _, want := range []string{"confirm", "Delete order 1?", "pinchtab dialog accept"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("result does not carry %q: %s", want, text)
+		}
+	}
+}
+
 func TestHandleClickDialogActionRejectsInvalidValue(t *testing.T) {
 	srv := mockPinchTab()
 	defer srv.Close()

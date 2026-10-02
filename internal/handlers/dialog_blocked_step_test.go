@@ -30,11 +30,12 @@ func (b *dialogRaisingBridge) ExecuteAction(context.Context, string, bridge.Acti
 
 var dialogBlockedBranches = []struct {
 	name    string
+	action  string
 	err     func(*bridge.DialogState) error
 	message string
 }{
-	{"click timeout", func(*bridge.DialogState) error { return context.DeadlineExceeded }, "timed out"},
-	{"dialog blocking", func(d *bridge.DialogState) error {
+	{"type timeout", `{"kind":"type","text":"x","nodeId":42}`, func(*bridge.DialogState) error { return context.DeadlineExceeded }, "timed out"},
+	{"dialog blocking", `{"kind":"click"}`, func(d *bridge.DialogState) error {
 		return &bridge.ErrDialogBlocking{DialogType: d.Type, DialogMessage: d.Message}
 	}, "click blocked"},
 }
@@ -43,8 +44,8 @@ func TestBatchAndMacroStepsCarryTheDialogRemedyExactlyOnce(t *testing.T) {
 	dialog := &bridge.DialogState{Type: "confirm", Message: "leave page?"}
 	for _, branch := range dialogBlockedBranches {
 		for _, tc := range []struct{ name, path, body string }{
-			{"batch", "/actions", `{"tabId":"tab1","actions":[{"kind":"click"}]}`},
-			{"macro", "/macro", `{"tabId":"tab1","steps":[{"kind":"click"}]}`},
+			{"batch", "/actions", `{"tabId":"tab1","actions":[` + branch.action + `]}`},
+			{"macro", "/macro", `{"tabId":"tab1","steps":[` + branch.action + `]}`},
 		} {
 			t.Run(branch.name+"/"+tc.name, func(t *testing.T) {
 				b := &dialogRaisingBridge{dialog: dialog, err: branch.err(dialog)}
@@ -89,7 +90,7 @@ func TestSingleActionDialogBlockedMessageCarriesNoRemedy(t *testing.T) {
 			b := &dialogRaisingBridge{dialog: dialog, err: branch.err(dialog)}
 			h := New(b, &config.RuntimeConfig{}, nil, nil, nil)
 			rec := httptest.NewRecorder()
-			body := bytes.NewReader([]byte(`{"kind":"click","tabId":"tab1"}`))
+			body := bytes.NewReader([]byte(`{"tabId":"tab1",` + strings.TrimPrefix(branch.action, "{")))
 			h.HandleAction(rec, httptest.NewRequest(http.MethodPost, "/action", body))
 			decodeDialogBlocked(t, rec, dialog)
 			var failure dialogBlockedFailure

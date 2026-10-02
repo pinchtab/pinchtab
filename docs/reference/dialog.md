@@ -43,7 +43,7 @@ Errors: `400` for a missing or unknown `action`, or when no dialog is open on th
 
 ## Dialog-blocked tabs
 
-While a dialog is open, routes that drive the page — navigate, back/forward/reload, wait, find, evaluate, element reads such as `attr` and `count`, `/action` and `/actions`, storage, and state save — answer `409 dialog_blocked` immediately instead of hanging. The error `details` carry `hint`, `remedy`, `tabId`, `dialogType` and `dialogMessage`. A batch whose step opens a dialog stops with a failed step carrying code `dialog_blocked`, even with `stopOnError:false`. Answer the dialog with `pinchtab dialog accept|dismiss`, or pass `--dialog-action accept|dismiss` (API `dialogAction`) on the click that opens it — see [Click](./click.md).
+While a dialog is open, routes that drive the page — navigate, back/forward/reload, wait, find, evaluate, element reads such as `attr` and `count`, `/action` and `/actions`, storage, and state save — answer `409 dialog_blocked` immediately instead of hanging. The error `details` carry `hint`, `remedy`, `tabId`, `dialogType` and `dialogMessage`. A click or double-click that itself opens a dialog is not blocked: it succeeds and names the dialog in `result.dialog` with the same fields. A batch stops at the step after the one that opened the dialog, which fails with code `dialog_blocked`, even with `stopOnError:false`. Answer the dialog with `pinchtab dialog accept|dismiss`, or pass `--dialog-action accept|dismiss` (API `dialogAction`) on the click that opens it — see [Click](./click.md).
 
 Tested by `tests/e2e/scenarios/api/dialog-guard-basic.sh`, `tests/e2e/scenarios/cli/dialog-guard-basic.sh` and `tests/e2e/scenarios/api/actions-extended.sh`.
 

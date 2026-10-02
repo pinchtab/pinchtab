@@ -156,3 +156,106 @@ func TestReadsAreNotDialogBlockedWithoutAPendingDialog(t *testing.T) {
 		})
 	}
 }
+
+type dialogOpeningBridge struct {
+	mockBridge
+	dialog *bridge.DialogState
+	result map[string]any
+	err    error
+}
+
+func (b *dialogOpeningBridge) ExecuteAction(context.Context, string, bridge.ActionRequest) (map[string]any, error) {
+	b.GetDialogManager().SetPending("tab1", b.dialog)
+	return b.result, b.err
+}
+
+func (b *dialogOpeningBridge) AvailableActions() []string {
+	return []string{bridge.ActionClick, bridge.ActionDoubleClick}
+}
+
+var clickOpenedDialogOutcomes = []struct {
+	name   string
+	bridge func(*bridge.DialogState) *dialogOpeningBridge
+}{
+	{"dialog named on the click result", func(d *bridge.DialogState) *dialogOpeningBridge {
+		return &dialogOpeningBridge{dialog: d, result: map[string]any{"clicked": true, bridge.OpenedDialogResultKey: d}}
+	}},
+	{"click timed out behind its dialog", func(d *bridge.DialogState) *dialogOpeningBridge {
+		return &dialogOpeningBridge{dialog: d, err: context.DeadlineExceeded}
+	}},
+}
+
+func assertOpenedDialogResult(t *testing.T, result map[string]any, dialog *bridge.DialogState) {
+	t.Helper()
+	got, _ := result[bridge.OpenedDialogResultKey].(map[string]any)
+	want := dialogBlockedDetails("tab1", dialog)
+	for _, key := range []string{"tabId", "dialogType", "dialogMessage", "remedy"} {
+		if got[key] != want[key] {
+			t.Fatalf("opened dialog %s = %v, want the blocked-case rendering %v; result=%v", key, got[key], want[key], result)
+		}
+	}
+	if got["hint"] != dialogOpenedHint {
+		t.Fatalf("hint = %v, want %q", got["hint"], dialogOpenedHint)
+	}
+}
+
+func TestClickThatOpensADialogSucceedsAndNamesTheDialog(t *testing.T) {
+	dialog := &bridge.DialogState{Type: "confirm", Message: "Delete order 1?"}
+	for _, kind := range []string{bridge.ActionClick, bridge.ActionDoubleClick} {
+		for _, outcome := range clickOpenedDialogOutcomes {
+			t.Run(kind+"/"+outcome.name, func(t *testing.T) {
+				h := New(outcome.bridge(dialog), &config.RuntimeConfig{}, nil, nil, nil)
+				rec := httptest.NewRecorder()
+				body := bytes.NewReader([]byte(`{"kind":"` + kind + `","tabId":"tab1","nodeId":42}`))
+				h.HandleAction(rec, httptest.NewRequest(http.MethodPost, "/action", body))
+
+				if rec.Code != http.StatusOK {
+					t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+				}
+				var resp struct {
+					Success bool           `json:"success"`
+					Result  map[string]any `json:"result"`
+				}
+				if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+					t.Fatalf("decode: %v body=%s", err, rec.Body.String())
+				}
+				if !resp.Success {
+					t.Fatalf("click that landed is not a success: %s", rec.Body.String())
+				}
+				assertOpenedDialogResult(t, resp.Result, dialog)
+			})
+		}
+	}
+}
+
+func TestBatchClickThatOpensADialogSucceedsAndTheNextStepIsBlocked(t *testing.T) {
+	dialog := &bridge.DialogState{Type: "alert", Message: "locked"}
+	for _, outcome := range clickOpenedDialogOutcomes {
+		t.Run(outcome.name, func(t *testing.T) {
+			h := New(outcome.bridge(dialog), &config.RuntimeConfig{}, nil, nil, nil)
+			rec := httptest.NewRecorder()
+			body := bytes.NewReader([]byte(`{"tabId":"tab1","actions":[{"kind":"click","nodeId":42},{"kind":"click","nodeId":43}]}`))
+			req := httptest.NewRequest(http.MethodPost, "/actions", body)
+			req.Header.Set("Content-Type", "application/json")
+			h.HandleActions(rec, req)
+
+			var envelope struct {
+				Results []actionResult `json:"results"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+				t.Fatalf("decode: %v body=%s", err, rec.Body.String())
+			}
+			if len(envelope.Results) != 2 {
+				t.Fatalf("want the opening click and the step it blocked: %s", rec.Body.String())
+			}
+			opening, blocked := envelope.Results[0], envelope.Results[1]
+			if !opening.Success {
+				t.Fatalf("click that landed is not a success: %s", rec.Body.String())
+			}
+			assertOpenedDialogResult(t, opening.Result, dialog)
+			if blocked.Success || blocked.Code != dialogBlockedCode {
+				t.Fatalf("step behind the dialog = %+v, want a %s failure", blocked, dialogBlockedCode)
+			}
+		})
+	}
+}
