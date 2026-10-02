@@ -121,15 +121,20 @@ var isoFormatByInputType = map[string]string{
 	"week":           "YYYY-Www",
 }
 
-func RejectedISOValue(ctx context.Context, nodeID int64) (*RejectedValueError, error) {
-	js := `function() {
+func RejectedISOValue(ctx context.Context, nodeID int64, text string) (*RejectedValueError, error) {
+	js := `function(text) {
 		if (!(this instanceof window.HTMLInputElement)) return "";
 		var proto = window.HTMLInputElement.prototype;
-		if (Object.getOwnPropertyDescriptor(proto, 'value').get.call(this) !== "") return "";
-		return Object.getOwnPropertyDescriptor(proto, 'type').get.call(this);
+		var value = Object.getOwnPropertyDescriptor(proto, 'value');
+		if (value.get.call(this) !== "") return "";
+		var type = Object.getOwnPropertyDescriptor(proto, 'type').get.call(this);
+		var probe = this.ownerDocument.createElement('input');
+		probe.type = type;
+		value.set.call(probe, text);
+		return value.get.call(probe) === "" ? type : "";
 	}`
 	var emptyInputType string
-	if err := CallFunctionOnNode(ctx, nodeID, js, nil, &emptyInputType); err != nil {
+	if err := CallFunctionOnNode(ctx, nodeID, js, []map[string]any{{"value": text}}, &emptyInputType); err != nil {
 		return nil, err
 	}
 	format, ok := isoFormatByInputType[emptyInputType]

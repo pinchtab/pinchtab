@@ -51,10 +51,10 @@ func (b *Bridge) actionFill(ctx context.Context, req ActionRequest) (map[string]
 			return nil, err
 		}
 		setErr := chromedp.Run(ctx, chromedp.SetValue(req.Selector, text, chromedp.ByQuery))
-		if err := refuseRejectedISOValue(ctx, int64(nodes[0].BackendNodeID), text); err != nil {
+		if err := checkFillLanded(ctx, int64(nodes[0].BackendNodeID), text, result); err != nil {
 			return nil, err
 		}
-		if setErr != nil {
+		if _, dropped := result["warning"]; setErr != nil && !dropped {
 			return nil, setErr
 		}
 		return finishFill(ctx, result, req.Submit)
@@ -67,29 +67,26 @@ func (b *Bridge) actionFill(ctx context.Context, req ActionRequest) (map[string]
 			}
 			return nil, err
 		}
-		// Compared against what was asked for rather than against "", so a clear that
-		// did not land is reported too. ValidateFillAction has already refused the
-		// nothing-was-supplied case, which is what used to disable this check.
-		if actual, err := bridgecdpops.ReadInputValue(ctx, req.NodeID); err == nil && actual != text {
-			if err := refuseRejectedISOValue(ctx, req.NodeID, text); err != nil {
-				return nil, err
-			}
-			result["warning"] = "fill may not have been picked up by the page (e.g. React controlled input); try 'type' instead"
+		if err := checkFillLanded(ctx, req.NodeID, text, result); err != nil {
+			return nil, err
 		}
 		return finishFill(ctx, result, req.Submit)
 	}
 	return nil, NewInvalidActionRequestError("need selector or ref")
 }
 
-func refuseRejectedISOValue(ctx context.Context, nodeID int64, text string) error {
-	if text == "" {
+// Compared against what was asked for rather than against "", so a clear that
+// did not land is reported too.
+func checkFillLanded(ctx context.Context, nodeID int64, text string, result map[string]any) error {
+	actual, err := bridgecdpops.ReadInputValue(ctx, nodeID)
+	if err != nil || actual == text {
 		return nil
 	}
-	rejected, err := bridgecdpops.RejectedISOValue(ctx, nodeID)
-	if err != nil || rejected == nil {
-		return nil
+	if rejected, err := bridgecdpops.RejectedISOValue(ctx, nodeID, text); err == nil && rejected != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidActionRequest, rejected)
 	}
-	return fmt.Errorf("%w: %w", ErrInvalidActionRequest, rejected)
+	result["warning"] = "fill may not have been picked up by the page (e.g. React controlled input); try 'type' instead"
+	return nil
 }
 
 func finishFill(ctx context.Context, result map[string]any, submit bool) (map[string]any, error) {

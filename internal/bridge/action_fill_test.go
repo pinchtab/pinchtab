@@ -235,3 +235,56 @@ func TestFillNamesTheISOFormatForEveryDateTimeInputType(t *testing.T) {
 		})
 	}
 }
+
+func TestFillOnADateTimeInputThatThePageClearsKeepsTheTypeHint(t *testing.T) {
+	targets := map[string]func(t *testing.T, ctx context.Context) ActionRequest{
+		"by ref": func(t *testing.T, ctx context.Context) ActionRequest {
+			return ActionRequest{NodeID: backendNodeID(t, ctx, "#delivery")}
+		},
+		"by selector": func(*testing.T, context.Context) ActionRequest {
+			return ActionRequest{Selector: "#delivery"}
+		},
+	}
+	values := map[string]string{"time": "12:30", "date": "2026-10-02"}
+	for name, target := range targets {
+		for inputType, value := range values {
+			t.Run(name+" "+inputType, func(t *testing.T) {
+				ctx := openTimeInputPage(t)
+				makeClearing := `(() => {
+					const input = document.querySelector("#delivery");
+					input.type = "` + inputType + `";
+					input.addEventListener("input", () => { input.value = ""; });
+				})()`
+				if err := chromedp.Run(ctx, chromedp.Evaluate(makeClearing, nil)); err != nil {
+					t.Fatalf("make clearing %s input: %v", inputType, err)
+				}
+				req := target(t, ctx)
+				req.Text, req.HasText = value, true
+
+				result, err := (&Bridge{}).actionFill(ctx, req)
+				if err != nil {
+					t.Fatalf("fill %q on a cleared %s input: %v", value, inputType, err)
+				}
+				warning, _ := result["warning"].(string)
+				if !strings.Contains(warning, "try 'type' instead") {
+					t.Errorf("warning = %q, want the React/type hint", warning)
+				}
+			})
+		}
+	}
+}
+
+func TestFillOnADateInputRefusesAnISOShapedImpossibleDate(t *testing.T) {
+	ctx := openTimeInputPage(t)
+	if err := chromedp.Run(ctx, chromedp.SetAttributeValue("#delivery", "type", "date", chromedp.ByQuery)); err != nil {
+		t.Fatalf("set type=date: %v", err)
+	}
+
+	_, err := (&Bridge{}).actionFill(ctx, ActionRequest{Selector: "#delivery", Text: "2026-02-30", HasText: true})
+	if !errors.Is(err, ErrInvalidActionRequest) {
+		t.Fatalf("error = %v, want an invalid request", err)
+	}
+	if !strings.Contains(err.Error(), "ISO format YYYY-MM-DD") {
+		t.Errorf("error = %q, want the ISO format hint", err)
+	}
+}
