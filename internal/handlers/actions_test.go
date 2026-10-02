@@ -1705,3 +1705,40 @@ func TestFocusFailingOnAConnectedNodeIsNotStale(t *testing.T) {
 		t.Errorf("a connected non-focusable node was reported stale: %v", err)
 	}
 }
+
+func TestFocusingActionsOnAReRenderedRefRecoverOrAskForASnapshot(t *testing.T) {
+	bodies := map[string]string{
+		"press":    `{"kind":"press","ref":"e0","key":"a","tabId":"tab-rerender"}`,
+		"focus":    `{"kind":"focus","ref":"e0","tabId":"tab-rerender"}`,
+		"dblclick": `{"kind":"dblclick","ref":"e0","tabId":"tab-rerender"}`,
+	}
+	for kind, body := range bodies {
+		t.Run(kind+"/re-created", func(t *testing.T) {
+			ctx, _, h := newRerenderFixture(t)
+			rerenderApp(t, ctx, `<input placeholder="Search">`)
+
+			w := postRerenderAction(t, h, body)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("%s on a re-rendered input: status=%d body=%s", kind, w.Code, w.Body.String())
+			}
+			var focused bool
+			if err := chromedp.Run(ctx, chromedp.Evaluate(`document.activeElement === document.querySelector("#app input")`, &focused)); err != nil {
+				t.Fatal(err)
+			}
+			if !focused {
+				t.Errorf("%s did not land on the re-created input", kind)
+			}
+		})
+		t.Run(kind+"/removed", func(t *testing.T) {
+			ctx, _, h := newRerenderFixture(t)
+			rerenderApp(t, ctx, `<p>nothing to focus</p>`)
+
+			w := postRerenderAction(t, h, body)
+
+			if w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "snapshot") {
+				t.Fatalf("%s on a removed input: status=%d body=%s, want 404 asking for a snapshot", kind, w.Code, w.Body.String())
+			}
+		})
+	}
+}
