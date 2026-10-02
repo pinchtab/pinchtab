@@ -53,10 +53,10 @@ type NetworkBuffer struct {
 	retainedBytes int64
 
 	// Inflight tracking is independent of the ring buffer so eviction
-	// doesn't corrupt the count. inflightIDs holds request IDs currently
-	// in flight; lastChange records the most recent in-flight transition
-	// (request started or completed). Both are guarded by mu.
-	inflightIDs map[string]struct{}
+	// doesn't corrupt the count. inflightIDs maps each request in flight to
+	// the loaderId of the document that issued it; lastChange records the most
+	// recent in-flight transition. Both are guarded by mu.
+	inflightIDs map[string]string
 	lastChange  time.Time
 
 	subMu       sync.Mutex
@@ -87,7 +87,7 @@ func NewNetworkBuffer(size int) *NetworkBuffer {
 		entries:        make([]NetworkEntry, size),
 		index:          make(map[string]int),
 		maxSize:        size,
-		inflightIDs:    make(map[string]struct{}),
+		inflightIDs:    make(map[string]string),
 		lastChange:     time.Now(),
 		subscribers:    make(map[int]chan NetworkEntry),
 		completionSubs: make(map[int]chan string),
@@ -113,7 +113,9 @@ func (nb *NetworkBuffer) SignalBodyChange() {
 	nb.bodyChangeCh = make(chan struct{})
 }
 
-func (nb *NetworkBuffer) MarkRequestStart(requestID string) {
+// MarkRequestStart records requestID as in flight for the document loaded by
+// loaderID. An empty loaderID (a worker fetch) is never abandoned by navigation.
+func (nb *NetworkBuffer) MarkRequestStart(requestID, loaderID string) {
 	if requestID == "" {
 		return
 	}
@@ -122,8 +124,53 @@ func (nb *NetworkBuffer) MarkRequestStart(requestID string) {
 	if _, ok := nb.inflightIDs[requestID]; ok {
 		return
 	}
-	nb.inflightIDs[requestID] = struct{}{}
+	nb.inflightIDs[requestID] = loaderID
 	nb.lastChange = time.Now()
+}
+
+const abandonedByNavigationError = "net::ERR_ABORTED (document replaced by navigation)"
+
+// AbandonRequestsOutsideDocument ends every in-flight request issued by a document
+// other than currentLoaderID. Chrome sends no loadingFailed for a fetch cut short
+// by its own page navigating away, so without this the request counts against
+// network idle for the life of the tab.
+func (nb *NetworkBuffer) AbandonRequestsOutsideDocument(currentLoaderID string) {
+	if currentLoaderID == "" {
+		return
+	}
+	nb.mu.Lock()
+	var abandoned []string
+	for requestID, loaderID := range nb.inflightIDs {
+		if loaderID != "" && loaderID != currentLoaderID {
+			delete(nb.inflightIDs, requestID)
+			abandoned = append(abandoned, requestID)
+		}
+	}
+	if len(abandoned) > 0 {
+		nb.lastChange = time.Now()
+	}
+	nb.mu.Unlock()
+
+	for _, requestID := range abandoned {
+		nb.Update(requestID, func(entry *NetworkEntry) {
+			markEntryFailed(entry, abandonedByNavigationError)
+		})
+		nb.publishCompletion(requestID)
+	}
+}
+
+func markEntryEnded(entry *NetworkEntry) {
+	entry.Finished = true
+	entry.EndTime = time.Now()
+	if !entry.StartTime.IsZero() {
+		entry.Duration = float64(entry.EndTime.Sub(entry.StartTime).Milliseconds())
+	}
+}
+
+func markEntryFailed(entry *NetworkEntry, errorText string) {
+	markEntryEnded(entry)
+	entry.Failed = true
+	entry.Error = errorText
 }
 
 func (nb *NetworkBuffer) MarkRequestEnd(requestID string) {

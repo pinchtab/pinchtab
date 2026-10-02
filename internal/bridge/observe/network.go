@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/sanitize"
@@ -130,62 +131,7 @@ func (nm *NetworkMonitor) StartCaptureWithSize(tabCtx context.Context, tabID str
 	}
 
 	chromedp.ListenTarget(listenerCtx, func(ev any) {
-		switch e := ev.(type) {
-		case *network.EventRequestWillBeSent:
-			buf.Add(requestEntryFromEvent(e))
-			buf.MarkRequestStart(string(e.RequestID))
-
-		case *network.EventResponseReceived:
-			buf.Update(string(e.RequestID), func(entry *NetworkEntry) {
-				entry.Status = int(e.Response.Status)
-				entry.StatusText = e.Response.StatusText
-				entry.MimeType = e.Response.MimeType
-				if e.Response.Headers != nil {
-					respHeaders := make(map[string]string)
-					for k, v := range e.Response.Headers {
-						if s, ok := v.(string); ok {
-							respHeaders[k] = s
-						}
-					}
-					entry.ResponseHeaders = respHeaders
-				}
-				if e.Response.EncodedDataLength > 0 {
-					entry.Size = int64(e.Response.EncodedDataLength)
-				}
-			})
-
-		case *network.EventLoadingFinished:
-			buf.Update(string(e.RequestID), func(entry *NetworkEntry) {
-				entry.Finished = true
-				entry.EndTime = time.Now()
-				if !entry.StartTime.IsZero() {
-					entry.Duration = float64(entry.EndTime.Sub(entry.StartTime).Milliseconds())
-				}
-				if e.EncodedDataLength > 0 {
-					entry.Size = int64(e.EncodedDataLength)
-				}
-				if nm.bodyRetentionEnabled() {
-					entry.BodyPending = true
-					entry.BodySkipped = false
-					entry.BodySkipReason = ""
-					entry.BodyError = ""
-				}
-			})
-			buf.MarkRequestEnd(string(e.RequestID))
-			go nm.maybeRetainBody(tabCtx, buf, string(e.RequestID))
-
-		case *network.EventLoadingFailed:
-			buf.Update(string(e.RequestID), func(entry *NetworkEntry) {
-				entry.Failed = true
-				entry.Finished = true
-				entry.EndTime = time.Now()
-				if !entry.StartTime.IsZero() {
-					entry.Duration = float64(entry.EndTime.Sub(entry.StartTime).Milliseconds())
-				}
-				entry.Error = e.ErrorText
-			})
-			buf.MarkRequestEnd(string(e.RequestID))
-		}
+		nm.recordEvent(tabCtx, buf, ev)
 	})
 
 	// Self-heal the listeners map when the listener ends (StopCapture cancel or
@@ -199,6 +145,60 @@ func (nm *NetworkMonitor) StartCaptureWithSize(tabCtx context.Context, tabID str
 
 	slog.Debug("network capture started", "tabId", tabID)
 	return nil
+}
+
+func (nm *NetworkMonitor) recordEvent(tabCtx context.Context, buf *NetworkBuffer, ev any) {
+	switch e := ev.(type) {
+	case *network.EventRequestWillBeSent:
+		buf.Add(requestEntryFromEvent(e))
+		buf.MarkRequestStart(string(e.RequestID), string(e.LoaderID))
+
+	case *network.EventResponseReceived:
+		buf.Update(string(e.RequestID), func(entry *NetworkEntry) {
+			entry.Status = int(e.Response.Status)
+			entry.StatusText = e.Response.StatusText
+			entry.MimeType = e.Response.MimeType
+			if e.Response.Headers != nil {
+				respHeaders := make(map[string]string)
+				for k, v := range e.Response.Headers {
+					if s, ok := v.(string); ok {
+						respHeaders[k] = s
+					}
+				}
+				entry.ResponseHeaders = respHeaders
+			}
+			if e.Response.EncodedDataLength > 0 {
+				entry.Size = int64(e.Response.EncodedDataLength)
+			}
+		})
+
+	case *network.EventLoadingFinished:
+		buf.Update(string(e.RequestID), func(entry *NetworkEntry) {
+			markEntryEnded(entry)
+			if e.EncodedDataLength > 0 {
+				entry.Size = int64(e.EncodedDataLength)
+			}
+			if nm.bodyRetentionEnabled() {
+				entry.BodyPending = true
+				entry.BodySkipped = false
+				entry.BodySkipReason = ""
+				entry.BodyError = ""
+			}
+		})
+		buf.MarkRequestEnd(string(e.RequestID))
+		go nm.maybeRetainBody(tabCtx, buf, string(e.RequestID))
+
+	case *network.EventLoadingFailed:
+		buf.Update(string(e.RequestID), func(entry *NetworkEntry) {
+			markEntryFailed(entry, e.ErrorText)
+		})
+		buf.MarkRequestEnd(string(e.RequestID))
+
+	case *page.EventFrameNavigated:
+		if e.Frame != nil && e.Frame.ParentID == "" {
+			buf.AbandonRequestsOutsideDocument(string(e.Frame.LoaderID))
+		}
+	}
 }
 
 // reserveCaptureListener reserves the per-tab listener slot. If capture is

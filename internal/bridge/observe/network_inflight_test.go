@@ -58,8 +58,8 @@ func TestNetworkBuffer_InflightLifecycle(t *testing.T) {
 		t.Fatalf("fresh buffer: got count=%d, want 0", count)
 	}
 
-	buf.MarkRequestStart("req-1")
-	buf.MarkRequestStart("req-2")
+	buf.MarkRequestStart("req-1", "")
+	buf.MarkRequestStart("req-2", "")
 	count, lastChange := buf.InflightStatus()
 	if count != 2 {
 		t.Errorf("after 2 starts: got count=%d, want 2", count)
@@ -88,8 +88,8 @@ func TestNetworkBuffer_InflightLifecycle(t *testing.T) {
 func TestNetworkBuffer_InflightIdempotent(t *testing.T) {
 	buf := NewNetworkBuffer(10)
 
-	buf.MarkRequestStart("req-1")
-	buf.MarkRequestStart("req-1") // duplicate start should be no-op
+	buf.MarkRequestStart("req-1", "")
+	buf.MarkRequestStart("req-1", "") // duplicate start should be no-op
 	count, _ := buf.InflightStatus()
 	if count != 1 {
 		t.Errorf("duplicate start: got count=%d, want 1", count)
@@ -109,7 +109,7 @@ func TestNetworkBuffer_InflightSurvivesEviction(t *testing.T) {
 	buf := NewNetworkBuffer(2)
 
 	for i, id := range []string{"r1", "r2", "r3"} {
-		buf.MarkRequestStart(id)
+		buf.MarkRequestStart(id, "")
 		buf.Add(NetworkEntry{RequestID: id, URL: "https://example.com", Method: "GET"})
 		_ = i
 	}
@@ -129,7 +129,7 @@ func TestNetworkBuffer_InflightSurvivesEviction(t *testing.T) {
 
 func TestNetworkBuffer_ClearPreservesInflight(t *testing.T) {
 	buf := NewNetworkBuffer(10)
-	buf.MarkRequestStart("r1")
+	buf.MarkRequestStart("r1", "")
 	buf.Add(NetworkEntry{RequestID: "r1", URL: "https://example.com"})
 
 	buf.Clear()

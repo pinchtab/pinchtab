@@ -103,7 +103,7 @@ func TestSubscribeCompletionsNotifiesOnce(t *testing.T) {
 	id, completions := nb.SubscribeCompletions()
 	defer nb.UnsubscribeCompletions(id)
 
-	nb.MarkRequestStart("r1")
+	nb.MarkRequestStart("r1", "")
 	nb.MarkRequestEnd("r1")
 
 	select {
@@ -129,7 +129,7 @@ func TestEntrySubscriberDoesNotReceiveCompletions(t *testing.T) {
 	subID, ch := nb.Subscribe()
 	defer nb.Unsubscribe(subID)
 
-	nb.MarkRequestStart("r1")
+	nb.MarkRequestStart("r1", "")
 	nb.MarkRequestEnd("r1")
 
 	select {
@@ -179,7 +179,7 @@ func TestPublishCompletionDropsWhenSubscriberFull(t *testing.T) {
 		// Far more than the 64-slot channel cap; excess must be dropped, not block.
 		for i := range 200 {
 			rid := fmt.Sprintf("r%d", i)
-			nb.MarkRequestStart(rid)
+			nb.MarkRequestStart(rid, "")
 			nb.MarkRequestEnd(rid)
 		}
 		close(done)
