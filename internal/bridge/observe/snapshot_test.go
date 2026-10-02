@@ -352,6 +352,8 @@ const contentEditableFixtureHTML = `<body id="editors">
 <div contenteditable="plaintext-only" aria-label="Plain">raw</div>
 <div aria-label="Panel">static</div>
 <div contenteditable="true" aria-label="Rich"><span>inner</span></div>
+<div tabindex="0" aria-label="Card">x</div>
+<div contenteditable="true" aria-label="Doc"><p>a</p><div aria-label="Para">nested</div></div>
 </body>`
 
 func TestInteractiveSnapshotListsRolelessContentEditableAsTextbox(t *testing.T) {
@@ -365,6 +367,7 @@ func TestInteractiveSnapshotListsRolelessContentEditableAsTextbox(t *testing.T) 
 		`textbox "Notes" val="old"`,
 		`textbox "Plain" val="raw"`,
 		`textbox "Rich" val="inner"`,
+		`textbox "Doc" val="a\n\nnested"`,
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("interactive snapshot = %q, want %q", got, want)
