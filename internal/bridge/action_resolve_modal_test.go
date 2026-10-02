@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
-	"os"
 	"runtime"
 	"strings"
 	"testing"
@@ -14,27 +13,10 @@ import (
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/selector"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 func TestDialogScopeReproducesGlobalEscapeAndContainsActionsAndReads(t *testing.T) {
-	chromePath := testbrowser.Path(t)
-	profile := testbrowser.ProfileDir(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(profile),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 20*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-		_ = os.RemoveAll(profile)
-	})
+	ctx := newActionTab(t, 20*time.Second)
 
 	html := `<style>
 		[role=dialog] { position: fixed; inset: 20px; background: white; }
@@ -167,23 +149,7 @@ func TestDialogScopeReproducesGlobalEscapeAndContainsActionsAndReads(t *testing.
 }
 
 func TestTopmostModalUsesBrowserPaintOrderAndRejectsFalseOwners(t *testing.T) {
-	chromePath := testbrowser.Path(t)
-	profile := testbrowser.ProfileDir(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(profile),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 20*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-		_ = os.RemoveAll(profile)
-	})
+	ctx := newActionTab(t, 20*time.Second)
 
 	navigate := func(html string) {
 		t.Helper()
@@ -254,23 +220,7 @@ func TestTopmostModalUsesBrowserPaintOrderAndRejectsFalseOwners(t *testing.T) {
 }
 
 func TestDialogScopeContainmentIncludesOpenShadowDescendants(t *testing.T) {
-	chromePath := testbrowser.Path(t)
-	profile := testbrowser.ProfileDir(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(profile),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 20*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-		_ = os.RemoveAll(profile)
-	})
+	ctx := newActionTab(t, 20*time.Second)
 
 	html := `<div id="dialog" role="dialog" aria-modal="true"
 		style="position:fixed;inset:20px;background:white"><div id="host"></div></div>

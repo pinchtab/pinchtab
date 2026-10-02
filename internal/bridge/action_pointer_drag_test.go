@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -12,7 +11,6 @@ import (
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 // Two independent pairs in one page: #mouseSrc/#mouseDst answer plain mousedown/mouseup,
@@ -45,26 +43,7 @@ type dragFixture struct {
 
 func newDragFixture(t *testing.T) *dragFixture {
 	t.Helper()
-	chromePath := testbrowser.Path(t)
-
-	profile := testbrowser.ProfileDir(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(profile),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 60*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-		_ = os.RemoveAll(profile)
-	})
-
-	return &dragFixture{ctx: ctx, b: &Bridge{}}
+	return &dragFixture{ctx: newActionTab(t, 60*time.Second), b: &Bridge{}}
 }
 
 // Each trial reloads, so one trial cannot inherit another's drop.

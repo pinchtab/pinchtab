@@ -9,7 +9,6 @@ import (
 
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/selector"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 // Every trap that made the wrapped and unwrapped resolvers disagree, on one
@@ -37,22 +36,7 @@ document.getElementById('host').attachShadow({mode: 'open'}).innerHTML =
 
 func newSelectorFixture(t *testing.T) context.Context {
 	t.Helper()
-	chromePath := testbrowser.Path(t)
-
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx := newActionTab(t, 30*time.Second)
 
 	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(unifiedSelectorFixtureHTML))
 	if err := chromedp.Run(ctx,

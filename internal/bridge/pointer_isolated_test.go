@@ -11,25 +11,11 @@ import (
 	"github.com/chromedp/chromedp"
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 func newPointerFixture(t *testing.T, html string) context.Context {
 	t.Helper()
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(testbrowser.Path(t)),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx := newActionTab(t, 30*time.Second)
 
 	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(html))
 	if err := chromedp.Run(ctx,

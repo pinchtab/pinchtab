@@ -15,7 +15,6 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/selector"
 	"github.com/pinchtab/pinchtab/internal/srccensus"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 // stubScope records what the shared recursion asks of a scope, so the grammar
@@ -384,21 +383,7 @@ func TestFrameScopedWrapperFormsSeeTheWholeFrame(t *testing.T) {
 // background-last, while both correct answers are inside the dialog.
 func newScopedWrapperFixture(t *testing.T) context.Context {
 	t.Helper()
-	chromePath := testbrowser.Path(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 20*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx := newActionTab(t, 20*time.Second)
 
 	html := `<style>[role=dialog] { position: fixed; inset: 20px; background: white; }</style>
 	<button id="background-first">Save</button>

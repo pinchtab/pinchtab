@@ -4,14 +4,12 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 func decodeSelectRequest(t *testing.T, body string) ActionRequest {
@@ -71,23 +69,7 @@ func TestActionSelectRefusesOnlyWhenNoValueWasSupplied(t *testing.T) {
 // The outcome asserted against the PAGE, not against the action result: the result echoes
 // back what the caller asked for, so it reports success for a selection that never landed.
 func TestSelectAppliesASuppliedEmptyValueToThePage(t *testing.T) {
-	chromePath := testbrowser.Path(t)
-	profile := testbrowser.ProfileDir(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(profile),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancel := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 20*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancel()
-		cancelAlloc()
-		_ = os.RemoveAll(profile)
-	})
+	ctx := newActionTab(t, 20*time.Second)
 
 	html := `<select id="pick">
 		<option value="uk">United Kingdom</option>

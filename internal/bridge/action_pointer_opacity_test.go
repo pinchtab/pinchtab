@@ -11,7 +11,6 @@ import (
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 // The three ways CSS hides an element reach a descendant differently, which is
@@ -40,18 +39,7 @@ const opacityFixtureHTML = `<!doctype html><html><body>
 </body></html>`
 
 func TestPointerRefusesAnElementHiddenByAnAncestorsOpacity(t *testing.T) {
-	chromePath := testbrowser.Path(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	defer cancelAlloc()
-	ctx, cancel := chromedp.NewContext(alloc)
-	defer cancel()
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	defer cancelTimeout()
+	ctx := newActionTab(t, 30*time.Second)
 
 	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(opacityFixtureHTML))
 	if err := chromedp.Run(ctx, chromedp.Navigate(dataURL)); err != nil {

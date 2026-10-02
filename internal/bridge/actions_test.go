@@ -12,7 +12,6 @@ import (
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 func TestClickAction_UsesCoordinatePathIncludingZeroZero(t *testing.T) {
@@ -1341,18 +1340,7 @@ func TestHoverAction_HumanizedStillRequiresATarget(t *testing.T) {
 // has no browserless seam, so this is where selector routing and the real
 // trail landing on the target are pinned.
 func TestHoverAction_HumanizedSelectorLandsOnTheTarget(t *testing.T) {
-	chromePath := testbrowser.Path(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	defer cancelAlloc()
-	ctx, cancel := chromedp.NewContext(alloc)
-	defer cancel()
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	defer cancelTimeout()
+	ctx := newActionTab(t, 30*time.Second)
 
 	html := `<style>#target { position: absolute; top: 100px; left: 100px; width: 120px; height: 40px; }</style>
 	<div id="target">hover me</div>
@@ -1385,19 +1373,7 @@ func TestHoverAction_HumanizedSelectorLandsOnTheTarget(t *testing.T) {
 
 func newSelectorActionTab(t *testing.T, html string) context.Context {
 	t.Helper()
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(testbrowser.Path(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancel := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancel()
-		cancelAlloc()
-	})
+	ctx := newActionTab(t, 30*time.Second)
 	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(html))
 	if err := chromedp.Run(ctx, chromedp.Navigate(dataURL)); err != nil {
 		t.Fatal(err)

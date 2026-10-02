@@ -9,7 +9,6 @@ import (
 	"github.com/chromedp/chromedp"
 	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/selector"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 // The frame question the world unification could silently get wrong: a scoped
@@ -55,21 +54,7 @@ func TestAFrameScopedResolutionDoesNotSeeTheTopDocument(t *testing.T) {
 
 func newChildFrameFixture(t *testing.T) context.Context {
 	t.Helper()
-	chromePath := testbrowser.Path(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 20*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx := newActionTab(t, 20*time.Second)
 
 	html := `<body>
 	<button id="top-only">top</button>

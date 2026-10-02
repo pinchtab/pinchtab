@@ -8,22 +8,10 @@ import (
 
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 func TestClickPreservesFloatingFlyoutWithoutScroll(t *testing.T) {
-	chromePath := testbrowser.Path(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	defer cancelAlloc()
-	ctx, cancel := chromedp.NewContext(alloc)
-	defer cancel()
-	ctx, cancelTimeout := context.WithTimeout(ctx, 15*time.Second)
-	defer cancelTimeout()
+	ctx := newActionTab(t, 15*time.Second)
 
 	html := `<style>
 		#portal { position: fixed; inset: 10px auto auto 10px; }

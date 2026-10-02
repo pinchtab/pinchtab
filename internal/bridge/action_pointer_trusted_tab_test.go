@@ -29,18 +29,7 @@ const trustedClickFixtureHTML = `<!doctype html><html><body>
 const trustedDispatchTestDeadline = 3 * time.Second
 
 func TestTrustedClickLandsOnATabManagerCreatedTab(t *testing.T) {
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(testbrowser.Path(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	defer cancelAlloc()
-	browserCtx, cancelBrowser := chromedp.NewContext(alloc)
-	defer cancelBrowser()
-	if err := chromedp.Run(browserCtx); err != nil {
-		t.Fatal(err)
-	}
+	browserCtx := testbrowser.Tab(t)
 
 	tm := NewTabManager(browserCtx, &config.RuntimeConfig{}, nil, func(context.Context, string) error { return nil })
 	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(trustedClickFixtureHTML))
