@@ -51,6 +51,10 @@ result is an answer, the same way `console` and `errors` report having nothing t
 built for `REF=$(pinchtab find … --ref-only)`, where an empty `REF` spent on a click is
 worse than a failed command.
 
+`--ref-only` also exits non-zero when the top matches are tied (`confidence` is `ambiguous`),
+naming the tied refs and the retry query `nth:<i>:role:<role> <name>` built from the top
+match, where `i` counts from 1 in page order. Printing one of the tied refs would be a guess.
+
 ## Using `POST /find`
 
 ```bash
@@ -65,8 +69,9 @@ If `tabId` is omitted, PinchTab uses the active tab in the current bridge contex
 
 | Field | Description |
 | --- | --- |
-| `best_ref` | Highest-scoring element reference to use with `/action` |
-| `confidence` | `high`, `medium`, or `low` |
+| `best_ref` | Highest-scoring element reference to use with `/action`; not safe to act on when `tied_refs` is present |
+| `confidence` | `high`, `medium`, `low`, or `ambiguous` when the top matches are tied |
+| `tied_refs` | Present only on a tie: the refs whose role and name equal the top match's, or whose score is within 0.01 of it |
 | `score` | Score of the best match |
 | `matches` | Top matches above threshold |
 | `strategy` | Matching strategy used |

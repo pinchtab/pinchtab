@@ -131,6 +131,7 @@ func TestHandleFindAmbiguousTieWithholdsSelector(t *testing.T) {
 			"best_ref":   "e3",
 			"confidence": "ambiguous",
 			"tied_refs":  []string{"e3", "e1", "e2"},
+			"matches":    []map[string]any{{"ref": "e3", "role": "button", "name": "Add"}},
 		})
 	}))
 	defer srv.Close()
@@ -150,5 +151,8 @@ func TestHandleFindAmbiguousTieWithholdsSelector(t *testing.T) {
 	hint, _ := resp["nextActionHint"].(string)
 	if !strings.Contains(hint, "Ambiguous") || !strings.Contains(hint, "e1") || strings.Contains(hint, "Use selector") {
 		t.Errorf("nextActionHint = %q, want an ambiguity hint naming the tied refs", hint)
+	}
+	if !strings.Contains(hint, "nth:<i>:role:button Add") {
+		t.Errorf("nextActionHint = %q, want the positional retry query", hint)
 	}
 }

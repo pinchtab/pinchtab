@@ -44,7 +44,7 @@ func Find(conn apiclient.Conn, query string, cmd *cobra.Command) {
 	if refOnly {
 		result := conn.PostQuiet(path, body, capture)
 		if tied := stringList(result["tied_refs"]); len(tied) > 0 {
-			cli.Fatal("Ambiguous match for %q: %s are indistinguishable; refine the query", query, strings.Join(tied, ", "))
+			cli.Fatal("Ambiguous match for %q: %s are indistinguishable; pick one with %s", query, strings.Join(tied, ", "), positionalRetryQuery(result))
 		}
 		if ref, ok := result["best_ref"].(string); ok && ref != "" {
 			fmt.Println(ref)
@@ -80,4 +80,21 @@ func Find(conn apiclient.Conn, query string, cmd *cobra.Command) {
 			fmt.Printf("%s\t%s\t%q\n", ref, role, name)
 		}
 	}
+}
+
+func positionalRetryQuery(result map[string]any) string {
+	matches, _ := result["matches"].([]any)
+	top := map[string]any{}
+	if len(matches) > 0 {
+		top, _ = matches[0].(map[string]any)
+	}
+	role, _ := top["role"].(string)
+	name, _ := top["name"].(string)
+	if role == "" {
+		role = "<role>"
+	}
+	if name == "" {
+		name = "<name>"
+	}
+	return fmt.Sprintf(`"nth:<i>:role:%s %s" (i counts from 1 in page order)`, role, name)
 }

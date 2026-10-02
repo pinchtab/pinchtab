@@ -75,7 +75,7 @@ func handleFind(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.Call
 		tied, _ := resp["tied_refs"].([]any)
 		switch {
 		case len(tied) > 0:
-			resp["nextActionHint"] = fmt.Sprintf("Ambiguous: refs %v match equally well, so none is safe to act on. Retry pinchtab_find with a query naming what sets the intended one apart (its row, label or position).", tied)
+			resp["nextActionHint"] = fmt.Sprintf("Ambiguous: refs %v match equally well, so none is safe to act on. Retry pinchtab_find with %s, where i counts from 1 in page order.", tied, positionalRetryQuery(resp))
 		case bestRef != "":
 			resp["bestRef"] = bestRef
 			resp["selector"] = bestRef
@@ -86,6 +86,23 @@ func handleFind(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.Call
 
 		return jsonResult(resp)
 	}
+}
+
+func positionalRetryQuery(resp map[string]any) string {
+	matches, _ := resp["matches"].([]any)
+	top := map[string]any{}
+	if len(matches) > 0 {
+		top, _ = matches[0].(map[string]any)
+	}
+	role, _ := top["role"].(string)
+	name, _ := top["name"].(string)
+	if role == "" {
+		role = "<role>"
+	}
+	if name == "" {
+		name = "<name>"
+	}
+	return fmt.Sprintf("query %q", "nth:<i>:role:"+role+" "+name)
 }
 
 func handleExtract(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
