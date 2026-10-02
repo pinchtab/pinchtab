@@ -28,6 +28,33 @@ func (e *NoOptionMatchError) Error() string {
 	return fmt.Sprintf("no option matched %q by value or visible text", e.Value)
 }
 
+// NotFillableError reports a fill target that holds no value of its own, such as
+// one segment of a date or time input. Host names the input it belongs to, when
+// the target sits in that input's shadow tree.
+type NotFillableError struct {
+	Tag  string `json:"tag"`
+	Role string `json:"role"`
+	Host *struct {
+		Tag  string `json:"tag"`
+		Type string `json:"type"`
+	} `json:"host"`
+}
+
+func (e *NotFillableError) Error() string {
+	target := "<" + e.Tag
+	if e.Role != "" {
+		target += fmt.Sprintf(" role=%q", e.Role)
+	}
+	target += ">"
+	if e.Host == nil {
+		return fmt.Sprintf("fill target %s is not an input, textarea, select or contenteditable element", target)
+	}
+	return fmt.Sprintf(
+		"fill target %s is a part of <%s type=%q>, not a field; fill the host input by selector with the whole value in ISO format (e.g. 12:30, 2026-10-02)",
+		target, e.Host.Tag, e.Host.Type,
+	)
+}
+
 func FillByNodeID(ctx context.Context, nodeID int64, value string) error {
 	objectID, err := ResolveNodeObjectID(ctx, nodeID)
 	if err != nil {
@@ -36,22 +63,42 @@ func FillByNodeID(ctx context.Context, nodeID int64, value string) error {
 	if err := focusNode(ctx, nodeID); err != nil {
 		return err
 	}
-	// Use the native value setter for the concrete element type to bypass
-	// framework-patched setters (e.g. React's value tracker). Calling the
-	// input setter on a textarea throws with an incompatible receiver.
+	// The native setter of the concrete element type bypasses framework-patched
+	// setters (e.g. React's value tracker); the input setter throws on a textarea.
 	js := `function(v) {
 				var proto = null;
 				if (this instanceof window.HTMLTextAreaElement) {
 					proto = window.HTMLTextAreaElement.prototype;
 				} else if (this instanceof window.HTMLInputElement) {
 					proto = window.HTMLInputElement.prototype;
+				} else if (this instanceof window.HTMLSelectElement) {
+					proto = window.HTMLSelectElement.prototype;
 				}
-				var setter = proto && Object.getOwnPropertyDescriptor(proto, 'value').set;
-				if (setter) { setter.call(this, v); } else { this.value = v; }
+				if (proto) {
+					Object.getOwnPropertyDescriptor(proto, 'value').set.call(this, v);
+				} else if (this.isContentEditable) {
+					this.textContent = v;
+				} else {
+					var root = this.getRootNode && this.getRootNode();
+					var host = root && root.host;
+					return {
+						tag: (this.localName || this.nodeName || '').toLowerCase(),
+						role: (this.getAttribute && this.getAttribute('role')) || '',
+						host: host ? {tag: host.localName, type: host.getAttribute('type') || ''} : null
+					};
+				}
 				this.dispatchEvent(new Event('input', {bubbles: true}));
 				this.dispatchEvent(new Event('change', {bubbles: true}));
+				return null;
 			}`
-	return cdptk.CallFunctionOn(ctx, objectID, js, []map[string]any{{"value": value}}, nil)
+	var refusal *NotFillableError
+	if err := cdptk.CallFunctionOn(ctx, objectID, js, []map[string]any{{"value": value}}, &refusal); err != nil {
+		return err
+	}
+	if refusal != nil {
+		return refusal
+	}
+	return nil
 }
 
 func focusNode(ctx context.Context, nodeID int64) error {
@@ -174,7 +221,8 @@ func SelectByNodeID(ctx context.Context, nodeID int64, value string) error {
 // ReadInputValue reads back the effective value of an input element. For React
 // controlled inputs it checks the fiber's memoizedProps.value (which reflects
 // React state) rather than the DOM value, since the DOM value can be stale.
-// Returns the effective value the framework considers current.
+// Returns the effective value the framework considers current. Only the native
+// value getter is read, so an expando a fill left behind cannot echo back.
 func ReadInputValue(ctx context.Context, nodeID int64) (string, error) {
 	js := `function() {
 		var el = this;
@@ -188,7 +236,12 @@ func ReadInputValue(ctx context.Context, nodeID int64) (string, error) {
 				return props.value || "";
 			}
 		}
-		return el.value || "";
+		var fieldType = [window.HTMLInputElement, window.HTMLTextAreaElement, window.HTMLSelectElement]
+			.find(function(type) { return el instanceof type; });
+		if (fieldType) {
+			return Object.getOwnPropertyDescriptor(fieldType.prototype, 'value').get.call(el) || "";
+		}
+		return el.isContentEditable ? el.textContent || "" : "";
 	}`
 	var value string
 	err := CallFunctionOnNode(ctx, nodeID, js, nil, &value)

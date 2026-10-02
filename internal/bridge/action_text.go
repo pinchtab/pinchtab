@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"unicode/utf8"
@@ -51,6 +52,10 @@ func (b *Bridge) actionFill(ctx context.Context, req ActionRequest) (map[string]
 	}
 	if req.NodeID > 0 {
 		if err := bridgecdpops.FillByNodeID(ctx, req.NodeID, text); err != nil {
+			var notFillable *bridgecdpops.NotFillableError
+			if errors.As(err, &notFillable) {
+				return nil, fmt.Errorf("%w: %w", ErrInvalidActionRequest, err)
+			}
 			return nil, err
 		}
 		// Compared against what was asked for rather than against "", so a clear that
