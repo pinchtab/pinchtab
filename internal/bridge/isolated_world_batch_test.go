@@ -5,14 +5,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"maps"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/srccensus"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
@@ -80,39 +77,11 @@ func (c *cdpCounter) stop() map[string]int {
 	return out
 }
 
-// sharedBrowserDevToolsURL exists because chromedp binds a debug stream to a
-// connection when it dials, so a counted tab needs a second connection.
-func sharedBrowserDevToolsURL(t *testing.T) string {
-	t.Helper()
-	exec, err := browserExecutorContext(testbrowser.Tab(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	args, err := browser.GetBrowserCommandLine().Do(exec)
-	if err != nil {
-		t.Fatalf("read shared browser command line: %v", err)
-	}
-	for _, arg := range args {
-		profile, ok := strings.CutPrefix(arg, "--user-data-dir=")
-		if !ok {
-			continue
-		}
-		active, err := os.ReadFile(filepath.Join(profile, "DevToolsActivePort"))
-		if err != nil {
-			t.Fatalf("read shared browser DevTools port: %v", err)
-		}
-		port, path, _ := strings.Cut(strings.TrimSpace(string(active)), "\n")
-		return "ws://127.0.0.1:" + port + path
-	}
-	t.Fatalf("shared browser command line has no --user-data-dir: %v", args)
-	return ""
-}
-
 func newCountedContainmentFixture(t *testing.T) (context.Context, *cdpCounter) {
 	t.Helper()
 
 	counter := &cdpCounter{byMethod: map[string]int{}}
-	alloc, cancelAlloc := chromedp.NewRemoteAllocator(context.Background(), sharedBrowserDevToolsURL(t), chromedp.NoModifyURL)
+	alloc, cancelAlloc := chromedp.NewRemoteAllocator(context.Background(), testbrowser.DevToolsURL(t), chromedp.NoModifyURL)
 	ctx, cancelTab := chromedp.NewContext(alloc, chromedp.WithDebugf(counter.debugf))
 	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
 	t.Cleanup(func() {

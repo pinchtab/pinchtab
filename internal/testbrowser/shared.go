@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -68,6 +70,19 @@ func Launch(t testing.TB, opts ...chromedp.ExecAllocatorOption) context.Context 
 		t.Fatalf("start test browser: %v", err)
 	}
 	return ctx
+}
+
+// DevToolsURL is the shared browser's DevTools endpoint, for a test that needs a
+// second connection: chromedp binds a debug stream to a connection when it dials.
+func DevToolsURL(t testing.TB) string {
+	t.Helper()
+	sharedBrowser(t)
+	active, err := os.ReadFile(filepath.Join(shared.profile, "DevToolsActivePort"))
+	if err != nil {
+		t.Fatalf("read shared test browser DevTools port: %v", err)
+	}
+	port, path, _ := strings.Cut(strings.TrimSpace(string(active)), "\n")
+	return "ws://127.0.0.1:" + port + path
 }
 
 func sharedBrowser(t testing.TB) context.Context {
