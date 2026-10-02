@@ -187,6 +187,34 @@ func TestInlineTextNeverFusesIntoTheButtonAfterIt(t *testing.T) {
 	}
 }
 
+const hiddenOrderPage = `<style>.off{display:none}</style><h1>Order status</h1>` +
+	`<div class="off">Payment failed: card declined</div><p>Your order #4411 is confirmed.</p>` +
+	`<div style="visibility:hidden">Shipping: 2 days</div>`
+
+func TestDefaultExtractionLeavesOutCSSHiddenContent(t *testing.T) {
+	text := extractReadability(t, readabilityPage(t, hiddenOrderPage))
+
+	if want := "Order status\nYour order #4411 is confirmed."; text != want {
+		t.Errorf("want only the rendered lines, unchanged:\n want %q\n got  %q", want, text)
+	}
+}
+
+func TestAVisibleChildOfAnInvisibleParentKeepsItsText(t *testing.T) {
+	text := extractReadability(t, readabilityPage(t, `<style>.off{display:none}</style><p>Plan</p>`+
+		`<div style="visibility:hidden">Old price <span style="visibility:visible">New price $9</span> expired`+
+		`<select><option selected>Unseen choice</option></select></div>`+
+		`<div class="off">Removed <span style="visibility:visible">still removed</span></div>`))
+
+	if !strings.Contains(text, "New price $9") {
+		t.Errorf("a visibility:visible child is rendered inside a visibility:hidden parent, so its text must stay:\n%s", text)
+	}
+	for _, hidden := range []string{"Old price", "expired", "Unseen choice", "Removed", "still removed"} {
+		if strings.Contains(text, hidden) {
+			t.Errorf("%q is not rendered but leaked into the extraction:\n%s", hidden, text)
+		}
+	}
+}
+
 // The CI twin. Every guard above needs a browser and skips without one, so a revert of
 // the fix would land green on a machine that has none. This one reds anywhere: the whole
 // defect was reading innerText off a node that has no layout, so the script must not read

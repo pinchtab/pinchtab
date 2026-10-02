@@ -42,6 +42,22 @@
     chosenLabels.set(select, Array.from(liveSelects[i].selectedOptions, o => o.label).join(', '));
   });
 
+  const unrendered = new Set();
+  const invisible = new Set();
+  const markHidden = (liveEl, cloneEl) => {
+    const style = window.getComputedStyle(liveEl);
+    if (style.display === 'none') {
+      unrendered.add(cloneEl);
+      return;
+    }
+    if (style.visibility !== 'visible') invisible.add(cloneEl);
+    for (let i = 0; i < liveEl.children.length; i++) {
+      markHidden(liveEl.children[i], cloneEl.children[i]);
+    }
+  };
+  markHidden(live, root);
+  unrendered.forEach(el => el.remove());
+
   if (!source) {
     for (const sel of strip) {
       root.querySelectorAll(sel).forEach(el => el.remove());
@@ -90,7 +106,7 @@
   };
   const serialize = (node) => {
     if (node.nodeType === Node.TEXT_NODE) {
-      write(node.data);
+      if (!invisible.has(node.parentNode)) write(node.data);
       return;
     }
     if (node.nodeType !== Node.ELEMENT_NODE) return;
@@ -100,7 +116,7 @@
     }
     if (node.tagName === 'SELECT') {
       queue(' ');
-      write(chosenLabels.get(node));
+      if (!invisible.has(node)) write(chosenLabels.get(node));
       queue(' ');
       return;
     }
@@ -113,7 +129,7 @@
     if (block) queue('\n');
     if (button) queue(' ');
   };
-  serialize(root);
+  if (!unrendered.has(root)) serialize(root);
 
   return out.replace(/\n{3,}/g, '\n\n').trim();
 })()

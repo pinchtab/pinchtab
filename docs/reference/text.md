@@ -4,6 +4,9 @@ Extract text from the current page or a specific element.
 
 By default, PinchTab runs a Readability-style extraction against the current
 document. Use full/raw mode when you want `document.body.innerText` instead.
+The default extraction leaves out content the page hides with CSS
+(`display: none` or `visibility: hidden`), such as inactive tab panels, filtered
+rows, and hidden error templates.
 
 ## Element Selection
 
