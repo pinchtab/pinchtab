@@ -79,6 +79,13 @@ func (s tabStateStore) read() string {
 	return strings.TrimSpace(string(data))
 }
 
+func (s tabStateStore) target() string {
+	if !s.useLocal() {
+		return ""
+	}
+	return s.read()
+}
+
 func (s tabStateStore) write(tabID string) {
 	if tabID == "" || !s.useLocal() {
 		return

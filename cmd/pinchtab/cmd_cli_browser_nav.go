@@ -75,7 +75,7 @@ var tabsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt apiclient.Conn) {
 			if len(args) == 0 {
-				browseractions.TabList(rt, cmd, defaultTabState.read())
+				browseractions.TabList(rt, cmd, defaultTabState.target())
 				return
 			}
 			tabID := browseractions.TabFocus(rt, args[0], cmd)

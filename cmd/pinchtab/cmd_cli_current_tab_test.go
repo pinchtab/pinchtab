@@ -128,3 +128,25 @@ func TestResolveTabStateEndpointReadsTheConfigFile(t *testing.T) {
 		t.Errorf("env override = (%q, %q), want the env values", base, token)
 	}
 }
+
+func TestTabTargetIsTheCachedTabOnlyForAnonymousCallers(t *testing.T) {
+	oldAgentID := cliAgentID
+	defer func() { cliAgentID = oldAgentID }()
+	cliAgentID = ""
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("PINCHTAB_SESSION", "")
+	t.Setenv("PINCHTAB_AGENT_ID", "")
+	oldResolve := resolveTabStateEndpoint
+	resolveTabStateEndpoint = func() (string, string) { return "http://127.0.0.1:19999", "" }
+	t.Cleanup(func() { resolveTabStateEndpoint = oldResolve })
+
+	WriteTabStateFile("TAB_B")
+	if got := defaultTabState.target(); got != "TAB_B" {
+		t.Fatalf("anonymous target = %q, want TAB_B", got)
+	}
+
+	t.Setenv("PINCHTAB_AGENT_ID", "agent-env")
+	if got := defaultTabState.target(); got != "" {
+		t.Fatalf("identified target = %q, want empty: the next command uses the server-scoped tab", got)
+	}
+}
