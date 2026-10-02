@@ -3,6 +3,7 @@ package extract
 import (
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/semantic"
@@ -230,6 +231,10 @@ func newItemResolver(g group, schema Schema, opts Options) itemResolver {
 	headerView := newView(header)
 	r.columns = map[string]columnField{}
 	for _, prop := range schema.Properties {
+		if i, ok := exactHeader(prop, header); ok {
+			r.columns[prop.Name] = columnField{index: i, field: FieldResult{Score: 1, Confidence: semantic.CalibrateConfidence(1)}}
+			continue
+		}
 		node, fr, ok := matchTarget(prop.hint, fieldQuery(prop), headerView, opts)
 		if !ok {
 			continue
@@ -237,6 +242,28 @@ func newItemResolver(g group, schema Schema, opts Options) itemResolver {
 		r.columns[prop.Name] = columnField{index: position[node.Ref], field: fr}
 	}
 	return r
+}
+
+func exactHeader(prop Property, header []observe.A11yNode) (int, bool) {
+	name := headerKey(prop.Name)
+	if prop.hint.kind != targetNone || name == "" {
+		return 0, false
+	}
+	for i, h := range header {
+		if headerKey(h.Name) == name {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+func headerKey(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '_' || r == '-' || unicode.IsSpace(r) {
+			return -1
+		}
+		return unicode.ToLower(r)
+	}, s)
 }
 
 func (r itemResolver) resolve(item int) Result {

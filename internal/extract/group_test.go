@@ -441,3 +441,71 @@ func TestHintAcceptsABareRef(t *testing.T) {
 		t.Errorf("colour = %+v data=%v, want the e5 node's text", got.Fields["colour"], got.Data["colour"])
 	}
 }
+
+func filteredOrdersNodes() []observe.A11yNode {
+	nodes := []observe.A11yNode{
+		{Ref: "e1", Role: "main", Depth: 0},
+		{Ref: "e2", Role: "form", Name: "Filter orders", Depth: 1},
+		{Ref: "e3", Role: "combobox", Name: "Status", Value: "any", Depth: 2},
+		{Ref: "e4", Role: "option", Name: "any", Depth: 3},
+		{Ref: "e5", Role: "option", Name: "shipped", Depth: 3},
+		{Ref: "e6", Role: "option", Name: "pending", Depth: 3},
+		{Ref: "e7", Role: "table", Name: "Orders", Depth: 1},
+		{Ref: "e8", Role: "row", Depth: 2},
+		{Ref: "e9", Role: "columnheader", Name: "Order", Depth: 3},
+		{Ref: "e10", Role: "columnheader", Name: "Customer", Depth: 3},
+		{Ref: "e11", Role: "columnheader", Name: "Total", Depth: 3},
+	}
+	rows := [][3]string{{"1001", "Alice Johnson", "399.00"}, {"1002", "Bob Smith", "429.00"}, {"1003", "Carol White", "549.00"}}
+	for i, row := range rows {
+		base := 12 + i*4
+		nodes = append(nodes, observe.A11yNode{Ref: fmt.Sprintf("e%d", base), Role: "row", Depth: 2})
+		for j, cell := range row {
+			nodes = append(nodes, observe.A11yNode{Ref: fmt.Sprintf("e%d", base+1+j), Role: "cell", Name: cell, Depth: 3})
+		}
+	}
+	return nodes
+}
+
+const coincidentalShippedScore = 0.650944
+
+func TestResolveArray_ExactHeaderMatchIsHighAndOutranksACoincidentalMatch(t *testing.T) {
+	headers := `{"type":"object","properties":{"orders":{"type":"array","items":{"type":"object","properties":{
+		"order":{"type":"integer"},"customer":{"type":"string"},"total":{"type":"number"}}}}}}`
+	got := Resolve(mustSchema(t, headers), filteredOrdersNodes(), Options{})
+	rows := got.Fields["orders"].Items
+	if len(rows) != 3 {
+		t.Fatalf("rows = %+v, want 3", rows)
+	}
+	wantRefs := map[string]string{"order": "e13", "customer": "e14", "total": "e15"}
+	for name, ref := range wantRefs {
+		fr := rows[0].Fields[name]
+		if fr.Ref != ref || fr.Confidence != "high" || fr.Score <= coincidentalShippedScore {
+			t.Errorf("%s = %+v, want ref %s with high confidence above %v", name, fr, ref, coincidentalShippedScore)
+		}
+	}
+
+	mismatch := `{"type":"object","properties":{"orders":{"type":"array","items":{"type":"object","properties":{
+		"price":{"type":"number"},"buyer":{"type":"string"},"sku":{"type":"string"},"shipped":{"type":"string"}}}}}}`
+	got = Resolve(mustSchema(t, mismatch), filteredOrdersNodes(), Options{})
+	for _, item := range got.Fields["orders"].Items {
+		if fr := item.Fields["shipped"]; fr.Score > coincidentalShippedScore || fr.Confidence == "high" {
+			t.Errorf("shipped = %+v, want no higher than %v", fr, coincidentalShippedScore)
+		}
+	}
+}
+
+func TestExactHeader_IgnoresCaseSeparatorsAndYieldsToAHint(t *testing.T) {
+	header := []observe.A11yNode{{Name: "Order"}, {Name: "Customer Name"}}
+	for _, name := range []string{"customer_name", "CUSTOMER-NAME", "customerName", "Customer Name"} {
+		if i, ok := exactHeader(Property{Name: name}, header); !ok || i != 1 {
+			t.Errorf("exactHeader(%q) = %d, %v; want column 1", name, i, ok)
+		}
+	}
+	if _, ok := exactHeader(Property{Name: "customer"}, header); ok {
+		t.Error("a partial header match must not count as exact")
+	}
+	if _, ok := exactHeader(Property{Name: "order", hint: target{kind: targetQuery, value: "customer"}}, header); ok {
+		t.Error("an explicit hint must win over an exact header match")
+	}
+}
