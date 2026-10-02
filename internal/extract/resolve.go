@@ -4,7 +4,6 @@ import (
 	"context"
 	"math"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -111,7 +110,7 @@ func ResolveContext(ctx context.Context, schema Schema, nodes []observe.A11yNode
 	if opts.Matcher == nil {
 		opts.Matcher = sharedMatcher()
 	}
-	v := newView(canonicalOrder(nodes))
+	v := newView(nodes)
 	if schema.scope.kind != targetNone {
 		node, fr, ok := matchTarget(schema.scope, "", v, opts)
 		if !ok {
@@ -199,7 +198,7 @@ func matchTarget(tg target, fallbackQuery string, v view, opts Options) (observe
 		LexicalWeight:   opts.LexicalWeight,
 		EmbeddingWeight: opts.EmbeddingWeight,
 	})
-	best, ok := pickBest(res.Matches)
+	best, ok := v.pickBest(res.Matches)
 	score := roundScore(best.Score)
 	fr := FieldResult{Score: score, Confidence: semantic.CalibrateConfidence(score)}
 	if err != nil || !ok {
@@ -215,13 +214,13 @@ func matchTarget(tg target, fallbackQuery string, v view, opts Options) (observe
 	return node, fr, true
 }
 
-func pickBest(matches []semantic.ElementMatch) (semantic.ElementMatch, bool) {
+func (v view) pickBest(matches []semantic.ElementMatch) (semantic.ElementMatch, bool) {
 	best, ok := semantic.ElementMatch{}, false
 	var bestScore float64
 	for _, m := range matches {
 		s := roundScore(m.Score)
 		switch {
-		case !ok, s > bestScore, s == bestScore && refLess(m.Ref, best.Ref):
+		case !ok, s > bestScore, s == bestScore && v.index[m.Ref] < v.index[best.Ref]:
 			best, bestScore, ok = m, s, true
 		}
 	}
@@ -294,36 +293,4 @@ func coercionReason(t Type) string {
 	default:
 		return reasonNoMatch
 	}
-}
-
-func canonicalOrder(nodes []observe.A11yNode) []observe.A11yNode {
-	ordered := make([]observe.A11yNode, len(nodes))
-	copy(ordered, nodes)
-	sort.SliceStable(ordered, func(i, j int) bool {
-		return refLess(ordered[i].Ref, ordered[j].Ref)
-	})
-	return ordered
-}
-
-func refLess(a, b string) bool {
-	na, oka := refNum(a)
-	nb, okb := refNum(b)
-	if oka && okb {
-		return na < nb
-	}
-	if oka != okb {
-		return oka
-	}
-	return a < b
-}
-
-func refNum(ref string) (int, bool) {
-	if len(ref) < 2 || ref[0] != 'e' {
-		return 0, false
-	}
-	n, err := strconv.Atoi(ref[1:])
-	if err != nil {
-		return 0, false
-	}
-	return n, true
 }

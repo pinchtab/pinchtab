@@ -3,7 +3,7 @@ package extract
 import (
 	"encoding/json"
 	"errors"
-	"math/rand"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -298,14 +298,61 @@ func TestResolve_Deterministic(t *testing.T) {
 	if !reflect.DeepEqual(first, second) {
 		t.Fatalf("Resolve is not stable across runs:\n%+v\n%+v", first, second)
 	}
+}
 
-	shuffled := make([]observe.A11yNode, len(base))
-	copy(shuffled, base)
-	rng := rand.New(rand.NewSource(7))
-	rng.Shuffle(len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
-	third := Resolve(schema, shuffled, Options{})
-	if !reflect.DeepEqual(first, third) {
-		t.Fatalf("Resolve differs under shuffled node order:\n%+v\n%+v", first, third)
+const stockSchema = `{"type":"object","properties":{"products":{"type":"array","items":{"type":"object","properties":{
+	"name":{"type":"string"},"price":{"type":"number"},"stock":{"type":"integer"}}}}}}`
+
+var stockRows = []map[string]any{
+	{"name": "Pen", "price": 1.5, "stock": int64(12)},
+	{"name": "Book", "price": 7.0, "stock": int64(3)},
+	{"name": "Lamp", "price": 19.99, "stock": int64(0)},
+}
+
+func stockHeaderNodes() []observe.A11yNode {
+	return []observe.A11yNode{
+		{Ref: "e0", Role: "RootWebArea", Depth: 0},
+		{Ref: "e1", Role: "table", Depth: 3},
+		{Ref: "e2", Role: "row", Depth: 5},
+		{Ref: "e3", Role: "columnheader", Name: "Name", Text: "Name", Depth: 6},
+		{Ref: "e4", Role: "columnheader", Name: "Price", Text: "Price", Depth: 6},
+		{Ref: "e5", Role: "columnheader", Name: "Stock", Text: "Stock", Depth: 6},
+	}
+}
+
+func stockTableNodes() []observe.A11yNode {
+	nodes := stockHeaderNodes()
+	for _, cells := range [][3]string{{"Pen", "$1.50", "12"}, {"Book", "$7.00", "3"}, {"Lamp", "$19.99", "0"}} {
+		nodes = append(nodes, observe.A11yNode{Ref: fmt.Sprintf("e%d", len(nodes)), Role: "row", Depth: 5})
+		for _, cell := range cells {
+			nodes = append(nodes, observe.A11yNode{Ref: fmt.Sprintf("e%d", len(nodes)), Role: "cell", Name: cell, Text: cell, Depth: 6})
+		}
+	}
+	return nodes
+}
+
+func TestResolveArray_HeaderRowInBodyAcrossADepthGap(t *testing.T) {
+	got := Resolve(mustSchema(t, stockSchema), stockTableNodes(), Options{})
+	if list := items(t, got, "products"); !reflect.DeepEqual(list, stockRows) {
+		t.Fatalf("products = %v, want %v", list, stockRows)
+	}
+}
+
+func TestResolveArray_RefNumbersOutOfDocumentOrder(t *testing.T) {
+	nodes := stockTableNodes()
+	for i := range nodes {
+		nodes[i].Ref = fmt.Sprintf("e%d", len(nodes)-i)
+	}
+	got := Resolve(mustSchema(t, stockSchema), nodes, Options{})
+	if list := items(t, got, "products"); !reflect.DeepEqual(list, stockRows) {
+		t.Fatalf("products = %v, want %v", list, stockRows)
+	}
+}
+
+func TestResolveArray_HeaderCellsAreNeverItems(t *testing.T) {
+	got := Resolve(mustSchema(t, stockSchema), stockHeaderNodes(), Options{})
+	if _, present := got.Data["products"]; present {
+		t.Fatalf("products = %v, want no items from a header-only table", got.Data["products"])
 	}
 }
 

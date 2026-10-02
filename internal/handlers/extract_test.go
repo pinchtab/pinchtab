@@ -100,6 +100,62 @@ func TestHandleExtract_TypedDataWithRefs(t *testing.T) {
 	}
 }
 
+type snapshotThenExtractBridge struct {
+	extractMockBridge
+	page []bridge.A11yNode
+}
+
+func (m *snapshotThenExtractBridge) Snapshot(context.Context, string, string, bridge.ContentParams) (*bridge.SnapshotResult, error) {
+	return &bridge.SnapshotResult{Nodes: m.page}, nil
+}
+
+func stockTablePage() []bridge.A11yNode {
+	nodes := []bridge.A11yNode{
+		{Role: "RootWebArea", Depth: 0},
+		{Role: "table", Depth: 3},
+		{Role: "rowgroup", Depth: 4},
+		{Role: "row", Depth: 5},
+		{Role: "columnheader", Name: "Name", Text: "Name", Depth: 6},
+		{Role: "columnheader", Name: "Price", Text: "Price", Depth: 6},
+		{Role: "columnheader", Name: "Stock", Text: "Stock", Depth: 6},
+	}
+	for _, cells := range [][3]string{{"Pen", "$1.50", "12"}, {"Book", "$7.00", "3"}, {"Lamp", "$19.99", "0"}} {
+		nodes = append(nodes, bridge.A11yNode{Role: "row", Depth: 5})
+		for _, cell := range cells {
+			nodes = append(nodes, bridge.A11yNode{Role: "cell", Name: cell, Text: cell, Depth: 6})
+		}
+	}
+	for i := range nodes {
+		nodes[i].NodeID = int64(i + 1)
+	}
+	return nodes
+}
+
+func TestHandleExtract_AfterAFilteredSnapshotReturnsTheDataRows(t *testing.T) {
+	page := stockTablePage()
+	var cells []bridge.A11yNode
+	for _, n := range page {
+		if n.Role == "columnheader" || n.Role == "cell" {
+			cells = append(cells, n)
+		}
+	}
+	snapped := bridge.EpochRefs(nil, cells)
+	h := New(&snapshotThenExtractBridge{extractMockBridge{findMockBridge{refCache: snapped}}, page}, &config.RuntimeConfig{ActionTimeout: 10 * time.Second}, nil, nil, nil)
+	h.Matcher = semantic.NewLexicalMatcher()
+
+	w, _ := postExtract(t, h, "/extract", `{"schema":{"type":"object","properties":{"products":{"type":"array","items":{"type":"object","properties":{
+		"name":{"type":"string"},"price":{"type":"number"},"stock":{"type":"integer"}}}}}}}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", w.Code, w.Body.String())
+	}
+	var raw map[string]json.RawMessage
+	_ = json.Unmarshal(w.Body.Bytes(), &raw)
+	want := `{"products":[{"name":"Pen","price":1.5,"stock":12},{"name":"Book","price":7,"stock":3},{"name":"Lamp","price":19.99,"stock":0}]}`
+	if string(raw["data"]) != want {
+		t.Errorf("data = %s\nwant   %s", raw["data"], want)
+	}
+}
+
 func TestHandleExtract_SchemaAcceptedAsString(t *testing.T) {
 	h := newExtractTestHandler(productCache(), false)
 	quoted, _ := json.Marshal(productSchema)

@@ -119,6 +119,9 @@ func detectGroups(v view) []group {
 }
 
 func groupAt(v view, container, min int) (group, bool) {
+	if v.isHeaderRow(container) {
+		return group{}, false
+	}
 	children := v.children(container)
 	dominant, count := dominantRole(v, children)
 	if count < min || count == 0 {
@@ -282,11 +285,8 @@ func (v view) subtreeEnd(i int) int {
 
 func (v view) children(i int) []int {
 	var children []int
-	depth := v.nodes[i].Depth + 1
-	for j, end := i+1, v.subtreeEnd(i); j < end; j++ {
-		if v.nodes[j].Depth == depth {
-			children = append(children, j)
-		}
+	for j, end := i+1, v.subtreeEnd(i); j < end; j = v.subtreeEnd(j) {
+		children = append(children, j)
 	}
 	return children
 }
