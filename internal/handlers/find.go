@@ -10,6 +10,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
+	"github.com/pinchtab/pinchtab/internal/selector"
 	"github.com/pinchtab/semantic"
 	"github.com/pinchtab/semantic/recovery"
 )
@@ -28,6 +29,7 @@ type findResponse struct {
 	BestRef      string                  `json:"best_ref"`
 	Confidence   string                  `json:"confidence"`
 	TiedRefs     []string                `json:"tied_refs,omitempty"`
+	RetryQuery   string                  `json:"retry_query,omitempty"`
 	Score        float64                 `json:"score"`
 	Matches      []semantic.ElementMatch `json:"matches"`
 	Strategy     string                  `json:"strategy"`
@@ -242,16 +244,24 @@ func tiedTopRefs(matches []semantic.ElementMatch) []string {
 	return tied
 }
 
+func positionalRetryQuery(top semantic.ElementMatch) string {
+	role := selector.Selector{Kind: selector.KindRole, Value: top.Role + " " + top.Name}
+	return selector.Selector{Kind: selector.KindNth, Value: "<i>:" + role.String()}.String()
+}
+
 func buildFindResponse(req findRequest, result semantic.FindResult, idpiWarning string, start time.Time) findResponse {
 	confidence := result.ConfidenceLabel()
+	retryQuery := ""
 	tied := tiedTopRefs(result.Matches)
 	if tied != nil {
 		confidence = confidenceAmbiguous
+		retryQuery = positionalRetryQuery(result.Matches[0])
 	}
 	resp := findResponse{
 		BestRef:      result.BestRef,
 		Confidence:   confidence,
 		TiedRefs:     tied,
+		RetryQuery:   retryQuery,
 		Score:        result.BestScore,
 		Matches:      result.Matches,
 		Strategy:     result.Strategy,

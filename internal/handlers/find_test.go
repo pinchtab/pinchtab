@@ -541,6 +541,9 @@ func TestHandleFind_IndistinguishableTopMatchesAreAmbiguous(t *testing.T) {
 			t.Errorf("tied_refs = %v, want only the three Add buttons", resp.TiedRefs)
 		}
 	}
+	if resp.RetryQuery != "nth:<i>:role:button Add" {
+		t.Errorf("retry_query = %q, want the positional query for the tied role and name", resp.RetryQuery)
+	}
 }
 
 func TestHandleFind_DistinctMatchKeepsItsScoreLabel(t *testing.T) {
@@ -556,6 +559,9 @@ func TestHandleFind_DistinctMatchKeepsItsScoreLabel(t *testing.T) {
 	}
 	if resp.TiedRefs != nil {
 		t.Errorf("tied_refs = %v, want none", resp.TiedRefs)
+	}
+	if resp.RetryQuery != "" {
+		t.Errorf("retry_query = %q, want none", resp.RetryQuery)
 	}
 }
 

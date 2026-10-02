@@ -128,10 +128,11 @@ func TestHandleFindAddsSelectorHints(t *testing.T) {
 func TestHandleFindAmbiguousTieWithholdsSelector(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"best_ref":   "e3",
-			"confidence": "ambiguous",
-			"tied_refs":  []string{"e3", "e1", "e2"},
-			"matches":    []map[string]any{{"ref": "e3", "role": "button", "name": "Add"}},
+			"best_ref":    "e3",
+			"confidence":  "ambiguous",
+			"tied_refs":   []string{"e3", "e1", "e2"},
+			"retry_query": "nth:<i>:role:button Add",
+			"matches":     []map[string]any{{"ref": "e3", "role": "button", "name": "Add"}},
 		})
 	}))
 	defer srv.Close()

@@ -68,7 +68,7 @@ All element-action tools accept the unified `selector`, its deprecated aliases `
 | --- | --- | --- |
 | `pinchtab_eval` | `expression` required, `awaitPromise`, `tabId` | `awaitPromise=true` resolves a returned Promise (without it a Promise returns `{}` with a hint). Requires `security.allowEvaluate` (documented non-default JS-execution opt-in). Not frame-scoped — current `pinchtab_frame` state does not change evaluation context |
 | `pinchtab_pdf` | `tabId`, `landscape`, `scale`, `pageRanges` | Returns base64-encoded PDF content |
-| `pinchtab_find` | `query` required, `tabId` | Natural-language element search via `/find`; the result adds `bestRef`, `selector` (both the `best_ref`) and a `nextActionHint` to reuse in action tools. When `tied_refs` is present, `bestRef` and `selector` are withheld and the hint names the tied refs and a `nth:<i>:role:<role> <name>` retry query |
+| `pinchtab_find` | `query` required, `tabId` | Natural-language element search via `/find`; the result adds `bestRef`, `selector` (both the `best_ref`) and a `nextActionHint` to reuse in action tools. When `tied_refs` is present, `bestRef` and `selector` are withheld and the hint names the tied refs and the `retry_query` |
 | `pinchtab_extract` | `schema` (object) required, `tabId`, `scope`, `maxItems` | Schema-typed data via `/extract`: `data` plus a per-field `ref`, `score` and `confidence`; the refs are usable in action tools straight away. Prefer it over snapshot-then-parse for structured values; pin a `low` field with `x-pinchtab-hint`. See [Extract](./extract.md) |
 
 ## Diagnostics

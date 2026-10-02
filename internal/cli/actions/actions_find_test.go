@@ -182,7 +182,7 @@ const findTieChildEnv = "PINCHTAB_TEST_FIND_TIE"
 func TestFind_RefOnlyRefusesAnAmbiguousTie(t *testing.T) {
 	if os.Getenv(findTieChildEnv) != "" {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			_, _ = w.Write([]byte(`{"best_ref":"e3","confidence":"ambiguous","tied_refs":["e3","e1","e2"],"matches":[{"ref":"e3","role":"button","name":"Add"}]}`))
+			_, _ = w.Write([]byte(`{"best_ref":"e3","confidence":"ambiguous","tied_refs":["e3","e1","e2"],"retry_query":"nth:<i>:role:button Add","matches":[{"ref":"e3","role":"button","name":"Add"}]}`))
 		}))
 		defer srv.Close()
 		cmd := newFindCmd()
