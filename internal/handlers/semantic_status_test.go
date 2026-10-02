@@ -106,6 +106,9 @@ func TestASemanticSelectorThatMatchesNothingIs404OnEveryInspectEndpoint(t *testi
 				if !strings.Contains(w.Body.String(), "no matching element found") {
 					t.Errorf("body %s does not say the selector matched nothing", w.Body.String())
 				}
+				if !strings.Contains(w.Body.String(), `"code":"`+CodeElementNotFound+`"`) {
+					t.Errorf("body %s, want code %s; only a ref absent from the snapshot cache answers %s", w.Body.String(), CodeElementNotFound, CodeRefNotFound)
+				}
 			})
 		}
 	}
