@@ -1,10 +1,8 @@
 package bridge
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -14,7 +12,6 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/stealth"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 // The identity the endpoint hands out is only as good as what the browser puts on the
@@ -23,8 +20,6 @@ import (
 // Sec-CH-UA header for the life of the tab, which advertised a Windows Edge that sent none
 // of the hints a Windows Edge sends.
 func TestRotatedIdentitySendsClientHintsThatAgreeWithTheUserAgent(t *testing.T) {
-	chromePath := testbrowser.Path(t)
-
 	captured := newHeaderCapture()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		captured.record(r)
@@ -33,22 +28,7 @@ func TestRotatedIdentitySendsClientHintsThatAgreeWithTheUserAgent(t *testing.T) 
 	}))
 	t.Cleanup(server.Close)
 
-	profile := testbrowser.ProfileDir(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(profile),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 40*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-		_ = os.RemoveAll(profile)
-	})
+	ctx := newActionTab(t, 40*time.Second)
 
 	// Each load fetches its OWN path and reads back the headers recorded for that path, so a
 	// row cannot be handed a request it did not cause.

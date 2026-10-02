@@ -221,7 +221,7 @@ func TestTheProfileCensusReadsBothSpellingsOfTheDirectory(t *testing.T) {
 // trip them.
 const (
 	moduleTestFileFloor  = 200
-	userDataDirSiteFloor = 20
+	userDataDirSiteFloor = 2
 )
 
 func isSelectorCall(fun ast.Expr, pkg, name string) bool {

@@ -86,29 +86,17 @@ func newAuthProxy(t *testing.T, authorized *atomic.Int32) *httptest.Server {
 
 func newRedirectTab(t *testing.T, proxyURL string) (context.Context, string) {
 	t.Helper()
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(testbrowser.Path(t)),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)
-	if proxyURL != "" {
-		opts = append(opts,
+	var tab context.Context
+	if proxyURL == "" {
+		tab = testbrowser.Tab(t)
+	} else {
+		tab = testbrowser.Launch(t,
 			chromedp.ProxyServer(proxyURL),
 			chromedp.Flag("proxy-bypass-list", "<-loopback>"),
 		)
 	}
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 60*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
-	if err := chromedp.Run(ctx); err != nil {
-		t.Fatal(err)
-	}
+	ctx, cancel := context.WithTimeout(tab, 60*time.Second)
+	t.Cleanup(cancel)
 	return ctx, string(chromedp.FromContext(ctx).Target.TargetID)
 }
 

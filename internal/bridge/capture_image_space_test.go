@@ -12,7 +12,6 @@ import (
 
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 const imageSpaceFixtureHTML = `<body style="margin:0;width:1200px;height:2400px">
@@ -22,20 +21,7 @@ const imageSpaceFixtureHTML = `<body style="margin:0;width:1200px;height:2400px"
 func newImageSpaceFixture(t *testing.T) (context.Context, int64) {
 	t.Helper()
 
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(testbrowser.Path(t)),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 90*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx := newActionTab(t, 90*time.Second)
 
 	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(imageSpaceFixtureHTML))
 	if err := chromedp.Run(ctx,

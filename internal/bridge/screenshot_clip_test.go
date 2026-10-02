@@ -12,7 +12,6 @@ import (
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 // A single element of known size at a known offset, materially smaller than any
@@ -28,22 +27,7 @@ const clipFixtureSmallWidth, clipFixtureSmallHeight = 120, 60
 
 func newClipFixture(t *testing.T) context.Context {
 	t.Helper()
-	chromePath := testbrowser.Path(t)
-
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 60*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx := newActionTab(t, 60*time.Second)
 
 	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(clipFixtureHTML))
 	if err := chromedp.Run(ctx,

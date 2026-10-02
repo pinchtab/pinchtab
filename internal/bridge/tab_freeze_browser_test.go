@@ -6,10 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 const freezeProbePage = `<button id="b" onclick="document.title='clicked'">go</button>
@@ -20,37 +18,11 @@ document.addEventListener('resume', () => { window.__resumed = true; });
 </script>`
 
 func TestFreezeIdleFreezesARealTabAndAnActionUnfreezesIt(t *testing.T) {
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(testbrowser.Path(t)),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	defer cancelAlloc()
-	browserCtx, cancelBrowser := chromedp.NewContext(alloc)
-	defer cancelBrowser()
-	if err := chromedp.Run(browserCtx); err != nil {
-		t.Fatalf("start browser: %v", err)
-	}
-
 	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(freezeProbePage))
-	var raw target.ID
-	if err := chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
-		id, err := target.CreateTarget(dataURL).WithBackground(true).Do(ctx)
-		raw = id
-		return err
-	})); err != nil {
-		t.Fatalf("create background target: %v", err)
-	}
-	tabCtx, cancelTab := chromedp.NewContext(browserCtx, chromedp.WithTargetID(raw))
-	defer cancelTab()
-	if err := chromedp.Run(tabCtx); err != nil {
-		t.Fatalf("attach: %v", err)
-	}
+	browserCtx, tabCtx := newBackgroundTab(t, dataURL)
 
 	tm := NewTabManager(browserCtx, &config.RuntimeConfig{TabLifecyclePolicy: "freeze_idle", TabCloseDelay: 50 * time.Millisecond}, nil, nil)
-	tabID := string(raw)
+	tabID := string(chromedp.FromContext(tabCtx).Target.TargetID)
 	tm.tabs[tabID] = &TabEntry{Ctx: tabCtx, CDPID: tabID, CreatedAt: time.Now(), LastUsed: time.Now()}
 
 	tm.ScheduleIdleLifecycle(tabID)

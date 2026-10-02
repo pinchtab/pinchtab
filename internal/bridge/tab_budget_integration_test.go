@@ -2,38 +2,18 @@ package bridge
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/chromedp/cdproto/target"
-	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 func TestReconcileTabBudgetBoundsUntrackedTargets(t *testing.T) {
-	chromePath := testbrowser.Path(t)
-	profile := testbrowser.ProfileDir(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(profile),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancel := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancel()
-		cancelAlloc()
-		_ = os.RemoveAll(profile)
-	})
-
-	if err := chromedp.Run(ctx, chromedp.Navigate("about:blank")); err != nil {
-		t.Fatalf("start browser: %v", err)
-	}
+	// Own browser: reconcile closes page targets browser-wide.
+	ctx, cancel := context.WithTimeout(testbrowser.Launch(t), 30*time.Second)
+	t.Cleanup(cancel)
 
 	const maxTabs = 3
 	tm := NewTabManager(ctx, &config.RuntimeConfig{

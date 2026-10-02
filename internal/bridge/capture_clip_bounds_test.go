@@ -3,12 +3,12 @@ package bridge
 import (
 	"context"
 	"encoding/base64"
-	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"testing"
 	"time"
 
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
+
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 // The target sits far enough down and across that a scroll is required to reach
@@ -23,22 +23,7 @@ const clipScrollFixtureHTML = `<body style="margin:0;width:2400px;height:2400px"
 
 func newClipScrollFixture(t *testing.T) (context.Context, int64) {
 	t.Helper()
-	chromePath := testbrowser.Path(t)
-
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 60*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx := newActionTab(t, 60*time.Second)
 
 	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(clipScrollFixtureHTML))
 	var scrolled bool

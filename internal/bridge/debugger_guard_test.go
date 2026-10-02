@@ -195,16 +195,8 @@ func TestDebuggerPauseGuardLive(t *testing.T) {
 		t.Skip("set PINCHTAB_DEBUGGER_GUARD_LIVE=1 for the local Chromium proof")
 	}
 
-	chromePath := testbrowser.MustPath(t)
-	opts := append(chromedp.DefaultExecAllocatorOptions[:], chromedp.ExecPath(chromePath))
-	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
-	defer allocCancel()
-	tabCtx, tabCancel := chromedp.NewContext(allocCtx)
-	defer tabCancel()
-
-	if err := chromedp.Run(tabCtx); err != nil {
-		t.Fatalf("start local Chromium: %v", err)
-	}
+	testbrowser.MustPath(t)
+	tabCtx := testbrowser.Tab(t)
 	paused := make(chan struct{}, 2)
 	chromedp.ListenTarget(tabCtx, func(ev any) {
 		if _, ok := ev.(*debugger.EventPaused); ok {
@@ -266,8 +258,7 @@ func TestDebuggerPauseGuardLive(t *testing.T) {
 	}
 	t.Log("guarded pass: the same debugger statement completed without a pause")
 
-	newTargetCtx, newTargetCancel := chromedp.NewContext(allocCtx)
-	defer newTargetCancel()
+	newTargetCtx := testbrowser.Tab(t)
 	newTargetPaused := make(chan struct{}, 1)
 	chromedp.ListenTarget(newTargetCtx, func(ev any) {
 		if _, ok := ev.(*debugger.EventPaused); ok {

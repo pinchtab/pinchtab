@@ -3,14 +3,12 @@ package bridge
 import (
 	"context"
 	"encoding/base64"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/chromedp/chromedp"
 
 	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 // EvaluateSubtype's whole job is telling a Promise apart from a genuine empty
@@ -21,23 +19,7 @@ import (
 // with no promise subtype, a primitive is unaffected, and --await-promise resolves
 // the value. Fails against a WithReturnByValue(true) detection path.
 func TestEvaluateSubtypeDetectsPromiseAgainstRealChrome(t *testing.T) {
-	chromePath := testbrowser.Path(t)
-	profile := testbrowser.ProfileDir(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(profile),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancel := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 20*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancel()
-		cancelAlloc()
-		_ = os.RemoveAll(profile)
-	})
+	ctx := newActionTab(t, 20*time.Second)
 
 	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte("<html><body></body></html>"))
 	if err := chromedp.Run(ctx, chromedp.Navigate(dataURL)); err != nil {

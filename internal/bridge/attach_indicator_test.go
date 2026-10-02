@@ -3,7 +3,6 @@ package bridge
 import (
 	"context"
 	"encoding/base64"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -12,27 +11,10 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/stealth"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 func TestAttachIndicatorNamesPortPersistsAndClears(t *testing.T) {
-	chromePath := testbrowser.Path(t)
-	profile := testbrowser.ProfileDir(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(profile),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 20*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-		_ = os.RemoveAll(profile)
-	})
+	ctx := newActionTab(t, 20*time.Second)
 	pageURL := func(title string) string {
 		html := "<title>" + title + "</title><p>fixture</p>"
 		return "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(html))

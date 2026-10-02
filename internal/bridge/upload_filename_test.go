@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 const uploadFixtureHTML = `<body>
@@ -19,26 +18,7 @@ const uploadFixtureHTML = `<body>
 func newUploadFixture(t *testing.T) context.Context {
 	t.Helper()
 
-	// Not t.TempDir: its cleanup FAILS THE TEST when the removal errors, and a
-	// Chrome that is still flushing its cache directory as the test returns makes
-	// that removal error — a green assertion then reports red for a reason that
-	// has nothing to do with what was asserted. Best-effort removal instead.
-	userDataDir := testbrowser.ProfileDir(t)
-
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(testbrowser.Path(t)),
-		chromedp.UserDataDir(userDataDir),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx := newActionTab(t, 30*time.Second)
 
 	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(uploadFixtureHTML))
 	if err := chromedp.Run(ctx,

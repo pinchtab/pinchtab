@@ -1,7 +1,6 @@
 package bridge
 
 import (
-	"context"
 	"encoding/base64"
 	"strings"
 	"testing"
@@ -9,30 +8,13 @@ import (
 
 	"github.com/chromedp/chromedp"
 	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 // The snapshot pipeline the /snapshot handler runs — fetch the a11y tree, flatten
 // it, then enrich from the DOM — against a real page, because the defect lives in
 // what the browser reports for a password field and no stub can stand in for it.
 func TestSnapshotDistinguishesEmptyAndFilledPasswordInRealBrowser(t *testing.T) {
-	chromePath := testbrowser.Path(t)
-
-	profile := testbrowser.ProfileDir(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(profile),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx := newActionTab(t, 30*time.Second)
 
 	html := `<form>
 		<label for="untouched">Paste bearer token</label>
@@ -87,22 +69,7 @@ func TestSnapshotDistinguishesEmptyAndFilledPasswordInRealBrowser(t *testing.T) 
 }
 
 func TestAnUnenrichedSnapshotStillKeepsAPasswordOut(t *testing.T) {
-	chromePath := testbrowser.Path(t)
-
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	ctx := newActionTab(t, 30*time.Second)
 
 	const secret = "supersecret123"
 	html := `<form>
