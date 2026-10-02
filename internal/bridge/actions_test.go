@@ -13,6 +13,7 @@ import (
 	"github.com/chromedp/chromedp"
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 func TestClickAction_UsesCoordinatePathIncludingZeroZero(t *testing.T) {
@@ -1479,5 +1480,60 @@ func TestClickActions_NodeIDWinsOverSelector(t *testing.T) {
 				t.Fatalf("%s dispatched at nodes %v, want [%d]", tc.name, dispatched, wantNode)
 			}
 		})
+	}
+}
+
+const pressKeyPage = `<input id="name"><input id="agree" type="checkbox">`
+
+func openPressKeyPage(t *testing.T) context.Context {
+	t.Helper()
+	ctx := testbrowser.Launch(t)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	t.Cleanup(cancel)
+	page := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(pressKeyPage))
+	if err := chromedp.Run(ctx, chromedp.Navigate(page)); err != nil {
+		t.Fatalf("navigate: %v", err)
+	}
+	return ctx
+}
+
+func TestPressRejectsUnknownKeyNamesWithoutTypingThem(t *testing.T) {
+	ctx := openPressKeyPage(t)
+	b := &Bridge{}
+
+	for _, key := range []string{"Enterr", "Ctrl+Enterr"} {
+		result, err := b.pressKey(ctx, ActionRequest{Selector: "#name", Key: key})
+		if !errors.Is(err, ErrInvalidActionRequest) {
+			t.Fatalf("press %q = (%v, %v), want an invalid request error", key, result, err)
+		}
+		for _, want := range []string{`"Enterr"`, "Escape", "Space"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("press %q error = %q, want it to mention %s", key, err, want)
+			}
+		}
+	}
+	if _, err := b.keyDown(ctx, ActionRequest{Key: "Enterr"}); !errors.Is(err, ErrInvalidActionRequest) {
+		t.Errorf("keydown Enterr error = %v, want an invalid request error", err)
+	}
+	if got := pageValue(t, ctx, "#name"); got != "" {
+		t.Fatalf("field = %q after rejected presses, want nothing typed", got)
+	}
+
+	if _, err := b.pressKey(ctx, ActionRequest{Selector: "#name", Key: "a"}); err != nil {
+		t.Fatalf("press a: %v", err)
+	}
+	if got := pageValue(t, ctx, "#name"); got != "a" {
+		t.Fatalf("field = %q after press a, want %q", got, "a")
+	}
+
+	if _, err := b.pressKey(ctx, ActionRequest{Selector: "#agree", Key: "Space"}); err != nil {
+		t.Fatalf("press Space: %v", err)
+	}
+	var checked bool
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector("#agree").checked`, &checked)); err != nil {
+		t.Fatalf("read checkbox: %v", err)
+	}
+	if !checked {
+		t.Fatal("press Space on a checkbox left it unchecked")
 	}
 }

@@ -200,6 +200,9 @@ func (b *Bridge) pressKey(ctx context.Context, req ActionRequest) (map[string]an
 		}
 		req.Key, req.Modifiers = key, chordModifiers
 	}
+	if err := validateKeyName(req.Key); err != nil {
+		return nil, err
+	}
 	if req.NodeID > 0 {
 		if err := bridgecdpops.FocusBackendNode(ctx, req.NodeID); err != nil {
 			return nil, err
@@ -407,6 +410,9 @@ func (b *Bridge) keyUp(ctx context.Context, req ActionRequest) (map[string]any, 
 func (b *Bridge) dispatchSingleKeyEvent(ctx context.Context, req ActionRequest, eventType, resultKey string) (map[string]any, error) {
 	if req.Key == "" {
 		return nil, fmt.Errorf("key required for %s", resultKey)
+	}
+	if err := validateKeyName(req.Key); err != nil {
+		return nil, err
 	}
 	if err := dispatchNamedKeyEvent(ctx, req.Key, eventType); err != nil {
 		return nil, err

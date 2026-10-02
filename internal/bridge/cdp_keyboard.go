@@ -2,13 +2,17 @@ package bridge
 
 import (
 	"context"
+	"fmt"
+	"sort"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/chromedp/chromedp"
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 )
 
 // namedKeyDefs maps friendly key names to CDP Input.dispatchKeyEvent parameters.
-// Keys absent from this table fall through to chromedp.KeyEvent.
+// Single-character keys absent from this table fall through to chromedp.KeyEvent.
 // insertText non-empty → use "keyDown" (fires keypress + default action); empty → "rawKeyDown".
 var namedKeyDefs = map[string]struct {
 	code       string
@@ -19,6 +23,8 @@ var namedKeyDefs = map[string]struct {
 	"Return": {"Enter", 13, "\r"},
 	"Tab":    {"Tab", 9, "\t"},
 	"Escape": {"Escape", 27, ""},
+	"Esc":    {"Escape", 27, ""},
+	"Space":  {"Space", 32, " "},
 	// Modifier keys must dispatch keyDown/keyUp events, never text. Without these
 	// entries they fall through to chromedp.KeyEvent and the literal name ("Shift")
 	// is typed into the focused field (issue #588). insertText is empty so the
@@ -103,11 +109,37 @@ func editingCommand(key string, modifiers int) string {
 	return ""
 }
 
+var w3cKeyAliases = map[string]string{
+	"Return": "Enter",
+	"Esc":    "Escape",
+	"Space":  " ",
+}
+
 func w3cKeyName(key string) string {
-	if key == "Return" {
-		return "Enter"
+	if w3c, ok := w3cKeyAliases[key]; ok {
+		return w3c
 	}
 	return key
+}
+
+func validateKeyName(key string) error {
+	if utf8.RuneCountInString(key) == 1 {
+		return nil
+	}
+	if _, ok := namedKeyDefs[key]; ok {
+		return nil
+	}
+	return fmt.Errorf("%w: unknown key %q; use a single character or one of: %s",
+		ErrInvalidActionRequest, key, strings.Join(namedKeyNames(), ", "))
+}
+
+func namedKeyNames() []string {
+	names := make([]string, 0, len(namedKeyDefs))
+	for name := range namedKeyDefs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func dispatchNamedKeyEvent(ctx context.Context, key, eventType string) error {
@@ -121,9 +153,9 @@ func dispatchNamedKeyEvent(ctx context.Context, key, eventType string) error {
 }
 
 // DispatchNamedKey dispatches key with the given CDP modifier bitmask
-// (Alt=1, Ctrl=2, Meta=4, Shift=8). Unrecognised keys with no modifiers fall
-// back to chromedp.KeyEvent (types the key); with modifiers they are dispatched
-// as a shortcut so chords like Ctrl+C / Cmd+A reach the page.
+// (Alt=1, Ctrl=2, Meta=4, Shift=8). Single-character keys outside the table
+// with no modifiers fall back to chromedp.KeyEvent; with modifiers they are
+// dispatched as a shortcut so chords like Ctrl+C / Cmd+A reach the page.
 func DispatchNamedKey(ctx context.Context, key string, modifiers int) error {
 	def, ok := namedKeyDefs[key]
 	if !ok {
