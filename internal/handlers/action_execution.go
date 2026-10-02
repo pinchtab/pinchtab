@@ -25,12 +25,16 @@ const (
 
 const submitInvalidWatchKeyJS = `Symbol.for("pinchtab.submitInvalidWatch")`
 
+// A click resolved by text lands on a <span> inside the button, which has no form of its own.
+const submitControlOfNodeJS = `(this.closest ? this.closest("button, input") : null)`
+
 // The watch listens on the form's root in the capture phase: invalid events do not bubble,
 // and a control tied to the form by a form= attribute sits outside the form's subtree.
 const armSubmitInvalidWatchJS = `function() {
 	const key = ` + submitInvalidWatchKeyJS + `;
 	if (this[key]) this[key].disarm();
-	const form = this.form;
+	const control = ` + submitControlOfNodeJS + `;
+	const form = control && control.form;
 	if (!form) return;
 	const root = form.getRootNode();
 	const watch = { fired: false };
@@ -50,9 +54,11 @@ const disarmSubmitInvalidWatchJS = `function() {
 // Reads validity instead of calling checkValidity, which would fire invalid events of its own.
 const submitInvalidFieldsJS = `function() {
 	const watch = this[` + submitInvalidWatchKeyJS + `];
-	if (!watch || !watch.fired || !this.form) return [];
+	const control = ` + submitControlOfNodeJS + `;
+	const form = control && control.form;
+	if (!watch || !watch.fired || !form) return [];
 	const label = (el) => ((el.labels && el.labels[0] && el.labels[0].innerText) || el.getAttribute("aria-label") || el.placeholder || "").replace(/\s+/g, " ").trim().slice(0, 100);
-	return Array.from(this.form.elements)
+	return Array.from(form.elements)
 		.filter((el) => el.willValidate && !el.validity.valid)
 		.slice(0, 10)
 		.map((el) => ({ name: el.name || el.id || "", label: label(el), message: (el.validationMessage || "").slice(0, 200) }));
@@ -336,10 +342,9 @@ var ErrStaleSubmitTarget = fmt.Errorf("ref is stale and its target submits a for
 // test can stub it: the guard's own effect is only visible against a real page, and the
 // stub is how the pre-fix dispatch is reproduced. A <button>
 // inside a form submits by DEFAULT — an absent type attribute means submit — which is the
-// case an agent is least likely to have declared. The closest ancestor is consulted so a
-// click landing on a <span> inside the button answers for the button.
+// case an agent is least likely to have declared.
 var submitControlJS = `function() {
-  var el = this.closest ? this.closest('button, input') : null;
+  var el = ` + submitControlOfNodeJS + `;
   if (!el || !el.form) return false;
   var type = (el.getAttribute('type') || '').toLowerCase();
   if (el.tagName.toLowerCase() === 'input') return type === 'submit' || type === 'image';

@@ -489,7 +489,12 @@ func submitFormHandlers(t *testing.T, body string) (*Handlers, string) {
 
 func clickSubmitButton(t *testing.T, h *Handlers, tabID string) submitPostState {
 	t.Helper()
-	w := postSubmitRequest(t, h, `{"kind":"click","tabId":"`+tabID+`","selector":"#b","submit":true}`)
+	return clickSubmitSelector(t, h, tabID, "#b")
+}
+
+func clickSubmitSelector(t *testing.T, h *Handlers, tabID, selector string) submitPostState {
+	t.Helper()
+	w := postSubmitRequest(t, h, `{"kind":"click","tabId":"`+tabID+`","selector":"`+selector+`","submit":true}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
 	}
@@ -516,6 +521,20 @@ func TestBrowserClickSubmitEmptyRequiredFieldIsValidationBlocked(t *testing.T) {
 	}
 	if len(post.InvalidFields) != 1 || post.InvalidFields[0].Name != "name" || post.InvalidFields[0].Label != "Full name" || post.InvalidFields[0].Message == "" {
 		t.Fatalf("invalid fields = %+v, want only the clicked form's name field", post.InvalidFields)
+	}
+}
+
+func TestBrowserClickSubmitOnButtonChildIsValidationBlocked(t *testing.T) {
+	h, tabID := submitFormHandlers(t, `
+		<form action="/done"><input name="name" required><button id="b"><span id="s">Place order</span></button></form>`)
+
+	post := clickSubmitSelector(t, h, tabID, "#s")
+
+	if post.Status != "blocked" || post.Signal != "validation_blocked" {
+		t.Fatalf("unexpected post-state: %+v", post)
+	}
+	if len(post.InvalidFields) != 1 || post.InvalidFields[0].Name != "name" {
+		t.Fatalf("invalid fields = %+v, want the name field", post.InvalidFields)
 	}
 }
 
