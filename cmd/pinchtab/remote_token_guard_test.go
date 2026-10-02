@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -176,6 +177,39 @@ func TestAnEnvCredentialTravelsToAnyHost(t *testing.T) {
 	token, err := resolveCLIToken(cfg, "http://203.0.113.9:9867")
 	if err != nil || token != "remote-secret" {
 		t.Fatalf("token = %q, err = %v; an explicit env credential is the deliberate way to authenticate to a named host", token, err)
+	}
+}
+
+func TestEveryCredentialBranchRecordsTheBaseItSendsTo(t *testing.T) {
+	t.Cleanup(func() { apiclient.UseTokenPairing("", "") })
+	cfg := &config.RuntimeConfig{Port: "9867", Token: "local-secret"}
+
+	for _, tc := range []struct {
+		name, env, base, wantSource string
+	}{
+		{"session env", "PINCHTAB_SESSION", "http://203.0.113.9:9001", "PINCHTAB_SESSION"},
+		{"token env", "PINCHTAB_TOKEN", "http://203.0.113.9:9002", "PINCHTAB_TOKEN"},
+		{"config token on loopback", "", "http://127.0.0.1:9003", "server.token"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			clearCredentialEnv(t)
+			if tc.env != "" {
+				t.Setenv(tc.env, "env-secret")
+			}
+			apiclient.UseTokenPairing("", "")
+
+			if _, err := resolveCLIToken(cfg, tc.base); err != nil {
+				t.Fatal(err)
+			}
+
+			source, destination := apiclient.AnnouncedTokenPairing()
+			if destination != tc.base {
+				t.Errorf("recorded destination = %q, want %q; a 401 hint would name the wrong server", destination, tc.base)
+			}
+			if !strings.Contains(source, tc.wantSource) {
+				t.Errorf("recorded source = %q, want it to name %s", source, tc.wantSource)
+			}
+		})
 	}
 }
 

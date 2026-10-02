@@ -227,3 +227,7 @@ func fatal(format string, args ...any) {
 // the command layer's tests: the handoff is the seam between the two packages, and
 // asserting on it is what pins that the CLI still performs it.
 func AnnouncedCachedTab() CachedTab { return cachedTab }
+
+func AnnouncedTokenPairing() (source, destination string) {
+	return tokenSource, tokenDestination
+}
