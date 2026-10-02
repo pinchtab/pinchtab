@@ -117,7 +117,8 @@ A tool refuses any argument it does not declare: the error names the unknown key
 ### More tools
 | Tool | Description |
 |------|-------------|
-| `pinchtab_back` / `pinchtab_forward` / `pinchtab_reload` | History navigation; returns the tab ID and the URL landed on. Optional: `snap`, `tabId`. |
+| `pinchtab_back` / `pinchtab_forward` | History navigation; returns the tab ID, the URL landed on, and `navigated` (false when the tab was at the edge of history and did not move). Optional: `snap`, `tabId`. |
+| `pinchtab_reload` | Reload the page; returns the tab ID and the URL landed on. Optional: `snap`, `tabId`. |
 | `pinchtab_frame` | Get or set the frame scope for selector-based actions and snapshots. Optional: `target`, `tabId`. |
 | `pinchtab_scroll_into_view` | Scroll an element into view and return its geometry. Target by `ref`/`selector`/`query`. |
 | `pinchtab_console` / `pinchtab_errors` | Captured console logs / uncaught JS errors for the tab — check when clicks do nothing. Optional: `clear`, `tabId`. |

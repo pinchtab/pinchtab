@@ -64,6 +64,7 @@ COMMANDS=(
   "binary:📦:Build release-style binary into dist/"
   "  all:📦:Build the full release binary matrix into dist/"
   "format dashboard:🎨:Run Prettier on dashboard sources"
+  "sync skills:🔄:Copy ./skills/* into the committed Grok plugin mirror"
 )
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -263,7 +264,7 @@ run_command() {
       echo ""
       echo "  ${ACCENT}${BOLD}🧪 Plugin checks${NC}"
       echo ""
-      bash scripts/check-plugin.sh
+      bash scripts/check-plugin.sh --check-skills
       local plugin_exit=$?
       if [ $go_exit -ne 0 ] || [ $dash_exit -ne 0 ] || [ $plugin_exit -ne 0 ]; then exit 1; fi
       exit 0
@@ -286,7 +287,7 @@ run_command() {
     "check plugin")
       echo "  ${ACCENT}${BOLD}🧪 Plugin checks${NC}"
       echo ""
-      exec bash scripts/check-plugin.sh
+      exec bash scripts/check-plugin.sh --check-skills
       ;;
     "check security")
       echo "  ${ACCENT}${BOLD}🔒 Security scan${NC}"
@@ -302,6 +303,11 @@ run_command() {
       echo "  ${ACCENT}${BOLD}🎨 Dashboard formatting${NC}"
       echo ""
       exec bash -lc 'cd dashboard && if command -v bun >/dev/null 2>&1; then bun run format; else npx prettier --write '"'"'src/**/*.{ts,tsx,css}'"'"'; fi'
+      ;;
+    "sync skills")
+      echo "  ${ACCENT}${BOLD}🔄 Skills sync${NC}"
+      echo ""
+      exec node plugins/sync-skills.mjs grok
       ;;
     "test")
       echo "  ${ACCENT}${BOLD}🔬 All tests${NC}"
@@ -415,7 +421,7 @@ run_command() {
       echo ""
       bash scripts/check.sh || exit 1
       bash scripts/check-dashboard.sh || exit 1
-      bash scripts/check-plugin.sh || exit 1
+      bash scripts/check-plugin.sh --check-skills || exit 1
       bash scripts/test.sh all || exit 1
       exec env E2E_LOGS="${E2E_LOGS:-hide}" go run ./tests/tools/runner e2e --suite extended
       ;;
@@ -433,7 +439,7 @@ run_command() {
       echo ""
       bash scripts/check.sh || exit 1
       bash scripts/check-dashboard.sh || exit 1
-      bash scripts/check-plugin.sh || exit 1
+      bash scripts/check-plugin.sh --check-skills || exit 1
       bash scripts/check-npm.sh || exit 1
       bash scripts/test.sh all || exit 1
       run_e2e_matrix "E2E-browsers summary" \
@@ -592,6 +598,13 @@ if [ $# -gt 0 ]; then
         run_command "format $2"
       else
         run_command "format"
+      fi
+      ;;
+    sync)
+      if [ $# -gt 1 ]; then
+        run_command "sync $2"
+      else
+        run_command "sync"
       fi
       ;;
     e2e)
