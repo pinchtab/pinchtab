@@ -106,10 +106,10 @@ var cachedTab CachedTab
 func UseCachedTab(c CachedTab) { cachedTab = c }
 
 // missingTabCodes are the codes a 404 for a tab that no longer exists carries on the
-// wire: uncoded from the bridge and the orchestrator, browser_crashed when the tab died
-// with its browser. Every other coded 404 that names the tab (ref_not_found puts it in
-// its message) is about something inside a tab that is still alive.
-var missingTabCodes = map[string]bool{"": true, genericErrorCode: true, "browser_crashed": true}
+// wire: the generic code httpx.Error writes for the bridge and the orchestrator, and
+// browser_crashed when the tab died with its browser. Every other 404 that names the tab
+// (ref_not_found puts it in its message) is about something inside a tab that is still alive.
+var missingTabCodes = map[string]bool{genericErrorCode: true, "browser_crashed": true}
 
 // namesCachedTab is the one classifier both consumers share: the formatter for the
 // wording, the terminal path for the clearing. Pure.

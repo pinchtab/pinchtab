@@ -214,6 +214,11 @@ func TestOnlyAMissingTab404MarksTheCachedTabStale(t *testing.T) {
 		{"submit target miss naming the live tab", func(w http.ResponseWriter) {
 			httpx.ErrorCode(w, http.StatusNotFound, "submit_target_not_found", "ref e99 not found in tab CACHED-TAB", false, nil)
 		}, false},
+		{"code-less 404 naming the tab", func(w http.ResponseWriter) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"tab CACHED-TAB not found"}`))
+		}, false},
 		{"uncoded 404 naming the tab only in details", func(w http.ResponseWriter) {
 			httpx.ErrorCode(w, http.StatusNotFound, "error", "no such download", false, map[string]any{"tabId": "CACHED-TAB"})
 		}, false},
@@ -422,7 +427,7 @@ func TestAFailedClearingSaysNothing(t *testing.T) {
 	UseCachedTab(CachedTab{TabID: "CACHED-TAB", Base: "http://127.0.0.1:9867", StateFile: unremovable})
 	t.Cleanup(func() { UseCachedTab(previous) })
 
-	got := clearCachedTabOnFailure(http.StatusNotFound, []byte(`{"error":"tab CACHED-TAB not found"}`))
+	got := clearCachedTabOnFailure(http.StatusNotFound, []byte(`{"code":"error","error":"tab CACHED-TAB not found"}`))
 	if got != "" {
 		t.Errorf("clearCachedTabOnFailure reported %q although the removal failed", got)
 	}
