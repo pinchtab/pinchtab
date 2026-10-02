@@ -179,6 +179,14 @@ func TestAMultiSelectJoinsItsSelectedLabelsAndAnEmptyOneRendersNothing(t *testin
 	}
 }
 
+func TestInlineTextNeverFusesIntoTheButtonAfterIt(t *testing.T) {
+	text := extractReadability(t, readabilityPage(t, `<p>Total $5<button>Pay</button></p>`))
+
+	if !strings.Contains(text, "Total $5 Pay") {
+		t.Errorf("want the text before a button kept apart from its label:\n%s", text)
+	}
+}
+
 // The CI twin. Every guard above needs a browser and skips without one, so a revert of
 // the fix would land green on a machine that has none. This one reds anywhere: the whole
 // defect was reading innerText off a node that has no layout, so the script must not read

@@ -305,6 +305,33 @@ func TestResolveArray_UnmatchedProductListIsNoFieldMatch(t *testing.T) {
 	}
 }
 
+func TestResolveArray_NoFieldMatchRefIsTheTopRankedCandidate(t *testing.T) {
+	var nodes []observe.A11yNode
+	ref := 1
+	addList := func(items int) string {
+		container := fmt.Sprintf("e%d", ref)
+		nodes = append(nodes, observe.A11yNode{Ref: container, Role: "list", Depth: 0})
+		ref++
+		for range items {
+			nodes = append(nodes,
+				observe.A11yNode{Ref: fmt.Sprintf("e%d", ref), Role: "listitem", Depth: 1},
+				observe.A11yNode{Ref: fmt.Sprintf("e%d", ref+1), Role: "link", Name: "Widget", Depth: 2},
+			)
+			ref += 2
+		}
+		return container
+	}
+	addList(2)
+	larger := addList(4)
+	schema := mustSchema(t, `{"type":"object","properties":{
+		"products":{"type":"array","items":{"type":"object","properties":{
+			"price":{"type":"number","x-pinchtab-hint":"role:button"}}}}}}`)
+	got := Resolve(schema, nodes, Options{})
+	if fr := got.Fields["products"]; fr.Reason != reasonNoFieldMatch || fr.Ref != larger {
+		t.Errorf("want no_field_match on the candidate with more items (%s), got %+v", larger, fr)
+	}
+}
+
 func TestResolveArray_ItemNodeItselfCarriesTheField(t *testing.T) {
 	nodes := []observe.A11yNode{
 		{Ref: "e1", Role: "list", Depth: 0},
