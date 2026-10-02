@@ -77,14 +77,32 @@ type submitStateSnapshot struct {
 }
 
 type submitPostState struct {
-	Status         string              `json:"status"`
-	Signal         string              `json:"signal"`
-	Dispatch       string              `json:"dispatch"`
-	ActionTimedOut bool                `json:"actionTimedOut"`
-	ElapsedMS      int64               `json:"elapsedMs"`
-	LiveRegionText string              `json:"liveRegionText,omitempty"`
-	Before         submitStateSnapshot `json:"before"`
-	After          submitStateSnapshot `json:"after"`
+	Status                string              `json:"status"`
+	Signal                string              `json:"signal"`
+	Dispatch              string              `json:"dispatch"`
+	ActionTimedOut        bool                `json:"actionTimedOut"`
+	ElapsedMS             int64               `json:"elapsedMs"`
+	LiveRegionText        string              `json:"liveRegionText,omitempty"`
+	LiveRegionBlocked     bool                `json:"liveRegionBlocked,omitempty"`
+	LiveRegionBlockReason string              `json:"liveRegionBlockReason,omitempty"`
+	LiveRegionWarning     string              `json:"liveRegionWarning,omitempty"`
+	Before                submitStateSnapshot `json:"before"`
+	After                 submitStateSnapshot `json:"after"`
+}
+
+func (h *Handlers) guardLiveRegionText(post *submitPostState) {
+	if post.LiveRegionText == "" {
+		return
+	}
+	result := h.ContentGuard.Scan(post.LiveRegionText, post.After.URL)
+	if result.Blocked {
+		post.LiveRegionText = ""
+		post.LiveRegionBlocked = true
+		post.LiveRegionBlockReason = result.BlockReason
+		return
+	}
+	post.LiveRegionText = result.Text
+	post.LiveRegionWarning = result.Warning
 }
 
 func (h *Handlers) captureSubmitState(ctx context.Context, tabID string) (submitStateSnapshot, error) {
@@ -169,7 +187,7 @@ func (h *Handlers) pollSubmitPostState(ctx context.Context, tabID string, before
 			lastReadErr = nil
 			after = observed
 			if signal, liveRegionText := submitTransitionSignal(before, after); signal != "" {
-				return submitPostState{
+				post := submitPostState{
 					Status:         "succeeded",
 					Signal:         signal,
 					Dispatch:       dispatch,
@@ -178,7 +196,9 @@ func (h *Handlers) pollSubmitPostState(ctx context.Context, tabID string, before
 					LiveRegionText: liveRegionText,
 					Before:         before,
 					After:          after,
-				}, nil
+				}
+				h.guardLiveRegionText(&post)
+				return post, nil
 			}
 		} else {
 			lastReadErr = err
