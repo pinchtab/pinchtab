@@ -1537,3 +1537,30 @@ func TestPressRejectsUnknownKeyNamesWithoutTypingThem(t *testing.T) {
 		t.Fatal("press Space on a checkbox left it unchecked")
 	}
 }
+
+func TestKeyUpRejectsUnknownNamesAndEscPressesEscape(t *testing.T) {
+	ctx := openPressKeyPage(t)
+	b := &Bridge{}
+
+	if _, err := b.keyUp(ctx, ActionRequest{Key: "Enterr"}); !errors.Is(err, ErrInvalidActionRequest) {
+		t.Fatalf("keyup Enterr error = %v, want an invalid request error", err)
+	}
+
+	listen := `window.seen = []; document.addEventListener("keydown", e => window.seen.push(e.key)); true`
+	if err := chromedp.Run(ctx, chromedp.Evaluate(listen, nil)); err != nil {
+		t.Fatalf("install listener: %v", err)
+	}
+	if _, err := b.pressKey(ctx, ActionRequest{Selector: "#name", Key: "Esc"}); err != nil {
+		t.Fatalf("press Esc: %v", err)
+	}
+	var seen []string
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`window.seen`, &seen)); err != nil {
+		t.Fatalf("read keys: %v", err)
+	}
+	if len(seen) != 1 || seen[0] != "Escape" {
+		t.Fatalf("press Esc dispatched keydown keys %q, want [Escape]", seen)
+	}
+	if got := pageValue(t, ctx, "#name"); got != "" {
+		t.Fatalf("field = %q after press Esc, want nothing typed", got)
+	}
+}
