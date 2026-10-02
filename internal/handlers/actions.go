@@ -583,6 +583,8 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+		h.armSubmitInvalidWatch(tCtx, req.NodeID)
+		defer h.disarmSubmitInvalidWatch(ctx, req.NodeID)
 	}
 
 	result, actionBackend, recoveryResult, actionErr := h.executeActionResilient(tCtx, &req, effectiveCfg, resolvedTabID, refMissing)

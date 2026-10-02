@@ -23,14 +23,36 @@ const (
 	submitLiveRegionTextLimit = 500
 )
 
-// submitInvalidFieldsJS runs on the clicked control. It reads validity rather than calling
-// checkValidity on each field so the probe fires no invalid events of its own.
-const submitInvalidFieldsJS = `function() {
-	const submits = this.matches('button:not([type]), button[type="submit"], input[type="submit"], input[type="image"]');
+const submitInvalidWatchKeyJS = `Symbol.for("pinchtab.submitInvalidWatch")`
+
+// The watch listens on the form's root in the capture phase: invalid events do not bubble,
+// and a control tied to the form by a form= attribute sits outside the form's subtree.
+const armSubmitInvalidWatchJS = `function() {
+	const key = ` + submitInvalidWatchKeyJS + `;
+	if (this[key]) this[key].disarm();
 	const form = this.form;
-	if (!submits || !form || form.noValidate || this.formNoValidate) return [];
+	if (!form) return;
+	const root = form.getRootNode();
+	const watch = { fired: false };
+	const onInvalid = (event) => { if (event.target.form === form) watch.fired = true; };
+	watch.disarm = () => root.removeEventListener("invalid", onInvalid, true);
+	root.addEventListener("invalid", onInvalid, true);
+	this[key] = watch;
+}`
+
+const disarmSubmitInvalidWatchJS = `function() {
+	const key = ` + submitInvalidWatchKeyJS + `;
+	if (!this[key]) return;
+	this[key].disarm();
+	delete this[key];
+}`
+
+// Reads validity instead of calling checkValidity, which would fire invalid events of its own.
+const submitInvalidFieldsJS = `function() {
+	const watch = this[` + submitInvalidWatchKeyJS + `];
+	if (!watch || !watch.fired || !this.form) return [];
 	const label = (el) => ((el.labels && el.labels[0] && el.labels[0].innerText) || el.getAttribute("aria-label") || el.placeholder || "").replace(/\s+/g, " ").trim().slice(0, 100);
-	return Array.from(form.elements)
+	return Array.from(this.form.elements)
 		.filter((el) => el.willValidate && !el.validity.valid)
 		.slice(0, 10)
 		.map((el) => ({ name: el.name || el.id || "", label: label(el), message: (el.validationMessage || "").slice(0, 200) }));
@@ -189,8 +211,18 @@ func pendingSubmitPostState(before, after submitStateSnapshot, dispatch string, 
 	}
 }
 
-// readInvalidSubmitFields treats a failed probe as "nothing blocking": the clicked node is
-// expected to vanish once a valid submit navigates.
+const submitInvalidWatchDisarmTimeout = 2 * time.Second
+
+func (h *Handlers) armSubmitInvalidWatch(ctx context.Context, nodeID int64) {
+	_ = h.Bridge.CallFunctionOnNode(ctx, nodeID, armSubmitInvalidWatchJS, nil, nil)
+}
+
+func (h *Handlers) disarmSubmitInvalidWatch(tabCtx context.Context, nodeID int64) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(tabCtx), submitInvalidWatchDisarmTimeout)
+	defer cancel()
+	_ = h.Bridge.CallFunctionOnNode(ctx, nodeID, disarmSubmitInvalidWatchJS, nil, nil)
+}
+
 func (h *Handlers) readInvalidSubmitFields(ctx context.Context, nodeID int64) []submitInvalidField {
 	var fields []submitInvalidField
 	if err := h.Bridge.CallFunctionOnNode(ctx, nodeID, submitInvalidFieldsJS, nil, &fields); err != nil {

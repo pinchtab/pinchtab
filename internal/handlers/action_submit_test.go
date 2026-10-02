@@ -7,12 +7,15 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 type submitActionBridge struct {
@@ -28,6 +31,10 @@ type submitActionBridge struct {
 	executeActionFn func(context.Context, string, bridge.ActionRequest) (map[string]any, error)
 	invalidFields   []submitInvalidField
 	probedNodeIDs   []int64
+
+	armedNodeIDs     []int64
+	disarmedNodeIDs  []int64
+	actionCallsAtArm int
 }
 
 func newSubmitActionBridge(ctx context.Context) *submitActionBridge {
@@ -66,11 +73,20 @@ func (b *submitActionBridge) ExecuteAction(ctx context.Context, kind string, req
 }
 
 func (b *submitActionBridge) CallFunctionOnNode(_ context.Context, nodeID int64, functionDecl string, _ []map[string]any, result any) error {
-	if functionDecl != submitInvalidFieldsJS {
+	switch functionDecl {
+	case armSubmitInvalidWatchJS:
+		b.armedNodeIDs = append(b.armedNodeIDs, nodeID)
+		b.actionCallsAtArm = b.actionCalls
+	case disarmSubmitInvalidWatchJS:
+		b.disarmedNodeIDs = append(b.disarmedNodeIDs, nodeID)
+	case submitInvalidFieldsJS:
+		b.probedNodeIDs = append(b.probedNodeIDs, nodeID)
+		if slices.Contains(b.armedNodeIDs, nodeID) {
+			*result.(*[]submitInvalidField) = b.invalidFields
+		}
+	default:
 		return b.mockBridge.CallFunctionOnNode(context.Background(), nodeID, functionDecl, nil, result)
 	}
-	b.probedNodeIDs = append(b.probedNodeIDs, nodeID)
-	*result.(*[]submitInvalidField) = b.invalidFields
 	return nil
 }
 
@@ -393,12 +409,38 @@ func TestHandleClickSubmitRequiredFieldEndsPollAsValidationBlocked(t *testing.T)
 	if len(b.probedNodeIDs) == 0 || b.probedNodeIDs[0] != 42 {
 		t.Fatalf("probed node IDs = %v, want the clicked node 42", b.probedNodeIDs)
 	}
+	if !slices.Equal(b.armedNodeIDs, []int64{42}) || b.actionCallsAtArm != 0 {
+		t.Fatalf("armed node IDs = %v after %d dispatches, want node 42 armed before the dispatch", b.armedNodeIDs, b.actionCallsAtArm)
+	}
+	if !slices.Equal(b.disarmedNodeIDs, []int64{42}) {
+		t.Fatalf("disarmed node IDs = %v, want the armed node 42", b.disarmedNodeIDs)
+	}
+}
+
+func TestPollClickSubmitIgnoresInvalidFieldsWithoutAnArmedWatch(t *testing.T) {
+	b := newSubmitActionBridge(context.Background())
+	b.invalidFields = []submitInvalidField{{Name: "name", Message: "Please fill out this field."}}
+	installSubmitModalReader(t, func(context.Context, string) (int64, bool, error) {
+		return 0, false, nil
+	})
+	h := &Handlers{Bridge: b}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	post, err := h.pollSubmitPostState(ctx, "tab1", 42, submitStateSnapshot{URL: "https://example.test/wizard"}, "acknowledged", false)
+	if err != nil {
+		t.Fatalf("poll post-state: %v", err)
+	}
+	if post.Status != "pending" || len(post.InvalidFields) != 0 {
+		t.Fatalf("unexpected post-state: %+v", post)
+	}
 }
 
 func TestPollClickSubmitTransitionSignalWinsOverInvalidFields(t *testing.T) {
 	b := newSubmitActionBridge(context.Background())
 	b.urls = []string{"https://example.test/done"}
 	b.invalidFields = []submitInvalidField{{Name: "name", Message: "Please fill out this field."}}
+	b.armedNodeIDs = []int64{42}
 	installSubmitModalReader(t, func(context.Context, string) (int64, bool, error) {
 		return 0, false, nil
 	})
@@ -411,6 +453,115 @@ func TestPollClickSubmitTransitionSignalWinsOverInvalidFields(t *testing.T) {
 		t.Fatalf("poll post-state: %v", err)
 	}
 	if post.Signal != "url_changed" || len(post.InvalidFields) != 0 {
+		t.Fatalf("unexpected post-state: %+v", post)
+	}
+}
+
+func submitFormHandlers(t *testing.T, body string) (*Handlers, string) {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/done", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<h1>Done</h1>`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(body))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	ctx, cancel := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancel)
+	if err := chromedp.Run(ctx, chromedp.Navigate(srv.URL+"/"), chromedp.WaitVisible("#b", chromedp.ByID)); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.RuntimeConfig{
+		ActionTimeout:  10 * time.Second,
+		DefaultBrowser: config.BrowserChrome,
+		StateDir:       t.TempDir(),
+	}
+	b := browserBridge(ctx, cfg)
+	const tabID = "tab-submit-form"
+	b.RegisterTab(tabID, ctx)
+	return New(b, cfg, nil, nil, nil), tabID
+}
+
+func clickSubmitButton(t *testing.T, h *Handlers, tabID string) submitPostState {
+	t.Helper()
+	w := postSubmitRequest(t, h, `{"kind":"click","tabId":"`+tabID+`","selector":"#b","submit":true}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+	var response struct {
+		Result struct {
+			PostState submitPostState `json:"postState"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	return response.Result.PostState
+}
+
+func TestBrowserClickSubmitEmptyRequiredFieldIsValidationBlocked(t *testing.T) {
+	h, tabID := submitFormHandlers(t, `
+		<form><input name="other" required></form>
+		<form action="/done"><label>Full name <input name="name" required></label><button id="b">Place order</button></form>`)
+
+	post := clickSubmitButton(t, h, tabID)
+
+	if post.Status != "blocked" || post.Signal != "validation_blocked" {
+		t.Fatalf("unexpected post-state: %+v", post)
+	}
+	if len(post.InvalidFields) != 1 || post.InvalidFields[0].Name != "name" || post.InvalidFields[0].Label != "Full name" || post.InvalidFields[0].Message == "" {
+		t.Fatalf("invalid fields = %+v, want only the clicked form's name field", post.InvalidFields)
+	}
+}
+
+func TestBrowserClickSubmitFilledRequiredFieldReportsURLChange(t *testing.T) {
+	h, tabID := submitFormHandlers(t, `
+		<form action="/done"><input name="name" required value="Ada"><button id="b">Place order</button></form>`)
+
+	post := clickSubmitButton(t, h, tabID)
+
+	if post.Status != "succeeded" || post.Signal != "url_changed" {
+		t.Fatalf("unexpected post-state: %+v", post)
+	}
+}
+
+func TestBrowserClickSubmitPreventedClickWithLiveRegionIsNotValidationBlocked(t *testing.T) {
+	h, tabID := submitFormHandlers(t, `
+		<div role="status" id="s"></div>
+		<form><input name="q" required><button id="b">Save</button></form>
+		<script>
+			document.getElementById("b").addEventListener("click", (e) => {
+				e.preventDefault();
+				setTimeout(() => { document.getElementById("s").textContent = "Saved"; }, 300);
+			});
+		</script>`)
+
+	post := clickSubmitButton(t, h, tabID)
+
+	if post.Status != "succeeded" || post.Signal != "live_region_changed" || post.LiveRegionText != "Saved" {
+		t.Fatalf("unexpected post-state: %+v", post)
+	}
+}
+
+func TestBrowserClickSubmitHandlerResettingAValidFormIsNotValidationBlocked(t *testing.T) {
+	h, tabID := submitFormHandlers(t, `
+		<form id="f"><input name="q" required><button id="b">Save</button></form>
+		<script>
+			document.getElementById("f").q.value = "Ada";
+			document.getElementById("f").addEventListener("submit", (e) => {
+				e.preventDefault();
+				e.target.reset();
+			});
+		</script>`)
+
+	post := clickSubmitButton(t, h, tabID)
+
+	if post.Signal == "validation_blocked" || len(post.InvalidFields) != 0 {
 		t.Fatalf("unexpected post-state: %+v", post)
 	}
 }
