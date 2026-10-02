@@ -91,6 +91,28 @@ func TestPrintActionResultSubmitPendingIsNotOK(t *testing.T) {
 	}
 }
 
+func TestPrintActionResultSubmitValidationBlockedListsInvalidFields(t *testing.T) {
+	got := captureStdout(t, func() {
+		printActionResult("click", map[string]any{
+			"success": true,
+			"result": map[string]any{
+				"postState": map[string]any{
+					"status": "blocked",
+					"signal": "validation_blocked",
+					"invalidFields": []any{
+						map[string]any{"name": "name", "label": "Full name", "message": "Please fill out this field."},
+						map[string]any{"name": "email", "message": "Please include an '@' in the email address."},
+					},
+				},
+			},
+		})
+	})
+	want := "BLOCKED validation_blocked\nname (Full name): Please fill out this field.\nemail: Please include an '@' in the email address.\n"
+	if got != want {
+		t.Fatalf("blocked output = %q, want %q", got, want)
+	}
+}
+
 func TestPrintActionResultSubmitSuccessNamesObservedSignal(t *testing.T) {
 	got := captureStdout(t, func() {
 		printActionResult("click", map[string]any{

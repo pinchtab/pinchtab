@@ -23,6 +23,19 @@ const (
 	submitLiveRegionTextLimit = 500
 )
 
+// submitInvalidFieldsJS runs on the clicked control. It reads validity rather than calling
+// checkValidity on each field so the probe fires no invalid events of its own.
+const submitInvalidFieldsJS = `function() {
+	const submits = this.matches('button:not([type]), button[type="submit"], input[type="submit"], input[type="image"]');
+	const form = this.form;
+	if (!submits || !form || form.noValidate || this.formNoValidate) return [];
+	const label = (el) => ((el.labels && el.labels[0] && el.labels[0].innerText) || el.getAttribute("aria-label") || el.placeholder || "").replace(/\s+/g, " ").trim().slice(0, 100);
+	return Array.from(form.elements)
+		.filter((el) => el.willValidate && !el.validity.valid)
+		.slice(0, 10)
+		.map((el) => ({ name: el.name || el.id || "", label: label(el), message: (el.validationMessage || "").slice(0, 200) }));
+}`
+
 const submitLiveRegionsJS = `(() => {
 	const live = '[role="status"], [role="alert"], [aria-live="polite"], [aria-live="assertive"], output';
 	const rendered = (el) => el.checkVisibility
@@ -76,18 +89,25 @@ type submitStateSnapshot struct {
 	liveRegionsRead bool
 }
 
+type submitInvalidField struct {
+	Name    string `json:"name"`
+	Label   string `json:"label,omitempty"`
+	Message string `json:"message"`
+}
+
 type submitPostState struct {
-	Status                string              `json:"status"`
-	Signal                string              `json:"signal"`
-	Dispatch              string              `json:"dispatch"`
-	ActionTimedOut        bool                `json:"actionTimedOut"`
-	ElapsedMS             int64               `json:"elapsedMs"`
-	LiveRegionText        string              `json:"liveRegionText,omitempty"`
-	LiveRegionBlocked     bool                `json:"liveRegionBlocked,omitempty"`
-	LiveRegionBlockReason string              `json:"liveRegionBlockReason,omitempty"`
-	LiveRegionWarning     string              `json:"liveRegionWarning,omitempty"`
-	Before                submitStateSnapshot `json:"before"`
-	After                 submitStateSnapshot `json:"after"`
+	Status                string               `json:"status"`
+	Signal                string               `json:"signal"`
+	Dispatch              string               `json:"dispatch"`
+	ActionTimedOut        bool                 `json:"actionTimedOut"`
+	ElapsedMS             int64                `json:"elapsedMs"`
+	LiveRegionText        string               `json:"liveRegionText,omitempty"`
+	LiveRegionBlocked     bool                 `json:"liveRegionBlocked,omitempty"`
+	LiveRegionBlockReason string               `json:"liveRegionBlockReason,omitempty"`
+	LiveRegionWarning     string               `json:"liveRegionWarning,omitempty"`
+	InvalidFields         []submitInvalidField `json:"invalidFields,omitempty"`
+	Before                submitStateSnapshot  `json:"before"`
+	After                 submitStateSnapshot  `json:"after"`
 }
 
 func (h *Handlers) guardLiveRegionText(post *submitPostState) {
@@ -169,10 +189,20 @@ func pendingSubmitPostState(before, after submitStateSnapshot, dispatch string, 
 	}
 }
 
+// readInvalidSubmitFields treats a failed probe as "nothing blocking": the clicked node is
+// expected to vanish once a valid submit navigates.
+func (h *Handlers) readInvalidSubmitFields(ctx context.Context, nodeID int64) []submitInvalidField {
+	var fields []submitInvalidField
+	if err := h.Bridge.CallFunctionOnNode(ctx, nodeID, submitInvalidFieldsJS, nil, &fields); err != nil {
+		return nil
+	}
+	return fields
+}
+
 // pollSubmitPostState observes only conservative terminal signals. The caller
 // supplies a fresh bounded child of the live tab context, never the action
 // context that may already have reached its deadline.
-func (h *Handlers) pollSubmitPostState(ctx context.Context, tabID string, before submitStateSnapshot, dispatch string, actionTimedOut bool) (submitPostState, error) {
+func (h *Handlers) pollSubmitPostState(ctx context.Context, tabID string, nodeID int64, before submitStateSnapshot, dispatch string, actionTimedOut bool) (submitPostState, error) {
 	started := time.Now()
 	after := before
 	observedPostState := false
@@ -199,6 +229,18 @@ func (h *Handlers) pollSubmitPostState(ctx context.Context, tabID string, before
 				}
 				h.guardLiveRegionText(&post)
 				return post, nil
+			}
+			if invalid := h.readInvalidSubmitFields(ctx, nodeID); len(invalid) > 0 {
+				return submitPostState{
+					Status:         "blocked",
+					Signal:         "validation_blocked",
+					Dispatch:       dispatch,
+					ActionTimedOut: actionTimedOut,
+					ElapsedMS:      time.Since(started).Milliseconds(),
+					InvalidFields:  invalid,
+					Before:         before,
+					After:          after,
+				}, nil
 			}
 		} else {
 			lastReadErr = err

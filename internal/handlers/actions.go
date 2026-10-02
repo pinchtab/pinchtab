@@ -588,7 +588,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	result, actionBackend, recoveryResult, actionErr := h.executeActionResilient(tCtx, &req, effectiveCfg, resolvedTabID, refMissing)
 	h.publishVocabIfReepoched(w, resolvedTabID, vocabBefore)
 	if submitClick && !isTimeoutWithPendingDialog(actionErr, resolvedTabID, h.Bridge) && (actionErr == nil || errors.Is(actionErr, context.DeadlineExceeded)) {
-		if result, ok = h.runSubmitClick(w, r, ctx, resolvedTabID, submitBefore, result, actionErr); !ok {
+		if result, ok = h.runSubmitClick(w, r, ctx, resolvedTabID, req.NodeID, submitBefore, result, actionErr); !ok {
 			return
 		}
 		actionErr = nil
@@ -678,7 +678,7 @@ func validateSubmitTarget(w http.ResponseWriter, req bridge.ActionRequest, refMi
 	return true
 }
 
-func (h *Handlers) runSubmitClick(w http.ResponseWriter, r *http.Request, tabCtx context.Context, tabID string, before submitStateSnapshot, result map[string]any, actionErr error) (map[string]any, bool) {
+func (h *Handlers) runSubmitClick(w http.ResponseWriter, r *http.Request, tabCtx context.Context, tabID string, nodeID int64, before submitStateSnapshot, result map[string]any, actionErr error) (map[string]any, bool) {
 	actionTimedOut := errors.Is(actionErr, context.DeadlineExceeded)
 	dispatch := "acknowledged"
 	if actionTimedOut {
@@ -688,7 +688,7 @@ func (h *Handlers) runSubmitClick(w http.ResponseWriter, r *http.Request, tabCtx
 	// The action's context may be expired here. Keep the live tab context as the parent
 	// and give post-state observation its own bounded, client-cancelable child.
 	postCtx, postCancel := httpx.WithClientTimeout(r.Context(), tabCtx, postSubmitPollTimeout)
-	postState, postErr := h.pollSubmitPostState(postCtx, tabID, before, dispatch, actionTimedOut)
+	postState, postErr := h.pollSubmitPostState(postCtx, tabID, nodeID, before, dispatch, actionTimedOut)
 	postCancel()
 	if postErr != nil {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "submit_post_state_failed", postErr.Error(), false, map[string]any{

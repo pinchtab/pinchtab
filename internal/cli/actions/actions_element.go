@@ -196,6 +196,10 @@ func printActionResult(kind string, result map[string]any) {
 				output.Hint("submit post-state is still pending; do not retry automatically")
 				printNavigationOutcome(actionResult)
 				return
+			case "blocked":
+				output.Value("BLOCKED " + signal)
+				printInvalidFields(postState["invalidFields"])
+				return
 			case "succeeded":
 				output.Value("SUCCEEDED " + signal)
 				if liveRegionText, _ := postState["liveRegionText"].(string); liveRegionText != "" {
@@ -217,6 +221,21 @@ func printActionResult(kind string, result map[string]any) {
 	}
 
 	output.Success()
+}
+
+func printInvalidFields(raw any) {
+	fields, _ := raw.([]any)
+	for _, f := range fields {
+		field, _ := f.(map[string]any)
+		name, _ := field["name"].(string)
+		label, _ := field["label"].(string)
+		message, _ := field["message"].(string)
+		subject := name
+		if label != "" && label != name {
+			subject = strings.TrimSpace(name + " (" + label + ")")
+		}
+		output.Value(subject + ": " + message)
+	}
 }
 
 // printNavigationOutcome reports the landing for an action whose headline is

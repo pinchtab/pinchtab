@@ -26,6 +26,8 @@ type submitActionBridge struct {
 	actionCalls     int
 	actionCtx       context.Context
 	executeActionFn func(context.Context, string, bridge.ActionRequest) (map[string]any, error)
+	invalidFields   []submitInvalidField
+	probedNodeIDs   []int64
 }
 
 func newSubmitActionBridge(ctx context.Context) *submitActionBridge {
@@ -61,6 +63,15 @@ func (b *submitActionBridge) ExecuteAction(ctx context.Context, kind string, req
 		return b.executeActionFn(ctx, kind, req)
 	}
 	return map[string]any{"clicked": true}, nil
+}
+
+func (b *submitActionBridge) CallFunctionOnNode(_ context.Context, nodeID int64, functionDecl string, _ []map[string]any, result any) error {
+	if functionDecl != submitInvalidFieldsJS {
+		return b.mockBridge.CallFunctionOnNode(context.Background(), nodeID, functionDecl, nil, result)
+	}
+	b.probedNodeIDs = append(b.probedNodeIDs, nodeID)
+	*result.(*[]submitInvalidField) = b.invalidFields
+	return nil
 }
 
 func installSubmitModalReader(t *testing.T, fn func(context.Context, string) (int64, bool, error)) {
@@ -144,7 +155,7 @@ func TestPollClickSubmitReportsURLChange(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	post, err := h.pollSubmitPostState(ctx, "tab1", submitStateSnapshot{
+	post, err := h.pollSubmitPostState(ctx, "tab1", 42, submitStateSnapshot{
 		URL: "https://example.test/wizard",
 	}, "acknowledged", false)
 	if err != nil {
@@ -183,7 +194,7 @@ func TestPollClickSubmitReportsPendingWithoutTerminalChange(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
-	post, err := h.pollSubmitPostState(ctx, "tab1", before, "unconfirmed", true)
+	post, err := h.pollSubmitPostState(ctx, "tab1", 42, before, "unconfirmed", true)
 	if err != nil {
 		t.Fatalf("poll post-state: %v", err)
 	}
@@ -201,7 +212,7 @@ func TestPollClickSubmitCancellationAndUnobservableStateAreErrors(t *testing.T) 
 		h := &Handlers{Bridge: b}
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		_, err := h.pollSubmitPostState(ctx, "tab1", submitStateSnapshot{URL: b.urls[0], DialogOpen: true}, "unconfirmed", true)
+		_, err := h.pollSubmitPostState(ctx, "tab1", 42, submitStateSnapshot{URL: b.urls[0], DialogOpen: true}, "unconfirmed", true)
 		if err == nil || !strings.Contains(err.Error(), "observation canceled") {
 			t.Fatalf("canceled observation error = %v", err)
 		}
@@ -216,7 +227,7 @@ func TestPollClickSubmitCancellationAndUnobservableStateAreErrors(t *testing.T) 
 		h := &Handlers{Bridge: b}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
-		_, err := h.pollSubmitPostState(ctx, "tab1", submitStateSnapshot{}, "unconfirmed", true)
+		_, err := h.pollSubmitPostState(ctx, "tab1", 42, submitStateSnapshot{}, "unconfirmed", true)
 		if err == nil || !strings.Contains(err.Error(), "never observable") || !strings.Contains(err.Error(), "target closed") {
 			t.Fatalf("unobservable post-state error = %v", err)
 		}
@@ -345,5 +356,61 @@ func TestClickSubmitRejectedInBatchAndMacroButFillSubmitAllowed(t *testing.T) {
 
 	if !rejectMultiStepSubmitClicks(httptest.NewRecorder(), []bridge.ActionRequest{{Kind: bridge.ActionFill, Submit: true}}, "batch", "actions") {
 		t.Fatal("fill submit should retain its existing multi-step behavior")
+	}
+}
+
+func TestHandleClickSubmitRequiredFieldEndsPollAsValidationBlocked(t *testing.T) {
+	b := newSubmitActionBridge(t.Context())
+	b.invalidFields = []submitInvalidField{{Name: "name", Label: "Name", Message: "Please fill out this field."}}
+	installSubmitModalReader(t, func(context.Context, string) (int64, bool, error) {
+		return 0, false, nil
+	})
+	h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+
+	started := time.Now()
+	w := postSubmitRequest(t, h, `{"kind":"click","tabId":"tab1","nodeId":42,"submit":true}`)
+	if elapsed := time.Since(started); elapsed >= time.Second {
+		t.Fatalf("validation-blocked submit took %v, want under 1s", elapsed)
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+	var response struct {
+		Result struct {
+			PostState submitPostState `json:"postState"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	post := response.Result.PostState
+	if post.Status != "blocked" || post.Signal != "validation_blocked" {
+		t.Fatalf("unexpected post-state: %+v", post)
+	}
+	if len(post.InvalidFields) != 1 || post.InvalidFields[0] != b.invalidFields[0] {
+		t.Fatalf("invalid fields = %+v, want %+v", post.InvalidFields, b.invalidFields)
+	}
+	if len(b.probedNodeIDs) == 0 || b.probedNodeIDs[0] != 42 {
+		t.Fatalf("probed node IDs = %v, want the clicked node 42", b.probedNodeIDs)
+	}
+}
+
+func TestPollClickSubmitTransitionSignalWinsOverInvalidFields(t *testing.T) {
+	b := newSubmitActionBridge(context.Background())
+	b.urls = []string{"https://example.test/done"}
+	b.invalidFields = []submitInvalidField{{Name: "name", Message: "Please fill out this field."}}
+	installSubmitModalReader(t, func(context.Context, string) (int64, bool, error) {
+		return 0, false, nil
+	})
+	h := &Handlers{Bridge: b}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	post, err := h.pollSubmitPostState(ctx, "tab1", 42, submitStateSnapshot{URL: "https://example.test/wizard"}, "acknowledged", false)
+	if err != nil {
+		t.Fatalf("poll post-state: %v", err)
+	}
+	if post.Signal != "url_changed" || len(post.InvalidFields) != 0 {
+		t.Fatalf("unexpected post-state: %+v", post)
 	}
 }
