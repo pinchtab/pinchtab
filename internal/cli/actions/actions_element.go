@@ -196,31 +196,11 @@ func printActionResult(kind string, result map[string]any) {
 		// A submit reports its own bounded post-state, which says more than "it
 		// moved" — so it is the headline, and the navigation rides underneath it
 		// rather than replacing it.
-		if postState, ok := actionResult["postState"].(map[string]any); ok {
-			status, _ := postState["status"].(string)
-			signal, _ := postState["signal"].(string)
-			switch status {
-			case "pending":
-				output.Value("PENDING")
-				output.Hint("submit post-state is still pending; do not retry automatically")
-				printNavigationOutcome(actionResult)
-				return
-			case "blocked":
-				output.Value("BLOCKED " + signal)
-				printInvalidFields(postState["invalidFields"])
-				return
-			case "succeeded":
-				output.Value("SUCCEEDED " + signal)
-				if liveRegionText, _ := postState["liveRegionText"].(string); liveRegionText != "" {
-					output.Value(liveRegionText)
-				}
-				printNavigationOutcome(actionResult)
-				return
-			}
+		if postState, ok := actionResult["postState"].(map[string]any); ok && printSubmitPostState(postState, actionResult) {
+			printOpenedTab(result, "")
+			return
 		}
-		if opened := openedTab(result); opened != "" {
-			output.Value("OK opened tab " + opened)
-			output.Hint("the click opened a new tab — run `pinchtab tab " + opened + "` to switch to it")
+		if printOpenedTab(result, "OK ") {
 			return
 		}
 		// A click that moved the page succeeded. It used to exit 1 with a 409, which
@@ -239,6 +219,39 @@ func printActionResult(kind string, result map[string]any) {
 	}
 
 	output.Success()
+}
+
+func printSubmitPostState(postState, actionResult map[string]any) bool {
+	status, _ := postState["status"].(string)
+	signal, _ := postState["signal"].(string)
+	switch status {
+	case "pending":
+		output.Value("PENDING")
+		output.Hint("submit post-state is still pending; do not retry automatically")
+		printNavigationOutcome(actionResult)
+	case "blocked":
+		output.Value("BLOCKED " + signal)
+		printInvalidFields(postState["invalidFields"])
+	case "succeeded":
+		output.Value("SUCCEEDED " + signal)
+		if liveRegionText, _ := postState["liveRegionText"].(string); liveRegionText != "" {
+			output.Value(liveRegionText)
+		}
+		printNavigationOutcome(actionResult)
+	default:
+		return false
+	}
+	return true
+}
+
+func printOpenedTab(result map[string]any, prefix string) bool {
+	opened := openedTab(result)
+	if opened == "" {
+		return false
+	}
+	output.Value(prefix + "opened tab " + opened)
+	output.Hint("the click opened a new tab — run `pinchtab tab " + opened + "` to switch to it")
+	return true
 }
 
 func printInvalidFields(raw any) {

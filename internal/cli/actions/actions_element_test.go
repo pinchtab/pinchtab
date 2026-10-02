@@ -1143,6 +1143,40 @@ func TestPrintActionResultAClickThatOpenedATabNamesIt(t *testing.T) {
 	}
 }
 
+func TestPrintActionResultASubmitThatOpenedATabNamesItUnderItsHeadline(t *testing.T) {
+	tests := []struct {
+		postState map[string]any
+		headline  string
+	}{
+		{map[string]any{"status": "pending"}, "PENDING\n"},
+		{map[string]any{"status": "blocked", "signal": "validation_blocked"}, "BLOCKED validation_blocked\n"},
+		{map[string]any{"status": "succeeded", "signal": "url_changed"}, "SUCCEEDED url_changed\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.postState["status"].(string), func(t *testing.T) {
+			submit := func(actionResult map[string]any) map[string]any {
+				actionResult["postState"] = tt.postState
+				return map[string]any{"success": true, "result": actionResult}
+			}
+			withTab := submit(map[string]any{"clicked": true, "switchedToTab": "TAB_NEW"})
+			withoutTab := submit(map[string]any{"clicked": true})
+
+			if got := captureStdout(t, func() { printActionResult("click", withTab) }); got != tt.headline+"opened tab TAB_NEW\n" {
+				t.Errorf("stdout = %q, want headline then opened tab TAB_NEW", got)
+			}
+			if hint := captureStderr(t, func() { printActionResult("click", withTab) }); !strings.Contains(hint, "pinchtab tab TAB_NEW") {
+				t.Errorf("stderr = %q; nothing tells the caller how to switch to the new tab", hint)
+			}
+			if got := captureStdout(t, func() { printActionResult("click", withoutTab) }); got != tt.headline {
+				t.Errorf("control stdout = %q, want %q", got, tt.headline)
+			}
+			if hint := captureStderr(t, func() { printActionResult("click", withoutTab) }); strings.Contains(hint, "pinchtab tab") {
+				t.Errorf("control stderr = %q; a submit that opened no tab mentioned one", hint)
+			}
+		})
+	}
+}
+
 func TestClickThatOpenedATabFetchesSnapAndTextFromTheNewTab(t *testing.T) {
 	for _, flag := range []string{"snap", "snap-diff", "text"} {
 		t.Run(flag, func(t *testing.T) {
