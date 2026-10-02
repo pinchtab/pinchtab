@@ -205,6 +205,9 @@ func TestFind_RefOnlyRefusesAnAmbiguousTie(t *testing.T) {
 	if !strings.Contains(string(raw), "nth:<i>:role:button Add") {
 		t.Errorf("output does not offer the positional retry query:\n%s", raw)
 	}
+	if !strings.Contains(string(raw), "i counts from 0") {
+		t.Errorf("%s does not state the zero-based nth index that action selectors use", string(raw))
+	}
 }
 
 func TestAmbiguousMatchAcrossRolesDescribesEachTiedRef(t *testing.T) {
@@ -221,7 +224,7 @@ func TestAmbiguousMatchAcrossRolesDescribesEachTiedRef(t *testing.T) {
 	if !strings.Contains(msg, `e0 (button "Add item"), e1 (link "Add item")`) {
 		t.Errorf("message = %q, want each tied ref with its role and name", msg)
 	}
-	for _, banned := range []string{"i counts from 1", "%!", "<nil>"} {
+	for _, banned := range []string{"i counts from", "%!", "<nil>"} {
 		if strings.Contains(msg, banned) {
 			t.Errorf("message = %q, must not contain %q without a retry query", msg, banned)
 		}

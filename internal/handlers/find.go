@@ -94,7 +94,7 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 	}
 
 	start := time.Now()
-	result, err := h.Matcher.Find(tCtx, req.Query, descs, semantic.FindOptions{
+	result, err := h.Matcher.Find(tCtx, matcherQuery(req.Query), descs, semantic.FindOptions{
 		Threshold:       req.Threshold,
 		TopK:            req.TopK,
 		LexicalWeight:   req.LexicalWeight,
@@ -243,6 +243,17 @@ func matchRefs(matches []semantic.ElementMatch) []string {
 		refs[i] = m.Ref
 	}
 	return refs
+}
+
+func matcherQuery(query string) string {
+	sel := selector.Parse(query)
+	if sel.Kind != selector.KindNth {
+		return query
+	}
+	if translated, ok := sel.SemanticQuery(); ok {
+		return translated
+	}
+	return query
 }
 
 func positionalRetryQuery(tied []semantic.ElementMatch) string {

@@ -48,7 +48,7 @@ func handlePDF(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallT
 
 func ambiguousFindHint(tied []any, retryQuery any) string {
 	if retry, _ := retryQuery.(string); retry != "" {
-		return fmt.Sprintf("Ambiguous: refs %v match equally well, so none is safe to act on. Retry pinchtab_find with query %q, where i counts from 1 in page order.", tied, retry)
+		return fmt.Sprintf("Ambiguous: refs %v match equally well, so none is safe to act on. Retry pinchtab_find with query %q, where i counts from 0 in page order.", tied, retry)
 	}
 	return fmt.Sprintf("Ambiguous: refs %v score equally but differ in role or name. Compare their role and name in matches and act on the ref you mean.", tied)
 }

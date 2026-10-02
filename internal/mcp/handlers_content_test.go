@@ -156,6 +156,9 @@ func TestHandleFindAmbiguousTieWithholdsSelector(t *testing.T) {
 	if !strings.Contains(hint, "nth:<i>:role:button Add") {
 		t.Errorf("nextActionHint = %q, want the positional retry query", hint)
 	}
+	if !strings.Contains(hint, "i counts from 0") {
+		t.Errorf("%s does not state the zero-based nth index that action selectors use", hint)
+	}
 }
 
 func TestAmbiguousFindHintWithoutRetryQueryNamesNoPosition(t *testing.T) {
@@ -164,7 +167,7 @@ func TestAmbiguousFindHintWithoutRetryQueryNamesNoPosition(t *testing.T) {
 	if !strings.Contains(hint, "e0") || !strings.Contains(hint, "e1") {
 		t.Errorf("hint = %q, want the tied refs named", hint)
 	}
-	for _, banned := range []string{"i counts from 1", "%!", `""`, "<nil>"} {
+	for _, banned := range []string{"i counts from", "%!", `""`, "<nil>"} {
 		if strings.Contains(hint, banned) {
 			t.Errorf("hint = %q, must not contain %q without a retry query", hint, banned)
 		}

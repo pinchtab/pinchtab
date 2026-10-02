@@ -25,7 +25,7 @@ func noElementsMatched(query string) string {
 
 func ambiguousMatch(query string, tied []string, result map[string]any) string {
 	if retry, _ := result["retry_query"].(string); retry != "" {
-		return fmt.Sprintf("Ambiguous match for %q: %s are indistinguishable; pick one with %q (i counts from 1 in page order)", query, strings.Join(tied, ", "), retry)
+		return fmt.Sprintf("Ambiguous match for %q: %s are indistinguishable; pick one with %q (i counts from 0 in page order)", query, strings.Join(tied, ", "), retry)
 	}
 	return fmt.Sprintf("Ambiguous match for %q: %s score equally but differ in role or name; use the ref you mean", query, describeTiedRefs(tied, result["matches"]))
 }

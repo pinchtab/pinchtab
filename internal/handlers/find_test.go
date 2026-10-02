@@ -549,6 +549,24 @@ func TestHandleFind_IndistinguishableTopMatchesAreAmbiguous(t *testing.T) {
 	}
 }
 
+func TestHandleFind_NthPicksTheSameRowAsAnAction(t *testing.T) {
+	h := newFindTestHandler(threeRowCartCache(), false)
+
+	for index, wantRef := range []string{"e1", "e3", "e5"} {
+		query := fmt.Sprintf("nth:%d:role:button Add", index)
+
+		found := postFind(t, h, fmt.Sprintf(`{"query": %q}`, query))
+		req := bridge.ActionRequest{}
+		if _, err := h.applySemanticActionSelector(context.Background(), "tab1", selector.Parse(query), &req); err != nil {
+			t.Fatalf("%s as an action selector: %v", query, err)
+		}
+
+		if found.BestRef != wantRef || req.Ref != wantRef {
+			t.Errorf("%s: find picked %q and the action picked %q, want both %q", query, found.BestRef, req.Ref, wantRef)
+		}
+	}
+}
+
 func TestHandleFind_TieAcrossRolesOmitsTheUnreachableRetryQuery(t *testing.T) {
 	cache := &bridge.RefCache{
 		Nodes: []bridge.A11yNode{

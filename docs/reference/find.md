@@ -72,7 +72,7 @@ If `tabId` is omitted, PinchTab uses the active tab in the current bridge contex
 | `best_ref` | Highest-scoring element reference to use with `/action`; not safe to act on when `tied_refs` is present |
 | `confidence` | `high`, `medium`, `low`, or `ambiguous` when the top matches are tied |
 | `tied_refs` | Present only on a tie: the refs whose role and name equal the top match's, or whose score is within 0.01 of it |
-| `retry_query` | Present only on a tie whose refs all share the top match's role and name: `nth:<i>:role:<role> <name>`, where `i` counts from 1 in page order. Omitted when the tied refs differ in role or name, since no single positional query reaches them all; pick the ref you mean from `matches` |
+| `retry_query` | Present only on a tie whose refs all share the top match's role and name: `nth:<i>:role:<role> <name>`, where `i` counts from 0 in page order, the same base as `nth:` in action selectors. Omitted when the tied refs differ in role or name, since no single positional query reaches them all; pick the ref you mean from `matches` |
 | `score` | Score of the best match |
 | `matches` | Top matches above threshold |
 | `strategy` | Matching strategy used |
@@ -171,7 +171,7 @@ curl -X POST http://localhost:9867/tabs/<tabId>/action \
 
 - `/find` uses the tab's accessibility snapshot, not raw DOM selectors.
 - The query is natural language, not a selector: CSS, XPath and refs are not resolved, only scored as text. Prefix a query with `find:` or `semantic:` to force natural-language matching.
-- Structured `/find` queries such as `role:button Save`, `text:Submit`, `label:Email`, `placeholder:Search`, `alt:Logo`, `title:Close`, `testid:submit`, `first:role:button`, `last:text:Submit`, and `nth:2:label:Email` are matched by the semantic engine against enriched descriptors. `/find` hands the query to the matcher unchanged, so its `nth:` index counts from 1 (`nth:1:label:Email` is the first match); `nth:0` or an index past the last match returns `200` with an empty `best_ref`. The zero-based index and the out-of-range refusal apply to `nth:` in action selectors, not to `/find`.
+- Structured `/find` queries such as `role:button Save`, `text:Submit`, `label:Email`, `placeholder:Search`, `alt:Logo`, `title:Close`, `testid:submit`, `first:role:button`, `last:text:Submit`, and `nth:2:label:Email` are matched by the semantic engine against enriched descriptors. `nth:` counts from 0 here exactly as in action selectors (`nth:0:label:Email` is the first match), so a query that `/find` resolves to a ref clicks that same ref. An index past the last match returns `200` with an empty `best_ref`; the out-of-range refusal applies to `nth:` in action selectors only.
 - In action commands, `role:`, `label:`, `placeholder:`, `alt:`, `title:`, `testid:`, and wrappers around those forms use semantic matching. CSS, XPath, refs, the existing `text:` action selector, and bare CSS/text wrappers such as `first:button` remain browser-side selector resolution.
 - Every `/find` and every semantic action selector re-reads the live accessibility tree before matching, so a control the previous action revealed is found without a snapshot in between. Refs already handed out keep their numbers.
 - Every successful response carries the tab's ref vocabulary token in the `X-PinchTab-Vocab` header; the CLI and MCP capture it, so a returned ref can be acted on without a snapshot in between.
