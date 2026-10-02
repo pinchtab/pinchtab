@@ -26,11 +26,9 @@ assert_json_exists "$RESULT" '.log.entries' "has entries array"
 
 ENTRY_COUNT=$(echo "$RESULT" | jq '.log.entries | length')
 if [ "$ENTRY_COUNT" -gt 0 ]; then
-  echo -e "  ${GREEN}✓${NC} HAR contains $ENTRY_COUNT entries"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "HAR contains $ENTRY_COUNT entries"
 else
-  echo -e "  ${RED}✗${NC} HAR has no entries (expected traffic from navigation)"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "HAR has no entries (expected traffic from navigation)"
 fi
 
 end_test
@@ -50,8 +48,7 @@ start_test "GET /network/export: NDJSON format"
 pinchtab GET "/network/export?tabId=${TAB_ID}&format=ndjson"
 
 if [ "$HTTP_STATUS" = "200" ]; then
-  echo -e "  ${GREEN}✓${NC} NDJSON export → 200"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "NDJSON export → 200"
 
   # Each line should be valid JSON
   LINE_COUNT=$(echo "$RESULT" | grep -c '^{' || true)
@@ -59,19 +56,15 @@ if [ "$HTTP_STATUS" = "200" ]; then
     FIRST_LINE=$(echo "$RESULT" | head -1)
     echo "$FIRST_LINE" | jq . >/dev/null 2>&1
     if [ $? -eq 0 ]; then
-      echo -e "  ${GREEN}✓${NC} NDJSON lines are valid JSON ($LINE_COUNT lines)"
-      ((ASSERTIONS_PASSED++)) || true
+      pass_assert "NDJSON lines are valid JSON ($LINE_COUNT lines)"
     else
-      echo -e "  ${RED}✗${NC} first NDJSON line is not valid JSON"
-      ((ASSERTIONS_FAILED++)) || true
+      fail_assert "first NDJSON line is not valid JSON"
     fi
   else
-    echo -e "  ${YELLOW}~${NC} no NDJSON lines (empty export)"
-    ((ASSERTIONS_PASSED++)) || true
+    skip_assert "no NDJSON lines (empty export)"
   fi
 else
-  echo -e "  ${RED}✗${NC} NDJSON export failed ($HTTP_STATUS)"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "NDJSON export failed ($HTTP_STATUS)"
 fi
 
 end_test
@@ -86,11 +79,9 @@ assert_json_exists "$RESULT" '.available' "lists available formats"
 
 AVAILABLE=$(echo "$RESULT" | jq -r '.available | join(",")')
 if echo "$AVAILABLE" | grep -q "har" && echo "$AVAILABLE" | grep -q "ndjson"; then
-  echo -e "  ${GREEN}✓${NC} available includes har and ndjson: $AVAILABLE"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "available includes har and ndjson: $AVAILABLE"
 else
-  echo -e "  ${RED}✗${NC} unexpected available formats: $AVAILABLE"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "unexpected available formats: $AVAILABLE"
 fi
 
 end_test
@@ -112,11 +103,9 @@ LEAKED=$(echo "$RESULT" | jq '[
 ] | length')
 
 if [ "$LEAKED" = "0" ] || [ "$LEAKED" = "null" ]; then
-  echo -e "  ${GREEN}✓${NC} no leaked sensitive headers"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "no leaked sensitive headers"
 else
-  echo -e "  ${RED}✗${NC} found $LEAKED un-redacted sensitive header values"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "found $LEAKED un-redacted sensitive header values"
 fi
 
 end_test
@@ -142,11 +131,9 @@ assert_ok "export with bodies"
 # At least one entry should have non-empty content.text for an HTML page
 HAS_BODY=$(echo "$RESULT" | jq '[.log.entries[] | select(.response.content.text != null and .response.content.text != "")] | length')
 if [ "$HAS_BODY" -gt 0 ]; then
-  echo -e "  ${GREEN}✓${NC} $HAS_BODY entries include response body"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "$HAS_BODY entries include response body"
 else
-  echo -e "  ${YELLOW}~${NC} no entries have body content (may depend on timing)"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "no entries have body content (may depend on timing)"
 fi
 
 end_test
@@ -159,11 +146,9 @@ assert_ok "export filter method=GET"
 
 NON_GET=$(echo "$RESULT" | jq '[.log.entries[] | select(.request.method != "GET")] | length')
 if [ "$NON_GET" = "0" ] || [ "$NON_GET" = "null" ]; then
-  echo -e "  ${GREEN}✓${NC} all exported entries are GET"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "all exported entries are GET"
 else
-  echo -e "  ${RED}✗${NC} found $NON_GET non-GET entries"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "found $NON_GET non-GET entries"
 fi
 
 end_test
@@ -176,11 +161,9 @@ assert_ok "export with limit=2"
 
 ENTRY_COUNT=$(echo "$RESULT" | jq '.log.entries | length')
 if [ "$ENTRY_COUNT" -le 2 ]; then
-  echo -e "  ${GREEN}✓${NC} limit respected: $ENTRY_COUNT entries (<= 2)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "limit respected: $ENTRY_COUNT entries (<= 2)"
 else
-  echo -e "  ${RED}✗${NC} limit exceeded: $ENTRY_COUNT entries (expected <= 2)"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "limit exceeded: $ENTRY_COUNT entries (expected <= 2)"
 fi
 
 end_test
@@ -196,11 +179,9 @@ assert_json_contains "$RESULT" '.format' "har" "format in response"
 
 FILE_ENTRIES=$(echo "$RESULT" | jq '.entries')
 if [ "$FILE_ENTRIES" -gt 0 ] 2>/dev/null; then
-  echo -e "  ${GREEN}✓${NC} file has $FILE_ENTRIES entries"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "file has $FILE_ENTRIES entries"
 else
-  echo -e "  ${YELLOW}~${NC} file written with $FILE_ENTRIES entries"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "file written with $FILE_ENTRIES entries"
 fi
 
 end_test
@@ -214,11 +195,9 @@ assert_json_exists "$RESULT" '.path' "has auto-generated path"
 
 AUTO_PATH=$(echo "$RESULT" | jq -r '.path')
 if echo "$AUTO_PATH" | grep -q "network-.*\.har$"; then
-  echo -e "  ${GREEN}✓${NC} auto-generated filename: $(basename "$AUTO_PATH")"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "auto-generated filename: $(basename "$AUTO_PATH")"
 else
-  echo -e "  ${RED}✗${NC} unexpected auto filename: $AUTO_PATH"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "unexpected auto filename: $AUTO_PATH"
 fi
 
 end_test
@@ -297,11 +276,9 @@ STREAM_OUTPUT=$(cat "$STREAM_TMP")
 rm -f "$STREAM_TMP"
 
 if echo "$STREAM_OUTPUT" | grep -q "event:"; then
-  echo -e "  ${GREEN}✓${NC} received SSE events from stream"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "received SSE events from stream"
 else
-  echo -e "  ${RED}✗${NC} no SSE events captured"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "no SSE events captured"
 fi
 
 end_test
@@ -331,11 +308,9 @@ if [ "$ENTRY_COUNT" -gt 0 ]; then
   for field in startedDateTime time request response timings; do
     VAL=$(echo "$FIRST" | jq ".$field")
     if [ "$VAL" != "null" ] && [ -n "$VAL" ]; then
-      echo -e "  ${GREEN}✓${NC} entry has .$field"
-      ((ASSERTIONS_PASSED++)) || true
+      pass_assert "entry has .$field"
     else
-      echo -e "  ${RED}✗${NC} entry missing .$field"
-      ((ASSERTIONS_FAILED++)) || true
+      fail_assert "entry missing .$field"
     fi
   done
 
@@ -343,11 +318,9 @@ if [ "$ENTRY_COUNT" -gt 0 ]; then
   for field in method url httpVersion headers queryString; do
     VAL=$(echo "$FIRST" | jq ".request.$field")
     if [ "$VAL" != "null" ] && [ -n "$VAL" ]; then
-      echo -e "  ${GREEN}✓${NC} request has .$field"
-      ((ASSERTIONS_PASSED++)) || true
+      pass_assert "request has .$field"
     else
-      echo -e "  ${RED}✗${NC} request missing .$field"
-      ((ASSERTIONS_FAILED++)) || true
+      fail_assert "request missing .$field"
     fi
   done
 
@@ -355,11 +328,9 @@ if [ "$ENTRY_COUNT" -gt 0 ]; then
   for field in status statusText httpVersion headers content; do
     VAL=$(echo "$FIRST" | jq ".response.$field")
     if [ "$VAL" != "null" ] && [ -n "$VAL" ]; then
-      echo -e "  ${GREEN}✓${NC} response has .$field"
-      ((ASSERTIONS_PASSED++)) || true
+      pass_assert "response has .$field"
     else
-      echo -e "  ${RED}✗${NC} response missing .$field"
-      ((ASSERTIONS_FAILED++)) || true
+      fail_assert "response missing .$field"
     fi
   done
 
@@ -367,16 +338,13 @@ if [ "$ENTRY_COUNT" -gt 0 ]; then
   for field in send wait receive; do
     VAL=$(echo "$FIRST" | jq ".timings.$field")
     if [ "$VAL" != "null" ] && [ -n "$VAL" ]; then
-      echo -e "  ${GREEN}✓${NC} timings has .$field"
-      ((ASSERTIONS_PASSED++)) || true
+      pass_assert "timings has .$field"
     else
-      echo -e "  ${RED}✗${NC} timings missing .$field"
-      ((ASSERTIONS_FAILED++)) || true
+      fail_assert "timings missing .$field"
     fi
   done
 else
-  echo -e "  ${YELLOW}~${NC} no entries to validate structure"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "no entries to validate structure"
 fi
 
 end_test
@@ -399,11 +367,9 @@ assert_ok "filter + limit"
 
 ENTRIES_COUNT=$(echo "$RESULT" | jq '.entries | length')
 if [ "$ENTRIES_COUNT" -le 3 ]; then
-  echo -e "  ${GREEN}✓${NC} limit respected: $ENTRIES_COUNT <= 3"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "limit respected: $ENTRIES_COUNT <= 3"
 else
-  echo -e "  ${RED}✗${NC} limit exceeded: $ENTRIES_COUNT > 3"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "limit exceeded: $ENTRIES_COUNT > 3"
 fi
 
 end_test

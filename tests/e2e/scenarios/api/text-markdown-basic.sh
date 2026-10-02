@@ -18,11 +18,9 @@ assert_json_eq "$RESULT" '.extraction' 'markdown' "extraction echoes markdown"
 
 TITLE=$(echo "$RESULT" | jq -r '.title')
 if [ -n "$TITLE" ] && [ "$TITLE" != "null" ]; then
-  echo -e "  ${GREEN}✓${NC} title present ($TITLE)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "title present ($TITLE)"
 else
-  echo -e "  ${RED}✗${NC} title missing"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "title missing"
 fi
 
 BODY=$(echo "$RESULT" | jq -r '.text')
@@ -43,11 +41,9 @@ CTYPE=$(echo "$RESPONSE" | tail -n 1)
 
 HTTP_STATUS="$STATUS"; assert_http_status 200 "format=text returned 200"
 if echo "$CTYPE" | grep -q "text/markdown"; then
-  echo -e "  ${GREEN}✓${NC} content-type is text/markdown"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "content-type is text/markdown"
 else
-  echo -e "  ${RED}✗${NC} content-type is $CTYPE (expected text/markdown)"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "content-type is $CTYPE (expected text/markdown)"
 fi
 
 end_test
@@ -98,10 +94,9 @@ if [ "$OPEN" -ne "$CLOSE" ] || [ "$LOPEN" -gt "$RPAREN" ]; then
   LINE_RULE_OK=0; echo -e "  ${RED}✗${NC} unbalanced link markup: [=$OPEN ]=$CLOSE ](=$LOPEN )=$RPAREN"
 fi
 if [ "$LINE_RULE_OK" -eq 1 ]; then
-  echo -e "  ${GREEN}✓${NC} truncated lines obey the cut rule (whole lines, prefix last line, no split row or link)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "truncated lines obey the cut rule (whole lines, prefix last line, no split row or link)"
 else
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "truncated lines break the cut rule"
 fi
 
 end_test
@@ -150,11 +145,9 @@ rm -f "$TMPH"
 
 HTTP_STATUS="$MD_STATUS"; assert_http_status 200 "markdown returns in warn mode"
 if [ -n "$MD_WARN_HDR" ]; then
-  echo -e "  ${GREEN}✓${NC} X-IDPI-Warning header present"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "X-IDPI-Warning header present"
 else
-  echo -e "  ${RED}✗${NC} X-IDPI-Warning header missing"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "X-IDPI-Warning header missing"
 fi
 assert_json_exists "$MD_BODY" ".idpiWarning" "idpiWarning field in markdown body"
 
@@ -164,11 +157,9 @@ e2e_curl -s -D "$TMPH2" "${E2E_SERVER}/text" >/dev/null
 RD_WARN_HDR=$(grep -i "^X-IDPI-Warning:" "$TMPH2" | sed 's/^[^:]*: *//' | tr -d '\r' | head -1)
 rm -f "$TMPH2"
 if [ -n "$RD_WARN_HDR" ]; then
-  echo -e "  ${GREEN}✓${NC} readability path warns identically on the same page"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "readability path warns identically on the same page"
 else
-  echo -e "  ${RED}✗${NC} readability path did not warn; guard parity broken"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "readability path did not warn; guard parity broken"
 fi
 
 end_test

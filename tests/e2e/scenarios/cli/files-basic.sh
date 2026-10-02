@@ -43,12 +43,10 @@ start_test "pinchtab pdf"
 pt_ok nav "${FIXTURES_URL}/index.html"
 pt_ok pdf -o /tmp/e2e-pdf-test.pdf
 if [ -f /tmp/e2e-pdf-test.pdf ]; then
-  echo -e "  ${GREEN}✓${NC} PDF file created"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "PDF file created"
   rm -f /tmp/e2e-pdf-test.pdf
 else
-  echo -e "  ${RED}✗${NC} PDF file not created"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "PDF file not created"
 fi
 end_test
 
@@ -72,11 +70,9 @@ start_test "pinchtab download (save to file)"
 
 pt_ok download "${FIXTURES_URL}/sample.txt" -o /tmp/e2e-download-test.txt
 if [ -f /tmp/e2e-download-test.txt ]; then
-  echo -e "  ${GREEN}✓${NC} file saved"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "file saved"
 else
-  echo -e "  ${RED}✗${NC} file not saved"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "file not saved"
 fi
 rm -f /tmp/e2e-download-test.txt
 

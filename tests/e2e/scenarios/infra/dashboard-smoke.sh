@@ -49,12 +49,10 @@ dashboard_assert_instance_found() {
     DASHBOARD_INST_ID=$(echo "$RESULT" | jq -r '.[] | select((.url // "") | contains("evaluate.html")) | .instanceId // empty' | head -n 1)
   fi
   if [ -n "${DASHBOARD_INST_ID}" ]; then
-    echo -e "  ${GREEN}✓${NC} found tab owner for screencast proxy: ${DASHBOARD_INST_ID}"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "found tab owner for screencast proxy: ${DASHBOARD_INST_ID}"
   else
-    echo -e "  ${RED}✗${NC} could not find tab owner for screencast proxy"
+    fail_assert "could not find tab owner for screencast proxy"
     echo "$RESULT" | jq '.' 2>/dev/null || echo "$RESULT"
-    ((ASSERTIONS_FAILED++)) || true
   fi
 }
 
@@ -88,11 +86,9 @@ dashboard_start_screencast_stream() {
 
 dashboard_assert_screencast_streaming() {
   if [ "${DASHBOARD_WS_STATUS}" = "101" ]; then
-    echo -e "  ${GREEN}✓${NC} screencast websocket upgraded"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "screencast websocket upgraded"
   else
-    echo -e "  ${RED}✗${NC} screencast websocket upgrade failed (status: ${DASHBOARD_WS_STATUS:-none})"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "screencast websocket upgrade failed (status: ${DASHBOARD_WS_STATUS:-none})"
   fi
 
   DASHBOARD_FRAME_BYTES=0
@@ -107,11 +103,9 @@ dashboard_assert_screencast_streaming() {
   fi
 
   if [ "${DASHBOARD_FRAME_BYTES}" -gt 0 ]; then
-    echo -e "  ${GREEN}✓${NC} screencast streamed bytes (${DASHBOARD_FRAME_BYTES})"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "screencast streamed bytes (${DASHBOARD_FRAME_BYTES})"
   else
-    echo -e "  ${RED}✗${NC} screencast did not stream any bytes"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "screencast did not stream any bytes"
   fi
 }
 
@@ -132,11 +126,9 @@ dashboard_assert_screencast_continues() {
 
   if [ "${current_bytes}" -gt "${before_bytes}" ]; then
     DASHBOARD_FRAME_BYTES="${current_bytes}"
-    echo -e "  ${GREEN}✓${NC} screencast kept streaming ${label} (${current_bytes} bytes)"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "screencast kept streaming ${label} (${current_bytes} bytes)"
   else
-    echo -e "  ${RED}✗${NC} screencast stopped streaming ${label}"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "screencast stopped streaming ${label}"
   fi
 }
 

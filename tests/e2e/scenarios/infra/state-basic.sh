@@ -34,11 +34,9 @@ pt_get "/state/list"
 assert_ok "list after save"
 COUNT=$(echo "$RESULT" | jq '.count')
 if [ "$COUNT" -gt "0" ]; then
-  echo -e "  ${GREEN}✓${NC} state count > 0"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "state count > 0"
 else
-  echo -e "  ${RED}✗${NC} expected at least 1 state, got $COUNT"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "expected at least 1 state, got $COUNT"
 fi
 
 end_test
@@ -131,8 +129,7 @@ if [ "$HTTP_STATUS" -eq 200 ]; then
   assert_json_contains "$RESULT" '.encrypted' "true" "encrypted flag set"
   ENCRYPTED_STATE_CREATED=1
 elif echo "$RESULT" | grep -q "encryption key"; then
-  echo -e "  ${YELLOW}⊘${NC} skipped (stateEncryptionKey not configured)"
-  ((ASSERTIONS_SKIPPED++)) || true
+  skip_assert "skipped (stateEncryptionKey not configured)"
 else
   assert_ok "save encrypted state"
 fi
@@ -146,8 +143,7 @@ if [ "$ENCRYPTED_STATE_CREATED" -eq 1 ]; then
   pt_post "/state/load" -d "{\"name\":\"${ENCRYPTED_STATE_NAME}\"}"
   assert_ok "load encrypted state"
 else
-  echo -e "  ${YELLOW}⊘${NC} skipped (encrypted state not created)"
-  ((ASSERTIONS_SKIPPED++)) || true
+  skip_assert "skipped (encrypted state not created)"
 fi
 
 end_test
@@ -159,8 +155,7 @@ if [ "$ENCRYPTED_STATE_CREATED" -eq 1 ]; then
   pt_delete "/state?name=${ENCRYPTED_STATE_NAME}"
   assert_ok "delete encrypted state"
 else
-  echo -e "  ${YELLOW}⊘${NC} skipped"
-  ((ASSERTIONS_SKIPPED++)) || true
+  skip_assert "skipped"
 fi
 
 end_test

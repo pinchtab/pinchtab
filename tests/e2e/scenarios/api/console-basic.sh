@@ -37,11 +37,9 @@ assert_ok "get console after logging page"
 
 CONSOLE_COUNT=$(echo "$RESULT" | jq '.console | length')
 if [ "$CONSOLE_COUNT" -gt 0 ]; then
-  echo -e "  ${GREEN}✓${NC} captured $CONSOLE_COUNT console entries"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "captured $CONSOLE_COUNT console entries"
 else
-  echo -e "  ${YELLOW}~${NC} no console entries (may need console.html fixture)"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "no console entries (may need console.html fixture)"
 fi
 
 end_test
@@ -56,11 +54,9 @@ assert_json_exists "$RESULT" '.success' "has success"
 pt_get /console
 CONSOLE_COUNT=$(echo "$RESULT" | jq '.console | length')
 if [ "$CONSOLE_COUNT" -eq 0 ]; then
-  echo -e "  ${GREEN}✓${NC} console cleared"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "console cleared"
 else
-  echo -e "  ${YELLOW}~${NC} still has $CONSOLE_COUNT entries after clear"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "still has $CONSOLE_COUNT entries after clear"
 fi
 
 end_test
@@ -75,11 +71,9 @@ assert_ok "get console with limit"
 
 CONSOLE_COUNT=$(echo "$RESULT" | jq '.console | length')
 if [ "$CONSOLE_COUNT" -le 2 ]; then
-  echo -e "  ${GREEN}✓${NC} limit respected ($CONSOLE_COUNT <= 2)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "limit respected ($CONSOLE_COUNT <= 2)"
 else
-  echo -e "  ${RED}✗${NC} limit not respected ($CONSOLE_COUNT > 2)"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "limit not respected ($CONSOLE_COUNT > 2)"
 fi
 
 end_test

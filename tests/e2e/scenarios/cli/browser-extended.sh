@@ -61,16 +61,13 @@ pt goto "fixtures:80/index.html"
 # a follow-up snap. CLI adding https:// means Chrome either loads an
 # https page or shows an error page (chrome-error://) — both are fine.
 if [ "$PT_CODE" -ne 0 ]; then
-  echo -e "  ${GREEN}✓${NC} CLI added https:// prefix (navigation failed as expected)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "CLI added https:// prefix (navigation failed as expected)"
 else
   pt_ok snap
   if echo "$PT_OUT" | grep -qiE 'https://|chrome-error'; then
-    echo -e "  ${GREEN}✓${NC} CLI added https:// prefix (snap URL shows https or chrome-error)"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "CLI added https:// prefix (snap URL shows https or chrome-error)"
   else
-    echo -e "  ${RED}✗${NC} Expected https:// URL or error, got: $PT_OUT"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "Expected https:// URL or error, got: $PT_OUT"
   fi
 fi
 
@@ -83,11 +80,9 @@ pt_ok goto "http://fixtures:80/index.html"
 # goto emits bare tab ID; inspect the resolved URL via snap.
 pt_ok snap
 if echo "$PT_OUT" | grep -q 'http://fixtures'; then
-  echo -e "  ${GREEN}✓${NC} Response URL is http://"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "Response URL is http://"
 else
-  echo -e "  ${RED}✗${NC} Expected http:// in URL"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "Expected http:// in URL"
 fi
 
 end_test
@@ -98,16 +93,13 @@ start_test "auto-https: explicit https:// is preserved"
 pt goto "https://fixtures:80/index.html"
 
 if [ "$PT_CODE" -ne 0 ]; then
-  echo -e "  ${GREEN}✓${NC} Explicit https:// preserved (navigation failed as expected)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "Explicit https:// preserved (navigation failed as expected)"
 else
   pt_ok snap
   if echo "$PT_OUT" | grep -qiE 'https://fixtures|chrome-error'; then
-    echo -e "  ${GREEN}✓${NC} Explicit https:// preserved (snap URL shows https or chrome-error)"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "Explicit https:// preserved (snap URL shows https or chrome-error)"
   else
-    echo -e "  ${RED}✗${NC} Expected https:// URL or error, got: $PT_OUT"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "Expected https:// URL or error, got: $PT_OUT"
   fi
 fi
 

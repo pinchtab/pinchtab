@@ -40,11 +40,9 @@ assert_output_contains "tabId" "returns new tab ID"
 NEW_TAB_ID=$(get_tab_id "$PT_OUT")
 
 if [ "$NEW_TAB_ID" != "$BASE_TAB_ID" ]; then
-  echo -e "  ${GREEN}✓${NC} --new-tab returned a different tab"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "--new-tab returned a different tab"
 else
-  echo -e "  ${RED}✗${NC} --new-tab reused ${BASE_TAB_ID}"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "--new-tab reused ${BASE_TAB_ID}"
 fi
 
 pt_ok tab
@@ -69,11 +67,9 @@ pt_ok nav "${FIXTURES_URL}/form.html"
 REUSED_TAB_ID=$(echo "$PT_OUT" | tr -d '[:space:]')
 
 if [ "$REUSED_TAB_ID" = "$TRACKED_TAB_ID" ]; then
-  echo -e "  ${GREEN}✓${NC} plain nav reused current tab"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "plain nav reused current tab"
 else
-  echo -e "  ${RED}✗${NC} expected $TRACKED_TAB_ID, got $REUSED_TAB_ID"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "expected $TRACKED_TAB_ID, got $REUSED_TAB_ID"
 fi
 
 pt_ok url --tab "$TRACKED_TAB_ID"
@@ -95,11 +91,9 @@ pt_ok nav "${FIXTURES_URL}/form.html"
 NEW_AFTER_CLOSE_ID=$(echo "$PT_OUT" | tr -d '[:space:]')
 
 if [ "$NEW_AFTER_CLOSE_ID" != "$CLOSED_TAB_ID" ]; then
-  echo -e "  ${GREEN}✓${NC} nav created a fresh tab after close"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "nav created a fresh tab after close"
 else
-  echo -e "  ${RED}✗${NC} nav reused closed tab ${CLOSED_TAB_ID}"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "nav reused closed tab ${CLOSED_TAB_ID}"
 fi
 
 pt tabs close "$NEW_AFTER_CLOSE_ID" > /dev/null 2>&1 || true
@@ -132,15 +126,12 @@ if [ -n "$FOCUS_TAB_ID" ]; then
   pt_ok nav "${FIXTURES_URL}/form.html"
   REUSED_FOCUS_ID=$(echo "$PT_OUT" | tr -d '[:space:]')
   if [ "$REUSED_FOCUS_ID" = "$FOCUS_TAB_ID" ]; then
-    echo -e "  ${GREEN}✓${NC} nav reused focused tab"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "nav reused focused tab"
   else
-    echo -e "  ${RED}✗${NC} expected focused tab $FOCUS_TAB_ID, got $REUSED_FOCUS_ID"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "expected focused tab $FOCUS_TAB_ID, got $REUSED_FOCUS_ID"
   fi
 else
-  echo -e "  ${YELLOW}⚠${NC} could not extract tab ID, skipping"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "could not extract tab ID, skipping"
 fi
 
 pt tabs close "$FOCUS_TAB_ID" > /dev/null 2>&1 || true
@@ -159,8 +150,7 @@ if [ -n "$CLOSE_ID" ]; then
   pt_ok tab close "$CLOSE_ID"
   assert_output_contains "OK" "output confirms tab was closed"
 else
-  echo -e "  ${YELLOW}⚠${NC} could not get tab ID from navigate, skipping"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "could not get tab ID from navigate, skipping"
 fi
 
 end_test

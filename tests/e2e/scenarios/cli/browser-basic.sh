@@ -65,8 +65,7 @@ start_test "pinchtab nav (bare hostname normalizes to https)"
 # Bare hostnames are now normalized to https:// - Chrome shows error page but nav succeeds
 pt nav "not-a-valid-url"
 if echo "$PT_OUT" | grep -q "chrome-error"; then
-  echo -e "  ${GREEN}✓${NC} Normalized to https://not-a-valid-url (Chrome error page)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "Normalized to https://not-a-valid-url (Chrome error page)"
 else
   echo -e "  ${YELLOW}⚠${NC} Unexpected result: $PT_OUT"
 fi
@@ -82,11 +81,9 @@ TAB_ID=$(echo "$PT_OUT" | tr -d '[:space:]')
 pt_ok nav "${FIXTURES_URL}/form.html" --tab "$TAB_ID"
 # nav emits bare tab ID on piped stdout; verify --tab reused the same tab.
 if [ "$(echo "$PT_OUT" | tr -d '[:space:]')" = "$TAB_ID" ]; then
-  echo -e "  ${GREEN}✓${NC} navigated in same tab"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "navigated in same tab"
 else
-  echo -e "  ${RED}✗${NC} expected tab $TAB_ID, got $PT_OUT"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "expected tab $TAB_ID, got $PT_OUT"
 fi
 # Follow up with a tab-scoped eval to confirm the URL actually changed.
 pt_ok eval "location.pathname" --tab "$TAB_ID"

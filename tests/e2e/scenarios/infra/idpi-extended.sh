@@ -118,11 +118,9 @@ assert_ok "snapshot returned"
 # warning header/body rather than hidden:true entries in .nodes.
 HIDDEN_COUNT=$(echo "$RESULT" | jq '[.nodes[] | select(.hidden == true)] | length')
 if [ "$HIDDEN_COUNT" -eq 0 ]; then
-  echo -e "  ${GREEN}✓${NC} hidden trap nodes omitted from the visible snapshot"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "hidden trap nodes omitted from the visible snapshot"
 else
-  echo -e "  ${RED}✗${NC} expected hidden trap nodes to be omitted, found $HIDDEN_COUNT hidden entries"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "expected hidden trap nodes to be omitted, found $HIDDEN_COUNT hidden entries"
 fi
 
 assert_json_exists "$RESULT" ".idpiWarning" "IDPI warning preserved on returned snapshot"
@@ -130,11 +128,9 @@ assert_json_exists "$RESULT" ".idpiWarning" "IDPI warning preserved on returned 
 # Visible nodes should NOT be flagged as hidden
 VISIBLE_BTN=$(echo "$RESULT" | jq '[.nodes[] | select(.name == "Safe Button" and .hidden != true)] | length')
 if [ "$VISIBLE_BTN" -gt 0 ]; then
-  echo -e "  ${GREEN}✓${NC} visible button not flagged as hidden"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "visible button not flagged as hidden"
 else
-  echo -e "  ${RED}✗${NC} visible button incorrectly flagged as hidden"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "visible button incorrectly flagged as hidden"
 fi
 
 end_test
@@ -168,11 +164,9 @@ assert_ok "snapshot returned (warn mode)"
 # Check for IDPI warning in response
 IDPI_WARN=$(echo "$RESULT" | jq -r '.idpiWarning // empty')
 if [ -n "$IDPI_WARN" ]; then
-  echo -e "  ${GREEN}✓${NC} IDPI warning present: ${IDPI_WARN:0:60}..."
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "IDPI warning present: ${IDPI_WARN:0:60}..."
 else
-  echo -e "  ${RED}✗${NC} no IDPI warning in response (expected warning for unicode bypass)"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "no IDPI warning in response (expected warning for unicode bypass)"
 fi
 
 end_test
@@ -197,11 +191,9 @@ pt_get "/snapshot?format=text"
 assert_ok "text snapshot returned"
 # Should NOT contain untrusted_web_content wrapper
 if echo "$RESULT" | grep -q "untrusted_web_content"; then
-  echo -e "  ${RED}✗${NC} text should not be wrapped when wrapContent is off"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "text should not be wrapped when wrapContent is off"
 else
-  echo -e "  ${GREEN}✓${NC} text output not wrapped (wrapContent disabled)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "text output not wrapped (wrapContent disabled)"
 fi
 
 end_test

@@ -38,11 +38,9 @@ start_test "pinchtab daemon install (fails without systemd)"
 
 pt daemon install
 if [ "$PT_CODE" -ne 0 ]; then
-  echo -e "  ${GREEN}✓${NC} fails gracefully without systemd (exit $PT_CODE)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "fails gracefully without systemd (exit $PT_CODE)"
 else
-  echo -e "  ${RED}✗${NC} daemon install unexpectedly succeeded"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "daemon install unexpectedly succeeded"
 fi
 
 end_test
@@ -60,11 +58,9 @@ start_test "pinchtab daemon start (fails without service manager)"
 
 pt daemon start
 if [ "$PT_CODE" -ne 0 ]; then
-  echo -e "  ${GREEN}✓${NC} start fails gracefully without service manager (exit $PT_CODE)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "start fails gracefully without service manager (exit $PT_CODE)"
 else
-  echo -e "  ${RED}✗${NC} daemon start unexpectedly succeeded"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "daemon start unexpectedly succeeded"
 fi
 
 end_test
@@ -74,11 +70,9 @@ start_test "pinchtab daemon stop (fails without service manager)"
 
 pt daemon stop
 if [ "$PT_CODE" -ne 0 ]; then
-  echo -e "  ${GREEN}✓${NC} stop fails gracefully without service manager (exit $PT_CODE)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "stop fails gracefully without service manager (exit $PT_CODE)"
 else
-  echo -e "  ${RED}✗${NC} daemon stop unexpectedly succeeded"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "daemon stop unexpectedly succeeded"
 fi
 
 end_test
@@ -88,11 +82,9 @@ start_test "pinchtab daemon restart (fails without service manager)"
 
 pt daemon restart
 if [ "$PT_CODE" -ne 0 ]; then
-  echo -e "  ${GREEN}✓${NC} restart fails gracefully without service manager (exit $PT_CODE)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "restart fails gracefully without service manager (exit $PT_CODE)"
 else
-  echo -e "  ${RED}✗${NC} daemon restart unexpectedly succeeded"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "daemon restart unexpectedly succeeded"
 fi
 
 end_test
@@ -138,8 +130,7 @@ CFG_FILE="$CFG"
 if [ -f "$CFG_FILE" ]; then
   assert_config_version "$CFG_FILE" "0.8.0" "configVersion set to 0.8.0"
 else
-  echo -e "  ${RED}✗${NC} config file not created"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "config file not created"
 fi
 config_cleanup
 
@@ -158,11 +149,9 @@ EOF
 
 PINCHTAB_CONFIG="$CFG" pt server --help
 if echo "$PT_OUT" | grep -q "Security Setup\|Security defaults"; then
-  echo -e "  ${RED}✗${NC} wizard ran on current config version"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "wizard ran on current config version"
 else
-  echo -e "  ${GREEN}✓${NC} wizard skipped for current version"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "wizard skipped for current version"
 fi
 config_cleanup
 
@@ -205,11 +194,9 @@ PINCHTAB_CONFIG="$CFG" HOME="$TMPDIR" pt daemon install
 
 ACTUAL_VERSION=$(jq -r '.configVersion // "none"' "$CFG")
 if [ "$ACTUAL_VERSION" = "0.8.0" ]; then
-  echo -e "  ${GREEN}✓${NC} wizard set configVersion before daemon install attempt"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "wizard set configVersion before daemon install attempt"
 else
-  echo -e "  ${YELLOW}⚠${NC} configVersion not set (wizard may not have saved: $ACTUAL_VERSION)"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "configVersion not set (wizard may not have saved: $ACTUAL_VERSION)"
 fi
 config_cleanup
 

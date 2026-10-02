@@ -82,11 +82,9 @@ RESPONSE=$(e2e_curl -s -w "\n%{http_code}" "${E2E_SERVER}/screenshot?tabId=${TAB
 STATUS=$(echo "$RESPONSE" | tail -n 1)
 
 if [ "$STATUS" = "200" ]; then
-  echo -e "  ${GREEN}✓${NC} screenshot returned 200"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "screenshot returned 200"
 else
-  echo -e "  ${RED}✗${NC} screenshot returned $STATUS"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "screenshot returned $STATUS"
 fi
 
 end_test
@@ -173,11 +171,9 @@ RESPONSE=$(e2e_curl -s -w "\n%{http_code}" "${E2E_SERVER}/pdf?tabId=${TAB_ID}")
 STATUS=$(echo "$RESPONSE" | tail -n 1)
 
 if [ "$STATUS" = "200" ]; then
-  echo -e "  ${GREEN}✓${NC} pdf returned 200"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "pdf returned 200"
 else
-  echo -e "  ${RED}✗${NC} pdf returned $STATUS"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "pdf returned $STATUS"
 fi
 
 end_test

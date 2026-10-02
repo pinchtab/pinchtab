@@ -13,11 +13,9 @@ INSTANCE_ID=$(echo "$PT_OUT" | jq -r '.defaultInstance.id // empty')
 if [ -n "$INSTANCE_ID" ]; then
   pt_ok instance logs "$INSTANCE_ID"
   # Logs command succeeds - output might be empty
-  echo -e "  ${GREEN}✓${NC} instance logs succeeded"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "instance logs succeeded"
 else
-  echo -e "  ${YELLOW}⚠${NC} No instance ID found, skipping logs test"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "No instance ID found, skipping logs test"
 fi
 
 end_test
@@ -29,11 +27,9 @@ assert_config_field() {
   local actual
   actual=$(jq -r "$path" "$CFG" 2>/dev/null)
   if [ "$actual" = "$expected" ]; then
-    echo -e "  ${GREEN}✓${NC} $desc"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "$desc"
   else
-    echo -e "  ${RED}✗${NC} $desc (expected $expected, got $actual)"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "$desc (expected $expected, got $actual)"
   fi
 }
 
@@ -48,18 +44,14 @@ assert_file_exists "$CFG_FILE" "config file created"
 CFG="$CFG_FILE"
 
 if jq -e '.server' "$CFG" >/dev/null 2>&1; then
-  echo -e "  ${GREEN}✓${NC} has server section"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "has server section"
 else
-  echo -e "  ${RED}✗${NC} missing server section"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "missing server section"
 fi
 if jq -e '.browser' "$CFG" >/dev/null 2>&1; then
-  echo -e "  ${GREEN}✓${NC} has browser section"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "has browser section"
 else
-  echo -e "  ${RED}✗${NC} missing browser section"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "missing browser section"
 fi
 config_cleanup
 end_test
@@ -267,11 +259,9 @@ PINCHTAB_CONFIG="$CFG" pt_fail config token
 
 # Check error message in stderr or stdout
 if printf '%s\n%s\n' "$PT_ERR" "$PT_OUT" | grep -qi "empty"; then
-  echo -e "  ${GREEN}✓${NC} reports empty token error"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "reports empty token error"
 else
-  echo -e "  ${RED}✗${NC} expected empty token error message"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "expected empty token error message"
 fi
 
 config_cleanup
@@ -335,11 +325,9 @@ pt activity tab "nonexistent_tab_xyz_12345" --limit 10
 # Should fail gracefully or return empty events
 if [ "$PT_CODE" -eq 0 ]; then
   assert_output_json "output is valid JSON even for non-existent tab"
-  echo -e "  ${GREEN}✓${NC} handled non-existent tab gracefully"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "handled non-existent tab gracefully"
 else
-  echo -e "  ${GREEN}✓${NC} correctly rejected non-existent tab"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "correctly rejected non-existent tab"
 fi
 
 end_test

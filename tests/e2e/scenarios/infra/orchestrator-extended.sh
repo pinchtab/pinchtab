@@ -23,11 +23,9 @@ assert_json_eq "$RESULT" '.url' "${BRIDGE_URL}" "instance stores remote bridge U
 
 ATTACHED_INST_ID=$(echo "$RESULT" | jq -r '.id // empty')
 if [ -n "$ATTACHED_INST_ID" ]; then
-  echo -e "  ${GREEN}✓${NC} attached bridge instance id: ${ATTACHED_INST_ID}"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "attached bridge instance id: ${ATTACHED_INST_ID}"
 else
-  echo -e "  ${RED}✗${NC} attach response missing instance id"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "attach response missing instance id"
 fi
 
 pt_post "/instances/${ATTACHED_INST_ID}/tabs/open" "{\"url\":\"${FIXTURES_URL}/index.html\"}"
@@ -46,11 +44,9 @@ assert_json_length_gte "$RESULT" '.' '1' "attached bridge has at least one tab"
 pt_get /instances/tabs
 assert_ok "aggregate tabs includes attached bridge"
 if echo "$RESULT" | jq -e --arg inst "$ATTACHED_INST_ID" '.[] | select(.instanceId == $inst)' >/dev/null 2>&1; then
-  echo -e "  ${GREEN}✓${NC} aggregate tab list includes attached bridge instance"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "aggregate tab list includes attached bridge instance"
 else
-  echo -e "  ${RED}✗${NC} aggregate tab list missing attached bridge instance"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "aggregate tab list missing attached bridge instance"
 fi
 
 DEFAULT_IDS=""

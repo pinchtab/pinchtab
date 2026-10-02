@@ -195,11 +195,9 @@ assert_ok "diff snapshot"
 DIFF_COUNT=$(echo "$RESULT" | jq '.nodes | length')
 
 if [ "$DIFF_COUNT" -le "$INITIAL_COUNT" ]; then
-  echo -e "  ${GREEN}✓${NC} diff has <= nodes than full ($DIFF_COUNT <= $INITIAL_COUNT)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "diff has <= nodes than full ($DIFF_COUNT <= $INITIAL_COUNT)"
 else
-  echo -e "  ${RED}✗${NC} diff has more nodes than full ($DIFF_COUNT > $INITIAL_COUNT)"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "diff has more nodes than full ($DIFF_COUNT > $INITIAL_COUNT)"
 fi
 
 end_test
@@ -217,11 +215,9 @@ assert_ok "snapshot with maxTokens"
 LIMITED_COUNT=$(echo "$RESULT" | jq '.nodes | length')
 
 if [ "$LIMITED_COUNT" -le "$FULL_COUNT" ]; then
-  echo -e "  ${GREEN}✓${NC} maxTokens limited nodes ($LIMITED_COUNT <= $FULL_COUNT)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "maxTokens limited nodes ($LIMITED_COUNT <= $FULL_COUNT)"
 else
-  echo -e "  ${RED}✗${NC} maxTokens did not limit ($LIMITED_COUNT > $FULL_COUNT)"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "maxTokens did not limit ($LIMITED_COUNT > $FULL_COUNT)"
 fi
 
 end_test
@@ -239,11 +235,9 @@ assert_ok "snapshot with depth=1"
 SHALLOW_COUNT=$(echo "$RESULT" | jq '.nodes | length')
 
 if [ "$SHALLOW_COUNT" -le "$FULL_COUNT" ]; then
-  echo -e "  ${GREEN}✓${NC} depth=1 limited tree ($SHALLOW_COUNT <= $FULL_COUNT)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "depth=1 limited tree ($SHALLOW_COUNT <= $FULL_COUNT)"
 else
-  echo -e "  ${RED}✗${NC} depth=1 did not limit ($SHALLOW_COUNT > $FULL_COUNT)"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "depth=1 did not limit ($SHALLOW_COUNT > $FULL_COUNT)"
 fi
 
 end_test
@@ -256,11 +250,9 @@ pt_get "/snapshot?format=text"
 assert_ok "get text format"
 
 if echo "$RESULT" | head -c1 | grep -q '{'; then
-  echo -e "  ${RED}✗${NC} got JSON instead of text"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "got JSON instead of text"
 else
-  echo -e "  ${GREEN}✓${NC} format is text, not JSON"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "format is text, not JSON"
 fi
 
 end_test
@@ -285,11 +277,9 @@ pt_get /snapshot
 REFS_AFTER=$(echo "$RESULT" | jq '[.nodes[].ref] | sort')
 
 if [ "$REFS_BEFORE" = "$REFS_AFTER" ]; then
-  echo -e "  ${GREEN}✓${NC} refs stable after action"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "refs stable after action"
 else
-  echo -e "  ${YELLOW}⚠${NC} refs changed (may be expected if DOM changed)"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "refs changed (may be expected if DOM changed)"
 fi
 
 end_test
@@ -302,11 +292,9 @@ pt_get "/snapshot?format=yaml"
 assert_ok "get yaml format"
 
 if echo "$RESULT" | grep -q "role:\|name:\|ref:"; then
-  echo -e "  ${GREEN}✓${NC} looks like YAML"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "looks like YAML"
 else
-  echo -e "  ${YELLOW}⚠${NC} may not be YAML format"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "may not be YAML format"
 fi
 
 end_test
@@ -439,11 +427,9 @@ assert_ok "find with explain"
 
 FIRST_EXPLAIN=$(echo "$RESULT" | jq '.matches[0].explain // empty')
 if [ -n "$FIRST_EXPLAIN" ] && [ "$FIRST_EXPLAIN" != "null" ]; then
-  echo -e "  ${GREEN}✓${NC} explain field present in matches"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "explain field present in matches"
 else
-  echo -e "  ${YELLOW}~${NC} explain field not in response (may need embedding model)"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "explain field not in response (may need embedding model)"
 fi
 
 end_test
@@ -465,11 +451,9 @@ assert_ok "find with high threshold"
 
 BEST_REF=$(echo "$RESULT" | jq -r '.best_ref // empty')
 if [ -z "$BEST_REF" ] || [ "$BEST_REF" = "" ] || [ "$BEST_REF" = "null" ]; then
-  echo -e "  ${GREEN}✓${NC} best_ref empty for low-confidence query"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "best_ref empty for low-confidence query"
 else
-  echo -e "  ${YELLOW}~${NC} best_ref returned: $BEST_REF (threshold may be met)"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "best_ref returned: $BEST_REF (threshold may be met)"
 fi
 
 end_test
@@ -621,11 +605,9 @@ assert_ok "get text with maxChars=50"
 
 TRUNCATED=$(echo "$RESULT" | jq -r '.truncated')
 if [ "$TRUNCATED" = "true" ]; then
-  echo -e "  ${GREEN}✓${NC} response marked truncated when maxChars=50"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "response marked truncated when maxChars=50"
 else
-  echo -e "  ${RED}✗${NC} response not marked truncated"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "response not marked truncated"
 fi
 
 end_test
@@ -643,19 +625,15 @@ STATUS=$(echo "$RESPONSE" | tail -n 2 | head -1)
 CTYPE=$(echo "$RESPONSE" | tail -n 1)
 
 if [ "$STATUS" = "200" ]; then
-  echo -e "  ${GREEN}✓${NC} format=text returned 200"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "format=text returned 200"
 else
-  echo -e "  ${RED}✗${NC} format=text returned $STATUS"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "format=text returned $STATUS"
 fi
 
 if echo "$CTYPE" | grep -q "text/plain"; then
-  echo -e "  ${GREEN}✓${NC} content-type is text/plain"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "content-type is text/plain"
 else
-  echo -e "  ${YELLOW}~${NC} content-type is $CTYPE (expected text/plain)"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "content-type is $CTYPE (expected text/plain)"
 fi
 
 end_test
@@ -664,11 +642,9 @@ end_test
 start_test "text extraction: text excludes script/style content"
 
 if echo "$RESULT" | grep -q "function\|var\|css\|<script>"; then
-  echo -e "  ${YELLOW}~${NC} text may contain code (depends on sanitization)"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "text may contain code (depends on sanitization)"
 else
-  echo -e "  ${GREEN}✓${NC} text properly excludes code content"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "text properly excludes code content"
 fi
 
 end_test
@@ -682,11 +658,9 @@ assert_ok "get text"
 
 TEXT_LEN=$(echo "$RESULT" | jq -r '.text' | wc -c)
 if [ "$TEXT_LEN" -lt 10000 ]; then
-  echo -e "  ${GREEN}✓${NC} text reasonably compact ($TEXT_LEN chars)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "text reasonably compact ($TEXT_LEN chars)"
 else
-  echo -e "  ${YELLOW}⚠${NC} text may be bloated ($TEXT_LEN chars)"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "text may be bloated ($TEXT_LEN chars)"
 fi
 
 end_test

@@ -11,11 +11,9 @@ start_test "pinchtab security (non-interactive)"
 pt security
 
 if [ -n "$PT_OUT" ] || [ "$PT_CODE" -eq 0 ] || [ "$PT_CODE" -ne 0 ]; then
-  echo -e "  ${GREEN}✓${NC} security command executed (exit code: $PT_CODE)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "security command executed (exit code: $PT_CODE)"
 else
-  echo -e "  ${RED}✗${NC} security command failed unexpectedly"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "security command failed unexpectedly"
 fi
 
 end_test

@@ -24,49 +24,40 @@ retained_body_checks() {
     return 1
   fi
 
-  echo -e "  ${GREEN}✓${NC} found request id: $REQ_ID"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "found request id: $REQ_ID"
 
   DETAIL=$(e2e_curl -s "${E2E_SERVER}/network/${REQ_ID}?body=true&bodyMode=retained-preferred&timeoutMs=2000")
 
   echo "$DETAIL" | jq -e '.bodyRetained == true' >/dev/null 2>&1
   if [ $? -eq 0 ]; then
-    echo -e "  ${GREEN}✓${NC} bodyRetained=true"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "bodyRetained=true"
   else
-    echo -e "  ${RED}✗${NC} expected bodyRetained=true"
+    fail_assert "expected bodyRetained=true"
     echo "$DETAIL" | jq .
-    ((ASSERTIONS_FAILED++)) || true
   fi
 
   echo "$DETAIL" | jq -e '.bodySource == "retained"' >/dev/null 2>&1
   if [ $? -eq 0 ]; then
-    echo -e "  ${GREEN}✓${NC} bodySource=retained"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "bodySource=retained"
   else
-    echo -e "  ${RED}✗${NC} expected bodySource=retained"
+    fail_assert "expected bodySource=retained"
     echo "$DETAIL" | jq .
-    ((ASSERTIONS_FAILED++)) || true
   fi
 
   echo "$DETAIL" | jq -e '.responseBody | contains("retained-body-ok")' >/dev/null 2>&1
   if [ $? -eq 0 ]; then
-    echo -e "  ${GREEN}✓${NC} retained response body contains expected payload"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "retained response body contains expected payload"
   else
-    echo -e "  ${RED}✗${NC} retained response body missing expected payload"
+    fail_assert "retained response body missing expected payload"
     echo "$DETAIL" | jq .
-    ((ASSERTIONS_FAILED++)) || true
   fi
 
   echo "$DETAIL" | jq -e '(.bodyPending // false) == false' >/dev/null 2>&1
   if [ $? -eq 0 ]; then
-    echo -e "  ${GREEN}✓${NC} bounded wait completed without leaving bodyPending=true"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "bounded wait completed without leaving bodyPending=true"
   else
-    echo -e "  ${RED}✗${NC} expected bodyPending=false after bounded wait"
+    fail_assert "expected bodyPending=false after bounded wait"
     echo "$DETAIL" | jq .
-    ((ASSERTIONS_FAILED++)) || true
   fi
 }
 

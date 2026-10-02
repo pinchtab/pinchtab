@@ -26,11 +26,9 @@ assert_output_not_contains "test-dashboard-token" "token not leaked to stdout"
 
 # Should mention clipboard (either success or unavailable)
 if printf '%s\n%s\n' "$PT_OUT" "$PT_ERR" | grep -qi "clipboard\|copied"; then
-  echo -e "  ${GREEN}✓${NC} clipboard feedback shown"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "clipboard feedback shown"
 else
-  echo -e "  ${RED}✗${NC} no clipboard feedback in output"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "no clipboard feedback in output"
 fi
 
 # Should suggest opening in browser since --no-open

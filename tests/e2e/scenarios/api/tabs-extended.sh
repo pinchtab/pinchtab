@@ -69,11 +69,9 @@ end_test
 start_test "tab-specific download: verify content returned"
 
 if [ -n "$RESULT" ]; then
-  echo -e "  ${GREEN}✓${NC} download returned content"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "download returned content"
 else
-  echo -e "  ${RED}✗${NC} download returned empty content"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "download returned empty content"
 fi
 
 end_test

@@ -33,12 +33,10 @@ if [ -n "${CAPTURE_TAB_ID:-}" ]; then
 fi
 
 if [ -f /tmp/e2e-custom-screenshot.jpg ]; then
-  echo -e "  ${GREEN}✓${NC} file created"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "file created"
   rm -f /tmp/e2e-custom-screenshot.jpg
 else
-  echo -e "  ${RED}✗${NC} file not created"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "file not created"
 fi
 close_capture_tab
 
@@ -79,12 +77,10 @@ pt_ok nav "${FIXTURES_URL}/index.html"
 pt_ok pdf -o /tmp/e2e-custom.pdf
 
 if [ -f /tmp/e2e-custom.pdf ]; then
-  echo -e "  ${GREEN}✓${NC} file created"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "file created"
   rm -f /tmp/e2e-custom.pdf
 else
-  echo -e "  ${RED}✗${NC} file not created"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "file not created"
 fi
 
 end_test

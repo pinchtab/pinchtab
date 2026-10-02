@@ -20,11 +20,9 @@ assert_json_eq "$RESULT" '.version' '4.13.0' "axe version echoed"
 IDS=$(echo "$RESULT" | jq -r '[.violations[].id] | sort | join(",")')
 for want in image-alt label color-contrast; do
   if echo "$IDS" | grep -q "$want"; then
-    echo -e "  ${GREEN}✓${NC} violation $want present"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "violation $want present"
   else
-    echo -e "  ${RED}✗${NC} violation $want missing (got: $IDS)"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "violation $want missing (got: $IDS)"
   fi
 done
 
@@ -41,11 +39,9 @@ start_test "a11y axe: isolated world defeats page tampering"
 
 VIOLATION_COUNT=$(echo "$RESULT" | jq '.violations | length')
 if [ "$VIOLATION_COUNT" -ge 3 ]; then
-  echo -e "  ${GREEN}✓${NC} $VIOLATION_COUNT violations despite a fake window.axe returning none"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "$VIOLATION_COUNT violations despite a fake window.axe returning none"
 else
-  echo -e "  ${RED}✗${NC} only $VIOLATION_COUNT violations; page tampering leaked into the run"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "only $VIOLATION_COUNT violations; page tampering leaked into the run"
 fi
 
 end_test
@@ -59,20 +55,16 @@ start_test "a11y axe: a ref-mapped node is actionable with the audit's vocab tok
 
 REF=$(echo "$RESULT" | jq -r 'first(.violations[] | select(.id=="label") | .nodes[] | select(.ref!=null and .ref!="") | .ref)')
 if [ -n "$REF" ] && [ "$REF" != "null" ]; then
-  echo -e "  ${GREEN}✓${NC} label violation carries ref $REF"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "label violation carries ref $REF"
 else
-  echo -e "  ${RED}✗${NC} label violation carries no ref"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "label violation carries no ref"
 fi
 
 VOCAB=$(echo "$RESULT" | jq -r '.vocabularyToken')
 if [ -n "$VOCAB" ] && [ "$VOCAB" != "null" ]; then
-  echo -e "  ${GREEN}✓${NC} audit published a vocabulary token $VOCAB"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "audit published a vocabulary token $VOCAB"
 else
-  echo -e "  ${RED}✗${NC} audit published no vocabulary token, so an agent cannot act on its refs"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "audit published no vocabulary token, so an agent cannot act on its refs"
 fi
 
 pt_post /action -d "{\"kind\":\"focus\",\"ref\":\"${REF}\",\"vocab\":\"${VOCAB}\"}"
@@ -90,11 +82,9 @@ pt_get "/a11y/audit?engine=axe"
 assert_ok "axe audit (iframe check)"
 IFRAME_NODE=$(echo "$RESULT" | jq '[.violations[].nodes[] | select((.target | length) > 1)] | length')
 if [ "$IFRAME_NODE" -ge 1 ]; then
-  echo -e "  ${GREEN}✓${NC} an iframe-nested violation node is reported"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "an iframe-nested violation node is reported"
 else
-  echo -e "  ${RED}✗${NC} no iframe-nested violation reported"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "no iframe-nested violation reported"
 fi
 
 end_test
@@ -107,11 +97,9 @@ assert_ok "axe audit tags=wcag2a"
 assert_json_exists "$RESULT" '.violations[] | select(.id=="image-alt")' "wcag2a keeps image-alt"
 CC=$(echo "$RESULT" | jq '[.violations[] | select(.id=="color-contrast")] | length')
 if [ "$CC" -eq 0 ]; then
-  echo -e "  ${GREEN}✓${NC} color-contrast (wcag2aa) absent under tags=wcag2a"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "color-contrast (wcag2aa) absent under tags=wcag2a"
 else
-  echo -e "  ${RED}✗${NC} color-contrast present under tags=wcag2a"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "color-contrast present under tags=wcag2a"
 fi
 
 end_test

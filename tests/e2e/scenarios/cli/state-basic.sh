@@ -77,16 +77,13 @@ start_test "pinchtab state save --encrypt creates encrypted state"
 pt_cli state save --name "$ENCRYPTED_CLI_STATE" --encrypt
 
 if [ "$PT_CODE" -eq 0 ]; then
-  echo -e "  ${GREEN}✓${NC} save encrypted state"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "save encrypted state"
   ENCRYPTED_STATE_CREATED=1
 elif echo "$PT_ERR" | grep -q "encryption key"; then
-  echo -e "  ${YELLOW}⊘${NC} skipped (stateEncryptionKey not configured)"
-  ((ASSERTIONS_SKIPPED++)) || true
+  skip_assert "skipped (stateEncryptionKey not configured)"
 else
-  echo -e "  ${RED}✗${NC} save encrypted state (exit $PT_CODE)"
+  fail_assert "save encrypted state (exit $PT_CODE)"
   echo "  stderr: $PT_ERR"
-  ((ASSERTIONS_FAILED++)) || true
 fi
 
 end_test
@@ -98,8 +95,7 @@ if [ "${ENCRYPTED_STATE_CREATED}" -eq 1 ]; then
   pt_cli state load --name "$ENCRYPTED_CLI_STATE"
   assert_cli_ok "load encrypted state"
 else
-  echo -e "  ${YELLOW}⊘${NC} skipped (encrypted state not created)"
-  ((ASSERTIONS_SKIPPED++)) || true
+  skip_assert "skipped (encrypted state not created)"
 fi
 
 end_test
@@ -111,8 +107,7 @@ if [ "${ENCRYPTED_STATE_CREATED}" -eq 1 ]; then
   pt_cli state delete --name "$ENCRYPTED_CLI_STATE"
   assert_cli_ok "delete encrypted state"
 else
-  echo -e "  ${YELLOW}⊘${NC} skipped"
-  ((ASSERTIONS_SKIPPED++)) || true
+  skip_assert "skipped"
 fi
 
 end_test

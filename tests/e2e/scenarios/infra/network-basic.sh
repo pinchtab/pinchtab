@@ -18,11 +18,9 @@ assert_json_exists "$RESULT" '.tabId' "has tabId"
 
 ENTRIES_COUNT=$(echo "$RESULT" | jq '.entries | length')
 if [ "$ENTRIES_COUNT" -gt 0 ]; then
-  echo -e "  ${GREEN}✓${NC} captured $ENTRIES_COUNT network entries"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "captured $ENTRIES_COUNT network entries"
 else
-  echo -e "  ${YELLOW}~${NC} no entries yet (timing-dependent)"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "no entries yet (timing-dependent)"
 fi
 
 end_test
@@ -43,11 +41,9 @@ assert_ok "get with limit"
 
 ENTRIES_COUNT=$(echo "$RESULT" | jq '.entries | length')
 if [ "$ENTRIES_COUNT" -le 2 ]; then
-  echo -e "  ${GREEN}✓${NC} limit respected: $ENTRIES_COUNT <= 2"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "limit respected: $ENTRIES_COUNT <= 2"
 else
-  echo -e "  ${RED}✗${NC} limit exceeded: $ENTRIES_COUNT > 2"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "limit exceeded: $ENTRIES_COUNT > 2"
 fi
 
 end_test

@@ -64,19 +64,15 @@ assert_ok "ghost-chrome navigate"
 GC_TAB=$(get_tab_id)
 
 if [ -n "$CHROME_TAB" ]; then
-  echo -e "  ${GREEN}✓${NC} chrome tabId: ${CHROME_TAB:0:12}..."
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "chrome tabId: ${CHROME_TAB:0:12}..."
 else
-  echo -e "  ${RED}✗${NC} chrome missing tabId"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "chrome missing tabId"
 fi
 
 if [ -n "$GC_TAB" ]; then
-  echo -e "  ${GREEN}✓${NC} ghost-chrome tabId: ${GC_TAB:0:12}..."
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "ghost-chrome tabId: ${GC_TAB:0:12}..."
 else
-  echo -e "  ${RED}✗${NC} ghost-chrome missing tabId"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "ghost-chrome missing tabId"
 fi
 
 end_test
@@ -93,19 +89,15 @@ assert_ok "ghost-chrome snapshot"
 GC_NODES=$(echo "$RESULT" | jq '.nodes | length')
 
 if [ "$CHROME_NODES" -gt 0 ]; then
-  echo -e "  ${GREEN}✓${NC} chrome nodes: $CHROME_NODES"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "chrome nodes: $CHROME_NODES"
 else
-  echo -e "  ${RED}✗${NC} chrome returned 0 nodes"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "chrome returned 0 nodes"
 fi
 
 if [ "$GC_NODES" -gt 0 ]; then
-  echo -e "  ${GREEN}✓${NC} ghost-chrome nodes: $GC_NODES"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "ghost-chrome nodes: $GC_NODES"
 else
-  echo -e "  ${RED}✗${NC} ghost-chrome returned 0 nodes"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "ghost-chrome returned 0 nodes"
 fi
 
 end_test
@@ -139,19 +131,15 @@ assert_ok "ghost-chrome interactive snapshot"
 GC_INTERACTIVE=$(echo "$RESULT" | jq '.nodes | length')
 
 if [ "$CHROME_INTERACTIVE" -gt 0 ]; then
-  echo -e "  ${GREEN}✓${NC} chrome interactive nodes: $CHROME_INTERACTIVE"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "chrome interactive nodes: $CHROME_INTERACTIVE"
 else
-  echo -e "  ${RED}✗${NC} chrome returned 0 interactive nodes"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "chrome returned 0 interactive nodes"
 fi
 
 if [ "$GC_INTERACTIVE" -gt 0 ]; then
-  echo -e "  ${GREEN}✓${NC} ghost-chrome interactive nodes: $GC_INTERACTIVE"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "ghost-chrome interactive nodes: $GC_INTERACTIVE"
 else
-  echo -e "  ${RED}✗${NC} ghost-chrome returned 0 interactive nodes"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "ghost-chrome returned 0 interactive nodes"
 fi
 
 end_test
@@ -323,11 +311,9 @@ ghostchrome_get "/snapshot?tabId=${GC_TAB_STATIC}"
 assert_ok "ghost-chrome snapshot (static path)"
 GC_SNAP_NODES=$(echo "$RESULT" | jq '.nodes | length' 2>/dev/null || echo "0")
 if [ "$GC_SNAP_NODES" -gt 0 ]; then
-  echo -e "  ${GREEN}✓${NC} ghost-chrome snapshot returned $GC_SNAP_NODES nodes"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "ghost-chrome snapshot returned $GC_SNAP_NODES nodes"
 else
-  echo -e "  ${RED}✗${NC} ghost-chrome snapshot returned 0 nodes"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "ghost-chrome snapshot returned 0 nodes"
 fi
 
 assert_json_contains "$RESULT" '.route.usedProvider' 'ghost-chrome' "ghost-chrome snapshot route.usedProvider contains ghost-chrome"

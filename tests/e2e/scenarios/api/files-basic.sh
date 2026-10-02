@@ -79,11 +79,9 @@ LOW_Q_SIZE=$(e2e_curl -s "${E2E_SERVER}/screenshot?quality=10" | wc -c)
 HIGH_Q_SIZE=$(e2e_curl -s "${E2E_SERVER}/screenshot?quality=95" | wc -c)
 
 if [ "$LOW_Q_SIZE" -lt "$HIGH_Q_SIZE" ]; then
-  echo -e "  ${GREEN}✓${NC} quality=10 ($LOW_Q_SIZE bytes) < quality=95 ($HIGH_Q_SIZE bytes)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "quality=10 ($LOW_Q_SIZE bytes) < quality=95 ($HIGH_Q_SIZE bytes)"
 else
-  echo -e "  ${YELLOW}~${NC} quality=10 ($LOW_Q_SIZE) not smaller than quality=95 ($HIGH_Q_SIZE)"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "quality=10 ($LOW_Q_SIZE) not smaller than quality=95 ($HIGH_Q_SIZE)"
 fi
 
 end_test

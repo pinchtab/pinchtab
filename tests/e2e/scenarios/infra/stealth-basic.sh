@@ -106,13 +106,11 @@ pt_get "/stealth/status?tabId=${TAB_ID}"
 assert_json_eq "$RESULT" '.tabOverrides.fingerprintRotateActive' 'true' "status reports fingerprint rotate overlay on tab"
 
 if [ -n "$ROTATE_USER_AGENT" ] && { [ "$PRE_ROTATE_UA" != "$ROTATE_USER_AGENT" ] || [ "$PRE_ROTATE_PLATFORM" != "$ROTATE_PLATFORM" ] || [ "$PRE_ROTATE_LANGUAGE" != "$ROTATE_LANGUAGE" ]; }; then
-  echo -e "  ${GREEN}✓${NC} fingerprint rotate changes tab persona"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "fingerprint rotate changes tab persona"
 else
-  echo -e "  ${RED}✗${NC} fingerprint rotate did not change tab persona"
+  fail_assert "fingerprint rotate did not change tab persona"
   echo -e "    ${MUTED}before:${NC} ua=${PRE_ROTATE_UA} platform=${PRE_ROTATE_PLATFORM} language=${PRE_ROTATE_LANGUAGE}"
   echo -e "    ${MUTED}after:${NC}  ua=${ROTATE_USER_AGENT} platform=${ROTATE_PLATFORM} language=${ROTATE_LANGUAGE}"
-  ((ASSERTIONS_FAILED++)) || true
 fi
 
 assert_eval_poll "navigator.userAgent === $(jq -Rn --arg v "$ROTATE_USER_AGENT" '$v')" "true" "rotated tab userAgent matches fingerprint" 8 0.3 "$TAB_ID"
@@ -451,8 +449,7 @@ HAS_UADATA=$(echo "$VERSION_SURFACES" | jq -r '.hasUAData // false')
 BRAND_MAJORS=$(echo "$VERSION_SURFACES" | jq -r '(.brands // []) | unique | join(",")')
 
 if [ -z "$UA_MAJOR" ]; then
-  echo -e "  ${RED}✗${NC} could not read a Chrome major from navigator.userAgent"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "could not read a Chrome major from navigator.userAgent"
 elif [ "$HAS_UADATA" != "true" ]; then
   # navigator.userAgentData is exposed only in a secure context; the e2e fixtures
   # are served over plain http, so the brands surface does not exist here and
@@ -462,12 +459,10 @@ elif [ "$HAS_UADATA" != "true" ]; then
   # TestProbedVersionReachesPersonaAndSecCHUA.
   echo -e "  ${YELLOW}!${NC} navigator.userAgentData is unavailable over http (insecure context), so the userAgent/brands cross-surface check did NOT run"
 elif [ "$BRAND_MAJORS" = "$UA_MAJOR" ]; then
-  echo -e "  ${GREEN}✓${NC} userAgent and userAgentData.brands both report major ${UA_MAJOR}"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "userAgent and userAgentData.brands both report major ${UA_MAJOR}"
 else
-  echo -e "  ${RED}✗${NC} version surfaces disagree: userAgent major=${UA_MAJOR} brands=${BRAND_MAJORS}"
+  fail_assert "version surfaces disagree: userAgent major=${UA_MAJOR} brands=${BRAND_MAJORS}"
   echo -e "    ${MUTED}a page comparing these sees an inconsistent persona${NC}"
-  ((ASSERTIONS_FAILED++)) || true
 fi
 
 end_test
@@ -487,24 +482,20 @@ if [ -z "$BINARY_VERSION" ]; then
   # case is reported as unrun rather than counted as agreement.
   echo -e "  ${YELLOW}!${NC} browserBinaryVersion is empty — the binary could not be probed, so this assertion did NOT run"
 elif [ "$ADVERTISED_MAJOR" = "$BINARY_MAJOR" ]; then
-  echo -e "  ${GREEN}✓${NC} advertised major ${ADVERTISED_MAJOR} matches the launched binary (${BINARY_VERSION})"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "advertised major ${ADVERTISED_MAJOR} matches the launched binary (${BINARY_VERSION})"
 else
-  echo -e "  ${RED}✗${NC} persona advertises Chrome ${ADVERTISED_MAJOR} while the running binary is ${BINARY_VERSION}"
+  fail_assert "persona advertises Chrome ${ADVERTISED_MAJOR} while the running binary is ${BINARY_VERSION}"
   echo -e "    ${MUTED}advertised:${NC} ${ADVERTISED_VERSION}"
   echo -e "    ${MUTED}launched:${NC}   ${BINARY_VERSION}"
-  ((ASSERTIONS_FAILED++)) || true
 fi
 
 # The page must agree with what the status endpoint claims to advertise, or
 # the endpoint is reporting a value the browser does not actually present.
 if [ -n "$UA_MAJOR" ] && [ -n "$ADVERTISED_MAJOR" ]; then
   if [ "$UA_MAJOR" = "$ADVERTISED_MAJOR" ]; then
-    echo -e "  ${GREEN}✓${NC} navigator.userAgent major matches advertisedBrowserVersion"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "navigator.userAgent major matches advertisedBrowserVersion"
   else
-    echo -e "  ${RED}✗${NC} status advertises major ${ADVERTISED_MAJOR} but the page reports ${UA_MAJOR}"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "status advertises major ${ADVERTISED_MAJOR} but the page reports ${UA_MAJOR}"
   fi
 fi
 

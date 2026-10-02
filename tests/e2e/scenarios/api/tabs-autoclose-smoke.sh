@@ -52,14 +52,11 @@ autoclose_tests() {
     tab_id_exists "$tab_id"
     local status=$?
     if [ "$status" -eq 0 ]; then
-      echo -e "  ${GREEN}✓${NC} ${desc}: ${tab_id:0:12}..."
-      ((ASSERTIONS_PASSED++)) || true
+      pass_assert "${desc}: ${tab_id:0:12}..."
     elif [ "$status" -eq 1 ]; then
-      echo -e "  ${RED}✗${NC} ${desc}: tab ${tab_id:0:12}... is missing"
-      ((ASSERTIONS_FAILED++)) || true
+      fail_assert "${desc}: tab ${tab_id:0:12}... is missing"
     else
-      echo -e "  ${RED}✗${NC} ${desc}: unable to fetch tab list"
-      ((ASSERTIONS_FAILED++)) || true
+      fail_assert "${desc}: unable to fetch tab list"
     fi
   }
 
@@ -73,15 +70,13 @@ autoclose_tests() {
       tab_id_exists "$tab_id"
       local status=$?
       if [ "$status" -eq 1 ]; then
-        echo -e "  ${GREEN}✓${NC} ${desc}: ${tab_id:0:12}..."
-        ((ASSERTIONS_PASSED++)) || true
+        pass_assert "${desc}: ${tab_id:0:12}..."
         return 0
       fi
       sleep "$delay"
     done
 
-    echo -e "  ${RED}✗${NC} ${desc}: tab ${tab_id:0:12}... is still open"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "${desc}: tab ${tab_id:0:12}... is still open"
     return 1
   }
 

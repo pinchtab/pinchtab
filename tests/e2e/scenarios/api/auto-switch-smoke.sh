@@ -14,15 +14,13 @@ wait_for_tab_count_at_most() {
   for _ in $(seq 1 "$attempts"); do
     actual=$(get_tab_count)
     if [ "$actual" -le "$max" ]; then
-      echo -e "  ${GREEN}✓${NC} ${desc} (${actual} <= ${max})"
-      ((ASSERTIONS_PASSED++)) || true
+      pass_assert "${desc} (${actual} <= ${max})"
       return 0
     fi
     sleep 0.2
   done
 
-  echo -e "  ${RED}✗${NC} ${desc} (tab count ${actual} > ${max})"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "${desc} (tab count ${actual} > ${max})"
   return 1
 }
 
@@ -35,11 +33,9 @@ assert_opener_captured_window_open() {
   local captured
   captured=$(echo "$RESULT" | jq -r '.result // empty')
   if [ "$captured" = "true" ]; then
-    echo -e "  ${GREEN}✓${NC} ${desc}"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "${desc}"
   else
-    echo -e "  ${RED}✗${NC} ${desc} (captured=${captured:-unset})"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "${desc} (captured=${captured:-unset})"
   fi
 }
 
@@ -55,25 +51,20 @@ assert_ok "click target=_blank link"
 
 NEW_TAB_ID=$(echo "$RESULT" | jq -r '.result.switchedToTab // empty')
 if [ -z "$NEW_TAB_ID" ]; then
-  echo -e "  ${RED}✗${NC} result.switchedToTab missing"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "result.switchedToTab missing"
 else
-  echo -e "  ${GREEN}✓${NC} switchedToTab returned: $NEW_TAB_ID"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "switchedToTab returned: $NEW_TAB_ID"
 fi
 
 if [ "$NEW_TAB_ID" = "$OPENER_TAB_ID" ]; then
-  echo -e "  ${RED}✗${NC} switchedToTab equals opener tab"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "switchedToTab equals opener tab"
 fi
 
 AFTER=$(get_tab_count)
 if [ "$AFTER" -le "$BEFORE" ]; then
-  echo -e "  ${RED}✗${NC} expected tab count to increase, before=${BEFORE} after=${AFTER}"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "expected tab count to increase, before=${BEFORE} after=${AFTER}"
 else
-  echo -e "  ${GREEN}✓${NC} tab count increased (${BEFORE} → ${AFTER})"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "tab count increased (${BEFORE} → ${AFTER})"
 fi
 
 pt_get /text
@@ -113,14 +104,11 @@ assert_ok "humanized x/y click on window.open button"
 
 NEW_TAB_ID=$(echo "$RESULT" | jq -r '.result.switchedToTab // empty')
 if [ -z "$NEW_TAB_ID" ]; then
-  echo -e "  ${RED}✗${NC} result.switchedToTab missing for humanized x/y click"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "result.switchedToTab missing for humanized x/y click"
 elif [ "$NEW_TAB_ID" = "$OPENER_TAB_ID" ]; then
-  echo -e "  ${RED}✗${NC} switchedToTab equals opener tab"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "switchedToTab equals opener tab"
 else
-  echo -e "  ${GREEN}✓${NC} switchedToTab returned: $NEW_TAB_ID"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "switchedToTab returned: $NEW_TAB_ID"
 fi
 
 assert_opener_captured_window_open "$OPENER_TAB_ID" "humanized x/y click installed the window.open capture before onclick"
@@ -136,11 +124,9 @@ assert_ok "same-tab click"
 
 SWITCHED=$(echo "$RESULT" | jq -r '.result.switchedToTab // empty')
 if [ -n "$SWITCHED" ]; then
-  echo -e "  ${RED}✗${NC} unexpected switchedToTab on same-tab click: $SWITCHED"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "unexpected switchedToTab on same-tab click: $SWITCHED"
 else
-  echo -e "  ${GREEN}✓${NC} no switchedToTab on same-tab click"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "no switchedToTab on same-tab click"
 fi
 
 end_test
@@ -155,11 +141,9 @@ assert_ok "click with autoSwitch=false"
 
 SWITCHED=$(echo "$RESULT" | jq -r '.result.switchedToTab // empty')
 if [ -n "$SWITCHED" ]; then
-  echo -e "  ${RED}✗${NC} switchedToTab set despite autoSwitch=false: $SWITCHED"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "switchedToTab set despite autoSwitch=false: $SWITCHED"
 else
-  echo -e "  ${GREEN}✓${NC} no switchedToTab when autoSwitch=false (popup guard closes the popup)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "no switchedToTab when autoSwitch=false (popup guard closes the popup)"
 fi
 
 wait_for_tab_count_at_most "$BEFORE_DISABLED" "popup was closed when autoSwitch=false"

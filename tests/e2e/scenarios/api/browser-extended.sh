@@ -45,11 +45,9 @@ start_test "error handling: error response format"
 pt_post /action -d '{"action":"click","selector":"#invalid-selector-#$%"}'
 
 if echo "$RESULT" | jq -e '.error' >/dev/null 2>&1; then
-  echo -e "  ${GREEN}✓${NC} error response has error field"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "error response has error field"
 else
-  echo -e "  ${YELLOW}~${NC} error format may vary"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "error format may vary"
 fi
 
 end_test
@@ -94,7 +92,7 @@ start_test "redirects: document redirect detection capability"
 
 echo -e "  ${BLUE}ℹ${NC} Redirect limiting available via CDP Fetch domain"
 echo -e "  ${BLUE}ℹ${NC} Default: -1 (unlimited). Set maxRedirects: N to limit hops"
-((ASSERTIONS_PASSED++)) || true
+pass_assert "informational only, nothing enforced to assert"
 
 end_test
 
@@ -361,11 +359,9 @@ start_test "POST /wait: negative ms handled gracefully"
 pt_post /wait '{"ms":-100}'
 # Should either return immediately or fail gracefully
 if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "400" ]; then
-  echo -e "  ${GREEN}✓${NC} negative ms handled (status: $HTTP_STATUS)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "negative ms handled (status: $HTTP_STATUS)"
 else
-  echo -e "  ${RED}✗${NC} unexpected status: $HTTP_STATUS"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "unexpected status: $HTTP_STATUS"
 fi
 
 end_test
@@ -396,15 +392,12 @@ ENTRIES_COUNT=$(echo "$RESULT" | jq '.entries | length')
 if [ "$ENTRIES_COUNT" -gt 0 ]; then
   NON_GET=$(echo "$RESULT" | jq '[.entries[] | select(.method != "GET")] | length')
   if [ "$NON_GET" -eq 0 ]; then
-    echo -e "  ${GREEN}✓${NC} all entries are GET requests"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "all entries are GET requests"
   else
-    echo -e "  ${YELLOW}~${NC} found $NON_GET non-GET entries (filter may be loose)"
-    ((ASSERTIONS_PASSED++)) || true
+    skip_assert "found $NON_GET non-GET entries (filter may be loose)"
   fi
 else
-  echo -e "  ${GREEN}✓${NC} no entries (no GET requests captured)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "no entries (no GET requests captured)"
 fi
 
 end_test
@@ -417,11 +410,9 @@ assert_ok "get network with limit"
 
 ENTRIES_COUNT=$(echo "$RESULT" | jq '.entries | length')
 if [ "$ENTRIES_COUNT" -le 5 ]; then
-  echo -e "  ${GREEN}✓${NC} entries limited to $ENTRIES_COUNT (<= 5)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "entries limited to $ENTRIES_COUNT (<= 5)"
 else
-  echo -e "  ${RED}✗${NC} expected <= 5 entries, got $ENTRIES_COUNT"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "expected <= 5 entries, got $ENTRIES_COUNT"
 fi
 
 end_test

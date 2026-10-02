@@ -71,11 +71,9 @@ assert_output_json "nav --new-tab returns JSON"
 TAB_ID=$(get_tab_id "$PT_OUT")
 
 if [ -n "$TAB_ID" ]; then
-  echo -e "  ${GREEN}✓${NC} created tab returned id"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "created tab returned id"
 else
-  echo -e "  ${RED}✗${NC} created tab did not return id"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "created tab did not return id"
 fi
 
 pt_ok nav "${FIXTURES_URL}/stealth-capabilities.html" --tab "$TAB_ID"
@@ -115,11 +113,9 @@ case "$stealth_level" in
 esac
 
 if [ "$crit" -ge "$min_crit" ]; then
-  echo -e "  ${GREEN}✓${NC} score meets ${stealth_level} expectations"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "score meets ${stealth_level} expectations"
 else
-  echo -e "  ${RED}✗${NC} score below ${stealth_level} expectations (${crit}/${total}, need ${min_crit})"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "score below ${stealth_level} expectations (${crit}/${total}, need ${min_crit})"
 fi
 
 end_test

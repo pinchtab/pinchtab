@@ -105,8 +105,7 @@ run_stealth_level_matrix() {
   start_test "stealth-levels: [medium] maxTouchPoints spoofed"
   pt_post /evaluate '{"expression":"navigator.maxTouchPoints === 0"}'
   if [ "$STEALTH_LEVEL" = "light" ]; then
-    echo -e "  ${MUTED}(skipped - native behavior at light level)${NC}"
-    ((ASSERTIONS_PASSED++)) || true
+    skip_assert "native behavior at light level"
   else
     assert_json_eq "$RESULT" '.result' 'true' "maxTouchPoints === 0 at medium+"
   fi
@@ -122,19 +121,15 @@ run_stealth_level_matrix() {
     webgl_platform=$(echo "$webgl_json" | jq -r '.platform // ""')
     if [ "$webgl_available" = "true" ]; then
       if [ "$webgl_ok" = "true" ]; then
-        echo -e "  ${GREEN}✓${NC} WebGL renderer matches platform (${webgl_platform})"
-        ((ASSERTIONS_PASSED++)) || true
+        pass_assert "WebGL renderer matches platform (${webgl_platform})"
       else
-        echo -e "  ${RED}✗${NC} WebGL renderer mismatches platform ${webgl_platform}: ${webgl_renderer}"
-        ((ASSERTIONS_FAILED++)) || true
+        fail_assert "WebGL renderer mismatches platform ${webgl_platform}: ${webgl_renderer}"
       fi
     else
-      echo -e "  ${MUTED}(skipped - WEBGL_debug_renderer_info unavailable)${NC}"
-      ((ASSERTIONS_PASSED++)) || true
+      skip_assert "WEBGL_debug_renderer_info unavailable"
     fi
   else
-    echo -e "  ${MUTED}(skipped - native WebGL at ${STEALTH_LEVEL} level)${NC}"
-    ((ASSERTIONS_PASSED++)) || true
+    skip_assert "native WebGL at ${STEALTH_LEVEL} level"
   fi
   end_test
 
@@ -214,15 +209,12 @@ run_stealth_level_matrix() {
     base_status="$RESULT"
     echo "$base_status" | jq -e '.scriptHash and .level' >/dev/null 2>&1
     if [ $? -eq 0 ]; then
-      echo -e "  ${GREEN}✓${NC} baseline tab exposes stealth status"
-      ((ASSERTIONS_PASSED++)) || true
+      pass_assert "baseline tab exposes stealth status"
     else
-      echo -e "  ${RED}✗${NC} baseline tab missing stealth status fields"
-      ((ASSERTIONS_FAILED++)) || true
+      fail_assert "baseline tab missing stealth status fields"
     fi
   else
-    echo -e "  ${RED}✗${NC} baseline capability tab missing tabId"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "baseline capability tab missing tabId"
   fi
 
   pt_post /navigate "{\"url\":\"${FIXTURES_URL}/stealth-capabilities.html\",\"newTab\":true}"
@@ -235,38 +227,31 @@ run_stealth_level_matrix() {
     base_level=$(echo "$base_status" | jq -r '.level // empty')
     created_level=$(echo "$created_status" | jq -r '.level // empty')
     if [ "$created_level" = "$base_level" ] && [ -n "$created_level" ]; then
-      echo -e "  ${GREEN}✓${NC} created tab keeps same stealth level"
-      ((ASSERTIONS_PASSED++)) || true
+      pass_assert "created tab keeps same stealth level"
     else
-      echo -e "  ${RED}✗${NC} created tab level drifted (${created_level} vs ${base_level})"
-      ((ASSERTIONS_FAILED++)) || true
+      fail_assert "created tab level drifted (${created_level} vs ${base_level})"
     fi
 
     base_hash=$(echo "$base_status" | jq -r '.scriptHash // empty')
     created_hash=$(echo "$created_status" | jq -r '.scriptHash // empty')
     if [ "$created_hash" = "$base_hash" ] && [ -n "$created_hash" ]; then
-      echo -e "  ${GREEN}✓${NC} created tab keeps same script hash"
-      ((ASSERTIONS_PASSED++)) || true
+      pass_assert "created tab keeps same script hash"
     else
-      echo -e "  ${RED}✗${NC} created tab script hash drifted (${created_hash} vs ${base_hash})"
-      ((ASSERTIONS_FAILED++)) || true
+      fail_assert "created tab script hash drifted (${created_hash} vs ${base_hash})"
     fi
 
     base_launch_mode=$(echo "$base_status" | jq -r '.launchMode // empty')
     created_launch_mode=$(echo "$created_status" | jq -r '.launchMode // empty')
     if [ "$created_launch_mode" = "$base_launch_mode" ] && [ -n "$created_launch_mode" ]; then
-      echo -e "  ${GREEN}✓${NC} created tab keeps same launch mode"
-      ((ASSERTIONS_PASSED++)) || true
+      pass_assert "created tab keeps same launch mode"
     else
-      echo -e "  ${RED}✗${NC} created tab launch mode drifted (${created_launch_mode} vs ${base_launch_mode})"
-      ((ASSERTIONS_FAILED++)) || true
+      fail_assert "created tab launch mode drifted (${created_launch_mode} vs ${base_launch_mode})"
     fi
 
     pt_post "/tabs/${created_tab_id}/evaluate" '{"expression":"!!window.__stealthCapabilities && window.__stealthCapabilities.webdriverDescriptorNativeLike && window.__stealthCapabilities.userAgentVersionCoherent"}'
     assert_json_eq "$RESULT" '.result' 'true' "created tab exposes the same capability fixture contract"
   else
-    echo -e "  ${RED}✗${NC} created capability tab missing tabId or baseline status"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "created capability tab missing tabId or baseline status"
   fi
   end_test
 
@@ -287,8 +272,7 @@ run_stealth_level_matrix() {
     restore_instance_id=$(echo "$RESULT" | jq -r '.id // empty')
 
     if [ -n "$restore_instance_id" ] && wait_for_orchestrator_instance_status "${E2E_SERVER}" "${restore_instance_id}" "running" 30; then
-      echo -e "  ${GREEN}✓${NC} restore profile instance reached running"
-      ((ASSERTIONS_PASSED++)) || true
+      pass_assert "restore profile instance reached running"
       pt_post "/instances/${restore_instance_id}/tabs/open" "{\"url\":\"${FIXTURES_URL}/stealth-capabilities.html\"}"
       assert_ok "open tab on restore profile instance"
       sleep 1
@@ -304,8 +288,7 @@ run_stealth_level_matrix() {
       if [ -n "$restore_instance_id" ] && wait_for_orchestrator_instance_status "${E2E_SERVER}" "${restore_instance_id}" "running" 30; then
         restored_tab_id=$(poll_instance_tab_id_by_url "${restore_instance_id}" "${FIXTURES_URL}/stealth-capabilities.html" 30 0.5)
         if [ -n "${restored_tab_id:-}" ]; then
-          echo -e "  ${GREEN}✓${NC} restored tab reappeared after restart"
-          ((ASSERTIONS_PASSED++)) || true
+          pass_assert "restored tab reappeared after restart"
           pt_get "/stealth/status?tabId=${restored_tab_id}"
           restored_status="$RESULT"
 
@@ -314,41 +297,32 @@ run_stealth_level_matrix() {
           restored_launch_mode=$(echo "$restored_status" | jq -r '.launchMode // empty')
 
           if [ "$restored_level" = "$STEALTH_LEVEL" ] && [ -n "$restored_level" ]; then
-            echo -e "  ${GREEN}✓${NC} restored tab keeps same stealth level"
-            ((ASSERTIONS_PASSED++)) || true
+            pass_assert "restored tab keeps same stealth level"
           else
-            echo -e "  ${RED}✗${NC} restored tab level drifted (${restored_level} vs ${STEALTH_LEVEL})"
-            ((ASSERTIONS_FAILED++)) || true
+            fail_assert "restored tab level drifted (${restored_level} vs ${STEALTH_LEVEL})"
           fi
 
           if [ "$restored_hash" = "$matrix_hash" ] && [ -n "$restored_hash" ]; then
-            echo -e "  ${GREEN}✓${NC} restored tab keeps same script hash"
-            ((ASSERTIONS_PASSED++)) || true
+            pass_assert "restored tab keeps same script hash"
           else
-            echo -e "  ${RED}✗${NC} restored tab script hash drifted (${restored_hash} vs ${matrix_hash})"
-            ((ASSERTIONS_FAILED++)) || true
+            fail_assert "restored tab script hash drifted (${restored_hash} vs ${matrix_hash})"
           fi
 
           if [ "$restored_launch_mode" = "$matrix_launch_mode" ] && [ -n "$restored_launch_mode" ]; then
-            echo -e "  ${GREEN}✓${NC} restored tab keeps same launch mode"
-            ((ASSERTIONS_PASSED++)) || true
+            pass_assert "restored tab keeps same launch mode"
           else
-            echo -e "  ${RED}✗${NC} restored tab launch mode drifted (${restored_launch_mode} vs ${matrix_launch_mode})"
-            ((ASSERTIONS_FAILED++)) || true
+            fail_assert "restored tab launch mode drifted (${restored_launch_mode} vs ${matrix_launch_mode})"
           fi
 
           assert_eval_poll "!!window.__stealthCapabilities && window.__stealthCapabilities.webdriverDescriptorNativeLike && window.__stealthCapabilities.userAgentVersionCoherent" "true" "restored tab exposes the same capability fixture contract" 10 0.5 "${restored_tab_id}"
         else
-          echo -e "  ${RED}✗${NC} restored tab did not reappear after restart"
-          ((ASSERTIONS_FAILED++)) || true
+          fail_assert "restored tab did not reappear after restart"
         fi
       else
-        echo -e "  ${RED}✗${NC} restore profile instance failed to restart"
-        ((ASSERTIONS_FAILED++)) || true
+        fail_assert "restore profile instance failed to restart"
       fi
     else
-      echo -e "  ${RED}✗${NC} restore profile instance failed to reach running"
-      ((ASSERTIONS_FAILED++)) || true
+      fail_assert "restore profile instance failed to reach running"
     fi
 
     if [ -n "$restore_instance_id" ]; then
@@ -356,8 +330,7 @@ run_stealth_level_matrix() {
     fi
     pt_delete "/profiles/${restore_profile_id}" >/dev/null 2>&1 || true
   else
-    echo -e "  ${RED}✗${NC} restore profile creation did not return an id"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "restore profile creation did not return an id"
   fi
   end_test
 
@@ -392,21 +365,15 @@ run_stealth_level_matrix() {
   echo -e "  ${MUTED}Critical tests: ${critical_passed}/${critical_total}${NC}"
 
   case "$STEALTH_LEVEL" in
-    light)
-      [ "$critical_passed" -ge 6 ] && ((ASSERTIONS_PASSED++)) || ((ASSERTIONS_FAILED++))
-      ;;
-    medium)
-      [ "$critical_passed" -ge 10 ] && ((ASSERTIONS_PASSED++)) || ((ASSERTIONS_FAILED++))
-      ;;
-    full)
-      [ "$critical_passed" -ge 12 ] && ((ASSERTIONS_PASSED++)) || ((ASSERTIONS_FAILED++))
-      ;;
+    light) critical_min=6 ;;
+    medium) critical_min=10 ;;
+    full) critical_min=12 ;;
   esac
 
-  if [ "$ASSERTIONS_FAILED" -eq 0 ]; then
-    echo -e "  ${GREEN}✓${NC} score meets ${STEALTH_LEVEL} level expectations"
+  if [ "$critical_passed" -ge "$critical_min" ]; then
+    pass_assert "score meets ${STEALTH_LEVEL} level expectations (critical >= ${critical_min})"
   else
-    echo -e "  ${RED}✗${NC} score below ${STEALTH_LEVEL} level expectations"
+    fail_assert "score below ${STEALTH_LEVEL} level expectations (critical ${critical_passed} < ${critical_min})"
   fi
   end_test
 
@@ -476,11 +443,9 @@ esac
 echo -e "  ${MUTED}Score: critical ${critical_passed}/${critical_total} (${stealth_level})${NC}"
 
 if [ "$critical_passed" -ge "$min_critical" ]; then
-  echo -e "  ${GREEN}✓${NC} score meets ${stealth_level} expectations"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "score meets ${stealth_level} expectations"
 else
-  echo -e "  ${RED}✗${NC} score below ${stealth_level} expectations (${critical_passed}/${critical_total}, need ${min_critical})"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "score below ${stealth_level} expectations (${critical_passed}/${critical_total}, need ${min_critical})"
 fi
 
 end_test
@@ -515,15 +480,12 @@ if [ -n "$FULL_URL" ]; then
     webgl_platform=$(echo "$webgl_json" | jq -r '.platform // ""')
     if [ "$webgl_available" = "true" ]; then
       if [ "$webgl_ok" = "true" ]; then
-        echo -e "  ${GREEN}✓${NC} WebGL renderer matches platform (${webgl_platform})"
-        ((ASSERTIONS_PASSED++)) || true
+        pass_assert "WebGL renderer matches platform (${webgl_platform})"
       else
-        echo -e "  ${RED}✗${NC} WebGL renderer mismatches platform ${webgl_platform}: ${webgl_renderer}"
-        ((ASSERTIONS_FAILED++)) || true
+        fail_assert "WebGL renderer mismatches platform ${webgl_platform}: ${webgl_renderer}"
       fi
     else
-      echo -e "  ${MUTED}(skipped - WEBGL_debug_renderer_info unavailable)${NC}"
-      ((ASSERTIONS_PASSED++)) || true
+      skip_assert "WEBGL_debug_renderer_info unavailable"
     fi
 
     end_test
@@ -541,11 +503,9 @@ if [ -n "$FULL_URL" ]; then
       echo -e "  ${MUTED}Score: critical ${critical_passed}/${critical_total} (full)${NC}"
 
       if [ "$critical_passed" -ge "$critical_total" ]; then
-        echo -e "  ${GREEN}✓${NC} score meets full expectations"
-        ((ASSERTIONS_PASSED++)) || true
+        pass_assert "score meets full expectations"
       else
-        echo -e "  ${RED}✗${NC} score below full expectations (${critical_passed}/${critical_total})"
-        ((ASSERTIONS_FAILED++)) || true
+        fail_assert "score below full expectations (${critical_passed}/${critical_total})"
       fi
     fi
 
@@ -567,11 +527,9 @@ full_stealth_checks() {
 
   TAB_ID=$(get_tab_id)
   if [ -n "$TAB_ID" ]; then
-    echo -e "  ${GREEN}✓${NC} Got tabId: $TAB_ID"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "Got tabId: $TAB_ID"
   else
-    echo -e "  ${RED}✗${NC} No tabId in response"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "No tabId in response"
   fi
 
   end_test
@@ -580,8 +538,7 @@ full_stealth_checks() {
 
   TITLE=$(echo "$RESULT" | jq -r '.title // empty')
   if [ "$TITLE" = "Bot Detection Tests" ]; then
-    echo -e "  ${GREEN}✓${NC} Page title: $TITLE"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "Page title: $TITLE"
   else
     echo -e "  ${YELLOW}⚠${NC} Unexpected title: $TITLE"
   fi

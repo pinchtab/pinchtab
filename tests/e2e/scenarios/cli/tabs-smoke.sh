@@ -27,11 +27,9 @@ done
 pt_ok tab --json
 TAB_COUNT=$(echo "$PT_OUT" | jq '.tabs | length')
 if [ "$TAB_COUNT" -ge "$MAX_TABS" ]; then
-  echo -e "  ${GREEN}✓${NC} $TAB_COUNT tabs open (>= $MAX_TABS)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "$TAB_COUNT tabs open (>= $MAX_TABS)"
 else
-  echo -e "  ${RED}✗${NC} expected >= $MAX_TABS tabs, got $TAB_COUNT"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "expected >= $MAX_TABS tabs, got $TAB_COUNT"
 fi
 
 end_test

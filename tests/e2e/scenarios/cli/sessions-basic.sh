@@ -22,11 +22,9 @@ start_test "pinchtab session create without --agent-id fails"
 
 pt_fail session create
 if echo "$PT_ERR" | grep -q "agent-id"; then
-  echo -e "  ${GREEN}✓${NC} error mentions --agent-id"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "error mentions --agent-id"
 else
-  echo -e "  ${RED}✗${NC} error mentions --agent-id (stderr: $PT_ERR)"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "error mentions --agent-id (stderr: $PT_ERR)"
 fi
 
 end_test

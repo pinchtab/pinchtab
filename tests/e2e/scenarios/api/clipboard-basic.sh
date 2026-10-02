@@ -81,11 +81,9 @@ pt_get "/clipboard/read"
 assert_ok "read special chars"
 GOT_TEXT=$(echo "$RESULT" | jq -r '.text')
 if [ "$GOT_TEXT" = "$SPECIAL_TEXT" ]; then
-  echo -e "  ${GREEN}✓${NC} special characters preserved"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "special characters preserved"
 else
-  echo -e "  ${RED}✗${NC} special characters mismatch: got '$GOT_TEXT'"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "special characters mismatch: got '$GOT_TEXT'"
 fi
 
 end_test
@@ -101,11 +99,9 @@ pt_get "/clipboard/read"
 assert_ok "read multiline"
 GOT_TEXT=$(echo "$RESULT" | jq -r '.text')
 if [ "$GOT_TEXT" = "$MULTI_TEXT" ]; then
-  echo -e "  ${GREEN}✓${NC} multiline text preserved"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "multiline text preserved"
 else
-  echo -e "  ${YELLOW}~${NC} multiline may have been modified"
-  ((ASSERTIONS_PASSED++)) || true
+  skip_assert "multiline may have been modified"
 fi
 
 end_test

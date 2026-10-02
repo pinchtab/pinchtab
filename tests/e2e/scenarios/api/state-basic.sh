@@ -13,32 +13,26 @@ STATE=$(e2e_curl -s "${E2E_SERVER}/tabs/${TAB_ID}/state")
 
 echo "$STATE" | jq -e '.tabId == "'"$TAB_ID"'"' >/dev/null 2>&1
 if [ $? -eq 0 ]; then
-  echo -e "  ${GREEN}✓${NC} tabId matches"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "tabId matches"
 else
-  echo -e "  ${RED}✗${NC} tabId mismatch"
+  fail_assert "tabId mismatch"
   echo "$STATE" | jq .
-  ((ASSERTIONS_FAILED++)) || true
 fi
 
 echo "$STATE" | jq -e '.load.readyState == "interactive" or .load.readyState == "complete" or .load.readyState == "loading"' >/dev/null 2>&1
 if [ $? -eq 0 ]; then
-  echo -e "  ${GREEN}✓${NC} load.readyState is present"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "load.readyState is present"
 else
-  echo -e "  ${RED}✗${NC} expected load.readyState"
+  fail_assert "expected load.readyState"
   echo "$STATE" | jq .
-  ((ASSERTIONS_FAILED++)) || true
 fi
 
 echo "$STATE" | jq -e '.actionability == "ready" or .actionability == "caution"' >/dev/null 2>&1
 if [ $? -eq 0 ]; then
-  echo -e "  ${GREEN}✓${NC} actionability is non-blocked for normal page"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "actionability is non-blocked for normal page"
 else
-  echo -e "  ${RED}✗${NC} expected actionability ready/caution"
+  fail_assert "expected actionability ready/caution"
   echo "$STATE" | jq .
-  ((ASSERTIONS_FAILED++)) || true
 fi
 
 end_test
@@ -57,22 +51,18 @@ STATE=$(e2e_curl -s "${E2E_SERVER}/tabs/${TAB_ID}/state")
 
 echo "$STATE" | jq -e '.dialogPresent == true' >/dev/null 2>&1
 if [ $? -eq 0 ]; then
-  echo -e "  ${GREEN}✓${NC} dialogPresent=true"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "dialogPresent=true"
 else
-  echo -e "  ${RED}✗${NC} expected dialogPresent=true"
+  fail_assert "expected dialogPresent=true"
   echo "$STATE" | jq .
-  ((ASSERTIONS_FAILED++)) || true
 fi
 
 echo "$STATE" | jq -e '.actionability == "blocked"' >/dev/null 2>&1
 if [ $? -eq 0 ]; then
-  echo -e "  ${GREEN}✓${NC} actionability=blocked"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "actionability=blocked"
 else
-  echo -e "  ${RED}✗${NC} expected actionability=blocked"
+  fail_assert "expected actionability=blocked"
   echo "$STATE" | jq .
-  ((ASSERTIONS_FAILED++)) || true
 fi
 
 pt_post /dialog -d "{\"tabId\":\"${TAB_ID}\",\"accept\":true}" >/dev/null 2>&1 || true

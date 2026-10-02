@@ -18,11 +18,9 @@ UA=$(echo "$RESULT" | jq -r '.result')
 
 if echo "$UA" | grep -qE '(Headless)?Chrome/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'; then
   CHROME_VERSION=$(echo "$UA" | grep -oE '(Headless)?Chrome/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
-  echo -e "  ${GREEN}✓${NC} UA contains Chrome version: $CHROME_VERSION"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "UA contains Chrome version: $CHROME_VERSION"
 else
-  echo -e "  ${RED}✗${NC} UA missing Chrome version: $UA"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "UA missing Chrome version: $UA"
 fi
 
 pt_post /close "{\"tabId\":\"$TAB_ID\"}" >/dev/null 2>&1
@@ -46,11 +44,9 @@ else
   INITIAL_VERSION=$(echo "$INITIAL_UA" | grep -oE 'Chrome/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
 
   if [ -z "$INITIAL_VERSION" ]; then
-    echo -e "  ${RED}✗${NC} initial UA missing Chrome version"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "initial UA missing Chrome version"
   else
-    echo -e "  ${GREEN}✓${NC} initial version: $INITIAL_VERSION"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "initial version: $INITIAL_VERSION"
   fi
 
   pt_post /fingerprint/rotate "{\"os\":\"mac\",\"tabId\":\"$TAB_ID\"}"
@@ -62,11 +58,9 @@ else
   ROTATED_VERSION=$(echo "$ROTATED_UA" | grep -oE 'Chrome/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
 
   if [ "$INITIAL_VERSION" = "$ROTATED_VERSION" ]; then
-    echo -e "  ${GREEN}✓${NC} Chrome version preserved after rotation: $ROTATED_VERSION"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "Chrome version preserved after rotation: $ROTATED_VERSION"
   else
-    echo -e "  ${RED}✗${NC} Chrome version changed: $INITIAL_VERSION → $ROTATED_VERSION"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "Chrome version changed: $INITIAL_VERSION → $ROTATED_VERSION"
   fi
 
   pt_post /close "{\"tabId\":\"$TAB_ID\"}" >/dev/null 2>&1
@@ -149,11 +143,9 @@ pt_get /health
 assert_ok "health"
 DEFAULT_INST_ID=$(echo "$RESULT" | jq -r '.defaultInstance.id // empty')
 if [ -n "$DEFAULT_INST_ID" ] && [ "$DEFAULT_INST_ID" != "null" ]; then
-  echo -e "  ${GREEN}✓${NC} default instance present: ${DEFAULT_INST_ID}"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "default instance present: ${DEFAULT_INST_ID}"
 else
-  echo -e "  ${RED}✗${NC} default instance present"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "default instance present"
 fi
 
 pt_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"

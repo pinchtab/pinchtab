@@ -240,22 +240,18 @@ wait_for_tab_url_contains() {
 assert_header_present() {
   local desc="$1"
   if [ -n "$HDR_VALUE" ]; then
-    echo -e "  ${GREEN}✓${NC} $desc: $HDR_VALUE"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "$desc: $HDR_VALUE"
   else
-    echo -e "  ${RED}✗${NC} $desc (header missing)"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "$desc (header missing)"
   fi
 }
 
 assert_header_absent() {
   local desc="$1"
   if [ -z "$HDR_VALUE" ]; then
-    echo -e "  ${GREEN}✓${NC} $desc"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "$desc"
   else
-    echo -e "  ${RED}✗${NC} $desc (unexpected: $HDR_VALUE)"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "$desc (unexpected: $HDR_VALUE)"
   fi
 }
 
@@ -388,11 +384,9 @@ HDR_COUNT=$(grep -ci "^X-IDPI-Warning:" "$tmpheaders" 2>/dev/null)
 HDR_COUNT=$(printf "%s" "${HDR_COUNT:-0}" | tr -d '[:space:]')
 rm -f "$tmpheaders"
 if [ "$HDR_COUNT" -eq 1 ]; then
-  echo -e "  ${GREEN}✓${NC} exactly one X-IDPI-Warning header"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "exactly one X-IDPI-Warning header"
 else
-  echo -e "  ${RED}✗${NC} expected 1 X-IDPI-Warning, got $HDR_COUNT"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "expected 1 X-IDPI-Warning, got $HDR_COUNT"
 fi
 idpi_cleanup "$E2E_SERVER" "$TAB_ID"
 end_test
@@ -440,11 +434,9 @@ assert_http_status "202" "task accepted"
 TASK_ID=$(echo "$RESULT" | jq -r '.taskId')
 STATE=$(echo "$RESULT" | jq -r '.state')
 if [ "$STATE" = "queued" ] || [ "$STATE" = "assigned" ] || [ "$STATE" = "running" ]; then
-  echo -e "  ${GREEN}✓${NC} initial task state is active/queued: $STATE"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "initial task state is active/queued: $STATE"
 else
-  echo -e "  ${RED}✗${NC} unexpected initial task state: $STATE"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "unexpected initial task state: $STATE"
 fi
 
 end_test
@@ -460,11 +452,9 @@ assert_json_eq "$RESULT" ".agentId" "$AGENT" "correct agent id"
 assert_json_eq "$RESULT" ".action" "snapshot" "correct action"
 STATE=$(echo "$RESULT" | jq -r '.state')
 if [ "$STATE" = "done" ] || [ "$STATE" = "assigned" ] || [ "$STATE" = "running" ] || [ "$STATE" = "failed" ]; then
-  echo -e "  ${GREEN}✓${NC} task reached terminal/active state: $STATE"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "task reached terminal/active state: $STATE"
 else
-  echo -e "  ${RED}✗${NC} unexpected state: $STATE"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "unexpected state: $STATE"
 fi
 
 end_test
@@ -493,11 +483,9 @@ pt_get "/tasks?agentId=${AGENT}"
 assert_ok "list tasks"
 COUNT=$(echo "$RESULT" | jq '.count')
 if [ "$COUNT" -ge 1 ]; then
-  echo -e "  ${GREEN}✓${NC} found $COUNT tasks for agent"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "found $COUNT tasks for agent"
 else
-  echo -e "  ${RED}✗${NC} expected at least 1 task, got $COUNT"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "expected at least 1 task, got $COUNT"
 fi
 
 end_test
@@ -522,11 +510,9 @@ pt_post "/tasks/${CANCEL_ID}/cancel" ""
 if [ "$HTTP_STATUS" = "200" ]; then
   assert_json_eq "$RESULT" ".status" "cancelled" "task cancelled"
 elif [ "$HTTP_STATUS" = "409" ]; then
-  echo -e "  ${GREEN}✓${NC} task already terminal (409 conflict, acceptable)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "task already terminal (409 conflict, acceptable)"
 else
-  echo -e "  ${RED}✗${NC} unexpected status: $HTTP_STATUS"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "unexpected status: $HTTP_STATUS"
 fi
 
 end_test
@@ -558,11 +544,9 @@ pt_post /tasks/batch -d "{\"agentId\":\"${AGENT}\",\"tasks\":[{\"action\":\"snap
 assert_http_status "202" "batch accepted"
 SUBMITTED=$(echo "$RESULT" | jq '.submitted')
 if [ "$SUBMITTED" = "3" ]; then
-  echo -e "  ${GREEN}✓${NC} all 3 tasks submitted"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "all 3 tasks submitted"
 else
-  echo -e "  ${RED}✗${NC} expected 3 submitted, got $SUBMITTED"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "expected 3 submitted, got $SUBMITTED"
 fi
 
 end_test
@@ -600,14 +584,11 @@ for i in $(seq 1 4); do
   pt_post /tasks -d "{\"agentId\":\"${FLOOD_AGENT}\",\"action\":\"snapshot\",\"tabId\":\"${TAB_ID}\"}"
 done
 if [ "$HTTP_STATUS" = "429" ]; then
-  echo -e "  ${GREEN}✓${NC} queue full for agent (HTTP 429)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "queue full for agent (HTTP 429)"
 elif [ "$HTTP_STATUS" = "202" ]; then
-  echo -e "  ${GREEN}✓${NC} task accepted (tasks completed before limit hit)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "task accepted (tasks completed before limit hit)"
 else
-  echo -e "  ${RED}✗${NC} unexpected status: $HTTP_STATUS (expected 429 or 202)"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "unexpected status: $HTTP_STATUS (expected 429 or 202)"
 fi
 
 end_test
@@ -675,11 +656,9 @@ ghostchrome_post /navigate "{\"url\":\"${FIXTURES_URL}/index.html\"}"
 assert_ok "ghost-chrome navigate"
 TAB_ID=$(get_tab_id)
 if [ -n "$TAB_ID" ]; then
-  echo -e "  ${GREEN}✓${NC} navigate returned tabId=$TAB_ID"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "navigate returned tabId=$TAB_ID"
 else
-  echo -e "  ${RED}✗${NC} navigate missing tabId"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "navigate missing tabId"
 fi
 end_test
 
@@ -689,11 +668,9 @@ ghostchrome_get "/snapshot?tabId=${TAB_ID}"
 assert_ok "ghost-chrome snapshot"
 NODE_COUNT=$(echo "$RESULT" | jq '.nodes | length' 2>/dev/null || echo 0)
 if [ "$NODE_COUNT" -gt 0 ]; then
-  echo -e "  ${GREEN}✓${NC} snapshot returned $NODE_COUNT nodes"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "snapshot returned $NODE_COUNT nodes"
 else
-  echo -e "  ${RED}✗${NC} snapshot returned 0 nodes"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "snapshot returned 0 nodes"
 fi
 end_test
 
@@ -724,8 +701,7 @@ if [ -n "$BUTTON_REF" ]; then
   ghostchrome_post /action "{\"tabId\":\"${ACTION_TAB}\",\"kind\":\"click\",\"ref\":\"${BUTTON_REF}\"}"
   assert_ok "ghost-chrome click"
 else
-  echo -e "  ${RED}✗${NC} no button found for click test"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "no button found for click test"
 fi
 end_test
 
@@ -741,8 +717,7 @@ if [ -n "$INPUT_REF" ]; then
   ghostchrome_post /action "{\"tabId\":\"${TYPE_TAB}\",\"kind\":\"type\",\"ref\":\"${INPUT_REF}\",\"text\":\"hello\"}"
   assert_ok "ghost-chrome type"
 else
-  echo -e "  ${RED}✗${NC} no textbox found on form.html"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "no textbox found on form.html"
 fi
 end_test
 
@@ -754,11 +729,9 @@ if [ "${PINCHTAB_E2E_BROWSER:-chrome}" = "ghost-chrome" ]; then
   # Chrome may fail (ref not found) but should NOT return 501.
   STATUS=$(echo "$HTTP_CODE")
   if [ "$STATUS" != "501" ]; then
-    echo -e "  ${GREEN}✓${NC} press escalated to Chrome (status: $STATUS, not 501)"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "press escalated to Chrome (status: $STATUS, not 501)"
   else
-    echo -e "  ${RED}✗${NC} press should escalate to Chrome, not return 501"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "press should escalate to Chrome, not return 501"
   fi
   end_test
 fi
@@ -775,11 +748,9 @@ assert_ok "navigate page 2"
 TAB_B=$(get_tab_id)
 
 if [ "$TAB_A" != "$TAB_B" ]; then
-  echo -e "  ${GREEN}✓${NC} different tab IDs: $TAB_A vs $TAB_B"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "different tab IDs: $TAB_A vs $TAB_B"
 else
-  echo -e "  ${RED}✗${NC} tabs should have different IDs"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "tabs should have different IDs"
 fi
 
 ghostchrome_get "/text?tabId=${TAB_A}&format=text"

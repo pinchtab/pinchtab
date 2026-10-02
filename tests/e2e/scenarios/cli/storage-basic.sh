@@ -73,8 +73,7 @@ if [ -n "$TAB_ID" ]; then
   pt_cli storage get --tab "$TAB_ID"
   assert_cli_ok "get storage for tab $TAB_ID"
 else
-  echo -e "  ${YELLOW}⊘${NC} skipped (no tab found)"
-  ((ASSERTIONS_SKIPPED++)) || true
+  skip_assert "skipped (no tab found)"
 fi
 
 end_test
@@ -86,8 +85,7 @@ if [ -n "$TAB_ID" ]; then
   pt_cli storage set pt_cli_tab_key pt_cli_tab_value --type local --tab "$TAB_ID"
   assert_cli_ok "set with --tab"
 else
-  echo -e "  ${YELLOW}⊘${NC} skipped (no tab found)"
-  ((ASSERTIONS_SKIPPED++)) || true
+  skip_assert "skipped (no tab found)"
 fi
 
 end_test
@@ -99,8 +97,7 @@ if [ -n "$TAB_ID" ]; then
   pt_cli storage delete --key pt_cli_tab_key --type local --tab "$TAB_ID"
   assert_cli_ok "delete with --tab"
 else
-  echo -e "  ${YELLOW}⊘${NC} skipped (no tab found)"
-  ((ASSERTIONS_SKIPPED++)) || true
+  skip_assert "skipped (no tab found)"
 fi
 
 end_test

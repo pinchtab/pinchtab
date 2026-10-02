@@ -35,11 +35,9 @@ pt_get /sessions
 assert_ok "list ok"
 SESSION_COUNT=$(echo "$RESULT" | jq 'length')
 if [ "$SESSION_COUNT" -ge 1 ]; then
-  echo -e "  ${GREEN}✓${NC} session list has $SESSION_COUNT entry(s)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "session list has $SESSION_COUNT entry(s)"
 else
-  echo -e "  ${RED}✗${NC} expected at least 1 session, got $SESSION_COUNT"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "expected at least 1 session, got $SESSION_COUNT"
 fi
 
 end_test
@@ -156,11 +154,9 @@ OTHER_STATUS=$(e2e_curl --token "" -s -o /dev/null -w "%{http_code}" \
   -H "Authorization: Session ${SESSION_TOKEN_2}" \
   "${E2E_SERVER}/sessions/me")
 if [ "$OTHER_STATUS" = "200" ]; then
-  echo -e "  ${GREEN}✓${NC} other session remains active after forbidden revoke"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "other session remains active after forbidden revoke"
 else
-  echo -e "  ${RED}✗${NC} other session should remain active (got $OTHER_STATUS)"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "other session should remain active (got $OTHER_STATUS)"
 fi
 
 end_test
@@ -179,11 +175,9 @@ REVOKED_STATUS=$(e2e_curl --token "" -s -o /dev/null -w "%{http_code}" \
   -H "Authorization: Session ${SESSION_TOKEN}" \
   "${E2E_SERVER}/sessions/me")
 if [ "$REVOKED_STATUS" = "401" ]; then
-  echo -e "  ${GREEN}✓${NC} token rejected after revoke (401)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "token rejected after revoke (401)"
 else
-  echo -e "  ${RED}✗${NC} token should be invalid after revoke (got $REVOKED_STATUS)"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "token should be invalid after revoke (got $REVOKED_STATUS)"
 fi
 
 end_test
@@ -207,11 +201,9 @@ ACTION_STATUS=$(e2e_curl --token "" -s -o /dev/null -w "%{http_code}" \
   -H "Authorization: Session ${ACTION_TOKEN}" \
   "${E2E_SERVER}/health")
 if [ "$ACTION_STATUS" = "200" ]; then
-  echo -e "  ${GREEN}✓${NC} session token authenticates /health"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "session token authenticates /health"
 else
-  echo -e "  ${RED}✗${NC} session token should authenticate /health (got $ACTION_STATUS)"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "session token should authenticate /health (got $ACTION_STATUS)"
 fi
 
 end_test

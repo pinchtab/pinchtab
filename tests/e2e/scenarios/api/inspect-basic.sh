@@ -27,11 +27,9 @@ assert_ok "count inputs"
 
 COUNT=$(echo "$RESULT" | jq '.count')
 if [ "$COUNT" -ge 3 ]; then
-  echo -e "  ${GREEN}✓${NC} count >= 3 (got: $COUNT)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "count >= 3 (got: $COUNT)"
 else
-  echo -e "  ${RED}✗${NC} count < 3 (got: $COUNT)"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "count < 3 (got: $COUNT)"
 fi
 
 assert_json_eq "$RESULT" '.selector' 'input' "selector echoed back"
@@ -49,11 +47,9 @@ pt_get "/count?selector=xpath:%2F%2Finput"
 assert_ok "count inputs by xpath"
 XPATH_COUNT=$(echo "$RESULT" | jq '.count')
 if [ "$XPATH_COUNT" -ge 3 ]; then
-  echo -e "  ${GREEN}✓${NC} xpath count >= 3 (got: $XPATH_COUNT)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "xpath count >= 3 (got: $XPATH_COUNT)"
 else
-  echo -e "  ${RED}✗${NC} xpath count < 3 (got: $XPATH_COUNT)"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "xpath count < 3 (got: $XPATH_COUNT)"
 fi
 
 # ref: a single element ⇒ count is 0 or 1.
@@ -83,11 +79,9 @@ pt_get "/count?selector=text:Submit"
 assert_ok "count text:Submit"
 TEXT_COUNT=$(echo "$RESULT" | jq '.count')
 if [ "$TEXT_COUNT" -ge 1 ]; then
-  echo -e "  ${GREEN}✓${NC} text:Submit count >= 1 (got: $TEXT_COUNT)"
-  ((ASSERTIONS_PASSED++)) || true
+  pass_assert "text:Submit count >= 1 (got: $TEXT_COUNT)"
 else
-  echo -e "  ${RED}✗${NC} text:Submit count < 1 (got: $TEXT_COUNT)"
-  ((ASSERTIONS_FAILED++)) || true
+  fail_assert "text:Submit count < 1 (got: $TEXT_COUNT)"
 fi
 
 end_test
@@ -126,16 +120,13 @@ if assert_ref_found "$INPUT_REF" "textbox ref for /box"; then
 
   BOX_WIDTH=$(echo "$RESULT" | jq '.box.width')
   if [ "$(echo "$BOX_WIDTH > 0" | bc -l 2>/dev/null || echo 0)" = "1" ]; then
-    echo -e "  ${GREEN}✓${NC} box width > 0 (got: $BOX_WIDTH)"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "box width > 0 (got: $BOX_WIDTH)"
   else
     # Fallback check for environments without bc
     if echo "$BOX_WIDTH" | grep -qvE '^0(\.0+)?$'; then
-      echo -e "  ${GREEN}✓${NC} box width > 0 (got: $BOX_WIDTH)"
-      ((ASSERTIONS_PASSED++)) || true
+      pass_assert "box width > 0 (got: $BOX_WIDTH)"
     else
-      echo -e "  ${RED}✗${NC} box width is 0 or invalid (got: $BOX_WIDTH)"
-      ((ASSERTIONS_FAILED++)) || true
+      fail_assert "box width is 0 or invalid (got: $BOX_WIDTH)"
     fi
   fi
 fi
@@ -252,17 +243,13 @@ if [ -n "$PASS_REF" ] && [ "$PASS_REF" != "null" ]; then
 
   PASS_VALUE=$(echo "$RESULT" | jq -r "[.nodes[] | select(.ref == \"$PASS_REF\")] | first | .value // empty")
   if [ "$PASS_VALUE" = "supersecret" ]; then
-    echo -e "  ${RED}✗${NC} password value leaked: $PASS_VALUE"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "password value leaked: $PASS_VALUE"
   elif [ -n "$PASS_VALUE" ] && echo "$PASS_VALUE" | grep -qF "••••••••"; then
-    echo -e "  ${GREEN}✓${NC} password value redacted"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "password value redacted"
   elif [ -z "$PASS_VALUE" ]; then
-    echo -e "  ${GREEN}✓${NC} password value empty (redacted)"
-    ((ASSERTIONS_PASSED++)) || true
+    pass_assert "password value empty (redacted)"
   else
-    echo -e "  ${RED}✗${NC} unexpected password value: $PASS_VALUE"
-    ((ASSERTIONS_FAILED++)) || true
+    fail_assert "unexpected password value: $PASS_VALUE"
   fi
 else
   echo -e "  ${YELLOW}⚠${NC} skipped: could not find password field ref"
