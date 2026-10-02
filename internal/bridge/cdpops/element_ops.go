@@ -29,6 +29,35 @@ func (e *NoOptionMatchError) Error() string {
 	return fmt.Sprintf("no option matched %q by value or visible text", e.Value)
 }
 
+// NotSelectError reports a select target that is not a <select> element.
+type NotSelectError struct {
+	Tag  string `json:"tag"`
+	Type string `json:"type"`
+	Role string `json:"role"`
+}
+
+func (e *NotSelectError) Error() string {
+	target := "<" + e.Tag
+	if e.Type != "" {
+		target += fmt.Sprintf(" type=%q", e.Type)
+	}
+	if e.Role != "" {
+		target += fmt.Sprintf(" role=%q", e.Role)
+	}
+	return "target " + target + "> is not a <select> element; use fill for a text field, check for a checkbox, or click for a custom dropdown"
+}
+
+const notSelectJS = `function() {
+	if (this instanceof window.HTMLSelectElement) {
+		return null;
+	}
+	return {
+		tag: (this.localName || this.nodeName || '').toLowerCase(),
+		type: (this.getAttribute && this.getAttribute('type')) || '',
+		role: (this.getAttribute && this.getAttribute('role')) || ''
+	};
+}`
+
 // NotFillableError reports a text-entry target that holds no value of its own, such as
 // one segment of a date or time input. Host names the input it belongs to, when
 // the target sits in that input's shadow tree.
@@ -205,33 +234,25 @@ func nodeDetached(ctx context.Context, nodeID int64) bool {
 // deliberately permissive; if multiple options share a prefix the first one
 // in document order wins, so prefer exact forms when disambiguation matters.
 //
-// When the element isn't a <select> (no `.options` collection), behavior
-// degrades to the original "set .value directly" path — preserves backward
-// compatibility for anyone using this helper on a plain input or custom
-// element.
-//
-// Returns an error when none of the three match strategies find an option on
-// a <select> element; the error enumerates available values + texts to make
-// the failure actionable.
+// A target that is not a <select> is refused with NotSelectError before it is
+// focused or written to. No match on a <select> returns NoOptionMatchError.
 func SelectByNodeID(ctx context.Context, nodeID int64, value string) error {
 	objectID, err := ResolveNodeObjectID(ctx, nodeID)
 	if err != nil {
 		return err
 	}
+	var refusal *NotSelectError
+	if err := cdptk.CallFunctionOn(ctx, objectID, notSelectJS, nil, &refusal); err != nil {
+		return err
+	}
+	if refusal != nil {
+		return refusal
+	}
 	if err := FocusBackendNode(ctx, nodeID); err != nil {
 		return err
 	}
-	// Return a structured object so the caller can inspect (a) the match
-	// strategy used and (b) the effective option value that was applied.
 	js := `function(v) {
-				var opts = this.options ? Array.from(this.options) : null;
-				if (!opts) {
-					// Not a <select>; preserve legacy behavior.
-					this.value = v;
-					this.dispatchEvent(new Event('input', {bubbles: true}));
-					this.dispatchEvent(new Event('change', {bubbles: true}));
-					return { ok: true, matchedBy: "legacy", value: v };
-				}
+				var opts = Array.from(this.options);
 				var target = String(v);
 				var trimmed = target.trim();
 				var lower = trimmed.toLowerCase();

@@ -61,9 +61,6 @@ func (b *Bridge) actionSelect(ctx context.Context, req ActionRequest) (map[strin
 	if !supplied {
 		return nil, fmt.Errorf(`select requires "value" (or "text"); send "value": "" to select an empty-valued option`)
 	}
-	// Both paths route through SelectByNodeID so they share its
-	// value-then-text match fallback. This lets callers pass either the
-	// `<option value="...">` attribute or the option's visible text.
 	nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
 	if err != nil {
 		return nil, err
@@ -71,7 +68,12 @@ func (b *Bridge) actionSelect(ctx context.Context, req ActionRequest) (map[strin
 	if nodeID <= 0 {
 		return nil, NewInvalidActionRequestError("need selector or ref")
 	}
-	return map[string]any{"selected": val}, bridgecdpops.SelectByNodeID(ctx, nodeID, val)
+	err = bridgecdpops.SelectByNodeID(ctx, nodeID, val)
+	var notSelect *bridgecdpops.NotSelectError
+	if errors.As(err, &notSelect) {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidActionRequest, notSelect)
+	}
+	return map[string]any{"selected": val}, err
 }
 
 func (b *Bridge) actionCheck(ctx context.Context, req ActionRequest) (map[string]any, error) {

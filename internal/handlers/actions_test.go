@@ -1770,7 +1770,11 @@ func TestTextEntryBySelectorOnTheWrongElementTypeIsAnInvalidRequest(t *testing.T
 }
 
 const selectOptionFixtureHTML = `<label>Size <select id="native" onchange="document.body.dataset.changed='1'"><option value="sm">Small</option><option value="lg">Large</option></select></label>
-<div role="listbox" id="custom"><div role="option" id="custom-lg" onclick="document.body.dataset.picked='lg'">Large</div></div>`
+<div role="listbox" id="custom"><div role="option" id="custom-lg" onclick="document.body.dataset.picked='lg'">Large</div></div>
+<h1 id="title">Category</h1>
+<form oninput="document.body.dataset.written='1'" onchange="document.body.dataset.written='1'">
+<input id="search" value="shoes"><input id="stock" type="checkbox" value="on"><div id="combo" role="combobox" tabindex="0">Pick</div>
+</form>`
 
 func newSelectOptionFixture(t *testing.T) (context.Context, *Handlers) {
 	t.Helper()
@@ -1783,7 +1787,10 @@ func newSelectOptionFixture(t *testing.T) (context.Context, *Handlers) {
 	b := browserBridge(ctx, cfg)
 	b.RegisterTab("tab-select", ctx)
 	targets := map[string]bridge.RefTarget{}
-	for ref, css := range map[string]string{"e2": "#native", "e4": "#native option[value=lg]", "e6": "#custom-lg"} {
+	for ref, css := range map[string]string{
+		"e2": "#native", "e4": "#native option[value=lg]", "e6": "#custom-lg",
+		"e7": "#title", "e8": "#search", "e9": "#stock", "e10": "#combo",
+	} {
 		nodeID, err := bridge.ResolveCSSToNodeID(ctx, css)
 		if err != nil {
 			t.Fatal(err)
@@ -1828,6 +1835,47 @@ func TestClickOnANativeSelectOptionPointsToSelectInsteadOf500(t *testing.T) {
 	}
 	if state != "sm|" {
 		t.Errorf("refused click still reached the page: value|changed=%q, want %q", state, "sm|")
+	}
+}
+
+func TestSelectOnANonSelectTargetIsAnInvalidRequestThatWritesNothing(t *testing.T) {
+	for name, target := range map[string]struct{ ref, named string }{
+		"textbox":       {"e8", "<input>"},
+		"checkbox":      {"e9", `<input type="checkbox">`},
+		"heading":       {"e7", "<h1>"},
+		"aria combobox": {"e10", `<div role="combobox">`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx, h := newSelectOptionFixture(t)
+
+			w := postRerenderAction(t, h, `{"kind":"select","ref":"`+target.ref+`","value":"garden","tabId":"tab-select"}`)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("select on a %s: status=%d body=%s, want 400", name, w.Code, w.Body.String())
+			}
+			var body struct {
+				Code      string `json:"code"`
+				Error     string `json:"error"`
+				Retryable bool   `json:"retryable"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if body.Code != "invalid_action_request" || body.Retryable {
+				t.Errorf("code=%q retryable=%v, want invalid_action_request and not retryable", body.Code, body.Retryable)
+			}
+			if !strings.Contains(body.Error, target.named) || strings.Contains(body.Error, "-32000") {
+				t.Errorf("error = %q, want it to name %s and not the raw CDP error", body.Error, target.named)
+			}
+			var state string
+			read := `[document.getElementById('search').value, document.getElementById('stock').value, document.getElementById('combo').value, document.body.dataset.written || ''].join('|')`
+			if err := chromedp.Run(ctx, chromedp.Evaluate(read, &state)); err != nil {
+				t.Fatal(err)
+			}
+			if state != "shoes|on||" {
+				t.Errorf("refused select still reached the page: search|stock|combo|written=%q, want %q", state, "shoes|on||")
+			}
+		})
 	}
 }
 
