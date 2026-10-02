@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -120,6 +121,46 @@ func TestTimeoutFlagUnitsPerVerb(t *testing.T) {
 			t.Errorf("scrape must not send a bare ms-ambiguous timeout key: %v", lastBody)
 		}
 	})
+}
+
+func TestWait_ForwardsEveryConditionAndState(t *testing.T) {
+	var lastBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		lastBody = nil
+		_ = json.Unmarshal(b, &lastBody)
+		_ = json.NewEncoder(w).Encode(map[string]any{"waited": true})
+	}))
+	defer srv.Close()
+	conn := apiclient.Conn{Client: srv.Client(), Base: srv.URL}
+
+	for _, tc := range []struct {
+		name  string
+		args  []string
+		flags map[string]string
+		want  map[string]any
+	}{
+		{"text with state", nil, map[string]string{"text": "Order 42", "state": "hidden"}, map[string]any{"text": "Order 42", "state": "hidden"}},
+		{"selector with text", []string{"#nope"}, map[string]string{"text": "X"}, map[string]any{"selector": "#nope", "text": "X"}},
+		{"ms with state", []string{"500"}, map[string]string{"state": "hidden"}, map[string]any{"ms": float64(500), "state": "hidden"}},
+		{
+			"every flag",
+			[]string{"#x"},
+			map[string]string{"text": "a", "not-text": "b", "url": "c", "load": "d", "fn": "e", "state": "hidden"},
+			map[string]any{"selector": "#x", "text": "a", "notText": "b", "url": "c", "load": "d", "fn": "e", "state": "hidden"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := newWaitCmd()
+			for flag, value := range tc.flags {
+				_ = cmd.Flags().Set(flag, value)
+			}
+			Wait(conn, tc.args, cmd)
+			if !reflect.DeepEqual(lastBody, tc.want) {
+				t.Fatalf("wait sent %v, want %v", lastBody, tc.want)
+			}
+		})
+	}
 }
 
 const waitChildEnv = "PINCHTAB_TEST_WAIT_MODE"

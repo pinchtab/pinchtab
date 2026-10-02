@@ -49,25 +49,38 @@ type waitResponse struct {
 	Error   string `json:"error,omitempty"`
 }
 
-func (wr *waitRequest) mode() string {
-	switch {
-	case wr.Ms != nil:
-		return "ms"
-	case wr.Selector != "":
-		return "selector"
-	case wr.Text != "":
-		return "text"
-	case wr.NotText != "":
-		return "notText"
-	case wr.URL != "":
-		return "url"
-	case wr.Load != "":
-		return "load"
-	case wr.Fn != "":
-		return "fn"
-	default:
-		return ""
+func (wr *waitRequest) conditions() []string {
+	var set []string
+	for _, c := range []struct {
+		name string
+		set  bool
+	}{
+		{"ms", wr.Ms != nil},
+		{"selector", wr.Selector != ""},
+		{"text", wr.Text != ""},
+		{"notText", wr.NotText != ""},
+		{"url", wr.URL != ""},
+		{"load", wr.Load != ""},
+		{"fn", wr.Fn != ""},
+	} {
+		if c.set {
+			set = append(set, c.name)
+		}
 	}
+	return set
+}
+
+func (wr *waitRequest) mode() (string, error) {
+	set := wr.conditions()
+	switch {
+	case len(set) == 0:
+		return "", errors.New("one of selector, text, notText, url, load, fn, or ms is required")
+	case len(set) > 1:
+		return "", fmt.Errorf("wait takes exactly one condition, got %s", strings.Join(set, ", "))
+	case wr.State != "" && set[0] != "selector":
+		return "", fmt.Errorf("state applies to selector waits only, not %s; to wait for text to disappear use notText", set[0])
+	}
+	return set[0], nil
 }
 
 func (wr *waitRequest) resolvedTimeout() time.Duration {
@@ -134,9 +147,9 @@ func (h *Handlers) HandleTabWait(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req waitRequest) {
 	start := time.Now()
 
-	mode := req.mode()
-	if mode == "" {
-		httpx.Error(w, 400, fmt.Errorf("one of selector, text, url, load, fn, or ms is required"))
+	mode, err := req.mode()
+	if err != nil {
+		httpx.Error(w, 400, err)
 		return
 	}
 
@@ -212,7 +225,7 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 		matchLabel = "fn"
 	}
 
-	err := pollUntil(tCtx, pollInterval, func() (bool, error) {
+	err = pollUntil(tCtx, pollInterval, func() (bool, error) {
 		if mode == "url" {
 			var href string
 			if evalErr := h.Bridge.Evaluate(tCtx, "window.location.href", &href, bridge.EvalOpts{}); evalErr != nil {

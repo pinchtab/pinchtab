@@ -12,12 +12,33 @@ import (
 func Wait(conn apiclient.Conn, args []string, cmd *cobra.Command) {
 	body := map[string]any{}
 
-	textFlag, _ := cmd.Flags().GetString("text")
-	notTextFlag, _ := cmd.Flags().GetString("not-text")
-	urlFlag, _ := cmd.Flags().GetString("url")
-	loadFlag, _ := cmd.Flags().GetString("load")
-	fnFlag, _ := cmd.Flags().GetString("fn")
-	stateFlag, _ := cmd.Flags().GetString("state")
+	for flag, field := range map[string]string{
+		"text":     "text",
+		"not-text": "notText",
+		"url":      "url",
+		"load":     "load",
+		"fn":       "fn",
+	} {
+		if value, _ := cmd.Flags().GetString(flag); value != "" {
+			body[field] = value
+		}
+	}
+	if len(args) > 0 {
+		// Bare arg is overloaded: a number means a ms wait, anything else a selector.
+		if ms, err := strconv.Atoi(args[0]); err == nil {
+			body["ms"] = ms
+		} else {
+			body["selector"] = args[0]
+		}
+	}
+	if len(body) == 0 {
+		fmt.Println("Usage: pinchtab wait <selector|ms> [--text|--not-text|--url|--load|--fn] [--state visible|hidden] [--timeout-ms ms] [--tab id]")
+		return
+	}
+	if state, _ := cmd.Flags().GetString("state"); state != "" {
+		body["state"] = state
+	}
+
 	tabID, _ := cmd.Flags().GetString("tab")
 
 	// The server's /wait timeout is milliseconds. --timeout-ms is the canonical
@@ -27,33 +48,6 @@ func Wait(conn apiclient.Conn, args []string, cmd *cobra.Command) {
 	if timeoutMs == 0 {
 		timeoutMs, _ = cmd.Flags().GetInt("timeout")
 	}
-
-	switch {
-	case textFlag != "":
-		body["text"] = textFlag
-	case notTextFlag != "":
-		body["notText"] = notTextFlag
-	case urlFlag != "":
-		body["url"] = urlFlag
-	case loadFlag != "":
-		body["load"] = loadFlag
-	case fnFlag != "":
-		body["fn"] = fnFlag
-	case len(args) > 0:
-		// Bare arg is overloaded: a number means a ms wait, anything else a selector.
-		if ms, err := strconv.Atoi(args[0]); err == nil {
-			body["ms"] = ms
-		} else {
-			body["selector"] = args[0]
-			if stateFlag != "" {
-				body["state"] = stateFlag
-			}
-		}
-	default:
-		fmt.Println("Usage: pinchtab wait <selector|ms> [--text|--not-text|--url|--load|--fn] [--timeout-ms ms] [--tab id]")
-		return
-	}
-
 	if timeoutMs > 0 {
 		body["timeout"] = timeoutMs
 	}

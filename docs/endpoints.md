@@ -844,7 +844,7 @@ POST /errors/clear
 
 Wait body fields:
 
-- exactly one of:
+- exactly one of the following; a body carrying two or more is refused with `400` naming the conflicting fields, rather than running one and dropping the rest:
   - `selector` — CSS / XPath (`xpath:` prefix or leading `//`) / text (`text:` prefix)
   - `text` — substring of `document.body.innerText`
   - `notText` — wait until substring is no longer present
@@ -857,7 +857,7 @@ Wait body fields:
   - `ms` — fixed sleep in milliseconds, max 30000 (escape hatch; prefer condition-based waits)
 - optional `tabId`
 - optional `timeout` — ms, default 10000, clamped 100–30000
-- optional `state` for selector waits — `visible` (default) or `hidden`
+- optional `state`, for `selector` only — `visible` (default) or `hidden`. With any other condition it is refused with `400`; to wait for text to disappear use `notText`
 - optional `idleFor` for `load: network-idle` — ms quiet period, default 500, clamped 0–10000
 
 Network query parameters:

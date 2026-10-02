@@ -91,17 +91,6 @@ func TestHandleWait_FixedMsNegativeClamped(t *testing.T) {
 	}
 }
 
-func TestHandleWait_FixedMsClampedAt30s(t *testing.T) {
-	// Verify the clamping logic: ms > 30000 gets clamped to 30000.
-	// We don't actually wait 30s — just verify mode detection and clamping.
-	wr := waitRequest{}
-	ms := 99999
-	wr.Ms = &ms
-	if wr.mode() != "ms" {
-		t.Errorf("expected mode 'ms', got %q", wr.mode())
-	}
-}
-
 func TestWaitRequest_TimeoutClamping(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -131,8 +120,8 @@ func TestWaitRequest_Mode(t *testing.T) {
 		req  waitRequest
 		want string
 	}{
-		{"empty", waitRequest{}, ""},
 		{"selector", waitRequest{Selector: "#foo"}, "selector"},
+		{"selector with state", waitRequest{Selector: "#foo", State: "hidden"}, "selector"},
 		{"text", waitRequest{Text: "hello"}, "text"},
 		{"notText", waitRequest{NotText: "Loading..."}, "notText"},
 		{"url", waitRequest{URL: "**/dash"}, "url"},
@@ -142,10 +131,69 @@ func TestWaitRequest_Mode(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.req.mode(); got != tt.want {
-				t.Errorf("mode() = %q, want %q", got, tt.want)
+			got, err := tt.req.mode()
+			if err != nil || got != tt.want {
+				t.Errorf("mode() = %q, %v, want %q", got, err, tt.want)
 			}
 		})
+	}
+}
+
+func TestHandleWait_RejectsMoreThanOneCondition(t *testing.T) {
+	tests := []struct {
+		body string
+		want []string
+	}{
+		{`{"text":"Order 42","url":"*/never*"}`, []string{"text", "url"}},
+		{`{"selector":"#nope","text":"X"}`, []string{"selector", "text"}},
+		{`{"ms":0,"notText":"X","load":"ready-state","fn":"true"}`, []string{"ms", "notText", "load", "fn"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.body, func(t *testing.T) {
+			h := New(&mockBridge{}, &config.RuntimeConfig{AllowEvaluate: true}, nil, nil, nil)
+			w := httptest.NewRecorder()
+			h.HandleWait(w, httptest.NewRequest("POST", "/wait", bytes.NewReader([]byte(tt.body))))
+			if w.Code != 400 {
+				t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+			}
+			for _, field := range tt.want {
+				if !bytes.Contains(w.Body.Bytes(), []byte(field)) {
+					t.Errorf("400 does not name conflicting field %q: %s", field, w.Body.String())
+				}
+			}
+		})
+	}
+}
+
+func TestHandleWait_RejectsStateOutsideSelector(t *testing.T) {
+	for _, body := range []string{
+		`{"text":"Order 42","state":"hidden"}`,
+		`{"notText":"Order 42","state":"hidden"}`,
+		`{"url":"**/dash","state":"visible"}`,
+		`{"load":"ready-state","state":"hidden"}`,
+		`{"fn":"true","state":"hidden"}`,
+		`{"ms":0,"state":"hidden"}`,
+	} {
+		t.Run(body, func(t *testing.T) {
+			h := New(&mockBridge{}, &config.RuntimeConfig{AllowEvaluate: true}, nil, nil, nil)
+			w := httptest.NewRecorder()
+			h.HandleWait(w, httptest.NewRequest("POST", "/wait", bytes.NewReader([]byte(body))))
+			if w.Code != 400 {
+				t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+			}
+			if !bytes.Contains(w.Body.Bytes(), []byte("notText")) {
+				t.Errorf("400 does not suggest notText: %s", w.Body.String())
+			}
+		})
+	}
+}
+
+func TestHandleWait_SelectorWithStateReachesTheTab(t *testing.T) {
+	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{}, nil, nil, nil)
+	w := httptest.NewRecorder()
+	h.HandleWait(w, httptest.NewRequest("POST", "/wait", bytes.NewReader([]byte(`{"selector":"#results","state":"hidden"}`))))
+	if w.Code != 404 {
+		t.Errorf("expected 404, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

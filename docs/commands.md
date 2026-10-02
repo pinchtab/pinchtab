@@ -329,6 +329,11 @@ pinchtab cache clear                    # Clear browser HTTP disk cache
 pinchtab cache status                   # Check if cache can be cleared
 ```
 
+`wait` takes exactly one condition: a selector, a millisecond count, or one of
+`--text`, `--not-text`, `--url`, `--load`, `--fn`. Giving two is refused with an
+error naming them rather than waiting on one and ignoring the other. `--state`
+applies to a selector only; to wait for text to disappear use `--not-text`.
+
 Manual handoff and resume are available via CLI and API:
 
 ```bash
