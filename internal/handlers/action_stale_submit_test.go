@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -53,9 +55,25 @@ func newOrderFixture(t *testing.T) orderFixture {
 			<form action="/order" method="post"><button id="b">Place order</button></form>
 			<a id="t" href="#" onclick="history.pushState({}, '', '/terms'); return false;">Read the terms</a>`))
 	})
+	mux.HandleFunc("/renumber", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<script>window.clicked = []</script>` + renumberPage(false)))
+	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return orderFixture{server: srv, orders: &orders}
+}
+
+// renumberPage is the three-control checkout. Rendered with the catalogue button first,
+// the ref the first render gave "Apply coupon" names "Browse catalogue" in the next epoch.
+func renumberPage(catalogueFirst bool) string {
+	coupon := `<button id="a" type="button" onclick="window.clicked.push('a')">Apply coupon</button>`
+	catalogue := `<button id="b" type="button" onclick="window.clicked.push('b')">Browse catalogue</button>`
+	order := `<form action="/order" method="post"><button id="p">Place order</button></form>`
+	if catalogueFirst {
+		return `<h1>Checkout</h1>` + catalogue + coupon + order
+	}
+	return `<h1>Checkout</h1>` + coupon + catalogue + order
 }
 
 func (f orderFixture) placed() int64 { return atomic.LoadInt64(f.orders) }
@@ -78,11 +96,25 @@ func (f orderFixture) settleForOrder() int64 {
 // descriptor still names the submit button.
 func staleSubmitHandlers(t *testing.T, f orderFixture) (*Handlers, context.Context, string) {
 	t.Helper()
+	h, ctx, tabID := checkoutHandlers(t, f, "/")
+	h.Recovery.RecordIntent(tabID, "e2", recovery.IntentEntry{
+		Descriptor: semantic.ElementDescriptor{Ref: "e2", Role: "button", Name: "Place order"},
+		CachedAt:   time.Now(),
+	})
+	h.Recovery.RecordIntent(tabID, "e3", recovery.IntentEntry{
+		Descriptor: semantic.ElementDescriptor{Ref: "e3", Role: "link", Name: "Read the terms"},
+		CachedAt:   time.Now(),
+	})
+	return h, ctx, tabID
+}
+
+func checkoutHandlers(t *testing.T, f orderFixture, path string) (*Handlers, context.Context, string) {
+	t.Helper()
 	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
 	t.Cleanup(cancelTimeout)
 
 	if err := chromedp.Run(ctx,
-		chromedp.Navigate(f.server.URL+"/"),
+		chromedp.Navigate(f.server.URL+path),
 		chromedp.WaitVisible("#b", chromedp.ByID),
 	); err != nil {
 		t.Fatal(err)
@@ -96,17 +128,7 @@ func staleSubmitHandlers(t *testing.T, f orderFixture) (*Handlers, context.Conte
 	b := browserBridge(ctx, cfg)
 	const tabID = "tab-stale-submit"
 	b.RegisterTab(tabID, ctx)
-	h := New(b, cfg, nil, nil, nil)
-
-	h.Recovery.RecordIntent(tabID, "e2", recovery.IntentEntry{
-		Descriptor: semantic.ElementDescriptor{Ref: "e2", Role: "button", Name: "Place order"},
-		CachedAt:   time.Now(),
-	})
-	h.Recovery.RecordIntent(tabID, "e3", recovery.IntentEntry{
-		Descriptor: semantic.ElementDescriptor{Ref: "e3", Role: "link", Name: "Read the terms"},
-		CachedAt:   time.Now(),
-	})
-	return h, ctx, tabID
+	return New(b, cfg, nil, nil, nil), ctx, tabID
 }
 
 func staleClick() *bridge.ActionRequest {
@@ -258,6 +280,72 @@ func rerenderElement(t *testing.T, ctx context.Context, id string) {
 	js := `(() => { const el = document.getElementById("` + id + `"); el.outerHTML = el.outerHTML; })()`
 	if err := chromedp.Run(ctx, chromedp.Evaluate(js, nil)); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func renderBody(t *testing.T, ctx context.Context, html string) {
+	t.Helper()
+	js := "document.body.innerHTML = " + strconv.Quote(html)
+	if err := chromedp.Run(ctx, chromedp.Evaluate(js, nil)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func clickedIDs(t *testing.T, ctx context.Context) []string {
+	t.Helper()
+	var ids []string
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`window.clicked`, &ids)); err != nil {
+		t.Fatal(err)
+	}
+	return ids
+}
+
+// Replacing every interactive node starts a new ref epoch numbered from e0, so the ref
+// the agent holds for "Apply coupon" now names whichever control renders first. The
+// pointer-retry arm used to refresh the cache, look the same ref up and click there.
+func TestAStaleRefInANewEpochIsNotDispatchedAtTheRenumberedControl(t *testing.T) {
+	f := newOrderFixture(t)
+	h, ctx, tabID := checkoutHandlers(t, f, "/renumber")
+	click := cachedClick(t, h, ctx, tabID, "button", "Apply coupon")
+	renderBody(t, ctx, renumberPage(true))
+
+	result, _, rr, err := h.executeActionResilient(ctx, click, h.Config, tabID, false)
+
+	if ids := clickedIDs(t, ctx); slices.Contains(ids, "b") {
+		t.Fatalf("clicked %v: the stale ref was dispatched at the control that inherited its number", ids)
+	}
+	switch {
+	case err == nil:
+		if rr == nil || !rr.Recovered {
+			t.Errorf("result %v with recovery %+v: a dispatch at a matched node must come through recovery", result, rr)
+		}
+	case errors.Is(err, ErrTargetNotFound):
+		if !strings.Contains(err.Error(), "/snapshot") {
+			t.Errorf("refusal %q does not tell the caller to re-snapshot", err)
+		}
+	default:
+		t.Errorf("error = %v, want ref-not-found with the snapshot remedy or a recovered click", err)
+	}
+}
+
+func TestAStaleRefRenumberedOntoASubmitControlPlacesNoOrder(t *testing.T) {
+	f := newOrderFixture(t)
+	h, ctx, tabID := checkoutHandlers(t, f, "/renumber")
+	click := cachedClick(t, h, ctx, tabID, "button", "Apply coupon")
+	renderBody(t, ctx, `<h1>Checkout</h1>`+
+		`<form action="/order" method="post"><button id="p">Place order</button></form>`+
+		`<a id="b" href="#">Browse catalogue</a>`)
+
+	_, _, rr, err := h.executeActionResilient(ctx, click, h.Config, tabID, false)
+
+	if placed := f.settleForOrder(); placed != 0 {
+		t.Fatalf("%d order(s) placed by a click on a ref minted for a different control", placed)
+	}
+	if !errors.Is(err, ErrTargetNotFound) && !errors.Is(err, ErrStaleSubmitTarget) {
+		t.Errorf("error = %v, want ref-not-found or the stale-submit refusal", err)
+	}
+	if rr != nil && rr.Recovered {
+		t.Errorf("recovery reported a dispatch: %+v", rr)
 	}
 }
 

@@ -462,11 +462,6 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 		if (req.Ref != "" || req.ToSelector != "") && bridge.IsStaleNodeError(err) {
 			recordStaleRefRetry()
 			h.refreshRefCache(ctx, resolvedTabID)
-			if cache := h.Bridge.GetRefCache(resolvedTabID); cache != nil && req.Ref != "" {
-				if target, ok := cache.Lookup(req.Ref); ok {
-					req.NodeID = target.BackendNodeID
-				}
-			}
 		}
 		h.refreshActionNodeIDFromSelector(ctx, req)
 		if secErr := h.refreshActionSecondaryTargets(ctx, resolvedTabID, req); secErr != nil {
