@@ -84,6 +84,8 @@ func TestCounterRuleCatchesEveryInlineWriteForm(t *testing.T) {
 			`((ASSERTIONS_SKIPPED--))`,
 			`[ "$ASSERTIONS_FAILED" != 0 ] && exit 1`,
 			`ASSERTIONS_PASSED=`,
+			`[[ $ASSERTIONS_FAILED == 0 ]]`,
+			`[[ $ASSERTIONS_PASSED != 0 ]]`,
 		}, "\n"),
 	}
 	got := inlineCounterWrites(scenario)
