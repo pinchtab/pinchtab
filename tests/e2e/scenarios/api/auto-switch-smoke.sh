@@ -26,6 +26,23 @@ wait_for_tab_count_at_most() {
   return 1
 }
 
+assert_opener_captured_window_open() {
+  local opener_tab_id="$1"
+  local desc="$2"
+
+  pt_post /evaluate "$(jq -nc --arg tabId "$opener_tab_id" '{tabId:$tabId, expression:"document.body.dataset.captured || \"\""}')"
+  assert_ok "read capture flag from opener tab"
+  local captured
+  captured=$(echo "$RESULT" | jq -r '.result // empty')
+  if [ "$captured" = "true" ]; then
+    echo -e "  ${GREEN}✓${NC} ${desc}"
+    ((ASSERTIONS_PASSED++)) || true
+  else
+    echo -e "  ${RED}✗${NC} ${desc} (captured=${captured:-unset})"
+    ((ASSERTIONS_FAILED++)) || true
+  fi
+}
+
 # ─────────────────────────────────────────────────────────────────
 start_test "click on target=_blank auto-switches current tab"
 
@@ -70,9 +87,11 @@ end_test
 start_test "window.open auto-switches current tab"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/target-blank.html\"}"
+OPENER_TAB_ID=$(get_tab_id)
 pt_post /action -d '{"kind":"click","selector":"#window-open"}'
 assert_ok "click window.open button"
 assert_json_exists "$RESULT" '.result.switchedToTab' "switchedToTab set for window.open"
+assert_opener_captured_window_open "$OPENER_TAB_ID" "selector click installed the window.open capture before onclick"
 
 end_test
 
@@ -103,6 +122,8 @@ else
   echo -e "  ${GREEN}✓${NC} switchedToTab returned: $NEW_TAB_ID"
   ((ASSERTIONS_PASSED++)) || true
 fi
+
+assert_opener_captured_window_open "$OPENER_TAB_ID" "humanized x/y click installed the window.open capture before onclick"
 
 end_test
 
