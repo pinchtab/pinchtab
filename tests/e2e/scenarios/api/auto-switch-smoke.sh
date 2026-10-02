@@ -77,6 +77,36 @@ assert_json_exists "$RESULT" '.result.switchedToTab' "switchedToTab set for wind
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "humanized x/y click on window.open auto-switches current tab"
+
+pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/target-blank.html\"}"
+OPENER_TAB_ID=$(get_tab_id)
+
+CENTER_EXPR="var r=document.getElementById('window-open').getBoundingClientRect(); JSON.stringify([Math.round(r.left+r.width/2), Math.round(r.top+r.height/2)])"
+pt_post /evaluate "$(jq -nc --arg tabId "$OPENER_TAB_ID" --arg expression "$CENTER_EXPR" '{tabId:$tabId, expression:$expression}')"
+assert_ok "read #window-open bounds"
+CENTER=$(echo "$RESULT" | jq -r '.result // empty')
+BUTTON_X=$(echo "$CENTER" | jq -r '.[0]')
+BUTTON_Y=$(echo "$CENTER" | jq -r '.[1]')
+
+pt_post /action -d "{\"kind\":\"click\",\"x\":${BUTTON_X},\"y\":${BUTTON_Y},\"humanize\":true}"
+assert_ok "humanized x/y click on window.open button"
+
+NEW_TAB_ID=$(echo "$RESULT" | jq -r '.result.switchedToTab // empty')
+if [ -z "$NEW_TAB_ID" ]; then
+  echo -e "  ${RED}✗${NC} result.switchedToTab missing for humanized x/y click"
+  ((ASSERTIONS_FAILED++)) || true
+elif [ "$NEW_TAB_ID" = "$OPENER_TAB_ID" ]; then
+  echo -e "  ${RED}✗${NC} switchedToTab equals opener tab"
+  ((ASSERTIONS_FAILED++)) || true
+else
+  echo -e "  ${GREEN}✓${NC} switchedToTab returned: $NEW_TAB_ID"
+  ((ASSERTIONS_PASSED++)) || true
+fi
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "regular same-tab click is unaffected"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/target-blank.html\"}"
