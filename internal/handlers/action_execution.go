@@ -109,6 +109,17 @@ func refNotFound(ref string) error {
 	return targetNotFound("ref " + ref)
 }
 
+func (h *Handlers) targetNotFoundOn(tabID, subject string) error {
+	if h.Bridge.GetRefCache(tabID) == nil {
+		return fmt.Errorf("%s %w - tab %s has no snapshot - %s", subject, ErrTargetNotFound, tabID, takeASnapshotFirst)
+	}
+	return targetNotFound(subject)
+}
+
+func (h *Handlers) refNotFoundOn(tabID, ref string) error {
+	return h.targetNotFoundOn(tabID, "ref "+ref)
+}
+
 type submitStateSnapshot struct {
 	URL        string `json:"url"`
 	DialogOpen bool   `json:"dialogOpen"`
@@ -424,7 +435,7 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 			if errors.Is(recErr, ErrStaleSubmitTarget) {
 				return nil, "", nil, recErr
 			}
-			return nil, "", &rr, refNotFound(req.Ref)
+			return nil, "", &rr, h.refNotFoundOn(resolvedTabID, req.Ref)
 		}
 		return recRes, "", &rr, nil
 	}
@@ -464,11 +475,11 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 		case recErr == nil:
 			result, err = recRes, nil
 		case errors.Is(recErr, errRefFrameReplaced):
-			err = fmt.Errorf("%w: %w", refNotFound(req.Ref), recErr)
+			err = fmt.Errorf("%w: %w", h.refNotFoundOn(resolvedTabID, req.Ref), recErr)
 		}
 	}
 	if err != nil && !submitClick && req.Ref != "" && bridge.IsStaleNodeError(err) {
-		err = fmt.Errorf("%w: %w", refNotFound(req.Ref), err)
+		err = fmt.Errorf("%w: %w", h.refNotFoundOn(resolvedTabID, req.Ref), err)
 	}
 	return result, backend, rr, err
 }
@@ -585,7 +596,7 @@ func (h *Handlers) refreshActionSecondaryTargets(ctx context.Context, tabID stri
 			}
 		}
 	}
-	return targetNotFound("drag destination " + toSelector)
+	return h.targetNotFoundOn(tabID, "drag destination "+toSelector)
 }
 
 // uniqueNodeForDescriptor returns the one node matching the descriptor's role and

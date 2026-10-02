@@ -82,8 +82,8 @@ func staleSubmitTargetDetails() map[string]any {
 // there; retryable is absent because an absent target stays absent. The recovery record
 // carries the matcher's score and threshold when there is one — diagnosis belongs in
 // details, never in the sentence a caller reads as the reason.
-func writeTargetNotFound(w http.ResponseWriter, err error, rr *recovery.RecoveryResult) {
-	details := map[string]any{"dispatched": false}
+func writeTargetNotFound(w http.ResponseWriter, tabID string, err error, rr *recovery.RecoveryResult) {
+	details := map[string]any{"dispatched": false, "tabId": tabID}
 	if rr != nil {
 		details["recovery"] = rr
 	}
@@ -615,7 +615,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if refMissing && h.Recovery == nil {
-		writeTargetNotFound(w, refNotFound(req.Ref), nil)
+		writeTargetNotFound(w, resolvedTabID, h.refNotFoundOn(resolvedTabID, req.Ref), nil)
 		return
 	}
 
@@ -727,7 +727,7 @@ func (h *Handlers) resolveActionDestination(w http.ResponseWriter, ctx context.C
 	if destinationResolution.refMissing {
 		h.refreshRefCache(ctx, tabID)
 		if err := h.refreshActionSecondaryTargets(ctx, tabID, req); err != nil {
-			writeTargetNotFound(w, err, nil)
+			writeTargetNotFound(w, tabID, err, nil)
 			return false
 		}
 	} else if req.ToSelector != "" && req.ToNodeID != 0 && h.Recovery != nil {
@@ -802,7 +802,7 @@ func (h *Handlers) writeActionError(w http.ResponseWriter, actionErr error, req 
 		return
 	}
 	if errors.Is(actionErr, ErrTargetNotFound) {
-		writeTargetNotFound(w, actionErr, recoveryResult)
+		writeTargetNotFound(w, resolvedTabID, actionErr, recoveryResult)
 		return
 	}
 	var noOption *bridgecdpops.NoOptionMatchError
@@ -1014,7 +1014,7 @@ func (h *Handlers) runMultiStepAction(
 		h.cacheActionIntent(tabID, *step)
 	}
 	if refMissing && h.Recovery == nil {
-		return actionResult{Index: index, Success: false, Error: refNotFound(step.Ref).Error()}, ctx, tabID
+		return actionResult{Index: index, Success: false, Error: h.refNotFoundOn(tabID, step.Ref).Error()}, ctx, tabID
 	}
 	return h.runResolvedActionStep(ctx, tCtx, r, w, step, plan.cfg, tabID, index, refMissing, func(err error) string {
 		return plan.errFmt(step.Kind, err)

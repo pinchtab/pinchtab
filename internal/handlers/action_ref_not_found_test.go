@@ -59,6 +59,48 @@ func TestAnUnresolvableRefIsANotFoundForEveryVerb(t *testing.T) {
 	}
 }
 
+func postAbsentRef(t *testing.T, cache *bridge.RefCache) (*httptest.ResponseRecorder, map[string]any) {
+	t.Helper()
+	mb := &mockBridge{availableActions: []string{bridge.ActionHover}, refCache: cache, executeActionErr: bridge.ErrElementStale}
+	h := New(mb, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+	w := httptest.NewRecorder()
+	h.HandleAction(w, httptest.NewRequest("POST", "/action", strings.NewReader(targetedActionBody(bridge.ActionHover, ""))))
+	return w, decodeJSONMap(t, w.Body.Bytes())
+}
+
+func TestARefNotFoundNamesTheTabItSearched(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		cache     *bridge.RefCache
+		wantError string
+	}{
+		{
+			name:      "a tab never snapshotted",
+			wantError: "ref e99 not found - tab tab1 has no snapshot - take a /snapshot first",
+		},
+		{
+			name:      "a stale ref on a snapshotted tab",
+			cache:     &bridge.RefCache{Refs: map[string]int64{"e1": 7}},
+			wantError: "ref e99 not found - take a /snapshot first",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, body := postAbsentRef(t, tc.cache)
+
+			if w.Code != http.StatusNotFound || body["code"] != "ref_not_found" {
+				t.Fatalf("status = %d code = %v, want 404 ref_not_found: %s", w.Code, body["code"], w.Body.String())
+			}
+			if got, _ := body["error"].(string); !strings.HasPrefix(got, tc.wantError+": ") {
+				t.Errorf("error = %q, want it to open with %q", got, tc.wantError)
+			}
+			details, _ := body["details"].(map[string]any)
+			if got := details["tabId"]; got != "tab1" {
+				t.Errorf("details.tabId = %v, want tab1 — the remedy does not say which tab to snapshot: %s", got, w.Body.String())
+			}
+		})
+	}
+}
+
 // The card's third case: a click naming nothing to click is the caller having omitted a
 // required argument. The bridge refuses it with the sentinel (its own census pins that), and
 // the endpoint answers the status an omitted argument deserves rather than a server fault
