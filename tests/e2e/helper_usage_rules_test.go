@@ -11,7 +11,7 @@ var (
 	inlineTabIDParse   = regexp.MustCompile(`jq\s+-r\s+['"]\.tabId\b`)
 	tabIDParserOpens   = regexp.MustCompile(`^get_tab_id\(\)\s*\{`)
 	functionClosesAtC0 = regexp.MustCompile(`^\}`)
-	counterWrite       = regexp.MustCompile(`\bASSERTIONS_(PASSED|FAILED|SKIPPED)\s*(\+\+|\+=|=[^=])`)
+	counterWrite       = regexp.MustCompile(`(\+\+|--)\s*ASSERTIONS_(PASSED|FAILED|SKIPPED)\b|\bASSERTIONS_(PASSED|FAILED|SKIPPED)\s*(\+\+|--|[-+*/%]?=([^=]|$))`)
 )
 
 func TestScenariosReadTabIDThroughTheHelper(t *testing.T) {
@@ -71,13 +71,30 @@ func TestScenariosBumpAssertionCountersThroughTheHelpers(t *testing.T) {
 func TestCounterRuleCatchesEveryInlineWriteForm(t *testing.T) {
 	scenario := scenarioFile{
 		Name: "scenarios/example.sh",
-		Body: "((ASSERTIONS_PASSED++))\nif [ \"$ASSERTIONS_FAILED\" == 0 ]; then\n  (( ASSERTIONS_FAILED += 1 ))\nfi\nASSERTIONS_SKIPPED=$((ASSERTIONS_SKIPPED+1))\npass_assert \"ok\"\n",
+		Body: strings.Join([]string{
+			`((ASSERTIONS_PASSED++))`,
+			`if [ "$ASSERTIONS_FAILED" == 0 ]; then`,
+			`  (( ASSERTIONS_FAILED += 1 ))`,
+			`fi`,
+			`ASSERTIONS_SKIPPED=$((ASSERTIONS_SKIPPED+1))`,
+			`pass_assert "ok"`,
+			`(( ++ASSERTIONS_PASSED ))`,
+			`((ASSERTIONS_FAILED-=1))`,
+			`echo "$ASSERTIONS_PASSED"`,
+			`((ASSERTIONS_SKIPPED--))`,
+			`[ "$ASSERTIONS_FAILED" != 0 ] && exit 1`,
+			`ASSERTIONS_PASSED=`,
+		}, "\n"),
 	}
 	got := inlineCounterWrites(scenario)
 	want := []string{
 		"scenarios/example.sh:1: ((ASSERTIONS_PASSED++))",
 		"scenarios/example.sh:3: (( ASSERTIONS_FAILED += 1 ))",
 		"scenarios/example.sh:5: ASSERTIONS_SKIPPED=$((ASSERTIONS_SKIPPED+1))",
+		"scenarios/example.sh:7: (( ++ASSERTIONS_PASSED ))",
+		"scenarios/example.sh:8: ((ASSERTIONS_FAILED-=1))",
+		"scenarios/example.sh:10: ((ASSERTIONS_SKIPPED--))",
+		"scenarios/example.sh:12: ASSERTIONS_PASSED=",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("offenders = %q, want %q", got, want)
