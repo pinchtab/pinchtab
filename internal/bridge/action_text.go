@@ -21,6 +21,70 @@ func textEntryResult(kind, text string) map[string]any {
 }
 
 func (b *Bridge) actionType(ctx context.Context, req ActionRequest) (map[string]any, error) {
+	return b.runInputReportingDialog(ctx, req, func(ctx context.Context) (map[string]any, error) {
+		return b.typeText(ctx, req)
+	})
+}
+
+func (b *Bridge) actionFill(ctx context.Context, req ActionRequest) (map[string]any, error) {
+	if !req.Submit {
+		return b.fillText(ctx, req)
+	}
+	return b.runInputReportingDialog(ctx, req, func(ctx context.Context) (map[string]any, error) {
+		return b.fillText(ctx, req)
+	})
+}
+
+func (b *Bridge) actionPress(ctx context.Context, req ActionRequest) (map[string]any, error) {
+	return b.runInputReportingDialog(ctx, req, func(ctx context.Context) (map[string]any, error) {
+		return b.pressKey(ctx, req)
+	})
+}
+
+func (b *Bridge) actionKeyboardType(ctx context.Context, req ActionRequest) (map[string]any, error) {
+	return b.runInputReportingDialog(ctx, req, func(ctx context.Context) (map[string]any, error) {
+		return b.keyboardType(ctx, req)
+	})
+}
+
+func (b *Bridge) actionKeyboardInsert(ctx context.Context, req ActionRequest) (map[string]any, error) {
+	return b.runInputReportingDialog(ctx, req, func(ctx context.Context) (map[string]any, error) {
+		return b.keyboardInsert(ctx, req)
+	})
+}
+
+func (b *Bridge) actionKeyDown(ctx context.Context, req ActionRequest) (map[string]any, error) {
+	return b.runInputReportingDialog(ctx, req, func(ctx context.Context) (map[string]any, error) {
+		return b.keyDown(ctx, req)
+	})
+}
+
+func (b *Bridge) actionKeyUp(ctx context.Context, req ActionRequest) (map[string]any, error) {
+	return b.runInputReportingDialog(ctx, req, func(ctx context.Context) (map[string]any, error) {
+		return b.keyUp(ctx, req)
+	})
+}
+
+// runInputReportingDialog names a dialog the input opened on the result, since
+// the input landed; the dialog-interrupted input's own result is never read
+// because it may still be running.
+func (b *Bridge) runInputReportingDialog(ctx context.Context, req ActionRequest, input func(context.Context) (map[string]any, error)) (map[string]any, error) {
+	var result map[string]any
+	opened, err := b.runWatchingDialogs(ctx, req, func(inputCtx context.Context) error {
+		var inputErr error
+		result, inputErr = input(inputCtx)
+		return inputErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	if opened != nil {
+		return map[string]any{OpenedDialogResultKey: opened}, nil
+	}
+	return result, nil
+}
+
+func (b *Bridge) typeText(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	if req.Text == "" {
 		return nil, fmt.Errorf("text required for type")
 	}
@@ -65,7 +129,7 @@ func nonEditableRefusal(ctx context.Context, req ActionRequest, err error) *brid
 	return refusal
 }
 
-func (b *Bridge) actionFill(ctx context.Context, req ActionRequest) (map[string]any, error) {
+func (b *Bridge) fillText(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	text, _ := FillText(req)
 	result := textEntryResult("filled", text)
 	if req.Selector != "" {
@@ -122,7 +186,7 @@ func finishFill(ctx context.Context, result map[string]any, submit bool) (map[st
 	return result, nil
 }
 
-func (b *Bridge) actionPress(ctx context.Context, req ActionRequest) (map[string]any, error) {
+func (b *Bridge) pressKey(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	if req.Key == "" {
 		return nil, fmt.Errorf("key required for press")
 	}
@@ -217,7 +281,7 @@ func (b *Bridge) humanizedTypeFocused(ctx context.Context, req ActionRequest) (m
 // events cause timeouts on long strings (issue #413).
 const keyboardTypeThreshold = 20
 
-func (b *Bridge) actionKeyboardType(ctx context.Context, req ActionRequest) (map[string]any, error) {
+func (b *Bridge) keyboardType(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	if req.Text == "" {
 		return nil, fmt.Errorf("text required for keyboard-type")
 	}
@@ -321,7 +385,7 @@ func (b *Bridge) keyboardTypeBatched(ctx context.Context, text string) (map[stri
 	return result, nil
 }
 
-func (b *Bridge) actionKeyboardInsert(ctx context.Context, req ActionRequest) (map[string]any, error) {
+func (b *Bridge) keyboardInsert(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	if req.Text == "" {
 		return nil, fmt.Errorf("text required for keyboard-inserttext")
 	}
@@ -332,11 +396,11 @@ func (b *Bridge) actionKeyboardInsert(ctx context.Context, req ActionRequest) (m
 	return textEntryResult("inserted", req.Text), nil
 }
 
-func (b *Bridge) actionKeyDown(ctx context.Context, req ActionRequest) (map[string]any, error) {
+func (b *Bridge) keyDown(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	return b.dispatchSingleKeyEvent(ctx, req, "keyDown", ActionKeyDown)
 }
 
-func (b *Bridge) actionKeyUp(ctx context.Context, req ActionRequest) (map[string]any, error) {
+func (b *Bridge) keyUp(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	return b.dispatchSingleKeyEvent(ctx, req, "keyUp", ActionKeyUp)
 }
 

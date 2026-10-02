@@ -80,6 +80,10 @@ func TestDialogBlockedIsTheSameContractOnReadsAndActions(t *testing.T) {
 			body := bytes.NewReader([]byte(`{"kind":"click","tabId":"tab1","nodeId":42}`))
 			h.HandleAction(w, httptest.NewRequest("POST", "/action", body))
 		}},
+		{"type", func(h *Handlers, w *httptest.ResponseRecorder) {
+			body := bytes.NewReader([]byte(`{"kind":"type","tabId":"tab1","nodeId":42,"text":"hi"}`))
+			h.HandleAction(w, httptest.NewRequest("POST", "/action", body))
+		}},
 		// The visual exports ride resolveBinaryReadContext, the sibling prelude —
 		// these rows are what stop the two preludes diverging on the guard again.
 		{"screenshot", func(h *Handlers, w *httptest.ResponseRecorder) {
@@ -170,19 +174,35 @@ func (b *dialogOpeningBridge) ExecuteAction(context.Context, string, bridge.Acti
 }
 
 func (b *dialogOpeningBridge) AvailableActions() []string {
-	return []string{bridge.ActionClick, bridge.ActionDoubleClick}
+	return []string{
+		bridge.ActionClick, bridge.ActionDoubleClick, bridge.ActionType, bridge.ActionFill, bridge.ActionPress,
+		bridge.ActionKeyboardType, bridge.ActionKeyboardInsert, bridge.ActionKeyDown, bridge.ActionKeyUp, bridge.ActionHover,
+	}
 }
 
 var clickOpenedDialogOutcomes = []struct {
 	name   string
 	bridge func(*bridge.DialogState) *dialogOpeningBridge
 }{
-	{"dialog named on the click result", func(d *bridge.DialogState) *dialogOpeningBridge {
-		return &dialogOpeningBridge{dialog: d, result: map[string]any{"clicked": true, bridge.OpenedDialogResultKey: d}}
+	{"dialog named on the action result", func(d *bridge.DialogState) *dialogOpeningBridge {
+		return &dialogOpeningBridge{dialog: d, result: map[string]any{bridge.OpenedDialogResultKey: d}}
 	}},
-	{"click timed out behind its dialog", func(d *bridge.DialogState) *dialogOpeningBridge {
+	{"action timed out behind its dialog", func(d *bridge.DialogState) *dialogOpeningBridge {
 		return &dialogOpeningBridge{dialog: d, err: context.DeadlineExceeded}
 	}},
+}
+
+var inputActionBodies = map[string]string{
+	"click":               `{"kind":"click","tabId":"tab1","nodeId":42}`,
+	"dblclick":            `{"kind":"dblclick","tabId":"tab1","nodeId":42}`,
+	"type":                `{"kind":"type","tabId":"tab1","nodeId":42,"text":"hi"}`,
+	"humanized type":      `{"kind":"type","tabId":"tab1","nodeId":42,"text":"hi","humanize":true}`,
+	"fill with submit":    `{"kind":"fill","tabId":"tab1","nodeId":42,"text":"hi","submit":true}`,
+	"press":               `{"kind":"press","tabId":"tab1","key":"Enter"}`,
+	"keyboard-type":       `{"kind":"keyboard-type","tabId":"tab1","text":"hi"}`,
+	"keyboard-inserttext": `{"kind":"keyboard-inserttext","tabId":"tab1","text":"hi"}`,
+	"keydown":             `{"kind":"keydown","tabId":"tab1","key":"Enter"}`,
+	"keyup":               `{"kind":"keyup","tabId":"tab1","key":"Enter"}`,
 }
 
 func assertOpenedDialogResult(t *testing.T, result map[string]any, dialog *bridge.DialogState) {
@@ -199,14 +219,14 @@ func assertOpenedDialogResult(t *testing.T, result map[string]any, dialog *bridg
 	}
 }
 
-func TestClickThatOpensADialogSucceedsAndNamesTheDialog(t *testing.T) {
+func TestInputThatOpensADialogSucceedsAndNamesTheDialog(t *testing.T) {
 	dialog := &bridge.DialogState{Type: "confirm", Message: "Delete order 1?"}
-	for _, kind := range []string{bridge.ActionClick, bridge.ActionDoubleClick} {
+	for name, actionBody := range inputActionBodies {
 		for _, outcome := range clickOpenedDialogOutcomes {
-			t.Run(kind+"/"+outcome.name, func(t *testing.T) {
+			t.Run(name+"/"+outcome.name, func(t *testing.T) {
 				h := New(outcome.bridge(dialog), &config.RuntimeConfig{}, nil, nil, nil)
 				rec := httptest.NewRecorder()
-				body := bytes.NewReader([]byte(`{"kind":"` + kind + `","tabId":"tab1","nodeId":42}`))
+				body := bytes.NewReader([]byte(actionBody))
 				h.HandleAction(rec, httptest.NewRequest(http.MethodPost, "/action", body))
 
 				if rec.Code != http.StatusOK {
@@ -220,11 +240,26 @@ func TestClickThatOpensADialogSucceedsAndNamesTheDialog(t *testing.T) {
 					t.Fatalf("decode: %v body=%s", err, rec.Body.String())
 				}
 				if !resp.Success {
-					t.Fatalf("click that landed is not a success: %s", rec.Body.String())
+					t.Fatalf("input that landed is not a success: %s", rec.Body.String())
 				}
 				assertOpenedDialogResult(t, resp.Result, dialog)
 			})
 		}
+	}
+}
+
+func TestNonInputActionTimedOutBehindADialogIsStillBlocked(t *testing.T) {
+	dialog := &bridge.DialogState{Type: "alert", Message: "locked"}
+	for name, actionBody := range map[string]string{
+		"hover":               `{"kind":"hover","tabId":"tab1","nodeId":42}`,
+		"fill without submit": `{"kind":"fill","tabId":"tab1","nodeId":42,"text":"hi"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := New(&dialogOpeningBridge{dialog: dialog, err: context.DeadlineExceeded}, &config.RuntimeConfig{}, nil, nil, nil)
+			rec := httptest.NewRecorder()
+			h.HandleAction(rec, httptest.NewRequest(http.MethodPost, "/action", bytes.NewReader([]byte(actionBody))))
+			decodeDialogBlocked(t, rec, dialog)
+		})
 	}
 }
 

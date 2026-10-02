@@ -23,6 +23,10 @@ type dialogRaisingBridge struct {
 	err    error
 }
 
+func (b *dialogRaisingBridge) AvailableActions() []string {
+	return []string{bridge.ActionClick, bridge.ActionHover}
+}
+
 func (b *dialogRaisingBridge) ExecuteAction(context.Context, string, bridge.ActionRequest) (map[string]any, error) {
 	b.GetDialogManager().SetPending("tab1", b.dialog)
 	return nil, b.err
@@ -34,7 +38,7 @@ var dialogBlockedBranches = []struct {
 	err     func(*bridge.DialogState) error
 	message string
 }{
-	{"type timeout", `{"kind":"type","text":"x","nodeId":42}`, func(*bridge.DialogState) error { return context.DeadlineExceeded }, "timed out"},
+	{"hover timeout", `{"kind":"hover","nodeId":42}`, func(*bridge.DialogState) error { return context.DeadlineExceeded }, "timed out"},
 	{"dialog blocking", `{"kind":"click"}`, func(d *bridge.DialogState) error {
 		return &bridge.ErrDialogBlocking{DialogType: d.Type, DialogMessage: d.Message}
 	}, "click blocked"},

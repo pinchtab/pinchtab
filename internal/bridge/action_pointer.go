@@ -241,11 +241,24 @@ func (s *autoSwitchSession) settle(ctx context.Context, result map[string]any, o
 
 const OpenedDialogResultKey = "dialog"
 
-// OpenedDialog returns the JavaScript dialog a click opened, nil when the
-// click result names none.
+// OpenedDialog returns the JavaScript dialog an input action opened, nil when
+// the action result names none.
 func OpenedDialog(result map[string]any) *bridgetabs.DialogState {
 	dialog, _ := result[OpenedDialogResultKey].(*bridgetabs.DialogState)
 	return dialog
+}
+
+// DispatchesInput reports whether req delivers trusted page input that a
+// JavaScript dialog can interrupt mid-dispatch.
+func DispatchesInput(req ActionRequest) bool {
+	switch CanonicalActionKind(req.Kind) {
+	case ActionClick, ActionDoubleClick, ActionType, ActionPress,
+		ActionKeyboardType, ActionKeyboardInsert, ActionKeyDown, ActionKeyUp:
+		return true
+	case ActionFill:
+		return req.Submit
+	}
+	return false
 }
 
 func (b *Bridge) armDialogAutoHandler(req ActionRequest) (*bridgetabs.DialogManager, bool) {

@@ -193,7 +193,7 @@ func printOpenedDialog(result map[string]any) bool {
 	dialogType, _ := dialog["dialogType"].(string)
 	message, _ := dialog["dialogMessage"].(string)
 	output.Value(fmt.Sprintf("OK opened %s dialog: %q", dialogType, message))
-	output.Hint("the click landed and opened a JavaScript dialog — answer it with `pinchtab dialog accept` or `pinchtab dialog dismiss`; do not click again")
+	output.Hint("the action landed and opened a JavaScript dialog — answer it with `pinchtab dialog accept` or `pinchtab dialog dismiss`; do not repeat it")
 	return true
 }
 

@@ -13,7 +13,7 @@ const dialogBlockedCode = "dialog_blocked"
 
 const dialogBlockedHint = "a JavaScript dialog is open on this tab and blocks every page interaction until it is answered. It belongs to this tab, so retrying, activating the tab or opening a fresh one cannot clear it. Use pinchtab dialog dismiss to cancel it instead of accepting, or pass --dialog-action accept|dismiss on the action that opens the dialog."
 
-const dialogOpenedHint = "this click landed and opened a JavaScript dialog, so do not click again. The dialog blocks every page interaction on this tab until it is answered. Use pinchtab dialog dismiss to cancel it instead of accepting."
+const dialogOpenedHint = "this action landed and opened a JavaScript dialog, so do not repeat it. The dialog blocks every page interaction on this tab until it is answered. Use pinchtab dialog dismiss to cancel it instead of accepting."
 
 var dialogBlockedRemedy = remedy.Declare("pinchtab dialog accept")
 

@@ -39,7 +39,7 @@ var hintSites = map[string]struct {
 	"../actions/actions_element.go:printActionResult":                   {occurrence, 1, "this action's refs went stale"},
 	"../actions/actions_element.go:printSubmitPostState":                {occurrence, 1, "this submit is still pending"},
 	"../actions/actions_element.go:printOpenedTab":                      {occurrence, 1, "this click opened a tab"},
-	"../actions/actions_element.go:printOpenedDialog":                   {occurrence, 1, "this click opened a JavaScript dialog"},
+	"../actions/actions_element.go:printOpenedDialog":                   {occurrence, 1, "this action opened a JavaScript dialog"},
 	"../actions/actions_element.go:printStaleRefsHint":                  {occurrence, 1, "this action invalidated the snapshot the caller is holding"},
 	"../actions/actions_capture.go:Capture":                             {occurrence, 1, "this page tripped the IDPI guard"},
 	"../actions/actions_text.go:Text":                                   {occurrence, 1, "readability collapsed on this page"},

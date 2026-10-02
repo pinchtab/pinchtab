@@ -164,19 +164,14 @@ func (h *Handlers) mapDialogBlockingError(err error, kind, tabID string) (string
 	return "", nil, false
 }
 
-func isClickKind(kind string) bool {
-	kind = bridge.CanonicalActionKind(kind)
-	return kind == bridge.ActionClick || kind == bridge.ActionDoubleClick
-}
-
-// dialogOpenedByClick names the dialog a click opened. Every action route refuses
-// a tab whose dialog is already open before dispatching, so a dialog pending when
-// a dispatched click times out was opened by that click.
-func (h *Handlers) dialogOpenedByClick(kind, tabID string, result map[string]any, err error) *bridge.DialogState {
+// dialogOpenedByInput names the dialog an input action opened. Every action
+// route refuses a tab whose dialog is already open before dispatching, so a
+// dialog pending when dispatched input times out was opened by that input.
+func (h *Handlers) dialogOpenedByInput(req *bridge.ActionRequest, tabID string, result map[string]any, err error) *bridge.DialogState {
 	if dialog := bridge.OpenedDialog(result); dialog != nil {
 		return dialog
 	}
-	if !isClickKind(kind) {
+	if !bridge.DispatchesInput(*req) {
 		return nil
 	}
 	return dialogPendingAfterTimeout(err, tabID, h.Bridge)
@@ -206,7 +201,7 @@ func (h *Handlers) runResolvedActionStep(
 	errFallback func(error) string,
 ) (actionResult, context.Context, string) {
 	res, _, _, err := h.executeActionResilient(tCtx, step, cfg, tabID, refMissing)
-	if dialog := h.dialogOpenedByClick(step.Kind, tabID, res, err); dialog != nil {
+	if dialog := h.dialogOpenedByInput(step, tabID, res, err); dialog != nil {
 		return actionResult{Index: index, Success: true, Result: withOpenedDialog(res, tabID, dialog)}, ctx, tabID
 	}
 	nextCtx := ctx
@@ -633,7 +628,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 
 	result, actionBackend, recoveryResult, actionErr := h.executeActionResilient(tCtx, &req, effectiveCfg, resolvedTabID, refMissing)
 	h.publishVocabIfReepoched(w, resolvedTabID, vocabBefore)
-	if dialog := h.dialogOpenedByClick(req.Kind, resolvedTabID, result, actionErr); dialog != nil {
+	if dialog := h.dialogOpenedByInput(&req, resolvedTabID, result, actionErr); dialog != nil {
 		h.writeActionResult(w, r, routing, withOpenedDialog(result, resolvedTabID, dialog), recoveryResult)
 		return
 	}
