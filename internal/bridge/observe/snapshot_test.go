@@ -3,6 +3,9 @@ package observe
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
+	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -85,5 +88,58 @@ func TestSnapshotOfAHiddenTabIncludesContentVisibilityAutoRows(t *testing.T) {
 		if !seen {
 			t.Errorf("snapshot of a background tab is missing link %q that sits in a content-visibility:auto row", name)
 		}
+	}
+}
+
+func rawAXNode(id, role, name string, childIDs ...string) RawAXNode {
+	quoted := func(s string) *RawAXValue {
+		v, _ := json.Marshal(s)
+		return &RawAXValue{Value: v}
+	}
+	return RawAXNode{NodeID: id, Role: quoted(role), Name: quoted(name), ChildIDs: childIDs}
+}
+
+func TestInteractiveSnapshotNamesLiveRegionsFromTheirText(t *testing.T) {
+	raw := []RawAXNode{
+		rawAXNode("root", "RootWebArea", "Form", "save", "alert", "status", "empty"),
+		rawAXNode("save", "button", "Save"),
+		rawAXNode("alert", "alert", "", "alert-text"),
+		rawAXNode("alert-text", "StaticText", "Enter a valid email address", "alert-inline"),
+		rawAXNode("alert-inline", "InlineTextBox", "Enter a valid email address"),
+		rawAXNode("status", "status", "", "status-wrap"),
+		rawAXNode("status-wrap", "generic", "", "status-count", "status-link"),
+		rawAXNode("status-count", "StaticText", " 3 items saved. "),
+		rawAXNode("status-link", "link", "Undo", "status-link-text"),
+		rawAXNode("status-link-text", "StaticText", "Undo"),
+		rawAXNode("empty", "status", ""),
+	}
+
+	nodes, _ := BuildSnapshot(raw, FilterInteractive, -1)
+
+	got := make([]string, 0, len(nodes))
+	for _, n := range nodes {
+		got = append(got, n.Role+" "+strconv.Quote(n.Name))
+	}
+	want := []string{
+		`button "Save"`,
+		`alert "Enter a valid email address"`,
+		`status "3 items saved. Undo"`,
+		`link "Undo"`,
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("interactive snapshot = %q, want %q", got, want)
+	}
+}
+
+func TestUnfilteredSnapshotLeavesLiveRegionNamesToTheirChildren(t *testing.T) {
+	raw := []RawAXNode{
+		rawAXNode("alert", "alert", "", "alert-text"),
+		rawAXNode("alert-text", "StaticText", "Enter a valid email address"),
+	}
+
+	nodes, _ := BuildSnapshot(raw, "", -1)
+
+	if len(nodes) != 2 || nodes[0].Name != "" || nodes[1].Name != "Enter a valid email address" {
+		t.Fatalf("unfiltered snapshot = %+v, want an unnamed alert followed by its text", nodes)
 	}
 }

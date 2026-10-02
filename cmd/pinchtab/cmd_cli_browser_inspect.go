@@ -291,7 +291,7 @@ var networkCmd = &cobra.Command{
 func configureBrowserInspectFlags() {
 	uploadCmd.Flags().StringP("selector", "s", "", "CSS selector for file input")
 	downloadCmd.Flags().StringP("output", "o", "", "Save downloaded file to path")
-	snapCmd.Flags().BoolP("interactive", "i", true, "Filter interactive elements + headings (default true, use --interactive=false for all)")
+	snapCmd.Flags().BoolP("interactive", "i", true, "Keep interactive elements plus headings, images, table cells and non-empty alert/status messages (default true, use --interactive=false for all)")
 	snapCmd.Flags().BoolP("compact", "c", true, "Compact output format (default true, use --compact=false for JSON)")
 	snapCmd.Flags().Bool("full", false, "Full JSON output (shorthand for --interactive=false --json)")
 	snapCmd.Flags().Bool("json", false, "JSON output, keeping the interactive filter (same as --compact=false)")

@@ -377,7 +377,8 @@ var InteractiveRoles = map[string]bool{
 // a tree that is usable without a follow-up page-text fetch.
 //
 // Keep this set tight:
-//   - Include: headings (structure), tables (cell/columnheader/rowheader), media (image/figure/caption)
+//   - Include: headings (structure), tables (cell/columnheader/rowheader), media (image/figure/caption),
+//     live regions (alert/status), which carry the outcome of the last action
 //   - Exclude: StaticText (duplicates parent names), paragraph/listitem (container noise),
 //     landmarks (banner/main/navigation/region add no content)
 var ContextRoles = map[string]bool{
@@ -388,6 +389,15 @@ var ContextRoles = map[string]bool{
 	"rowheader":    true,
 	"caption":      true,
 	"figure":       true,
+	"alert":        true,
+	"status":       true,
+}
+
+// Chrome leaves these roles unnamed and puts the message in descendant text,
+// which the interactive filter drops.
+var liveRegionRoles = map[string]bool{
+	"alert":  true,
+	"status": true,
 }
 
 const FilterInteractive = "interactive"
@@ -551,12 +561,12 @@ func (b *snapshotBuilder) topRoots(nodes []RawAXNode) []string {
 	return topRoots
 }
 
-func (b *snapshotBuilder) appendNode(n RawAXNode, depth int) {
+func (b *snapshotBuilder) appendNode(n RawAXNode, name string, depth int) {
 	ref := fmt.Sprintf("e%d", len(b.flat))
 	entry := A11yNode{
 		Ref:       ref,
 		Role:      n.Role.String(),
-		Name:      n.Name.String(),
+		Name:      name,
 		Depth:     depth,
 		FrameID:   n.FrameID,
 		FrameURL:  n.FrameURL,
@@ -626,9 +636,38 @@ func isFlattenableFrameRoot(n RawAXNode) bool {
 	return n.FrameOwnerNodeID != 0 && (role == "WebArea" || role == "RootWebArea")
 }
 
-func (b *snapshotBuilder) passesFilter(n RawAXNode) bool {
+func (b *snapshotBuilder) filteredName(n RawAXNode) (name string, keep bool) {
 	role := n.Role.String()
-	return b.filter != FilterInteractive || InteractiveRoles[role] || ContextRoles[role]
+	if b.filter != FilterInteractive {
+		return n.Name.String(), true
+	}
+	if liveRegionRoles[role] {
+		text := b.descendantText(n.NodeID)
+		return text, text != ""
+	}
+	return n.Name.String(), InteractiveRoles[role] || ContextRoles[role]
+}
+
+func (b *snapshotBuilder) descendantText(nodeID string) string {
+	var parts []string
+	seen := map[string]bool{nodeID: true}
+	var walk func(id string)
+	walk = func(id string) {
+		for _, childID := range b.childMap[id] {
+			if seen[childID] || b.hiddenNodes[childID] {
+				continue
+			}
+			seen[childID] = true
+			child := b.nodeByID[childID]
+			if child.Role.String() == "StaticText" {
+				parts = append(parts, child.Name.String())
+				continue
+			}
+			walk(childID)
+		}
+	}
+	walk(nodeID)
+	return strings.Join(strings.Fields(strings.Join(parts, " ")), " ")
 }
 
 func (b *snapshotBuilder) visit(nodeID string, depth int) {
@@ -643,8 +682,10 @@ func (b *snapshotBuilder) visit(nodeID string, depth int) {
 	if b.maxDepth >= 0 && depth > b.maxDepth {
 		return
 	}
-	if !isSkippableNode(n) && b.passesFilter(n) {
-		b.appendNode(n, depth)
+	if !isSkippableNode(n) {
+		if name, keep := b.filteredName(n); keep {
+			b.appendNode(n, name, depth)
+		}
 	}
 	for _, childID := range b.childMap[nodeID] {
 		b.visit(childID, depth+1)
