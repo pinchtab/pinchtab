@@ -58,7 +58,7 @@ func TestNavigationLifecycleWaiterReportsLastTargetState(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := w.wait(ctx)
+	_, err := w.wait(ctx)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("wait error = %v, want context cancellation", err)
 	}

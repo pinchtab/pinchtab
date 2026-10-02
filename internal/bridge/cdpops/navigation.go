@@ -11,6 +11,7 @@ import (
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/fetch"
+	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 )
@@ -19,7 +20,8 @@ const TargetTypePage = "page"
 
 func NavigatePage(ctx context.Context, url string) error {
 	replaceInitialBlank, _ := shouldReplaceInitialBlankNavigation(ctx)
-	return navigateAndWait(ctx, url, replaceInitialBlank)
+	_, err := navigateAndWait(ctx, url, replaceInitialBlank)
+	return err
 }
 
 // DispatchNavigation wakes a headed background renderer without activating its
@@ -81,26 +83,29 @@ type RedirectInterceptor interface {
 	BeginRedirectLimit(ctx context.Context, limit *RedirectLimit) (end func(), err error)
 }
 
-func NavigatePageWithRedirectLimit(ctx context.Context, url string, maxRedirects int, interceptor RedirectInterceptor) error {
+// NavigatePageWithRedirectLimit returns the main document's HTTP status, or 0
+// when the navigation committed without a network response (same-document,
+// file:, data:, about:).
+func NavigatePageWithRedirectLimit(ctx context.Context, url string, maxRedirects int, interceptor RedirectInterceptor) (int, error) {
 	replaceInitialBlank, _ := shouldReplaceInitialBlankNavigation(ctx)
 
 	if maxRedirects < 0 {
 		return navigateAndWait(ctx, url, replaceInitialBlank)
 	}
 	if interceptor == nil {
-		return fmt.Errorf("redirect limit requested but no request interceptor is available")
+		return 0, fmt.Errorf("redirect limit requested but no request interceptor is available")
 	}
 
 	limit := NewRedirectLimit(maxRedirects)
 	end, err := interceptor.BeginRedirectLimit(ctx, limit)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer end()
 
 	waiter, err := newNavigationLifecycleWaiter(ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer waiter.close()
 
@@ -108,16 +113,16 @@ func NavigatePageWithRedirectLimit(ctx context.Context, url string, maxRedirects
 		return startNavigation(ctx, url, replaceInitialBlank)
 	}))
 	if limitErr := limit.Err(); limitErr != nil {
-		return limitErr
+		return 0, limitErr
 	}
 	if err != nil {
-		return err
+		return 0, err
 	}
-	waitErr := waiter.wait(ctx)
+	status, waitErr := waiter.wait(ctx)
 	if limitErr := limit.Err(); limitErr != nil {
-		return limitErr
+		return 0, limitErr
 	}
-	return waitErr
+	return status, waitErr
 }
 
 // ShouldReplaceBlankHistoryEntry reports whether the first navigation should replace an untouched about:blank entry.
@@ -160,17 +165,17 @@ func startNavigation(ctx context.Context, url string, replaceInitialBlank bool) 
 	return chromedp.Evaluate("window.location.replace("+string(encodedURL)+")", nil).Do(ctx)
 }
 
-func navigateAndWait(ctx context.Context, url string, replaceInitialBlank bool) error {
+func navigateAndWait(ctx context.Context, url string, replaceInitialBlank bool) (int, error) {
 	waiter, err := newNavigationLifecycleWaiter(ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer waiter.close()
 
 	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		return startNavigation(ctx, url, replaceInitialBlank)
 	})); err != nil {
-		return err
+		return 0, err
 	}
 
 	return waiter.wait(ctx)
@@ -181,6 +186,7 @@ type navigationLifecycleWaiter struct {
 	mainFrame      cdp.FrameID
 	targetID       string
 	navigationSeen bool
+	documentStatus int
 	lastEvent      string
 	ready          chan struct{}
 	readyOnce      sync.Once
@@ -212,6 +218,9 @@ func newNavigationLifecycleWaiter(ctx context.Context) (*navigationLifecycleWait
 	w.cancel = cancel
 	chromedp.ListenTarget(listenCtx, w.onEvent)
 	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(execCtx context.Context) error {
+		if err := network.Enable().Do(execCtx); err != nil {
+			return err
+		}
 		return page.SetLifecycleEventsEnabled(true).Do(execCtx)
 	})); err != nil {
 		cancel()
@@ -225,6 +234,11 @@ func (w *navigationLifecycleWaiter) onEvent(event any) {
 	defer w.mu.Unlock()
 
 	switch e := event.(type) {
+	case *network.EventResponseReceived:
+		if e.Type != network.ResourceTypeDocument || e.FrameID != w.mainFrame || e.Response == nil {
+			return
+		}
+		w.documentStatus = int(e.Response.Status)
 	case *page.EventFrameNavigated:
 		if e.Frame == nil || e.Frame.ParentID != "" {
 			return
@@ -254,16 +268,18 @@ func (w *navigationLifecycleWaiter) markReady() {
 	w.readyOnce.Do(func() { close(w.ready) })
 }
 
-func (w *navigationLifecycleWaiter) wait(ctx context.Context) error {
+func (w *navigationLifecycleWaiter) wait(ctx context.Context) (int, error) {
 	select {
 	case <-w.ready:
-		return nil
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		return w.documentStatus, nil
 	case <-ctx.Done():
 		w.mu.Lock()
 		mainFrame := w.mainFrame
 		lastEvent := w.lastEvent
 		w.mu.Unlock()
-		return fmt.Errorf("navigation target %s main frame %s did not reach DOMContentLoaded (last lifecycle event %q): %w",
+		return 0, fmt.Errorf("navigation target %s main frame %s did not reach DOMContentLoaded (last lifecycle event %q): %w",
 			w.targetID, mainFrame, lastEvent, ctx.Err())
 	}
 }

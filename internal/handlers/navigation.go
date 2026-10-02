@@ -535,8 +535,12 @@ func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExe
 	}
 
 	route := ex.route
-	if navResult != nil && navResult.Route != nil {
-		route = navResult.Route
+	documentStatus := 0
+	if navResult != nil {
+		documentStatus = navResult.Status
+		if navResult.Route != nil {
+			route = navResult.Route
+		}
 	}
 
 	// Existing tabs may carry stale ref/frame state from a prior page; a fresh
@@ -571,7 +575,7 @@ func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExe
 			h.markCreatedTab(w, r, navResult.TabID)
 		}
 		h.recordResolvedURL(r, navResult.URL)
-		httpx.JSON(w, 200, navResponse(navResult.TabID, navResult.URL, navResult.Title, route, !ex.isNewTab))
+		httpx.JSON(w, 200, navResponse(navResult.TabID, navResult.URL, navResult.Title, navResult.Status, route, !ex.isNewTab))
 		return
 	}
 
@@ -598,7 +602,7 @@ func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExe
 	}
 	h.recordResolvedURL(r, navURL)
 
-	httpx.JSON(w, 200, navResponse(ex.tabID, navURL, title, route, !ex.isNewTab))
+	httpx.JSON(w, 200, navResponse(ex.tabID, navURL, title, documentStatus, route, !ex.isNewTab))
 }
 
 const errorPagePrefix = "chrome-error://"
@@ -670,8 +674,11 @@ func classifyNavigateError(navErr error) int {
 // navResponse builds the navigate JSON body. When routeAlways is true the route
 // key is always present (existing-tab contract, may be null); otherwise it is
 // included only when non-nil (blank-tab contract).
-func navResponse(tabID, url, title string, route *browserops.RouteMetadata, routeAlways bool) map[string]any {
+func navResponse(tabID, url, title string, documentStatus int, route *browserops.RouteMetadata, routeAlways bool) map[string]any {
 	resp := map[string]any{"tabId": tabID, "url": url, "title": title}
+	if documentStatus > 0 {
+		resp["status"] = documentStatus
+	}
 	if routeAlways || route != nil {
 		resp["route"] = route
 	}

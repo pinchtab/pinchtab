@@ -123,7 +123,7 @@ func TestRedirectLimitedNavigationKeepsProxyAuthWorking(t *testing.T) {
 	rm := NewRouteManager(nil)
 	rm.SetFetchAuthCoordination(func() bool { return true }, func(_ string, v bool) { suppressed.Store(v) })
 
-	if err := bridgecdpops.NavigatePageWithRedirectLimit(ctx, origin.URL+"/r/2", 3, rm); err != nil {
+	if _, err := bridgecdpops.NavigatePageWithRedirectLimit(ctx, origin.URL+"/r/2", 3, rm); err != nil {
 		t.Fatalf("redirect-limited navigation through the authenticated proxy: %v", err)
 	}
 	if got := bodyText(t, ctx); got != "landed" {
@@ -153,7 +153,7 @@ func TestRedirectLimitRefusesTheHopPastTheLimit(t *testing.T) {
 	ctx, _ := newRedirectTab(t, "")
 	rm := NewRouteManager(nil)
 
-	err := bridgecdpops.NavigatePageWithRedirectLimit(ctx, origin.URL+"/r/5", 2, rm)
+	_, err := bridgecdpops.NavigatePageWithRedirectLimit(ctx, origin.URL+"/r/5", 2, rm)
 	if !errors.Is(err, bridgecdpops.ErrTooManyRedirects) {
 		t.Fatalf("err = %v, want ErrTooManyRedirects", err)
 	}
@@ -168,7 +168,7 @@ func TestRouteRulesSurviveARedirectLimitedNavigation(t *testing.T) {
 	if err := rm.AddRule(ctx, tabID, rule); err != nil {
 		t.Fatal(err)
 	}
-	if err := bridgecdpops.NavigatePageWithRedirectLimit(ctx, origin.URL+"/r/1", 3, rm); err != nil {
+	if _, err := bridgecdpops.NavigatePageWithRedirectLimit(ctx, origin.URL+"/r/1", 3, rm); err != nil {
 		t.Fatalf("redirect-limited navigation with a live route: %v", err)
 	}
 	if err := bridgecdpops.NavigatePage(ctx, origin.URL+"/routed"); err != nil {
@@ -187,7 +187,7 @@ func TestRedirectLimitReleasesInterceptionOnReturn(t *testing.T) {
 	ctx, tabID := newRedirectTab(t, "")
 	rm := NewRouteManager(nil)
 
-	if err := bridgecdpops.NavigatePageWithRedirectLimit(ctx, origin.URL+"/r/1", 3, rm); err != nil {
+	if _, err := bridgecdpops.NavigatePageWithRedirectLimit(ctx, origin.URL+"/r/1", 3, rm); err != nil {
 		t.Fatal(err)
 	}
 	rm.mu.Lock()
@@ -210,7 +210,7 @@ func TestTimedOutRedirectLimitedNavigationLeavesTabUsable(t *testing.T) {
 	rm := NewRouteManager(nil)
 
 	navCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
-	err := bridgecdpops.NavigatePageWithRedirectLimit(navCtx, origin.URL+"/slow", 3, rm)
+	_, err := bridgecdpops.NavigatePageWithRedirectLimit(navCtx, origin.URL+"/slow", 3, rm)
 	cancel()
 	if err == nil {
 		t.Fatal("navigation to a 3s page under a 500ms deadline succeeded")
@@ -226,5 +226,51 @@ func TestTimedOutRedirectLimitedNavigationLeavesTabUsable(t *testing.T) {
 	}
 	if got := bodyText(t, ctx); got != "origin" {
 		t.Fatalf("body = %q, want origin", got)
+	}
+}
+
+func TestNavigationReportsTheMainDocumentStatus(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/hop":
+			http.Redirect(w, r, "/missing", http.StatusFound)
+		case "/missing":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = io.WriteString(w, "<title>gone</title><iframe src='/ok'></iframe>")
+		case "/denied":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = io.WriteString(w, `{"error":"unauthorized"}`)
+		default:
+			_, _ = io.WriteString(w, "<title>ok</title>ok")
+		}
+	}))
+	t.Cleanup(origin.Close)
+	ctx, _ := newRedirectTab(t, "")
+	rm := NewRouteManager(nil)
+
+	cases := []struct {
+		name         string
+		url          string
+		maxRedirects int
+		want         int
+	}{
+		{"a loaded page", origin.URL + "/ok", -1, 200},
+		{"a 404 whose frame loads a 200", origin.URL + "/missing", -1, 404},
+		{"a 401 json endpoint", origin.URL + "/denied", -1, 401},
+		{"a redirect reports where it landed", origin.URL + "/hop", 3, 404},
+		{"a same-document hop has no response", origin.URL + "/missing#top", -1, 0},
+		{"a document without a network response", "about:blank", -1, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := bridgecdpops.NavigatePageWithRedirectLimit(ctx, tc.url, tc.maxRedirects, rm)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Fatalf("status = %d, want %d", got, tc.want)
+			}
+		})
 	}
 }

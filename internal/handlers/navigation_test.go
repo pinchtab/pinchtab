@@ -798,3 +798,41 @@ func TestANewTabIsClosedUnlessTheResponseNamesIt(t *testing.T) {
 		})
 	}
 }
+
+func TestNavigateReportsTheMainDocumentStatus(t *testing.T) {
+	const target = "http://localhost/page.html"
+	stubNavigateHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("93.184.216.34")}, nil
+	})
+	cases := []struct {
+		name       string
+		status     int
+		wantStatus any
+	}{
+		{"a 404 page", 404, float64(404)},
+		{"a 200 page", 200, float64(200)},
+		{"a document with no network response omits the field", 0, nil},
+	}
+	for _, tc := range cases {
+		for _, newTab := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s newTab=%v", tc.name, newTab), func(t *testing.T) {
+				m := &mockBridge{currentURL: target, navigateResult: &bridge.NavigateResult{URL: target, Status: tc.status}}
+				h := New(m, &config.RuntimeConfig{}, nil, nil, nil)
+				srv := httptest.NewServer(http.HandlerFunc(h.HandleNavigate))
+				defer srv.Close()
+
+				body := map[string]any{"url": target, "tabId": "tab1"}
+				if newTab {
+					body = map[string]any{"url": target, "newTab": true}
+				}
+				code, raw, result := (apiclient.Conn{Client: srv.Client(), Base: srv.URL}).PostQuietWithStatus("/navigate", body)
+				if code != 200 {
+					t.Fatalf("an HTTP error page is still a completed navigation: got %d: %s", code, raw)
+				}
+				if got := result["status"]; got != tc.wantStatus {
+					t.Fatalf("status = %v, want %v: %s", got, tc.wantStatus, raw)
+				}
+			})
+		}
+	}
+}

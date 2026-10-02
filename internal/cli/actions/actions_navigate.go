@@ -82,6 +82,12 @@ func landedURL(result map[string]any) string {
 	return landed
 }
 
+func warnHTTPErrorStatus(result map[string]any) {
+	if status, ok := result["status"].(float64); ok && status >= 400 {
+		fmt.Fprintf(os.Stderr, "HTTP %d\n", int(status))
+	}
+}
+
 func Navigate(conn apiclient.Conn, url string, cmd *cobra.Command) string {
 	req := buildNavigateRequest(url, cmd)
 
@@ -101,6 +107,7 @@ func Navigate(conn apiclient.Conn, url string, cmd *cobra.Command) string {
 	result, usedFallback := postNavigate(conn, req, false)
 	resultTabID := tabIDFromNavigateResult(result)
 	reportFallbackNewTab(cmd, usedFallback, req.tabID, resultTabID)
+	warnHTTPErrorStatus(result)
 	stdout := navigateStdoutFor(cmd)
 	if resultTabID != "" {
 		if stdout.tabID {

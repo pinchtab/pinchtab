@@ -33,6 +33,25 @@ func TestHandleNavigate(t *testing.T) {
 	}
 }
 
+func TestHandleNavigateCarriesTheDocumentStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"tabId": "t1", "url": "https://example.com/missing", "status": 404})
+	}))
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_navigate", map[string]any{"url": "https://example.com/missing"}, srv)
+	if r.IsError {
+		t.Fatalf("an HTTP error page is a completed navigation, got error: %s", resultText(t, r))
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(resultText(t, r)), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result["status"] != float64(404) {
+		t.Fatalf("status = %v, want 404: %s", result["status"], resultText(t, r))
+	}
+}
+
 func TestHandleNavigateMissingURL(t *testing.T) {
 	srv := mockPinchTab()
 	defer srv.Close()

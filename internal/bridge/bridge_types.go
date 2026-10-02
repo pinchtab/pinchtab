@@ -257,10 +257,11 @@ func (s FrameScope) Active() bool {
 }
 
 type NavigateResult struct {
-	TabID string
-	URL   string
-	Title string
-	Route *browserops.RouteMetadata
+	TabID  string
+	URL    string
+	Title  string
+	Status int
+	Route  *browserops.RouteMetadata
 }
 
 // SnapshotResult is the bridge-level response from a snapshot operation.

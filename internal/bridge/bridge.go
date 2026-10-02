@@ -428,7 +428,8 @@ func (b *Bridge) Navigate(ctx context.Context, url string, params NavigateParams
 		}
 		return &NavigateResult{URL: url}, nil
 	}
-	if err := bridgecdpops.NavigatePageWithRedirectLimit(ctx, url, params.MaxRedirects, b.routeMgr); err != nil {
+	status, err := bridgecdpops.NavigatePageWithRedirectLimit(ctx, url, params.MaxRedirects, b.routeMgr)
+	if err != nil {
 		return nil, err
 	}
 
@@ -440,8 +441,9 @@ func (b *Bridge) Navigate(ctx context.Context, url string, params NavigateParams
 	title, _ := WaitForTitle(ctx, 2*time.Second)
 
 	return &NavigateResult{
-		URL:   finalURL,
-		Title: title,
+		URL:    finalURL,
+		Title:  title,
+		Status: status,
 	}, nil
 }
 

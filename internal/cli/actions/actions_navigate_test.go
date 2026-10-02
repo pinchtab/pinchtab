@@ -812,3 +812,43 @@ func fallbackNoticeLine(t *testing.T, stderr string) string {
 	t.Fatalf("no fallback notice in stderr:\n%s", stderr)
 	return ""
 }
+
+func TestNavigateWarnsOnAnHTTPErrorPageAndStillSucceeds(t *testing.T) {
+	cases := []struct {
+		name     string
+		response string
+		want     string
+	}{
+		{"a 404 page", `{"tabId":"ABC123","url":"https://example.com/missing","status":404}`, "HTTP 404\n"},
+		{"a 401 page", `{"tabId":"ABC123","url":"https://example.com/missing","status":401}`, "HTTP 401\n"},
+		{"a loaded page", `{"tabId":"ABC123","url":"https://example.com/","status":200}`, ""},
+		{"a response without a status", `{"tabId":"ABC123","url":"https://example.com/"}`, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PINCHTAB_SESSION", "s1")
+			stdoutTerminal(t, false)
+			m := newMockServer()
+			m.response = tc.response
+			m.responses["GET /tabs/ABC123/text"] = mockResponse{statusCode: 200, body: `{"text":"PAGE TEXT"}`}
+			defer m.close()
+
+			cmd := newNavigateCmd()
+			_ = cmd.Flags().Set("text", "true")
+
+			var stdout string
+			stderr := captureStderr(t, func() {
+				stdout = captureStdout(t, func() {
+					Navigate(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "https://example.com/missing", cmd)
+				})
+			})
+
+			if !strings.Contains(stdout, "PAGE TEXT") {
+				t.Errorf("stdout = %q, want the page text: an error page must not stop --text", stdout)
+			}
+			if got := strings.ReplaceAll(stderr, "ABC123\n", ""); got != tc.want {
+				t.Errorf("stderr = %q, want %q", stderr, tc.want)
+			}
+		})
+	}
+}

@@ -13,7 +13,9 @@ pinchtab nav https://pinchtab.com
 https://pinchtab.com/
 ```
 
-API response: `{"tabId":"...","url":"<landed URL>","title":"...","route":...}`.
+API response: `{"tabId":"...","url":"<landed URL>","title":"...","status":200,"route":...}`.
+
+`status` is the HTTP status of the main document the navigation landed on, after redirects. It is omitted when the document committed without a network response (`file:`, `data:`, `about:`, a same-document hash change) and when the page was served from a static tab.
 
 ## CLI Flags
 
@@ -76,6 +78,8 @@ pinchtab nav https://example.com --block-images  # Skip images
 - `--new-tab` and `newTab:true` force a new tab even if another tab is current.
 - Commands that operate without `--tab` use the current tracked tab. Focusing or using a tab updates that current-tab pointer; if the pointer is stale, PinchTab falls back to the most recently used tracked tab.
 - When the saved current-tab pointer names a tab the server no longer has, `pinchtab nav` retries the navigation without the tab id. For a session or agent-id caller — by `--agent-id` or `PINCHTAB_AGENT_ID`, either one — that retry reuses that scope's current tab, and the CLI stays silent because nothing was created. For a caller with neither, the server opens a **new** tab — the documented anonymous contract — so the CLI prints a `HINT` on stderr naming both the tab that was gone and the new one, rather than reporting plain success while leaving you with two tabs on one URL. Run with `PINCHTAB_SESSION` set to keep a single work surface. An explicit `--tab` never retries: it surfaces the 404.
+
+- A page that answers `404`, `401`, `500` or any other HTTP error is still a completed navigation: the API answers `200` with that code in `status`, and `pinchtab nav` exits 0 and prints `HTTP <status>` on stderr when it is 400 or above, so `--snap` and `--text` still print the error page. With `--json`, read `status` from the body.
 
 Errors: `400` for an invalid URL, `400 bad_wait_for` when the `waitFor` condition is unsupported or does not hold, `403` when the target is blocked (IDPI domain policy or a private/internal address), `409 dialog_blocked` when a JavaScript dialog is open on the tab, `409 tab_paused_handoff` while the tab is paused for [handoff](./handoff.md), `422` on a redirect loop.
 
