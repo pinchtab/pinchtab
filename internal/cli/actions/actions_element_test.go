@@ -1094,6 +1094,35 @@ func TestPrintActionResultAClickThatDidNotNavigateStaysPlain(t *testing.T) {
 	}
 }
 
+func TestPrintActionResultScrollSaysWhetherThePageMoved(t *testing.T) {
+	tests := []struct {
+		name   string
+		result map[string]any
+		want   string
+	}{
+		{
+			name:   "at the end of the page",
+			result: map[string]any{"scrolled": false, "scrollX": float64(0), "scrollY": float64(2300)},
+			want:   "OK (did not move, scrollX 0, scrollY 2300)\n",
+		},
+		{
+			name:   "moved",
+			result: map[string]any{"scrolled": true, "scrollX": float64(0), "scrollY": float64(800)},
+			want:   "OK\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := captureStdout(t, func() {
+				printActionResult("scroll", map[string]any{"success": true, "result": tt.result})
+			})
+			if got != tt.want {
+				t.Fatalf("scroll output = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // A submit that redirects keeps its own post-state headline — that says more than
 // "it moved" — and reports the landing underneath it. The landing used to be absent
 // from this form entirely.

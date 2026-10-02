@@ -216,9 +216,19 @@ func printActionResult(kind string, result map[string]any) {
 			output.Value("OK no navigation")
 			return
 		}
+		if actionResult["scrolled"] == false {
+			output.Value(scrollDidNotMove(actionResult))
+			return
+		}
 	}
 
 	output.Success()
+}
+
+func scrollDidNotMove(actionResult map[string]any) string {
+	scrollX, _ := actionResult["scrollX"].(float64)
+	scrollY, _ := actionResult["scrollY"].(float64)
+	return fmt.Sprintf("OK (did not move, scrollX %.0f, scrollY %.0f)", scrollX, scrollY)
 }
 
 func printSubmitPostState(postState, actionResult map[string]any) bool {
