@@ -1151,7 +1151,31 @@ func TestParsePressChord(t *testing.T) {
 			if tt.wantError != "" && (err == nil || !strings.Contains(err.Error(), tt.wantError)) {
 				t.Fatalf("parsePressChord(%q) error = %v, want %q", tt.input, err, tt.wantError)
 			}
+			if tt.wantError != "" && !errors.Is(err, ErrInvalidActionRequest) {
+				t.Fatalf("parsePressChord(%q) error = %v, want it to wrap ErrInvalidActionRequest", tt.input, err)
+			}
 		})
+	}
+}
+
+func TestMissingKeyOrTextIsAnInvalidActionRequest(t *testing.T) {
+	b := New(context.TODO(), nil, &config.RuntimeConfig{})
+	for _, tc := range []struct {
+		action string
+		req    ActionRequest
+	}{
+		{ActionPress, ActionRequest{}},
+		{ActionPress, ActionRequest{Key: "Control+A", Modifiers: 2}},
+		{ActionKeyDown, ActionRequest{}},
+		{ActionKeyUp, ActionRequest{}},
+		{ActionType, ActionRequest{Selector: "#x"}},
+		{ActionKeyboardType, ActionRequest{}},
+		{ActionKeyboardInsert, ActionRequest{}},
+	} {
+		_, err := b.Actions[tc.action](context.Background(), tc.req)
+		if !errors.Is(err, ErrInvalidActionRequest) {
+			t.Errorf("%s with %+v: error = %v, want it to wrap ErrInvalidActionRequest", tc.action, tc.req, err)
+		}
 	}
 }
 

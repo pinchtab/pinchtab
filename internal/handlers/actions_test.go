@@ -2165,3 +2165,29 @@ func shPrintWords(t *testing.T, words ...string) string {
 	}
 	return string(out)
 }
+
+func TestAMalformedPressChordIsAnInvalidRequestNotARetryableFault(t *testing.T) {
+	_, chordErr := bridge.New(context.TODO(), nil, &config.RuntimeConfig{}).Actions[bridge.ActionPress](
+		context.Background(), bridge.ActionRequest{Key: "Ctrl+"})
+	for _, tc := range []struct {
+		name       string
+		executeErr error
+		wantStatus int
+		wantCode   string
+		wantRetry  bool
+	}{
+		{"malformed chord", chordErr, http.StatusBadRequest, "invalid_action_request", false},
+		{"dispatch failure", fmt.Errorf("dispatch key event: websocket closed"), http.StatusInternalServerError, "action_failed", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mb := &mockBridge{availableActions: []string{bridge.ActionPress}, executeActionErr: tc.executeErr}
+
+			w, failure := postActionBody(t, mb, `{"kind":"press","key":"Ctrl+","tabId":"tab1"}`)
+
+			if w.Code != tc.wantStatus || failure.Code != tc.wantCode || failure.Retryable != tc.wantRetry {
+				t.Errorf("status=%d code=%q retryable=%v, want %d %q %v: %s",
+					w.Code, failure.Code, failure.Retryable, tc.wantStatus, tc.wantCode, tc.wantRetry, w.Body.String())
+			}
+		})
+	}
+}

@@ -86,7 +86,7 @@ func (b *Bridge) runInputReportingDialog(ctx context.Context, req ActionRequest,
 
 func (b *Bridge) typeText(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	if req.Text == "" {
-		return nil, fmt.Errorf("text required for type")
+		return nil, NewInvalidActionRequestError("text required for type")
 	}
 	if b.effectiveHumanize(req) {
 		return b.actionHumanizedType(ctx, req)
@@ -188,7 +188,7 @@ func finishFill(ctx context.Context, result map[string]any, submit bool) (map[st
 
 func (b *Bridge) pressKey(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	if req.Key == "" {
-		return nil, fmt.Errorf("key required for press")
+		return nil, NewInvalidActionRequestError("key required for press")
 	}
 	key, chordModifiers, chord, err := parsePressChord(req.Key)
 	if err != nil {
@@ -196,7 +196,7 @@ func (b *Bridge) pressKey(ctx context.Context, req ActionRequest) (map[string]an
 	}
 	if chord {
 		if req.Modifiers != 0 {
-			return nil, fmt.Errorf("press chord %q also supplied modifiers; use one chord form", req.Key)
+			return nil, NewInvalidActionRequestError(fmt.Sprintf("press chord %q also supplied modifiers; use one chord form", req.Key))
 		}
 		req.Key, req.Modifiers = key, chordModifiers
 	}
@@ -221,9 +221,9 @@ func parsePressChord(value string) (key string, modifiers int, chord bool, err e
 	}
 	parts := strings.Split(value, "+")
 	if len(parts) < 2 || strings.TrimSpace(parts[len(parts)-1]) == "" {
-		return "", 0, true, fmt.Errorf(
+		return "", 0, true, NewInvalidActionRequestError(fmt.Sprintf(
 			"invalid press chord %q; use modifiers such as Ctrl+A or Shift+ArrowLeft", value,
-		)
+		))
 	}
 	seen := 0
 	for _, raw := range parts[:len(parts)-1] {
@@ -238,12 +238,12 @@ func parsePressChord(value string) (key string, modifiers int, chord bool, err e
 		case "shift":
 			bit = 8
 		default:
-			return "", 0, true, fmt.Errorf(
+			return "", 0, true, NewInvalidActionRequestError(fmt.Sprintf(
 				"invalid press chord modifier %q; use Ctrl, Alt, Shift, or Meta", strings.TrimSpace(raw),
-			)
+			))
 		}
 		if seen&bit != 0 {
-			return "", 0, true, fmt.Errorf("duplicate press chord modifier %q", strings.TrimSpace(raw))
+			return "", 0, true, NewInvalidActionRequestError(fmt.Sprintf("duplicate press chord modifier %q", strings.TrimSpace(raw)))
 		}
 		seen |= bit
 	}
@@ -252,7 +252,7 @@ func parsePressChord(value string) (key string, modifiers int, chord bool, err e
 
 func (b *Bridge) actionHumanizedType(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	if req.Text == "" {
-		return nil, fmt.Errorf("text required for type")
+		return nil, NewInvalidActionRequestError("text required for type")
 	}
 
 	if req.Selector != "" {
@@ -286,7 +286,7 @@ const keyboardTypeThreshold = 20
 
 func (b *Bridge) keyboardType(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	if req.Text == "" {
-		return nil, fmt.Errorf("text required for keyboard-type")
+		return nil, NewInvalidActionRequestError("text required for keyboard-type")
 	}
 
 	if b.effectiveHumanize(req) {
@@ -390,7 +390,7 @@ func (b *Bridge) keyboardTypeBatched(ctx context.Context, text string) (map[stri
 
 func (b *Bridge) keyboardInsert(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	if req.Text == "" {
-		return nil, fmt.Errorf("text required for keyboard-inserttext")
+		return nil, NewInvalidActionRequestError("text required for keyboard-inserttext")
 	}
 	err := chromedp.Run(ctx, bridgecdpops.InsertTextAction(req.Text))
 	if err != nil {
@@ -409,7 +409,7 @@ func (b *Bridge) keyUp(ctx context.Context, req ActionRequest) (map[string]any, 
 
 func (b *Bridge) dispatchSingleKeyEvent(ctx context.Context, req ActionRequest, eventType, resultKey string) (map[string]any, error) {
 	if req.Key == "" {
-		return nil, fmt.Errorf("key required for %s", resultKey)
+		return nil, NewInvalidActionRequestError("key required for " + resultKey)
 	}
 	if err := validateKeyName(req.Key); err != nil {
 		return nil, err
