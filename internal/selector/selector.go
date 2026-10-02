@@ -195,10 +195,28 @@ func (s Selector) SemanticQuery() (string, bool) {
 	case KindNth:
 		index, raw, err := ParseNth(s.Value)
 		if err == nil && rawSelectorCanUseSemantic(raw) {
-			return fmt.Sprintf("%s%d:%s", nthPrefix, index+semanticNthOffset, raw), true
+			return matcherNth(index, raw), true
 		}
 	}
 	return "", false
+}
+
+// MatcherNthQuery translates an nth wrapper over any nested form into the matcher's
+// base, for a caller that sends the whole query to the matcher rather than resolving
+// non-semantic forms browser-side.
+func (s Selector) MatcherNthQuery() (string, bool) {
+	if s.Kind != KindNth {
+		return "", false
+	}
+	index, raw, err := ParseNth(s.Value)
+	if err != nil {
+		return "", false
+	}
+	return matcherNth(index, raw), true
+}
+
+func matcherNth(index int, raw string) string {
+	return fmt.Sprintf("%s%d:%s", nthPrefix, index+semanticNthOffset, raw)
 }
 
 // semanticNthOffset translates PinchTab's zero-based nth into the one-based nth the

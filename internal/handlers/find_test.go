@@ -567,6 +567,20 @@ func TestHandleFind_NthPicksTheSameRowAsAnAction(t *testing.T) {
 	}
 }
 
+func TestHandleFind_NthCountsFromZeroOverFormsActionsResolveBrowserSide(t *testing.T) {
+	h := newFindTestHandler(threeRowCartCache(), false)
+
+	for query, wantRef := range map[string]string{
+		"nth:0:text:Add": "e1",
+		"nth:1:text:Add": "e3",
+		"nth:2:text:Add": "e5",
+	} {
+		if found := postFind(t, h, fmt.Sprintf(`{"query": %q}`, query)); found.BestRef != wantRef {
+			t.Errorf("%s: best_ref = %q, want %q", query, found.BestRef, wantRef)
+		}
+	}
+}
+
 func TestHandleFind_TieAcrossRolesOmitsTheUnreachableRetryQuery(t *testing.T) {
 	cache := &bridge.RefCache{
 		Nodes: []bridge.A11yNode{

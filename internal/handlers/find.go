@@ -246,11 +246,7 @@ func matchRefs(matches []semantic.ElementMatch) []string {
 }
 
 func matcherQuery(query string) string {
-	sel := selector.Parse(query)
-	if sel.Kind != selector.KindNth {
-		return query
-	}
-	if translated, ok := sel.SemanticQuery(); ok {
+	if translated, ok := selector.Parse(query).MatcherNthQuery(); ok {
 		return translated
 	}
 	return query

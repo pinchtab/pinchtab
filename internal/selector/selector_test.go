@@ -672,6 +672,24 @@ func TestTheSemanticNthOffsetIsAnAdapterNotAnOffByOne(t *testing.T) {
 	}
 }
 
+func TestMatcherNthQueryTranslatesEveryNestedForm(t *testing.T) {
+	for input, want := range map[string]string{
+		"nth:0:role:button Save": "nth:1:role:button Save",
+		"nth:0:text:Save":        "nth:1:text:Save",
+		"nth:2:Save":             "nth:3:Save",
+		"NTH:1:css:#save":        "nth:2:css:#save",
+	} {
+		if got, ok := Parse(input).MatcherNthQuery(); !ok || got != want {
+			t.Errorf("MatcherNthQuery(%q) = %q, %v; want %q", input, got, ok, want)
+		}
+	}
+	for _, input := range []string{"role:button Save", "first:text:Save", "nth:x:text:Save", "nth:-1:text:Save"} {
+		if got, ok := Parse(input).MatcherNthQuery(); ok {
+			t.Errorf("MatcherNthQuery(%q) = %q, want no translation", input, got)
+		}
+	}
+}
+
 func TestSemanticNthBaseReportsTheCallersOwnIndex(t *testing.T) {
 	for _, tc := range []struct {
 		input     string
