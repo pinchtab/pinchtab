@@ -1737,6 +1737,78 @@ func TestAnActionOnTheWrongElementTypeIsAnInvalidRequestNotARetryableFault(t *te
 	}
 }
 
+const selectOptionFixtureHTML = `<label>Size <select id="native"><option value="sm">Small</option><option value="lg">Large</option></select></label>
+<div role="listbox" id="custom"><div role="option" id="custom-lg" onclick="document.body.dataset.picked='lg'">Large</div></div>`
+
+func newSelectOptionFixture(t *testing.T) (context.Context, *Handlers) {
+	t.Helper()
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancelTimeout)
+	if err := chromedp.Run(ctx, chromedp.Navigate("data:text/html,"+url.PathEscape(selectOptionFixtureHTML))); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.RuntimeConfig{ActionTimeout: 30 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
+	b := browserBridge(ctx, cfg)
+	b.RegisterTab("tab-select", ctx)
+	targets := map[string]bridge.RefTarget{}
+	for ref, css := range map[string]string{"e2": "#native", "e4": "#native option[value=lg]", "e6": "#custom-lg"} {
+		nodeID, err := bridge.ResolveCSSToNodeID(ctx, css)
+		if err != nil {
+			t.Fatal(err)
+		}
+		targets[ref] = bridge.RefTarget{BackendNodeID: nodeID}
+	}
+	b.SetRefCache("tab-select", &bridge.RefCache{Targets: targets})
+	return ctx, New(b, cfg, nil, nil, nil)
+}
+
+func TestClickOnANativeSelectOptionPointsToSelectInsteadOf500(t *testing.T) {
+	_, h := newSelectOptionFixture(t)
+
+	w := postRerenderAction(t, h, `{"kind":"click","ref":"e4","tabId":"tab-select"}`)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("click on a native option: status=%d body=%s, want 400", w.Code, w.Body.String())
+	}
+	var body struct {
+		Code      string `json:"code"`
+		Error     string `json:"error"`
+		Retryable bool   `json:"retryable"`
+		Details   struct {
+			Hint string `json:"hint"`
+		} `json:"details"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Code != "invalid_action_request" || body.Retryable {
+		t.Errorf("code=%q retryable=%v, want invalid_action_request and not retryable", body.Code, body.Retryable)
+	}
+	if !strings.Contains(body.Details.Hint, `select e2 "Large"`) {
+		t.Errorf("hint = %q, want it to name select e2 \"Large\"", body.Details.Hint)
+	}
+	if strings.Contains(w.Body.String(), "-32000") {
+		t.Errorf("body leaks the raw CDP error: %s", w.Body.String())
+	}
+}
+
+func TestClickOnACustomListboxOptionStillClicks(t *testing.T) {
+	ctx, h := newSelectOptionFixture(t)
+
+	w := postRerenderAction(t, h, `{"kind":"click","ref":"e6","tabId":"tab-select"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("click on a custom option: status=%d body=%s, want 200", w.Code, w.Body.String())
+	}
+	var picked string
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.body.dataset.picked || ""`, &picked)); err != nil {
+		t.Fatal(err)
+	}
+	if picked != "lg" {
+		t.Errorf("custom option click did not land: picked=%q", picked)
+	}
+}
+
 func newIframeRerenderFixture(t *testing.T) (context.Context, *Handlers) {
 	t.Helper()
 	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)

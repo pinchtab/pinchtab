@@ -103,6 +103,28 @@ func writeNoOptionMatch(w http.ResponseWriter, kind string, err error, noOption 
 		})
 }
 
+func (h *Handlers) invalidActionDetails(actionErr error, tabID string) map[string]any {
+	var closedOption *bridge.ClosedSelectOptionError
+	if !errors.As(actionErr, &closedOption) {
+		return nil
+	}
+	return map[string]any{
+		"dispatched": false,
+		"hint":       fmt.Sprintf("choose the option on its <select> instead: select %s %q", h.refForNode(tabID, closedOption.SelectBackendNodeID), closedOption.OptionText),
+	}
+}
+
+func (h *Handlers) refForNode(tabID string, backendNodeID int64) string {
+	if cache := h.Bridge.GetRefCache(tabID); cache != nil {
+		for ref, target := range cache.Targets {
+			if target.BackendNodeID == backendNodeID {
+				return ref
+			}
+		}
+	}
+	return "<select ref>"
+}
+
 func availableOptionsHint(options []bridgecdpops.SelectOption) string {
 	if len(options) == 0 {
 		return "the <select> has no options"
@@ -746,7 +768,7 @@ func (h *Handlers) writeActionError(w http.ResponseWriter, actionErr error, req 
 		return
 	}
 	if errors.Is(actionErr, bridge.ErrInvalidActionRequest) {
-		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_action_request", fmt.Sprintf("action %s: %v", req.Kind, actionErr), false, nil)
+		httpx.ErrorCode(w, http.StatusBadRequest, "invalid_action_request", fmt.Sprintf("action %s: %v", req.Kind, actionErr), false, h.invalidActionDetails(actionErr, resolvedTabID))
 		return
 	}
 	if errors.Is(actionErr, ErrStaleSubmitTarget) {

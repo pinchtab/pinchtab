@@ -366,12 +366,71 @@ func (p *pointerOps) clickTarget(ctx context.Context, req ActionRequest, auto *a
 		return gesture.onSubmitNode(ctx, nodeID)
 	case nodeID > 0:
 		prepare(nodeID)
-		return gesture.onNode(ctx, nodeID)
+		return refuseClosedSelectOption(ctx, nodeID, gesture.onNode(ctx, nodeID))
 	case req.HasXY:
 		return gesture.onPoint(ctx, req.X, req.Y)
 	default:
 		return NewInvalidActionRequestError("need selector, ref, nodeId, or x/y coordinates")
 	}
+}
+
+// ClosedSelectOptionError reports a click on an <option> of a native <select>
+// that renders no box of its own, so no pointer can ever reach it.
+type ClosedSelectOptionError struct {
+	SelectBackendNodeID int64
+	OptionText          string
+}
+
+func (e *ClosedSelectOptionError) Error() string {
+	return fmt.Sprintf("click target is the option %q of a native <select>, which has no box to click; choose it with select on the <select>", e.OptionText)
+}
+
+const optionTextJS = `function() { return this instanceof HTMLOptionElement ? this.text : null; }`
+
+const owningSelectJS = `function() { return this.closest('select'); }`
+
+func refuseClosedSelectOption(ctx context.Context, nodeID int64, err error) error {
+	if err == nil {
+		return nil
+	}
+	refusal, checkErr := closedSelectOption(ctx, nodeID)
+	if checkErr != nil || refusal == nil {
+		return err
+	}
+	return fmt.Errorf("%w: %w", ErrInvalidActionRequest, refusal)
+}
+
+func closedSelectOption(ctx context.Context, nodeID int64) (*ClosedSelectOptionError, error) {
+	objectID, err := bridgecdpops.ResolveNodeObjectID(ctx, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	var text *string
+	if err := cdptk.CallFunctionOn(ctx, objectID, optionTextJS, nil, &text); err != nil || text == nil {
+		return nil, err
+	}
+	selectObjectID, err := cdptk.CallFunctionOnForHandle(ctx, objectID, owningSelectJS, nil)
+	if err != nil || selectObjectID == "" {
+		return nil, err
+	}
+	selectNodeID, err := backendNodeIDOfObject(ctx, selectObjectID)
+	if err != nil {
+		return nil, err
+	}
+	return &ClosedSelectOptionError{SelectBackendNodeID: selectNodeID, OptionText: *text}, nil
+}
+
+func backendNodeIDOfObject(ctx context.Context, objectID string) (int64, error) {
+	var desc struct {
+		Node struct {
+			BackendNodeID int64 `json:"backendNodeId"`
+		} `json:"node"`
+	}
+	err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.describeNode", map[string]any{"objectId": objectID}, &desc)
+	if err != nil {
+		return 0, fmt.Errorf("describe node: %w", err)
+	}
+	return desc.Node.BackendNodeID, nil
 }
 
 // runWatchingDialogs runs click with a one-shot dialog auto-handler armed when
