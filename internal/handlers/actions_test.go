@@ -2089,11 +2089,38 @@ func TestOptionHintSurvivesAShellPasteVerbatim(t *testing.T) {
 		t.Fatalf("hint = %q, want the available options prefix", hint)
 	}
 
-	out, err := exec.Command("/bin/sh", "-c", "printf %s "+arg).Output()
-	if err != nil {
-		t.Fatalf("sh rejected the hint argument %s: %v", arg, err)
-	}
-	if string(out) != text {
+	if out := shPrintWords(t, arg); out != text+"\n" {
 		t.Errorf("pasting the hint argument printed %q, want the option text %q unchanged", out, text)
 	}
+}
+
+func TestOptionHintWithALabelSurvivesAShellPasteVerbatim(t *testing.T) {
+	value, text := "$(echo PWNED)", "`id` it's \"big\""
+	hint := availableOptionsHint([]bridgecdpops.SelectOption{{Value: value, Text: text}})
+	arg, ok := strings.CutPrefix(hint, "available options: ")
+	if !ok {
+		t.Fatalf("hint = %q, want the available options prefix", hint)
+	}
+	valueWord, label, ok := strings.Cut(arg, " (")
+	if !ok {
+		t.Fatalf("hint argument = %s, want a value followed by a parenthesised label", arg)
+	}
+	textWord, ok := strings.CutSuffix(label, ")")
+	if !ok {
+		t.Fatalf("hint argument = %s, want the label closed by a parenthesis", arg)
+	}
+
+	if out, want := shPrintWords(t, valueWord, textWord), value+"\n"+text+"\n"; out != want {
+		t.Errorf("pasting the value and label words printed %q, want %q unchanged", out, want)
+	}
+}
+
+func shPrintWords(t *testing.T, words ...string) string {
+	t.Helper()
+	script := `printf '%s\n' ` + strings.Join(words, " ")
+	out, err := exec.Command("/bin/sh", "-c", script).Output()
+	if err != nil {
+		t.Fatalf("sh rejected %s: %v", script, err)
+	}
+	return string(out)
 }
