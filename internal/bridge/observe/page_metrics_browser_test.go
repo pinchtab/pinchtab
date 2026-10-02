@@ -3,7 +3,6 @@ package observe
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -11,31 +10,6 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
-
-func launchBrowser(t *testing.T) context.Context {
-	t.Helper()
-	chromePath := testbrowser.Path(t)
-	profile := testbrowser.ProfileDir(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(profile),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	if err := chromedp.Run(ctx); err != nil {
-		cancelBrowser()
-		cancelAlloc()
-		t.Fatalf("launch browser: %v", err)
-	}
-	t.Cleanup(func() {
-		cancelBrowser()
-		cancelAlloc()
-		_ = os.RemoveAll(profile)
-	})
-	return ctx
-}
 
 func allowSlowTargetReads(t *testing.T) {
 	original := targetReadTimeout
@@ -55,7 +29,7 @@ func openTab(t *testing.T, browserCtx context.Context, html string) context.Cont
 
 func TestPageCountersMoveBetweenATrivialAndADOMHeavyPage(t *testing.T) {
 	allowSlowTargetReads(t)
-	browser := launchBrowser(t)
+	browser := testbrowser.Tab(t)
 	trivial := openTab(t, browser, "<html><body>hi</body></html>")
 	heavy := openTab(t, browser, "<html><body>"+strings.Repeat("<div><span>x</span></div>", 3000)+"<script>for(let i=0;i<500;i++)document.addEventListener('x'+i,()=>{})</script></body></html>")
 
@@ -94,7 +68,7 @@ func TestPageCountersMoveBetweenATrivialAndADOMHeavyPage(t *testing.T) {
 
 func TestPerPollCostAcrossSeveralTabsIsRecorded(t *testing.T) {
 	allowSlowTargetReads(t)
-	browser := launchBrowser(t)
+	browser := testbrowser.Tab(t)
 	const tabs = 5
 	targets := map[string]context.Context{}
 	for i := range tabs {

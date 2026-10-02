@@ -2,7 +2,6 @@ package observe
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"fmt"
 	"image"
@@ -16,7 +15,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 // The retention path drove a fetcher that hardcoded base64Encoded to false, so a binary
@@ -61,8 +59,7 @@ func TestBinaryResponseBodiesCarryTheCDPFlagOnEveryPath(t *testing.T) {
 		t.Fatalf("text fixture (%d) must also exceed the limit %d, or truncation is untested", len(textBody), limit)
 	}
 
-	ctx, cancel := browserContext(t)
-	defer cancel()
+	ctx := deadlineTab(t)
 
 	nm := NewNetworkMonitor(0)
 	nm.ConfigureBodyRetention(true, limit)
@@ -141,24 +138,6 @@ func TestBinaryResponseBodiesCarryTheCDPFlagOnEveryPath(t *testing.T) {
 	}
 	if !utf8.ValidString(textEntry.ResponseBody) {
 		t.Error("the retained text is not valid UTF-8; the cut split a rune")
-	}
-}
-
-func browserContext(t *testing.T) (context.Context, context.CancelFunc) {
-	t.Helper()
-	chromePath := testbrowser.Path(t)
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelCtx := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	return ctx, func() {
-		cancelTimeout()
-		cancelCtx()
-		cancelAlloc()
 	}
 }
 

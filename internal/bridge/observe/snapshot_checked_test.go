@@ -2,14 +2,11 @@ package observe
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 // checkedFixtureHTML covers every case the field has to answer for: a checked and
@@ -32,31 +29,7 @@ const checkedFixtureHTML = `<body>
 
 func newCheckedFixture(t *testing.T) context.Context {
 	t.Helper()
-	chromePath := testbrowser.Path(t)
-
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
-
-	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(checkedFixtureHTML))
-	if err := chromedp.Run(ctx,
-		chromedp.Navigate(dataURL),
-		chromedp.WaitVisible("#go", chromedp.ByID),
-	); err != nil {
-		t.Fatal(err)
-	}
-	return ctx
+	return fixtureTab(t, checkedFixtureHTML, "#go")
 }
 
 func snapshotNodes(t *testing.T, ctx context.Context) []A11yNode {

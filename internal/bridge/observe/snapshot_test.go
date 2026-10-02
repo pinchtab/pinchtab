@@ -2,16 +2,13 @@ package observe
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"slices"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 const hydratedListFixtureHTML = `<body>
@@ -30,38 +27,22 @@ for (const title of ["Hydrated issue alpha", "Hydrated issue beta", "Hydrated is
 
 func newBackgroundTabFixture(t *testing.T, html string) context.Context {
 	t.Helper()
-	chromePath := testbrowser.Path(t)
-
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	browserCtx, cancelBrowser := chromedp.NewContext(alloc)
-	browserCtx, cancelTimeout := context.WithTimeout(browserCtx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
+	foregroundCtx := deadlineTab(t)
 
 	var targetID target.ID
-	if err := chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+	if err := chromedp.Run(foregroundCtx, chromedp.ActionFunc(func(ctx context.Context) error {
 		var err error
 		targetID, err = target.CreateTarget("about:blank").WithFocus(false).Do(ctx)
 		return err
 	})); err != nil {
 		t.Fatal(err)
 	}
-	tabCtx, cancelTab := chromedp.NewContext(browserCtx, chromedp.WithTargetID(targetID))
+	tabCtx, cancelTab := chromedp.NewContext(foregroundCtx, chromedp.WithTargetID(targetID))
 	t.Cleanup(cancelTab)
 
-	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(html))
 	var visibility string
 	if err := chromedp.Run(tabCtx,
-		chromedp.Navigate(dataURL),
+		chromedp.Navigate(htmlDataURL(html)),
 		chromedp.Evaluate(`document.visibilityState`, &visibility),
 	); err != nil {
 		t.Fatal(err)

@@ -2,13 +2,10 @@ package observe
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/chromedp/chromedp"
-	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 // The scroll offset must not enter the test: boxes reach IsOnScreen in viewport
@@ -50,30 +47,7 @@ func newScrollFixture(t *testing.T, scrollX, scrollY int) scrollFixture {
 
 func newScrollFixtureFrom(t *testing.T, html string, scrollX, scrollY int) scrollFixture {
 	t.Helper()
-	chromePath := testbrowser.Path(t)
-
-	alloc, cancelAlloc := chromedp.NewExecAllocator(context.Background(), append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromePath),
-		chromedp.UserDataDir(testbrowser.ProfileDir(t)),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("no-sandbox", true),
-	)...)
-	ctx, cancelBrowser := chromedp.NewContext(alloc)
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(func() {
-		cancelTimeout()
-		cancelBrowser()
-		cancelAlloc()
-	})
-
-	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(html))
-	if err := chromedp.Run(ctx,
-		chromedp.Navigate(dataURL),
-		chromedp.WaitVisible("#target", chromedp.ByID),
-	); err != nil {
-		t.Fatal(err)
-	}
+	ctx := fixtureTab(t, html, "#target")
 	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		var done bool
 		return chromedp.Evaluate(scrollScript(scrollX, scrollY), &done).Do(ctx)

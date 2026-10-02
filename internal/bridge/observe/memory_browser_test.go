@@ -8,12 +8,13 @@ import (
 
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/heapsnap"
+	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 const leakPage = `<html><body><script>window.leak = []; function grow(){ window.leak.push(Array.from({length: 1500000}, (_, i) => i + 0.5)); }</script></body></html>`
 
 func TestGarbageCollectionReclaimsADroppedArray(t *testing.T) {
-	tab := openTab(t, launchBrowser(t), leakPage)
+	tab := openTab(t, testbrowser.Tab(t), leakPage)
 	baseline, err := ReadHeapUsage(tab, true)
 	if err != nil {
 		t.Fatalf("baseline: %v", err)
@@ -50,7 +51,7 @@ func TestGarbageCollectionReclaimsADroppedArray(t *testing.T) {
 }
 
 func TestHeapSnapshotStreamsAValidV8Snapshot(t *testing.T) {
-	tab := openTab(t, launchBrowser(t), `<html><body><script>window.keep = Array.from({length: 50}, () => [1, 2, 3]);</script></body></html>`)
+	tab := openTab(t, testbrowser.Tab(t), `<html><body><script>window.keep = Array.from({length: 50}, () => [1, 2, 3]);</script></body></html>`)
 	path := filepath.Join(t.TempDir(), "tab"+heapsnap.Ext)
 	f, err := os.Create(path)
 	if err != nil {
@@ -104,7 +105,7 @@ func TestHeapSnapshotStreamsAValidV8Snapshot(t *testing.T) {
 }
 
 func TestHeapSnapshotStopsAtTheSinkRefusalAndLeavesTheTabUsable(t *testing.T) {
-	tab := openTab(t, launchBrowser(t), "<html><body>hi</body></html>")
+	tab := openTab(t, testbrowser.Tab(t), "<html><body>hi</body></html>")
 	sink := heapsnap.NewSink(discard{}, 1024)
 	err := TakeHeapSnapshot(tab, sink.WriteChunk)
 	if !errors.Is(err, heapsnap.ErrTooLarge) {
