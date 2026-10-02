@@ -1123,6 +1123,43 @@ func TestPrintActionResultScrollSaysWhetherThePageMoved(t *testing.T) {
 	}
 }
 
+func TestScrollCommandReportsAStuckPageInTextAndPassesJSONThrough(t *testing.T) {
+	const stuck = `{"success":true,"result":{"scrolled":false,"scrollX":0,"scrollY":2300}}`
+	tests := []struct {
+		name string
+		json bool
+		want string
+	}{
+		{name: "text", want: "OK (did not move, scrollX 0, scrollY 2300)\n"},
+		{name: "json", json: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newMockServer()
+			defer m.close()
+			m.setResponse("POST", "/action", 200, stuck)
+			cmd := newSimpleCmd()
+			cmd.Flags().Bool("json", tt.json, "")
+			got := captureStdout(t, func() {
+				ActionSimple(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "scroll", []string{"down"}, cmd)
+			})
+			if tt.json {
+				var decoded map[string]any
+				if err := json.Unmarshal([]byte(got), &decoded); err != nil {
+					t.Fatalf("--json stdout is not JSON: %q", got)
+				}
+				if strings.Contains(got, "did not move") {
+					t.Fatalf("--json stdout carries the text line: %q", got)
+				}
+				return
+			}
+			if got != tt.want {
+				t.Fatalf("scroll stdout = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // A submit that redirects keeps its own post-state headline — that says more than
 // "it moved" — and reports the landing underneath it. The landing used to be absent
 // from this form entirely.
