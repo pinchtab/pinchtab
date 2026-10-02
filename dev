@@ -561,20 +561,6 @@ if [ $# -gt 0 ]; then
       exit 0
       ;;
 
-    check)
-      if [ $# -gt 1 ]; then
-        run_command "check $2"
-      else
-        run_command "check"
-      fi
-      ;;
-    install)
-      if [ $# -gt 1 ]; then
-        run_command "install $2"
-      else
-        run_command "install"
-      fi
-      ;;
     pack)
       if [ "${2:-}" = "plugin" ]; then
         if [ $# -gt 2 ]; then
@@ -586,27 +572,6 @@ if [ $# -gt 0 ]; then
         echo "  ${ERROR}Unknown pack target: ${2:-}${NC}" >&2
         echo "  Usage: dev pack plugin [<version>]" >&2
         exit 1
-      fi
-      ;;
-    test)
-      if [ $# -gt 1 ]; then
-        run_command "test $2"
-      else
-        run_command "test"
-      fi
-      ;;
-    format)
-      if [ $# -gt 1 ]; then
-        run_command "format $2"
-      else
-        run_command "format"
-      fi
-      ;;
-    sync)
-      if [ $# -gt 1 ]; then
-        run_command "sync $2"
-      else
-        run_command "sync"
       fi
       ;;
     e2e)
@@ -634,20 +599,6 @@ if [ $# -gt 0 ]; then
       fi
       run_e2e_runner "${@:2}"
       ;;
-    smoke)
-      if [ $# -gt 1 ]; then
-        run_command "smoke ${*:2}"
-      else
-        run_command "smoke"
-      fi
-      ;;
-    binary)
-      if [ $# -gt 1 ]; then
-        run_command "binary $2"
-      else
-        run_command "binary"
-      fi
-      ;;
     opt)
       if [ $# -gt 1 ]; then
         exec bash scripts/dev-opt.sh "${@:2}"
@@ -663,6 +614,8 @@ if [ $# -gt 0 ]; then
         exec bash scripts/dev-bench.sh help
       fi
       ;;
+    check|install|test|format|sync|binary) run_command "$1${2+ $2}" ;;
+    smoke) run_command "$*" ;;
     *) run_command "$1" ;;
   esac
   exit 0
