@@ -106,26 +106,31 @@ func TestExtractReadsTheSchemaFromStdinAndForwardsScopeMaxItemsAndTab(t *testing
 	}
 }
 
-func TestExtractFieldsAppendsTheRefTableAndExplainAddsScores(t *testing.T) {
+func TestExtractFieldsPrintsTheRefTableOnStderrAndKeepsStdoutPipeable(t *testing.T) {
 	for _, tc := range []struct {
 		flag string
 		want []string
 	}{
-		{"fields", []string{"name\te2\thigh", "price\te3\tmedium"}},
-		{"explain", []string{"name\te2\thigh\t1.00\thint\t-", "price\te3\tmedium\t0.71\ttext\t-"}},
+		{"fields", []string{"field\tref\tconfidence", "name\te2\thigh", "price\te3\tmedium"}},
+		{"explain", []string{"field\tref\tconfidence\tscore\tsource\treason", "name\te2\thigh\t1.00\thint\t-", "price\te3\tmedium\t0.71\ttext\t-"}},
 	} {
 		t.Run(tc.flag, func(t *testing.T) {
 			m := newMockServer()
 			m.response = extractTestResponse
 			defer m.close()
 
-			out := captureStdout(t, func() {
-				Extract(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, newExtractCmd(writeSchemaFile(t, extractTestSchema), map[string]string{tc.flag: "true"}))
+			var stdout string
+			stderr := captureStderr(t, func() {
+				stdout = captureStdout(t, func() {
+					Extract(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, newExtractCmd(writeSchemaFile(t, extractTestSchema), map[string]string{tc.flag: "true"}))
+				})
 			})
-			for _, row := range tc.want {
-				if !strings.Contains(out, row+"\n") {
-					t.Errorf("output lacks row %q:\n%s", row, out)
-				}
+			var data map[string]any
+			if err := json.Unmarshal([]byte(stdout), &data); err != nil {
+				t.Fatalf("stdout is not the data JSON alone: %v\n%s", err, stdout)
+			}
+			if want := strings.Join(tc.want, "\n") + "\n"; stderr != want {
+				t.Errorf("stderr =\n%s\nwant\n%s", stderr, want)
 			}
 			if _, ok := sentBody(t, m)["explain"]; ok {
 				t.Errorf("--explain renders locally and must not be sent: %s", m.lastBody)
@@ -142,7 +147,7 @@ func TestExtractNamesEachUnmatchedPropertyOnStderrWithItsReason(t *testing.T) {
 		{"empty data", `{"data":{},"fields":{"items":{"confidence":"low","reason":"no_field_match"}},"missing":[],"truncated":false}`, "", "{}\n", "unmatched: items (no_field_match); rerun with --explain\n"},
 		{"one line per property, sorted", unmatched, "", "{\n  \"title\": \"Mugs\"\n}\n", "unmatched: brand (no_match); rerun with --explain\nunmatched: items (no_field_match); rerun with --explain\n"},
 		{"fully matched", extractTestResponse, "", "", ""},
-		{"explain already shows the reason", unmatched, "explain", "", ""},
+		{"explain already shows the reason", unmatched, "explain", "", "field\tref\tconfidence\tscore\tsource\treason\nbrand\t-\tlow\t0.00\t-\tno_match\nitems\te4\tlow\t0.00\t-\tno_field_match\ntitle\te1\thigh\t1.00\ttext\t-\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := newMockServer()
@@ -169,13 +174,26 @@ func TestExtractNamesEachUnmatchedPropertyOnStderrWithItsReason(t *testing.T) {
 	}
 }
 
-func TestExtractFieldRowsListArrayItemsUnderTheirIndex(t *testing.T) {
+func TestExtractFieldTableListsArrayItemsUnderTheirIndexWithEqualColumns(t *testing.T) {
 	var fields map[string]any
 	_ = json.Unmarshal([]byte(`{"products":{"ref":"e20","confidence":"high","items":[{"ref":"e21","fields":{"name":{"ref":"e22","confidence":"high"}}}]}}`), &fields)
-	got := strings.Join(extractFieldRows(fields, "", false), "\n")
-	want := "products\te20\thigh\nproducts[0]\te21\nproducts[0].name\te22\thigh"
-	if got != want {
-		t.Errorf("rows =\n%s\nwant\n%s", got, want)
+	for _, tc := range []struct {
+		explain bool
+		want    string
+	}{
+		{false, "field\tref\tconfidence\nproducts\te20\thigh\nproducts[0]\te21\t-\nproducts[0].name\te22\thigh"},
+		{true, "field\tref\tconfidence\tscore\tsource\treason\nproducts\te20\thigh\t0.00\t-\t-\nproducts[0]\te21\t-\t-\t-\t-\nproducts[0].name\te22\thigh\t0.00\t-\t-"},
+	} {
+		rows := extractFieldTable(fields, tc.explain)
+		if got := strings.Join(rows, "\n"); got != tc.want {
+			t.Errorf("explain=%v rows =\n%s\nwant\n%s", tc.explain, got, tc.want)
+		}
+		width := len(extractFieldColumns(tc.explain))
+		for _, row := range rows {
+			if n := len(strings.Split(row, "\t")); n != width {
+				t.Errorf("explain=%v row %q has %d columns, want %d", tc.explain, row, n, width)
+			}
+		}
 	}
 }
 

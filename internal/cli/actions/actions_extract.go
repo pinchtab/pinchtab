@@ -50,8 +50,8 @@ func Extract(conn apiclient.Conn, cmd *cobra.Command) {
 	output.JSON(result["data"])
 	if withFields || explain {
 		fields, _ := result["fields"].(map[string]any)
-		for _, row := range extractFieldRows(fields, "", explain) {
-			fmt.Println(row)
+		for _, row := range extractFieldTable(fields, explain) {
+			fmt.Fprintln(os.Stderr, row)
 		}
 	}
 	if !explain {
@@ -110,6 +110,19 @@ func extractUnmatchedLines(data, fields map[string]any) []string {
 	return lines
 }
 
+func extractFieldColumns(explain bool) []string {
+	columns := []string{"field", "ref", "confidence"}
+	if explain {
+		columns = append(columns, "score", "source", "reason")
+	}
+	return columns
+}
+
+func extractFieldTable(fields map[string]any, explain bool) []string {
+	header := strings.Join(extractFieldColumns(explain), "\t")
+	return append([]string{header}, extractFieldRows(fields, "", explain)...)
+}
+
 func extractFieldRows(fields map[string]any, prefix string, explain bool) []string {
 	names := make([]string, 0, len(fields))
 	for name := range fields {
@@ -126,7 +139,7 @@ func extractFieldRows(fields map[string]any, prefix string, explain bool) []stri
 			item, _ := it.(map[string]any)
 			label := prefix + name + "[" + strconv.Itoa(i) + "]"
 			ref, _ := item["ref"].(string)
-			rows = append(rows, label+"\t"+orDash(ref))
+			rows = append(rows, extractItemRow(label, ref, explain))
 			itemFields, _ := item["fields"].(map[string]any)
 			rows = append(rows, extractFieldRows(itemFields, label+".", explain)...)
 		}
@@ -143,6 +156,14 @@ func extractFieldRow(label string, field map[string]any, explain bool) string {
 		source, _ := field["source"].(string)
 		reason, _ := field["reason"].(string)
 		cols = append(cols, strconv.FormatFloat(score, 'f', 2, 64), orDash(source), orDash(reason))
+	}
+	return strings.Join(cols, "\t")
+}
+
+func extractItemRow(label, ref string, explain bool) string {
+	cols := []string{label, orDash(ref)}
+	for range len(extractFieldColumns(explain)) - len(cols) {
+		cols = append(cols, "-")
 	}
 	return strings.Join(cols, "\t")
 }

@@ -77,16 +77,18 @@ pinchtab extract --schema amounts.schema.json --scope role:table
 | `--schema <file\|->` | Schema file, or `-` to read it from stdin (required) |
 | `--scope <selector>` | Sent as `scope` |
 | `--max-items <n>` | Sent as `maxItems` |
-| `--fields` | After the data, print one `field<TAB>ref<TAB>confidence` row per field; array items appear as `products[0]` and `products[0].name` |
-| `--explain` | The same table with `score`, `source` and `reason` columns |
+| `--fields` | Print a `field<TAB>ref<TAB>confidence` table on stderr, one row per field after a header line; array items appear as `products[0]` and `products[0].name`, with `-` in the cells they lack |
+| `--explain` | The same table on stderr with `score`, `source` and `reason` columns |
 | `--json` | Print the full response envelope instead of `data` |
 | `--tab <id>` | Target a tab through `POST /tabs/{id}/extract` |
 
-Three things are reported on stderr, never on stdout, so piping `data` into `jq` is
-unaffected. The command still exits 0, because the page answered:
+The field table and three diagnostics are reported on stderr, never on stdout, so piping
+`data` into `jq` is unaffected, with or without `--fields`. The command still exits 0,
+because the page answered:
 
 | Stderr line | When |
 | --- | --- |
+| `field ref confidence` (tab-separated, plus `score source reason` with `--explain`) | Header of the `--fields` / `--explain` table; every row below it has the same columns |
 | `unmatched: items (no_field_match); rerun with --explain` | One line per top-level property absent from `data`, carrying that field's `reason`; not printed with `--explain`, whose table already shows it |
 | `missing required fields: name, price` | A `required` property did not resolve |
 | `truncated: an array hit its item cap; ...` | An array stopped at `--max-items` or the schema's `maxItems` |

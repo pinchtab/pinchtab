@@ -228,7 +228,7 @@ pinchtab find --explain                 # Include score breakdown
 pinchtab find --ref-only                # Print only the best ref
 pinchtab extract --schema <file>        # Schema-typed data as JSON (see reference/extract.md)
 pinchtab extract --schema -             # Read the schema from stdin
-pinchtab extract --schema <file> --fields   # + field<TAB>ref<TAB>confidence table
+pinchtab extract --schema <file> --fields   # + field<TAB>ref<TAB>confidence table on stderr
 pinchtab extract --schema <file> --scope role:table --max-items 5  # Confine and cap
 pinchtab eval <expression>              # Evaluate JavaScript
 pinchtab a11y audit                     # Accessibility score + findings (native engine)

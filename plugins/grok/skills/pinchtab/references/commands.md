@@ -254,7 +254,7 @@ echo '{"type":"object","properties":{"products":{"type":"array","items":{"type":
   "name":{"type":"string","x-pinchtab-hint":"role:heading"},
   "price":{"type":"number","description":"product price"}}}}}}' | pinchtab extract --schema - --max-items 10
 
-pinchtab extract --schema product.json --fields   # + field<TAB>ref<TAB>confidence table
+pinchtab extract --schema product.json --fields   # + field<TAB>ref<TAB>confidence table on stderr
 pinchtab click e12                                 # a field's ref works straight away
 ```
 
@@ -263,7 +263,7 @@ pinchtab click e12                                 # a field's ref works straigh
 | `--schema <file\|->` | JSON schema file, or `-` for stdin (required) |
 | `--scope <sel>` | Confine every field to one element's subtree (ref, `role:`, `text:` or a plain query) |
 | `--max-items <n>` | Cap on items per array |
-| `--fields` / `--explain` | Append the ref table; `--explain` adds score, source and reason |
+| `--fields` / `--explain` | Print the ref table on stderr under a `field ref confidence` header; `--explain` adds score, source and reason |
 | `--json` | Full envelope (`data`, `fields`, `missing`, `truncated`) |
 
 Pick the read by what you need back: `extract` for typed values (prices, flags, rows)
