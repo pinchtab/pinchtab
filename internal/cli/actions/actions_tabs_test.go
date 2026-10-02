@@ -76,3 +76,43 @@ func TestTabFocusResolvesOneBasedIndex(t *testing.T) {
 		t.Fatalf("expected resolved tabId in body, got %s", m.requests[1].Body)
 	}
 }
+
+const tabsBody = `{"tabs":[` +
+	`{"id":"TAB_A","url":"http://127.0.0.1:19581/","title":"Home","type":"page","status":"active","browserContextId":"CTX"},` +
+	`{"id":"TAB_B","url":"http://127.0.0.1:19581/next","title":"Next","type":"page","status":"active","browserContextId":"CTX"}]}`
+
+func TestTabListPrintsOneLinePerTabAndMarksTheTargetTab(t *testing.T) {
+	m := newMockServer()
+	m.response = tabsBody
+	defer m.close()
+
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool("json", false, "")
+
+	out := captureStdout(t, func() {
+		TabList(apiclient.Conn{Client: http.DefaultClient, Base: m.base()}, cmd, "TAB_B")
+	})
+
+	want := "TAB_A\thttp://127.0.0.1:19581/\tHome\n" +
+		"*TAB_B\thttp://127.0.0.1:19581/next\tNext\n"
+	if out != want {
+		t.Fatalf("tabs output = %q, want %q", out, want)
+	}
+}
+
+func TestTabListMarksNothingWithoutATargetTab(t *testing.T) {
+	m := newMockServer()
+	m.response = tabsBody
+	defer m.close()
+
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool("json", false, "")
+
+	out := captureStdout(t, func() {
+		TabList(apiclient.Conn{Client: http.DefaultClient, Base: m.base()}, cmd, "")
+	})
+
+	if strings.Contains(out, "*") {
+		t.Fatalf("no tab should be marked, got %q", out)
+	}
+}

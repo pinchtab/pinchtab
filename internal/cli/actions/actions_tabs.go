@@ -11,30 +11,31 @@ import (
 )
 
 // TabList lists all open tabs.
-func TabList(conn apiclient.Conn, cmd *cobra.Command) {
+func TabList(conn apiclient.Conn, cmd *cobra.Command, targetTabID string) {
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
 		conn.Get("/tabs", nil)
 		return
 	}
 
-	// Terse: one line per tab: [*]<id>\t<url>\t<title>
 	body := conn.GetRaw("/tabs", nil)
-	var tabs []map[string]any
-	if err := json.Unmarshal(body, &tabs); err != nil {
+	var resp struct {
+		Tabs []struct {
+			ID    string `json:"id"`
+			URL   string `json:"url"`
+			Title string `json:"title"`
+		} `json:"tabs"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
 		fmt.Println(string(body))
 		return
 	}
-	for _, tab := range tabs {
-		id, _ := tab["id"].(string)
-		url, _ := tab["url"].(string)
-		title, _ := tab["title"].(string)
-		active, _ := tab["active"].(bool)
-		prefix := ""
-		if active {
-			prefix = "*"
+	for _, tab := range resp.Tabs {
+		marker := ""
+		if targetTabID != "" && tab.ID == targetTabID {
+			marker = "*"
 		}
-		fmt.Printf("%s%s\t%s\t%s\n", prefix, id, url, title)
+		fmt.Printf("%s%s\t%s\t%s\n", marker, tab.ID, tab.URL, tab.Title)
 	}
 }
 
