@@ -105,6 +105,49 @@ func TestPrintActionResultSubmitSuccessNamesObservedSignal(t *testing.T) {
 	}
 }
 
+func TestPrintActionResultSubmitSuccessPrintsLiveRegionTextAsServed(t *testing.T) {
+	wrapped := "<untrusted_web_content>\nOrder saved\n</untrusted_web_content>"
+	tests := []struct {
+		name      string
+		postState map[string]any
+		want      string
+	}{
+		{
+			name:      "plain text follows the headline",
+			postState: map[string]any{"status": "succeeded", "signal": "live_region_changed", "liveRegionText": "Order saved"},
+			want:      "SUCCEEDED live_region_changed\nOrder saved\n",
+		},
+		{
+			name:      "untrusted-content wrapper is kept",
+			postState: map[string]any{"status": "succeeded", "signal": "live_region_changed", "liveRegionText": wrapped},
+			want:      "SUCCEEDED live_region_changed\n" + wrapped + "\n",
+		},
+		{
+			name:      "blocked text adds no line",
+			postState: map[string]any{"status": "succeeded", "signal": "live_region_changed", "liveRegionBlocked": true, "liveRegionBlockReason": "injection pattern"},
+			want:      "SUCCEEDED live_region_changed\n",
+		},
+		{
+			name:      "pending ignores live region text",
+			postState: map[string]any{"status": "pending", "liveRegionText": "Saving"},
+			want:      "PENDING\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := captureStdout(t, func() {
+				printActionResult("click", map[string]any{
+					"success": true,
+					"result":  map[string]any{"postState": tt.postState},
+				})
+			})
+			if got != tt.want {
+				t.Fatalf("output = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestClickWaitNav(t *testing.T) {
 	m := newMockServer()
 	defer m.close()

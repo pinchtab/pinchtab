@@ -198,6 +198,9 @@ func printActionResult(kind string, result map[string]any) {
 				return
 			case "succeeded":
 				output.Value("SUCCEEDED " + signal)
+				if liveRegionText, _ := postState["liveRegionText"].(string); liveRegionText != "" {
+					output.Value(liveRegionText)
+				}
 				printNavigationOutcome(actionResult)
 				return
 			}
