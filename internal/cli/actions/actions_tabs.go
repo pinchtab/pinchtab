@@ -39,16 +39,46 @@ func TabList(conn apiclient.Conn, cmd *cobra.Command, targetTabID string) {
 	}
 }
 
-// TabClose closes a tab by ID.
-func TabClose(conn apiclient.Conn, tabID string, cmd *cobra.Command) {
+// TabClose closes a tab by ID. When that tab was the CLI's current one it returns
+// the tab the server lists first, which is where a read without a tab id lands.
+func TabClose(conn apiclient.Conn, tabID string, wasCurrent bool, cmd *cobra.Command) string {
 	jsonOutput, _ := cmd.Flags().GetBool("json")
-	if jsonOutput {
-		conn.Post("/close", map[string]any{"tabId": tabID})
-		return
+	body := map[string]any{"tabId": tabID}
+	if !wasCurrent {
+		if jsonOutput {
+			conn.Post("/close", body)
+			return ""
+		}
+		conn.PostQuiet("/close", body)
+		output.Success()
+		return ""
 	}
 
-	conn.PostQuiet("/close", map[string]any{"tabId": tabID})
+	result := conn.PostQuiet("/close", body)
+	successor := firstListedTabID(conn)
+	if jsonOutput {
+		if result == nil {
+			result = map[string]any{}
+		}
+		result["currentTabId"] = successor
+		output.JSON(result)
+		return successor
+	}
 	output.Success()
+	if successor == "" {
+		output.Hint("no tab is current: pass a tab id, or run pinchtab nav <url> to open one")
+		return ""
+	}
+	fmt.Printf("current tab: %s\n", successor)
+	return successor
+}
+
+func firstListedTabID(conn apiclient.Conn) string {
+	ids, err := listTabIDs(conn)
+	if err != nil || len(ids) == 0 {
+		return ""
+	}
+	return ids[0]
 }
 
 // TabFocus switches to a tab by ID, making it the active tab

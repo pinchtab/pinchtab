@@ -20,6 +20,7 @@ type tabStateHarness struct {
 	token       string
 	serverToken string
 	statusFor   func(tabID string) int
+	handle      func(w http.ResponseWriter, r *http.Request) bool
 	requests    []*http.Request
 }
 
@@ -37,6 +38,9 @@ func newTabStateHarness(t *testing.T) *tabStateHarness {
 		if got := r.Header.Get("Authorization"); got != "Bearer "+h.serverToken {
 			w.WriteHeader(http.StatusUnauthorized)
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+			return
+		}
+		if h.handle != nil && h.handle(w, r) {
 			return
 		}
 		status := h.statusFor(id)
@@ -287,4 +291,33 @@ func TestAnInvalidServerBaseLeavesTheTabStateInconclusiveWithoutExiting(t *testi
 		t.Fatalf("resolveArg = %q, want no cached tab", got)
 	}
 	defaultTabState.announceCachedTab("tab1")
+}
+
+func TestCloseOfCurrentTabHandsTheStateFileToTheSuccessor(t *testing.T) {
+	h := newTabStateHarness(t)
+	h.handle = func(w http.ResponseWriter, r *http.Request) bool {
+		switch r.URL.Path {
+		case "/close":
+			_, _ = w.Write([]byte(`{"closed":true,"tabId":"TAB-C"}`))
+		case "/tabs":
+			_, _ = w.Write([]byte(`{"tabs":[{"id":"TAB-B"},{"id":"TAB-A"}]}`))
+		default:
+			return false
+		}
+		return true
+	}
+	conn := apiclient.Conn{Client: http.DefaultClient, Base: h.base, Token: h.token}
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool("json", false, "")
+
+	WriteTabStateFile("TAB-C")
+	closeTabAndAdvance(conn, "TAB-A", cmd)
+	if got := defaultTabState.read(); got != "TAB-C" {
+		t.Fatalf("closing another tab moved the current tab to %q", got)
+	}
+
+	closeTabAndAdvance(conn, "TAB-C", cmd)
+	if got := defaultTabState.read(); got != "TAB-B" {
+		t.Fatalf("after closing the current tab the state file holds %q, want the successor TAB-B", got)
+	}
 }

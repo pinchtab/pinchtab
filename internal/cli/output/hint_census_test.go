@@ -44,6 +44,7 @@ var hintSites = map[string]struct {
 	"../actions/actions_capture.go:Capture":                             {occurrence, 1, "this page tripped the IDPI guard"},
 	"../actions/actions_text.go:Text":                                   {occurrence, 1, "readability collapsed on this page"},
 	"../actions/actions_evaluate.go:Evaluate":                           {occurrence, 1, "this eval returned a Promise without --await-promise"},
+	"../actions/actions_tabs.go:TabClose":                               {occurrence, 1, "this close removed the current tab and no tab is left to succeed it"},
 	"../actions/actions_tabs.go:TabHandoff":                             {occurrence, 1, "the reason this handoff carried"},
 	"../actions/actions_tabs.go:TabHandoffStatus":                       {occurrence, 1, "the reason this handoff carried"},
 	"../../../cmd/pinchtab/cmd_cli_runtime.go:resolveCLIBase":           {advisory, 2, "the caller's own --server/PINCHTAB_SERVER is redundant: their setting, not an event"},

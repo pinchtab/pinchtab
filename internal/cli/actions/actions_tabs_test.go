@@ -16,7 +16,7 @@ func TestTabCloseUsesCloseEndpoint(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.Flags().Bool("json", false, "")
 
-	TabClose(apiclient.Conn{Client: http.DefaultClient, Base: m.base()}, "tab_123", cmd)
+	TabClose(apiclient.Conn{Client: http.DefaultClient, Base: m.base()}, "tab_123", false, cmd)
 
 	if m.lastPath != "/close" {
 		t.Fatalf("expected /close, got %s", m.lastPath)
@@ -114,5 +114,52 @@ func TestTabListMarksNothingWithoutATargetTab(t *testing.T) {
 
 	if strings.Contains(out, "*") {
 		t.Fatalf("no tab should be marked, got %q", out)
+	}
+}
+
+func TestTabCloseOfCurrentTabReportsTheServersFirstListedTab(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	m.setResponse("POST", "/close", 200, `{"closed":true,"tabId":"tab_c"}`)
+	m.setResponse("GET", "/tabs", 200, `{"tabs":[{"id":"tab_b"},{"id":"tab_a"}]}`)
+	conn := apiclient.Conn{Client: http.DefaultClient, Base: m.base()}
+
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool("json", false, "")
+	var got string
+	out := captureStdout(t, func() { got = TabClose(conn, "tab_c", true, cmd) })
+	if got != "tab_b" {
+		t.Fatalf("successor = %q, want the first listed tab tab_b", got)
+	}
+	if out != "OK\ncurrent tab: tab_b\n" {
+		t.Fatalf("output = %q", out)
+	}
+
+	m.setResponse("GET", "/tabs", 200, `{"tabs":[]}`)
+	out = captureStdout(t, func() { got = TabClose(conn, "tab_c", true, cmd) })
+	if got != "" || out != "OK\n" {
+		t.Fatalf("with no tabs left: successor=%q output=%q", got, out)
+	}
+
+	m.setResponse("GET", "/tabs", 200, `{"tabs":[{"id":"tab_b"}]}`)
+	cmd = &cobra.Command{}
+	cmd.Flags().Bool("json", true, "")
+	out = captureStdout(t, func() { got = TabClose(conn, "tab_c", true, cmd) })
+	if got != "tab_b" || !strings.Contains(out, `"currentTabId": "tab_b"`) || !strings.Contains(out, `"closed": true`) {
+		t.Fatalf("json mode: successor=%q output=%q", got, out)
+	}
+}
+
+func TestTabCloseOfAnotherTabDoesNotListTabs(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool("json", false, "")
+
+	out := captureStdout(t, func() {
+		TabClose(apiclient.Conn{Client: http.DefaultClient, Base: m.base()}, "tab_x", false, cmd)
+	})
+	if out != "OK\n" || len(m.requests) != 1 {
+		t.Fatalf("output=%q requests=%d, want OK and only the close call", out, len(m.requests))
 	}
 }

@@ -99,12 +99,16 @@ func newTabCloseCmd() *cobra.Command {
 		Short: "Close a tab by ID",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			runCLI(func(rt apiclient.Conn) {
-				browseractions.TabClose(rt, args[0], cmd)
-				ClearTabStateFileIfCurrent(args[0])
-			})
+			runCLI(func(rt apiclient.Conn) { closeTabAndAdvance(rt, args[0], cmd) })
 		},
 	}
+}
+
+func closeTabAndAdvance(rt apiclient.Conn, tabID string, cmd *cobra.Command) {
+	wasCurrent := defaultTabState.target() == tabID
+	successor := browseractions.TabClose(rt, tabID, wasCurrent, cmd)
+	ClearTabStateFileIfCurrent(tabID)
+	WriteTabStateFile(successor)
 }
 
 // errNoCurrentTab refuses locally instead of issuing /tabs//<verb>: an empty path
