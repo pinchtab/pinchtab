@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -86,10 +87,6 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	if err := httpx.DecodeJSON(w, r, &req, httpx.JSONBodyOptions{MaxBytes: int64(maxRequestBytes), Lenient: true}); err != nil {
 		httpx.Error(w, httpx.StatusForJSONDecodeError(err), fmt.Errorf("invalid JSON body: %w", err))
 		return
-	}
-
-	if req.Selector == "" {
-		req.Selector = "input[type=file]"
 	}
 
 	if len(req.Files) == 0 && len(req.Paths) == 0 {
@@ -194,6 +191,19 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	tCtx, tCancel := httpx.WithClientTimeout(r.Context(), ctx, h.Config.ActionTimeout)
 	defer tCancel()
 
+	if req.Selector == "" {
+		candidates, err := h.fileInputCandidates(tCtx, resolvedTabID)
+		if err != nil {
+			httpx.Error(w, 500, fmt.Errorf("upload: list file inputs: %w", err))
+			return
+		}
+		if len(candidates) > 1 {
+			httpx.ErrorCode(w, http.StatusBadRequest, "upload_ambiguous", ambiguousUploadMessage(candidates), false, map[string]any{"candidates": candidates})
+			return
+		}
+		req.Selector = defaultUploadSelector
+	}
+
 	nodeID, err := h.Bridge.ResolveSelectorToNodeID(tCtx, req.Selector, h.Bridge.GetRefCache(resolvedTabID), h.selectorFrameID(resolvedTabID))
 	if err != nil {
 		h.respondSelectorFailure(w, resolvedTabID, fmt.Errorf("%w: upload selector %q: %w", ErrElementNotFound, req.Selector, err))
@@ -222,6 +232,34 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		"status": "ok",
 		"files":  len(allPaths),
 	})
+}
+
+const defaultUploadSelector = "input[type=file]"
+
+type fileInputCandidate struct {
+	Label    string `json:"label"`
+	Selector string `json:"selector"`
+}
+
+const fileInputCandidatesExpr = `Array.from(document.querySelectorAll('input[type=file]')).map((el) => ({
+  label: ((el.labels && el.labels[0] && el.labels[0].textContent) || el.getAttribute('aria-label') || '').trim(),
+  selector: el.id ? '#' + CSS.escape(el.id) : el.name ? 'input[type=file][name=' + JSON.stringify(el.name) + ']' : '',
+}))`
+
+func (h *Handlers) fileInputCandidates(ctx context.Context, tabID string) ([]fileInputCandidate, error) {
+	var candidates []fileInputCandidate
+	if err := h.evaluateCount(ctx, tabID, fileInputCandidatesExpr, &candidates); err != nil {
+		return nil, err
+	}
+	return candidates, nil
+}
+
+func ambiguousUploadMessage(candidates []fileInputCandidate) string {
+	described := make([]string, len(candidates))
+	for i, c := range candidates {
+		described[i] = strings.TrimSpace(fmt.Sprintf("%q %s", c.Label, c.Selector))
+	}
+	return fmt.Sprintf("upload: %d file inputs on the page and no selector given; pass one: %s", len(candidates), strings.Join(described, ", "))
 }
 
 // @Endpoint POST /tabs/{id}/upload

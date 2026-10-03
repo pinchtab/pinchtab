@@ -122,6 +122,82 @@ func TestHandleUpload_NonFileElementIs400InvalidActionRequest(t *testing.T) {
 	}
 }
 
+func fileInputsBridge(candidates string) *recordingUploadBridge {
+	rec := &recordingUploadBridge{}
+	rec.evaluateFn = func(_ string, result any) error {
+		return json.Unmarshal([]byte(candidates), result)
+	}
+	return rec
+}
+
+func uploadWithoutSelector(t *testing.T, rec *recordingUploadBridge) *httptest.ResponseRecorder {
+	t.Helper()
+	h := New(rec, &config.RuntimeConfig{AllowUpload: true, StateDir: t.TempDir(), ActionTimeout: time.Second}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/upload?tabId=t1", bytes.NewReader([]byte(`{"files":["aGVsbG8="]}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleUpload(w, req)
+	return w
+}
+
+func TestHandleUpload_NoSelectorWithOneFileInputAttaches(t *testing.T) {
+	rec := fileInputsBridge(`[{"label":"CV","selector":"#cv"}]`)
+	w := uploadWithoutSelector(t, rec)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("single file input did not upload: %d %s", w.Code, w.Body.String())
+	}
+	if rec.selector != "input[type=file]" || len(rec.attachedPaths) != 1 {
+		t.Fatalf("resolved %q and attached %d files, want the default selector and 1 file", rec.selector, len(rec.attachedPaths))
+	}
+}
+
+func TestHandleUpload_NoSelectorWithTwoFileInputsRefusesAndListsThem(t *testing.T) {
+	rec := fileInputsBridge(`[{"label":"CV","selector":"#cv"},{"label":"Photo","selector":"#photo"}]`)
+	w := uploadWithoutSelector(t, rec)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("two file inputs and no selector answered %d, want 400: %s", w.Code, w.Body.String())
+	}
+	var body struct {
+		Code    string `json:"code"`
+		Error   string `json:"error"`
+		Details struct {
+			Candidates []fileInputCandidate `json:"candidates"`
+		} `json:"details"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode error body: %v", err)
+	}
+	if body.Code != "upload_ambiguous" {
+		t.Fatalf("got code %q, want upload_ambiguous", body.Code)
+	}
+	for _, want := range []string{"CV", "#cv", "Photo", "#photo"} {
+		if !strings.Contains(body.Error, want) {
+			t.Fatalf("error %q does not list candidate %q", body.Error, want)
+		}
+	}
+	if len(body.Details.Candidates) != 2 || body.Details.Candidates[1].Selector != "#photo" {
+		t.Fatalf("details.candidates = %+v, want both inputs with their selectors", body.Details.Candidates)
+	}
+	if rec.selector != "" || rec.attachedPaths != nil {
+		t.Fatalf("refused upload still resolved %q and attached %v", rec.selector, rec.attachedPaths)
+	}
+}
+
+func TestHandleUpload_ExplicitSelectorSkipsTheFileInputCensus(t *testing.T) {
+	rec := fileInputsBridge(`[{"label":"CV","selector":"#cv"},{"label":"Photo","selector":"#photo"}]`)
+	h := New(rec, &config.RuntimeConfig{AllowUpload: true, StateDir: t.TempDir(), ActionTimeout: time.Second}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/upload?tabId=t1", bytes.NewReader([]byte(`{"selector":"#photo","files":["aGVsbG8="]}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleUpload(w, req)
+
+	if w.Code != http.StatusOK || rec.evaluateCalls != 0 {
+		t.Fatalf("explicit selector answered %d after %d evaluations, want 200 and none: %s", w.Code, rec.evaluateCalls, w.Body.String())
+	}
+}
+
 func TestHandleUpload_ResolvesRefSelector(t *testing.T) {
 	rec := &recordingUploadBridge{refCache: &bridge.RefCache{Refs: map[string]int64{"e0": 4242}}}
 	h := New(rec, &config.RuntimeConfig{AllowUpload: true, StateDir: t.TempDir(), ActionTimeout: time.Second}, nil, nil, nil)
