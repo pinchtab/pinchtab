@@ -53,3 +53,40 @@ func TestResolve_RefHintIsNotRedirectedToTheLabelledControl(t *testing.T) {
 		t.Errorf("name = %#v %+v, want the hinted label text from e5", got.Data["name"], got.Fields["name"])
 	}
 }
+
+func TestFieldQuery_SplitsCaseBoundariesIntoWords(t *testing.T) {
+	cases := map[string]string{
+		"itemPrice":    "item price",
+		"OrderStatus":  "order status",
+		"URLPath":      "url path",
+		"giftWrap":     "gift wrap",
+		"item2Price":   "item2 price",
+		"item_price":   "item_price",
+		"order-status": "order-status",
+		"gift wrap":    "gift wrap",
+		"price":        "price",
+	}
+	for name, want := range cases {
+		if got := fieldQuery(Property{Name: name}); got != want {
+			t.Errorf("fieldQuery(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
+func TestResolve_CamelCaseKeyMatchesLikeItsSnakeTwin(t *testing.T) {
+	nodes := []observe.A11yNode{
+		{Ref: "e1", Role: "form", Depth: 0},
+		{Ref: "e2", Role: "checkbox", Name: "Gift wrap", Checked: observe.CheckedTrue, Depth: 1},
+		{Ref: "e3", Role: "textbox", Name: "Coupon code", Value: "SAVE10", Depth: 1},
+	}
+	for _, keys := range [][2]string{{"giftWrap", "couponCode"}, {"gift_wrap", "coupon_code"}, {"GiftWrap", "CouponCode"}} {
+		schema := mustSchema(t, `{"type":"object","properties":{"`+keys[0]+`":{"type":"boolean"},"`+keys[1]+`":{"type":"string"}}}`)
+		got := Resolve(schema, nodes, Options{})
+		if got.Data[keys[0]] != true || got.Fields[keys[0]].Ref != "e2" {
+			t.Errorf("%s = %#v %+v, want true from e2", keys[0], got.Data[keys[0]], got.Fields[keys[0]])
+		}
+		if got.Data[keys[1]] != "SAVE10" || got.Fields[keys[1]].Ref != "e3" {
+			t.Errorf("%s = %#v %+v, want SAVE10 from e3", keys[1], got.Data[keys[1]], got.Fields[keys[1]])
+		}
+	}
+}

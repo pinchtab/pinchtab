@@ -61,7 +61,7 @@
       "hits": 2,
       "data": {
         "passwordLabel": "Username Password",
-        "quotesSource": "Quotes by:",
+        "quotesSource": "Quotes to Scrape",
         "site": "Quotes to Scrape",
         "submit": "Login",
         "usernameLabel": "Username Password"
