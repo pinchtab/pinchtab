@@ -29,8 +29,6 @@ func autoNamedOutputPath(prefix, ext string) (string, error) {
 
 var errUnsafeOutputDir = errors.New("unsafe auto-named output dir")
 
-// refuseSharedOutputDir guards the auto-named dir, which on Linux is /tmp/pinchtab and
-// shared by every user: MkdirAll accepts a dir another user created or pointed elsewhere.
 func refuseSharedOutputDir(dir string) error {
 	info, err := os.Lstat(dir)
 	if err != nil {

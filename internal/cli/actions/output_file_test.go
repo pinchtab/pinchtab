@@ -517,10 +517,12 @@ func TestAutoNamedOutputPathRefusesASharedDir(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name string
+		want string
 		make func(t *testing.T, dir string)
 	}{
 		{
 			name: "world-writable",
+			want: "allows group or other access",
 			make: func(t *testing.T, dir string) {
 				if err := os.Mkdir(dir, 0o700); err != nil {
 					t.Fatal(err)
@@ -532,6 +534,7 @@ func TestAutoNamedOutputPathRefusesASharedDir(t *testing.T) {
 		},
 		{
 			name: "symlink",
+			want: "it is a symlink",
 			make: func(t *testing.T, dir string) {
 				if err := os.Symlink(t.TempDir(), dir); err != nil {
 					t.Fatal(err)
@@ -551,6 +554,9 @@ func TestAutoNamedOutputPathRefusesASharedDir(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), dir) {
 				t.Errorf("error %q does not name %s", err, dir)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error %q does not say %q", err, tc.want)
 			}
 		})
 	}
