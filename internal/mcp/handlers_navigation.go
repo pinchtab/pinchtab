@@ -64,7 +64,7 @@ func withOptionalSnapshot(ctx context.Context, c *Client, r mcp.CallToolRequest,
 	if snapErr != nil {
 		return resultFromBytes(body, code)
 	}
-	return mcp.NewToolResultText(string(stripTrivialRoute(body)) + "\n" + string(snapBody)), nil
+	return mcp.NewToolResultText(string(body) + "\n" + string(snapBody)), nil
 }
 
 // handleHistoryNav serves pinchtab_back, pinchtab_forward and pinchtab_reload. The

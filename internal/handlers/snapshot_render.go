@@ -147,11 +147,10 @@ func (h *Handlers) writeSnapshotDiff(w http.ResponseWriter, q snapshotQuery, res
 	case "compact", "text":
 		h.writeSnapshotPlainDiff(w, q, res, prevNodes, wrap)
 	default:
-		data := snapshotDiffFields(res.attachRootFrame(res.scope.attach(map[string]any{
+		data := snapshotDiffFields(res.attachRootFrame(res.scope.attach(withRoute(map[string]any{
 			"url":   res.url,
 			"title": res.title,
-			"route": res.route,
-		})), prevNodes, res)
+		}, res.route))), prevNodes, res)
 		if q.format == "yaml" {
 			writeSnapshotYAML(w, data, q.controls.Ignored)
 			return
@@ -180,14 +179,13 @@ func (h *Handlers) writeSnapshot(w http.ResponseWriter, q snapshotQuery, res sna
 		h.writeSnapshotPlain(w, q, res, snapshotTextHeader(res.title, res.url, len(res.flat), res.scope), res.hint,
 			bridge.FormatSnapshotText(res.flat), idpiResult.WrapContent)
 	default:
-		resp := res.attachRootFrame(res.scope.attach(map[string]any{
+		resp := res.attachRootFrame(res.scope.attach(withRoute(map[string]any{
 			"url":             res.url,
 			"title":           res.title,
-			"route":           res.route,
 			"nodes":           res.wireNodes(res.flat),
 			"count":           len(res.flat),
 			"vocabularyToken": vocabularyToken,
-		}))
+		}, res.route)))
 		if res.truncated {
 			resp["truncated"] = true
 			resp["maxTokens"] = q.controls.MaxTokens

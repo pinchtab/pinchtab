@@ -1081,17 +1081,17 @@ func TestHandleNavigateNewTabOpensATab(t *testing.T) {
 	}
 }
 
-func TestHandleNavigateSnapStripsTheTrivialRouteButKeepsAnEscalation(t *testing.T) {
+func TestHandleNavigateSnapKeepsTheServerRouteVerbatim(t *testing.T) {
 	escalated := `{"requestedProvider":"cloak","usedProvider":"ghost-chrome","escalated":true,"reason":"challenge","attempts":[{"provider":"cloak","accepted":false},{"provider":"ghost-chrome","accepted":true}]}`
-	for name, tc := range map[string]struct{ route, want string }{
-		"trivial":   {trivialRoute, `{"tabId":"t1"}`},
-		"escalated": {escalated, `{"tabId":"t1","route":` + escalated + `}`},
+	for name, navBody := range map[string]string{
+		"route-less": `{"tabId":"t1"}`,
+		"escalated":  `{"tabId":"t1","route":` + escalated + `}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch r.URL.Path {
 				case "/navigate":
-					_, _ = w.Write([]byte(`{"tabId":"t1","route":` + tc.route + `}`))
+					_, _ = w.Write([]byte(navBody))
 				case "/snapshot":
 					_, _ = w.Write([]byte(`{"snapshot":true}`))
 				default:
@@ -1104,7 +1104,7 @@ func TestHandleNavigateSnapStripsTheTrivialRouteButKeepsAnEscalation(t *testing.
 			if r.IsError {
 				t.Fatalf("navigate returned error: %s", resultText(t, r))
 			}
-			if got, want := resultText(t, r), tc.want+"\n"+`{"snapshot":true}`; got != want {
+			if got, want := resultText(t, r), navBody+"\n"+`{"snapshot":true}`; got != want {
 				t.Fatalf("reply:\n got %s\nwant %s", got, want)
 			}
 		})

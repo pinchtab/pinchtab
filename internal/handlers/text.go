@@ -418,15 +418,14 @@ func (h *Handlers) writeTextResponse(w http.ResponseWriter, r *http.Request, tCt
 		return
 	}
 
-	resp := scope.attach(map[string]any{
+	resp := scope.attach(withRoute(map[string]any{
 		"url":        url,
 		"title":      title,
 		"text":       text,
 		"truncated":  truncated,
-		"route":      route,
 		"extraction": extraction.Mode,
 		"textLength": utf8.RuneCountInString(text),
-	})
+	}, route))
 	if extraction.RawKnown {
 		resp["rawLength"] = extraction.RawLength
 	}

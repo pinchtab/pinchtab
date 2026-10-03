@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -243,68 +242,7 @@ func resultFromBytes(body []byte, code int) (*mcp.CallToolResult, error) {
 	if reason := reportsNoSuccess(body); reason != "" {
 		return mcp.NewToolResultError(reason), nil
 	}
-	return mcp.NewToolResultText(string(stripTrivialRoute(body))), nil
-}
-
-type routeBlock struct {
-	RequestedBrowser string `json:"requestedProvider"`
-	UsedBrowser      string `json:"usedProvider"`
-	Escalated        bool   `json:"escalated"`
-	Reason           string `json:"reason"`
-	FallbackAttempts int    `json:"fallbackAttempts"`
-	Attempts         []any  `json:"attempts"`
-}
-
-func (b routeBlock) trivial() bool {
-	return b.RequestedBrowser == b.UsedBrowser && !b.Escalated && b.Reason == "" &&
-		b.FallbackAttempts == 0 && len(b.Attempts) <= 1
-}
-
-func stripTrivialRoute(body []byte) []byte {
-	start, end, value, ok := topLevelMemberSpan(body, "route")
-	if !ok {
-		return body
-	}
-	var route routeBlock
-	if json.Unmarshal(value, &route) != nil || !route.trivial() {
-		return body
-	}
-	out := make([]byte, 0, len(body)-(end-start))
-	out = append(out, body[:start]...)
-	return append(out, body[end:]...)
-}
-
-func topLevelMemberSpan(body []byte, key string) (start, end int, value json.RawMessage, ok bool) {
-	dec := json.NewDecoder(bytes.NewReader(body))
-	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
-		return 0, 0, nil, false
-	}
-	first := true
-	for dec.More() {
-		before := int(dec.InputOffset())
-		tok, err := dec.Token()
-		if err != nil {
-			return 0, 0, nil, false
-		}
-		name, _ := tok.(string)
-		if dec.Decode(&value) != nil {
-			return 0, 0, nil, false
-		}
-		end = int(dec.InputOffset())
-		if name != key {
-			first = false
-			continue
-		}
-		if !first || !dec.More() {
-			return before, end, value, true
-		}
-		comma := bytes.IndexByte(body[end:], ',')
-		if comma < 0 {
-			return 0, 0, nil, false
-		}
-		return before, end + comma + 1, value, true
-	}
-	return 0, 0, nil, false
+	return mcp.NewToolResultText(string(body)), nil
 }
 
 type remedyTool struct {

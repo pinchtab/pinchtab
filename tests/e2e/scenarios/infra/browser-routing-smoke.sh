@@ -38,13 +38,13 @@ assert_json_length_gte "$RESULT" '.nodes' 1 "snapshot has nodes"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "browser routing: navigate with ?browser=<configured> has route metadata"
+start_test "browser routing: navigate with ?browser=<configured> omits the unchanged route"
 
 pt_post "/navigate" -d "{\"url\":\"${FIXTURES_URL}/buttons.html\",\"browser\":\"${CONFIGURED}\"}"
 assert_ok "navigate with browser=${CONFIGURED}"
 assert_json_contains "$RESULT" '.url' 'buttons.html' "navigated to buttons page"
 
-assert_json_eq "$RESULT" '.route.requestedProvider' "${CONFIGURED}" "route.requestedProvider=${CONFIGURED}"
+assert_json_not_exists "$RESULT" '.route' "unrouted navigate omits route"
 
 end_test
 

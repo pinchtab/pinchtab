@@ -38,3 +38,10 @@ func routeMetadataFor(routing browserRouting) *browserops.RouteMetadata {
 	}}
 	return route
 }
+
+func withRoute(resp map[string]any, route *browserops.RouteMetadata) map[string]any {
+	if !route.Trivial() {
+		resp["route"] = route
+	}
+	return resp
+}

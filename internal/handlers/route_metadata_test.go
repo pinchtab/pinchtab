@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/browsers"
@@ -113,73 +114,110 @@ func TestResolveReadRouting_GhostChromeDowngradeRecordsBothBrowsers(t *testing.T
 	assertGhostChromeDowngrade(t, readRoute(t, h, "ghost-chrome", "text", browsers.ShapeRenderedRead))
 }
 
-func actionRoute(t *testing.T, browser string) *browserops.RouteMetadata {
+type capturingRecorder struct{ events []activity.Event }
+
+func (c *capturingRecorder) Enabled() bool { return true }
+
+func (c *capturingRecorder) Record(evt activity.Event) error {
+	c.events = append(c.events, evt)
+	return nil
+}
+
+func (c *capturingRecorder) Query(activity.Filter) ([]activity.Event, error) { return c.events, nil }
+
+type routedReply struct {
+	route    *browserops.RouteMetadata
+	hasRoute bool
+	recorded *browserops.RouteMetadata
+}
+
+func serveRouted(t *testing.T, handler http.HandlerFunc, req *http.Request) routedReply {
 	t.Helper()
-	h := New(&autoSwitchActionBridge{}, routeTestConfig(), nil, nil, nil)
-	body := []byte(`{"kind":"click","browser":"` + browser + `"}`)
-	req := httptest.NewRequest("POST", "/action", bytes.NewReader(body))
+	rec := &capturingRecorder{}
 	w := httptest.NewRecorder()
-	h.HandleAction(w, req)
+	activity.Middleware(rec, "client", handler).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
 	}
-	var resp struct {
-		Route *browserops.RouteMetadata `json:"route"`
-	}
+	var resp map[string]json.RawMessage
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	return resp.Route
+	if len(rec.events) != 1 {
+		t.Fatalf("recorded %d activity events, want 1", len(rec.events))
+	}
+	reply := routedReply{recorded: rec.events[0].Route}
+	raw, ok := resp["route"]
+	if !ok {
+		return reply
+	}
+	reply.hasRoute = true
+	if err := json.Unmarshal(raw, &reply.route); err != nil {
+		t.Fatalf("decode route %s: %v", raw, err)
+	}
+	return reply
+}
+
+func assertTrivialRouteOnlyRecorded(t *testing.T, reply routedReply, browser string) {
+	t.Helper()
+	if reply.hasRoute {
+		t.Fatalf("reply carries a route for an unrouted request: %+v", reply.route)
+	}
+	assertSingleAttempt(t, reply.recorded, browser)
+}
+
+func assertDowngradeRepliedAndRecorded(t *testing.T, reply routedReply) {
+	t.Helper()
+	assertGhostChromeDowngrade(t, reply.route)
+	assertGhostChromeDowngrade(t, reply.recorded)
+}
+
+func actionReply(t *testing.T, browser string) routedReply {
+	t.Helper()
+	h := New(&autoSwitchActionBridge{}, routeTestConfig(), nil, nil, nil)
+	body := []byte(`{"kind":"click","browser":"` + browser + `"}`)
+	return serveRouted(t, h.HandleAction, httptest.NewRequest("POST", "/action", bytes.NewReader(body)))
 }
 
 func TestHandleAction_SingleBrowserRecordsOneAttempt(t *testing.T) {
-	assertSingleAttempt(t, actionRoute(t, config.BrowserCloak), config.BrowserCloak)
+	assertTrivialRouteOnlyRecorded(t, actionReply(t, config.BrowserCloak), config.BrowserCloak)
 }
 
 func TestHandleAction_GhostChromeDowngradeRecordsBothBrowsers(t *testing.T) {
-	assertGhostChromeDowngrade(t, actionRoute(t, "ghost-chrome"))
+	assertDowngradeRepliedAndRecorded(t, actionReply(t, "ghost-chrome"))
 }
 
-func multiStepRoute(t *testing.T, path, body string) *browserops.RouteMetadata {
+func multiStepReply(t *testing.T, path, body string) routedReply {
 	t.Helper()
 	cfg := routeTestConfig()
 	cfg.AllowMacro = true
 	h := New(&autoSwitchActionBridge{}, cfg, nil, nil, nil)
 	req := httptest.NewRequest("POST", path, bytes.NewReader([]byte(body)))
 	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
 	if path == "/macro" {
-		h.HandleMacro(w, req)
-	} else {
-		h.HandleActions(w, req)
+		return serveRouted(t, h.HandleMacro, req)
 	}
+	return serveRouted(t, h.HandleActions, req)
+}
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
-	}
-	var resp struct {
-		Route *browserops.RouteMetadata `json:"route"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	return resp.Route
+func TestHandleActions_SingleBrowserRecordsOneAttempt(t *testing.T) {
+	assertTrivialRouteOnlyRecorded(t, multiStepReply(t, "/actions", `{"actions":[{"kind":"click","browser":"cloak"}]}`), config.BrowserCloak)
 }
 
 func TestHandleActions_GhostChromeDowngradeRecordsBothBrowsers(t *testing.T) {
-	assertGhostChromeDowngrade(t, multiStepRoute(t, "/actions", `{"actions":[{"kind":"click","browser":"ghost-chrome"}]}`))
+	assertDowngradeRepliedAndRecorded(t, multiStepReply(t, "/actions", `{"actions":[{"kind":"click","browser":"ghost-chrome"}]}`))
 }
 
 func TestHandleMacro_SingleBrowserRecordsOneAttempt(t *testing.T) {
-	assertSingleAttempt(t, multiStepRoute(t, "/macro", `{"steps":[{"kind":"click","browser":"cloak"}]}`), config.BrowserCloak)
+	assertTrivialRouteOnlyRecorded(t, multiStepReply(t, "/macro", `{"steps":[{"kind":"click","browser":"cloak"}]}`), config.BrowserCloak)
 }
 
 func TestHandleMacro_GhostChromeDowngradeRecordsBothBrowsers(t *testing.T) {
-	assertGhostChromeDowngrade(t, multiStepRoute(t, "/macro", `{"steps":[{"kind":"click","browser":"ghost-chrome"}]}`))
+	assertDowngradeRepliedAndRecorded(t, multiStepReply(t, "/macro", `{"steps":[{"kind":"click","browser":"ghost-chrome"}]}`))
 }
 
-func navigateRoute(t *testing.T, browser string) *browserops.RouteMetadata {
+func navigateReply(t *testing.T, browser string) routedReply {
 	t.Helper()
 	stubNavigateHostResolution(t, func(context.Context, string, string) ([]net.IP, error) {
 		return []net.IP{net.ParseIP("93.184.216.34")}, nil
@@ -188,26 +226,35 @@ func navigateRoute(t *testing.T, browser string) *browserops.RouteMetadata {
 	m := &mockBridge{navigateResult: &bridge.NavigateResult{TabID: "tab_abc12345", URL: "https://example.com/"}}
 	h := New(m, routeTestConfig(), nil, nil, nil)
 	body := []byte(`{"url":"https://example.com","browser":"` + browser + `"}`)
-	req := httptest.NewRequest("POST", "/navigate", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-	h.HandleNavigate(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
-	}
-	var resp struct {
-		Route *browserops.RouteMetadata `json:"route"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	return resp.Route
+	return serveRouted(t, h.HandleNavigate, httptest.NewRequest("POST", "/navigate", bytes.NewReader(body)))
 }
 
 func TestHandleNavigate_SingleBrowserRecordsOneAttempt(t *testing.T) {
-	assertSingleAttempt(t, navigateRoute(t, config.BrowserCloak), config.BrowserCloak)
+	assertTrivialRouteOnlyRecorded(t, navigateReply(t, config.BrowserCloak), config.BrowserCloak)
 }
 
 func TestHandleNavigate_GhostChromeDowngradeRecordsBothBrowsers(t *testing.T) {
-	assertGhostChromeDowngrade(t, navigateRoute(t, "ghost-chrome"))
+	assertDowngradeRepliedAndRecorded(t, navigateReply(t, "ghost-chrome"))
+}
+
+func TestRouteMetadataTrivial(t *testing.T) {
+	oneAttempt := []browserops.RouteAttempt{{Browser: "cloak", Accepted: true}}
+	for name, tc := range map[string]struct {
+		route *browserops.RouteMetadata
+		want  bool
+	}{
+		"nil":               {nil, true},
+		"unrouted":          {&browserops.RouteMetadata{RequestedBrowser: "cloak", UsedBrowser: "cloak", Attempts: oneAttempt}, true},
+		"downgraded":        {&browserops.RouteMetadata{RequestedBrowser: "ghost-chrome", UsedBrowser: "cloak", Attempts: oneAttempt}, false},
+		"escalated":         {&browserops.RouteMetadata{RequestedBrowser: "cloak", UsedBrowser: "cloak", Escalated: true, Attempts: oneAttempt}, false},
+		"reason":            {&browserops.RouteMetadata{RequestedBrowser: "cloak", UsedBrowser: "cloak", Reason: "x", Attempts: oneAttempt}, false},
+		"fallback attempts": {&browserops.RouteMetadata{RequestedBrowser: "cloak", UsedBrowser: "cloak", FallbackAttempts: 1, Attempts: oneAttempt}, false},
+		"two attempts":      {&browserops.RouteMetadata{RequestedBrowser: "cloak", UsedBrowser: "cloak", Attempts: []browserops.RouteAttempt{{}, {}}}, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := tc.route.Trivial(); got != tc.want {
+				t.Fatalf("Trivial() = %v, want %v", got, tc.want)
+			}
+		})
+	}
 }

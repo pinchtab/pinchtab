@@ -861,7 +861,7 @@ func (h *Handlers) writeActionSuccess(w http.ResponseWriter, r *http.Request, tC
 func (h *Handlers) writeActionResult(w http.ResponseWriter, r *http.Request, routing browserRouting, result map[string]any, recoveryResult *recovery.RecoveryResult) {
 	actionRoute := routeMetadataFor(routing)
 	h.recordActivity(r, activity.Update{Route: actionRoute})
-	resp := map[string]any{"success": true, "result": result, "route": actionRoute}
+	resp := withRoute(map[string]any{"success": true, "result": result}, actionRoute)
 	if recoveryResult != nil {
 		resp["recovery"] = recoveryResult
 	}
@@ -1101,13 +1101,12 @@ func (h *Handlers) writeMultiStepActionResult(
 	if reason := multiStepFailureReason(results, total, successful); reason.message != "" {
 		httpx.RecordFailureReason(w, reason.code, reason.message)
 	}
-	resp := map[string]any{
+	resp := withRoute(map[string]any{
 		"results":    results,
 		"total":      total,
 		"successful": successful,
 		"failed":     failed,
-		"route":      route,
-	}
+	}, route)
 	maps.Copy(resp, extra)
 	httpx.JSON(w, 200, resp)
 }

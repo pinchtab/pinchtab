@@ -277,10 +277,11 @@ ghostchrome_get "/text?tabId=${GC_TAB_ROUTE}"
 assert_ok "ghost-chrome text"
 
 # /text bypasses the ghost-chrome adapter (uses readability.js directly), so
-# route metadata may name chrome as the provider that served it.
-USED=$(echo "$RESULT" | jq -r '.route.usedProvider // empty' 2>/dev/null)
+# route metadata may name chrome as the provider that served it; an unchanged
+# ghost-chrome route is omitted.
+USED=$(echo "$RESULT" | jq -r '.route.usedProvider // "ghost-chrome"' 2>/dev/null)
 if [ "$USED" = "ghost-chrome" ] || [ "$USED" = "chrome" ]; then
-  pass_assert "ghost-chrome text route.usedProvider=$USED (text handler may bypass adapter)"
+  pass_assert "ghost-chrome text served by $USED (text handler may bypass adapter)"
 else
   fail_assert "ghost-chrome text route.usedProvider is '$USED', want ghost-chrome or chrome: $RESULT"
 fi
@@ -292,7 +293,7 @@ CHROME_TAB_ROUTE=$(get_tab_id)
 pt_get "/text?tabId=${CHROME_TAB_ROUTE}"
 assert_ok "chrome text"
 
-assert_json_eq "$RESULT" '.route.usedProvider' 'chrome' "chrome route.usedProvider=chrome"
+assert_json_not_exists "$RESULT" '.route' "unrouted chrome text omits route"
 
 end_test
 
@@ -316,7 +317,12 @@ else
   fail_assert "ghost-chrome snapshot returned 0 nodes"
 fi
 
-assert_json_contains "$RESULT" '.route.usedProvider' 'ghost-chrome' "ghost-chrome snapshot route.usedProvider contains ghost-chrome"
+GC_SNAP_USED=$(echo "$RESULT" | jq -r '.route.usedProvider // "ghost-chrome"' 2>/dev/null)
+if [ "$GC_SNAP_USED" = "ghost-chrome" ]; then
+  pass_assert "ghost-chrome snapshot served by ghost-chrome"
+else
+  fail_assert "ghost-chrome snapshot route.usedProvider is '$GC_SNAP_USED', want ghost-chrome: $RESULT"
+fi
 
 end_test
 

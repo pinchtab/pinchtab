@@ -6,7 +6,7 @@ Scroll the current tab or a specific element.
 curl -X POST http://localhost:9867/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"scroll","scrollY":800}'
-# Response: {"success":true,"result":{"scrolled":true,...},"route":{...}}
+# Response: {"success":true,"result":{"scrolled":true,...}}
 # result also carries scrollX/scrollY (where the scroller ended up), deltaX/deltaY (the scroll
 # requested) and targetX/targetY (the point scrolled at); an element scroll returns only scrolled:true
 

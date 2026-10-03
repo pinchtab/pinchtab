@@ -13,7 +13,9 @@ pinchtab nav https://pinchtab.com
 https://pinchtab.com/
 ```
 
-API response: `{"tabId":"...","url":"<landed URL>","title":"...","status":200,"route":...}`.
+API response: `{"tabId":"...","url":"<landed URL>","title":"...","status":200}`.
+
+`route` appears only when routing changed something — a downgrade to another browser, an escalation, or a fallback — and then lists every browser attempted.
 
 `status` is the HTTP status of the main document the navigation landed on, after redirects. It is omitted when the document committed without a network response (`file:`, `data:`, `about:`, a same-document hash change) and when the page was served from a static tab.
 

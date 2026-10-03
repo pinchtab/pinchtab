@@ -104,6 +104,13 @@ type RouteMetadata struct {
 	Attempts         []RouteAttempt `json:"attempts,omitempty"`
 }
 
+// Trivial reports a route that tells the caller nothing beyond "you got the
+// browser you asked for"; replies omit it while the activity record keeps it.
+func (r *RouteMetadata) Trivial() bool {
+	return r == nil || r.RequestedBrowser == r.UsedBrowser && !r.Escalated && r.Reason == "" &&
+		r.FallbackAttempts == 0 && len(r.Attempts) <= 1
+}
+
 type RouteAttempt struct {
 	Browser  string `json:"provider"`
 	Accepted bool   `json:"accepted"`

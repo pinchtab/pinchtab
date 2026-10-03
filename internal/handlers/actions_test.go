@@ -25,7 +25,6 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
-	"github.com/pinchtab/pinchtab/internal/browserops"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/srccensus"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
@@ -446,68 +445,6 @@ func TestBatchActionQueryKeysAreActionParameters(t *testing.T) {
 		if _, ok := actionQueryKeys[key]; !ok {
 			t.Errorf("batchActionQueryKeys has %q, which is not an /action parameter; it would accept a key the singular route refuses", key)
 		}
-	}
-}
-
-func TestHandleActions_ResponseIncludesRoute(t *testing.T) {
-	b := &autoSwitchActionBridge{}
-	h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
-
-	body := `{"actions":[{"kind":"click"},{"kind":"type","text":"hello"}]}`
-	req := httptest.NewRequest("POST", "/actions", bytes.NewReader([]byte(body)))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	h.HandleActions(w, req)
-
-	if w.Code != 200 {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-	var resp struct {
-		Route *browserops.RouteMetadata `json:"route"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if resp.Route == nil {
-		t.Fatal("expected route in batch /actions response, got nil")
-	}
-	if resp.Route.UsedBrowser == "" {
-		t.Fatal("expected route.usedProvider to be set")
-	}
-	if len(resp.Route.Attempts) == 0 {
-		t.Fatal("expected route.attempts to be non-empty")
-	}
-}
-
-func TestHandleMacro_ResponseIncludesRoute(t *testing.T) {
-	b := &autoSwitchActionBridge{}
-	h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second, AllowMacro: true}, nil, nil, nil)
-
-	body := `{"steps":[{"kind":"click"},{"kind":"type","text":"hello"}]}`
-	req := httptest.NewRequest("POST", "/macro", bytes.NewReader([]byte(body)))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	h.HandleMacro(w, req)
-
-	if w.Code != 200 {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-	var resp struct {
-		Route *browserops.RouteMetadata `json:"route"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if resp.Route == nil {
-		t.Fatal("expected route in /macro response, got nil")
-	}
-	if resp.Route.UsedBrowser == "" {
-		t.Fatal("expected route.usedProvider to be set")
-	}
-	if len(resp.Route.Attempts) == 0 {
-		t.Fatal("expected route.attempts to be non-empty")
 	}
 }
 

@@ -575,7 +575,7 @@ func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExe
 			h.markCreatedTab(w, r, navResult.TabID)
 		}
 		h.recordResolvedURL(r, navResult.URL)
-		httpx.JSON(w, 200, navResponse(navResult.TabID, navResult.URL, navResult.Title, navResult.Status, route, !ex.isNewTab))
+		httpx.JSON(w, 200, navResponse(navResult.TabID, navResult.URL, navResult.Title, navResult.Status, route))
 		return
 	}
 
@@ -602,7 +602,7 @@ func (h *Handlers) runNavigate(w http.ResponseWriter, r *http.Request, ex navExe
 	}
 	h.recordResolvedURL(r, navURL)
 
-	httpx.JSON(w, 200, navResponse(ex.tabID, navURL, title, documentStatus, route, !ex.isNewTab))
+	httpx.JSON(w, 200, navResponse(ex.tabID, navURL, title, documentStatus, route))
 }
 
 const errorPagePrefix = "chrome-error://"
@@ -671,18 +671,12 @@ func classifyNavigateError(navErr error) int {
 	return 500
 }
 
-// navResponse builds the navigate JSON body. When routeAlways is true the route
-// key is always present (existing-tab contract, may be null); otherwise it is
-// included only when non-nil (blank-tab contract).
-func navResponse(tabID, url, title string, documentStatus int, route *browserops.RouteMetadata, routeAlways bool) map[string]any {
+func navResponse(tabID, url, title string, documentStatus int, route *browserops.RouteMetadata) map[string]any {
 	resp := map[string]any{"tabId": tabID, "url": url, "title": title}
 	if documentStatus > 0 {
 		resp["status"] = documentStatus
 	}
-	if routeAlways || route != nil {
-		resp["route"] = route
-	}
-	return resp
+	return withRoute(resp, route)
 }
 
 type navigateBrowserOptions struct {

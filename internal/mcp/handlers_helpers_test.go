@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -266,57 +265,19 @@ func TestRemedyVerbToolsNameRealToolParameters(t *testing.T) {
 	}
 }
 
-const trivialRoute = `{"requestedProvider":"cloak","usedProvider":"cloak","escalated":false,"attempts":[{"provider":"cloak","accepted":true}]}`
-
-func TestStripTrivialRouteDropsOnlyTheRouteMember(t *testing.T) {
-	cases := map[string]struct{ in, want string }{
-		"last":                              {`{"ok":true,"tabId":"t1","route":` + trivialRoute + `}`, `{"ok":true,"tabId":"t1"}`},
-		"first":                             {`{"route":` + trivialRoute + `,"ok":true,"tabId":"t1"}`, `{"ok":true,"tabId":"t1"}`},
-		"middle":                            {`{"ok":true,"route":` + trivialRoute + `,"tabId":"t1"}`, `{"ok":true,"tabId":"t1"}`},
-		"only":                              {`{"route":` + trivialRoute + `}`, `{}`},
-		"pretty":                            {"{\n  \"ok\": true,\n  \"route\": " + trivialRoute + ",\n  \"tabId\": \"t1\"\n}", "{\n  \"ok\": true,\n  \"tabId\": \"t1\"\n}"},
-		"nested route key is not top-level": {`{"details":{"route":` + trivialRoute + `},"ok":true}`, `{"details":{"route":` + trivialRoute + `},"ok":true}`},
-	}
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			got := string(stripTrivialRoute([]byte(tc.in)))
-			if got != tc.want {
-				t.Fatalf("got %s\nwant %s", got, tc.want)
-			}
-			if !json.Valid([]byte(got)) {
-				t.Fatalf("result is not valid JSON: %s", got)
-			}
-		})
-	}
-}
-
-func TestStripTrivialRoutePassesEverythingElseThroughByteIdentical(t *testing.T) {
-	oneAttempt := `"attempts":[{"provider":"cloak","accepted":true}]`
-	for name, in := range map[string]string{
-		"downgraded":        `{"ok":true,"route":{"requestedProvider":"ghost-chrome","usedProvider":"cloak","escalated":false,` + oneAttempt + `}}`,
-		"escalated":         `{"ok":true,"route":{"requestedProvider":"cloak","usedProvider":"cloak","escalated":true,` + oneAttempt + `}}`,
-		"reason":            `{"ok":true,"route":{"requestedProvider":"cloak","usedProvider":"cloak","escalated":false,"reason":"x",` + oneAttempt + `}}`,
-		"fallback attempts": `{"ok":true,"route":{"requestedProvider":"cloak","usedProvider":"cloak","escalated":false,"fallbackAttempts":1,` + oneAttempt + `}}`,
-		"two attempts":      `{"ok":true,"route":{"requestedProvider":"cloak","usedProvider":"cloak","escalated":false,"attempts":[{},{}]}}`,
-		"route-less":        `{"ok":true,"tabId":"t1"}`,
-		"non-JSON":          "plain text\nsecond line",
-		"array body":        `[{"route":` + trivialRoute + `}]`,
-		"route not JSON":    `{"ok":true,"route":"cloak"}`,
+func TestResultFromBytesPassesTheRouteThroughUntouched(t *testing.T) {
+	for name, body := range map[string]string{
+		"route-less": `{"ok":true,"tabId":"t1"}`,
+		"escalated":  `{"ok":true,"route":{"requestedProvider":"ghost-chrome","usedProvider":"chrome","escalated":true,"attempts":[{"provider":"ghost-chrome","accepted":false},{"provider":"chrome","accepted":true}]}}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			if got := string(stripTrivialRoute([]byte(in))); got != in {
-				t.Fatalf("body changed:\n got %s\nwant %s", got, in)
+			res, err := resultFromBytes([]byte(body), 200)
+			if err != nil || res.IsError {
+				t.Fatalf("unexpected error: %v / %s", err, resultText(t, res))
+			}
+			if got := resultText(t, res); got != body {
+				t.Fatalf("reply = %s, want %s", got, body)
 			}
 		})
-	}
-}
-
-func TestResultFromBytesStripsTheTrivialRoute(t *testing.T) {
-	res, err := resultFromBytes([]byte(`{"ok":true,"route":`+trivialRoute+`}`), 200)
-	if err != nil || res.IsError {
-		t.Fatalf("unexpected error: %v / %s", err, resultText(t, res))
-	}
-	if got := resultText(t, res); got != `{"ok":true}` {
-		t.Fatalf("reply = %s", got)
 	}
 }
