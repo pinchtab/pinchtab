@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -507,5 +508,63 @@ func assertAutoNamedOutsideCwd(t *testing.T, prefix, ext string, run func() stri
 	assertNonEmpty(t, printed)
 	if entries, err := os.ReadDir(cwd); err != nil || len(entries) != 0 {
 		t.Errorf("cwd holds %v (err %v); auto-named output must not land there", entries, err)
+	}
+}
+
+func TestAutoNamedOutputPathRefusesASharedDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows skips the owner and mode checks")
+	}
+	for _, tc := range []struct {
+		name string
+		make func(t *testing.T, dir string)
+	}{
+		{
+			name: "world-writable",
+			make: func(t *testing.T, dir string) {
+				if err := os.Mkdir(dir, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Chmod(dir, 0o777); err != nil { // #nosec G302 -- the unsafe dir under test.
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name: "symlink",
+			make: func(t *testing.T, dir string) {
+				if err := os.Symlink(t.TempDir(), dir); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			setTempDirEnv(t, tmp)
+			dir := filepath.Join(tmp, "pinchtab")
+			tc.make(t, dir)
+
+			_, err := autoNamedOutputPath("screenshot", ".jpg")
+			if !errors.Is(err, errUnsafeOutputDir) {
+				t.Fatalf("autoNamedOutputPath accepted a %s dir: err = %v", tc.name, err)
+			}
+			if !strings.Contains(err.Error(), dir) {
+				t.Errorf("error %q does not name %s", err, dir)
+			}
+		})
+	}
+}
+
+func TestAutoNamedOutputPathCreatesAFreshPrivateDir(t *testing.T) {
+	tmp := t.TempDir()
+	setTempDirEnv(t, tmp)
+
+	path, err := autoNamedOutputPath("screenshot", ".jpg")
+	if err != nil {
+		t.Fatalf("fresh dir refused: %v", err)
+	}
+	if want := filepath.Join(tmp, "pinchtab"); filepath.Dir(path) != want {
+		t.Errorf("path %s is not under %s", path, want)
 	}
 }

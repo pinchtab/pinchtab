@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,7 +21,25 @@ func autoNamedOutputPath(prefix, ext string) (string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("create auto-named output dir: %w", err)
 	}
+	if err := refuseSharedOutputDir(dir); err != nil {
+		return "", err
+	}
 	return filepath.Join(dir, prefix+"-"+time.Now().Format("20060102-150405")+ext), nil
+}
+
+var errUnsafeOutputDir = errors.New("unsafe auto-named output dir")
+
+// refuseSharedOutputDir guards the auto-named dir, which on Linux is /tmp/pinchtab and
+// shared by every user: MkdirAll accepts a dir another user created or pointed elsewhere.
+func refuseSharedOutputDir(dir string) error {
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return fmt.Errorf("inspect auto-named output dir: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%w %s: it is a symlink", errUnsafeOutputDir, dir)
+	}
+	return refuseForeignOutputDir(dir, info)
 }
 
 // writeOutputFile writes buf to path and returns the path actually used.
