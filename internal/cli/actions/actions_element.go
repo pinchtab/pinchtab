@@ -119,16 +119,29 @@ func postActionWithHeaders(conn apiclient.Conn, cmd *cobra.Command, req bridge.A
 		tabID = opened
 	}
 
-	snap, _ := cmd.Flags().GetBool("snap")
-	snapDiff, _ := cmd.Flags().GetBool("snap-diff")
-	if snap || snapDiff {
-		fetchAndPrintSnapshot(conn, cmd, tabID, snapDiff)
+	if tailRequested(cmd) {
+		settleNetwork(conn, tabID)
+		printPostActionOutput(conn, tabID, cmd)
 	}
+}
 
-	text, _ := cmd.Flags().GetBool("text")
-	if text {
-		fetchAndPrintText(conn, tabID)
+const settleTimeoutMs = 1500
+
+// settleNetwork holds the --snap / --snap-diff / --text tail until requests the
+// action started have gone quiet, capped at settleTimeoutMs. A tab without
+// network capture settles immediately and silently; hitting the cap prints a
+// settle header so the read is not mistaken for a settled one.
+func settleNetwork(conn apiclient.Conn, tabID string) {
+	body := map[string]any{"load": "network-idle", "timeout": settleTimeoutMs}
+	result := conn.PostQuiet(apiclient.TabPath(tabID, "wait"), body)
+	if waited, _ := result["waited"].(bool); waited {
+		return
 	}
+	msg, _ := result["error"].(string)
+	if msg == "" || strings.Contains(msg, "network monitor unavailable") {
+		return
+	}
+	fmt.Printf("settle: %s\n", msg)
 }
 
 func namedNoTab(cmd *cobra.Command) bool {

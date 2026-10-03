@@ -76,6 +76,15 @@ func printPostActionOutput(conn apiclient.Conn, tabID string, cmd *cobra.Command
 	}
 }
 
+func tailRequested(cmd *cobra.Command) bool {
+	for _, name := range []string{"snap", "snap-diff", "text"} {
+		if on, _ := cmd.Flags().GetBool(name); on {
+			return true
+		}
+	}
+	return false
+}
+
 // landedURL is the URL the navigation actually ended on, which is not the
 // requested one whenever a redirect, login wall or error page intervened. Empty
 // when the response carries none, so callers can stay terse instead of printing

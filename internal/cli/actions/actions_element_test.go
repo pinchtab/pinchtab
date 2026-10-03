@@ -342,14 +342,14 @@ func TestPressWithSnapDiffFetchesSnapshot(t *testing.T) {
 	_ = cmd.Flags().Set("snap-diff", "true")
 	ActionSimple(apiclient.Conn{Client: client, Base: m.base()}, "press", []string{"Enter"}, cmd)
 
-	if len(m.requests) != 2 {
-		t.Fatalf("expected 2 requests (action + snapshot), got %d", len(m.requests))
+	if len(m.requests) != 3 {
+		t.Fatalf("expected 3 requests (action + settle + snapshot), got %d", len(m.requests))
 	}
-	if m.requests[1].Path != "/snapshot" {
-		t.Fatalf("snapshot path = %q, want /snapshot", m.requests[1].Path)
+	if m.requests[2].Path != "/snapshot" {
+		t.Fatalf("snapshot path = %q, want /snapshot", m.requests[2].Path)
 	}
-	if m.requests[1].Query != (url.Values{"filter": {"interactive"}, "format": {"compact"}, "diff": {"true"}}).Encode() {
-		t.Fatalf("snapshot query = %q", m.requests[1].Query)
+	if m.requests[2].Query != (url.Values{"filter": {"interactive"}, "format": {"compact"}, "diff": {"true"}}).Encode() {
+		t.Fatalf("snapshot query = %q", m.requests[2].Query)
 	}
 }
 
@@ -1259,10 +1259,13 @@ func TestClickThatOpenedATabFetchesSnapAndTextFromTheNewTab(t *testing.T) {
 				Action(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "click", "e3", cmd)
 			})
 
-			if len(m.requests) != 2 {
-				t.Fatalf("expected 2 requests (action + follow-up), got %d", len(m.requests))
+			if len(m.requests) != 3 {
+				t.Fatalf("expected 3 requests (action + settle + follow-up), got %d", len(m.requests))
 			}
-			followUp := m.requests[1]
+			if settle := m.requests[1]; settle.Path != "/tabs/TAB_NEW/wait" {
+				t.Fatalf("settle path = %q, want /tabs/TAB_NEW/wait", settle.Path)
+			}
+			followUp := m.requests[2]
 			if flag == "text" {
 				if followUp.Path != "/tabs/TAB_NEW/text" {
 					t.Fatalf("text path = %q, want /tabs/TAB_NEW/text", followUp.Path)
@@ -1318,5 +1321,79 @@ func TestClickThatOpenedADialogSkipsTheSnapAndTextTails(t *testing.T) {
 				t.Fatalf("got %d requests, want the action alone: a read behind the open dialog answers 409", len(m.requests))
 			}
 		})
+	}
+}
+
+func TestSnapDiffTailSettlesNetworkBeforeReading(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	m.setResponse("POST", "/wait", 200, `{"waited":true,"elapsed":12,"match":"network-idle"}`)
+	m.setResponse("GET", "/snapshot", 200, "snapshot")
+
+	cmd := newSimpleCmd()
+	_ = cmd.Flags().Set("snap-diff", "true")
+	out := captureStdout(t, func() {
+		ActionSimple(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "press", []string{"Enter"}, cmd)
+	})
+
+	paths := make([]string, 0, len(m.requests))
+	for _, r := range m.requests {
+		paths = append(paths, r.Path)
+	}
+	if strings.Join(paths, " ") != "/action /wait /snapshot" {
+		t.Fatalf("request order = %q, want action, wait, snapshot", paths)
+	}
+	var wait map[string]any
+	_ = json.Unmarshal([]byte(m.requests[1].Body), &wait)
+	if wait["load"] != "network-idle" || wait["timeout"] != float64(settleTimeoutMs) {
+		t.Fatalf("wait body = %s, want load=network-idle timeout=%d", m.requests[1].Body, settleTimeoutMs)
+	}
+	if strings.Contains(out, "settle:") {
+		t.Fatalf("settled read printed a settle header: %q", out)
+	}
+}
+
+func TestTailSettleTimeoutPrintsHeaderThenReads(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	m.setResponse("POST", "/wait", 200, `{"waited":false,"elapsed":1500,"error":"timeout after 1500ms waiting for network-idle (inflight=2)"}`)
+	m.setResponse("GET", "/text", 200, `{"text":"Showing 10 of 30"}`)
+
+	cmd := newSimpleCmd()
+	_ = cmd.Flags().Set("text", "true")
+	out := captureStdout(t, func() {
+		ActionSimple(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "press", []string{"Enter"}, cmd)
+	})
+
+	if !strings.Contains(out, "settle: timeout after 1500ms waiting for network-idle (inflight=2)\nShowing 10 of 30") {
+		t.Fatalf("output = %q, want settle header before the text", out)
+	}
+}
+
+func TestTailWithoutNetworkCaptureReadsSilently(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	m.setResponse("POST", "/wait", 200, `{"waited":false,"elapsed":1,"error":"network monitor unavailable for tab"}`)
+	m.setResponse("GET", "/text", 200, `{"text":"page"}`)
+
+	cmd := newSimpleCmd()
+	_ = cmd.Flags().Set("text", "true")
+	out := captureStdout(t, func() {
+		ActionSimple(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "press", []string{"Enter"}, cmd)
+	})
+
+	if strings.Contains(out, "settle:") {
+		t.Fatalf("unavailable monitor must read silently, got %q", out)
+	}
+}
+
+func TestActionWithoutTailFlagsNeverWaits(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+
+	ActionSimple(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "press", []string{"Enter"}, newSimpleCmd())
+
+	if len(m.requests) != 1 || m.requests[0].Path != "/action" {
+		t.Fatalf("expected the action alone, got %+v", m.requests)
 	}
 }
