@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"encoding/json"
 	"net/url"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
@@ -14,6 +15,10 @@ func PDF(conn apiclient.Conn, cmd *cobra.Command) {
 
 	outFile, _ := cmd.Flags().GetString("output")
 	tabID, _ := cmd.Flags().GetString("tab")
+	fileOutput, _ := cmd.Flags().GetBool("file-output")
+	if fileOutput && outFile != "" {
+		usageErr("Error: --file-output saves on the server and cannot be combined with -o/--output; use --path to choose the server-side location")
+	}
 
 	if v, _ := cmd.Flags().GetBool("landscape"); v {
 		params.Set("landscape", "true")
@@ -60,12 +65,17 @@ func PDF(conn apiclient.Conn, cmd *cobra.Command) {
 	if v, _ := cmd.Flags().GetBool("generate-document-outline"); v {
 		params.Set("generateDocumentOutline", "true")
 	}
-	if v, _ := cmd.Flags().GetBool("file-output"); v {
+	if fileOutput {
 		params.Del("raw")
 		params.Set("output", "file")
 	}
 	if v, _ := cmd.Flags().GetString("path"); v != "" {
 		params.Set("path", v)
+	}
+
+	if fileOutput {
+		printServerSavedPDF(conn.GetRaw(apiclient.TabPath(tabID, "pdf"), params))
+		return
 	}
 
 	autoNamed := outFile == ""
@@ -85,4 +95,18 @@ func PDF(conn apiclient.Conn, cmd *cobra.Command) {
 		cli.Fatal("Write failed: %v", err)
 	}
 	printSaved(saved, len(data))
+}
+
+func printServerSavedPDF(reply []byte) {
+	if reply == nil {
+		return
+	}
+	var saved struct {
+		Path string `json:"path"`
+		Size int    `json:"size"`
+	}
+	if err := json.Unmarshal(reply, &saved); err != nil || saved.Path == "" {
+		cli.Fatal("Unexpected reply to a server-side PDF save: %s", reply)
+	}
+	printSaved(saved.Path, saved.Size)
 }

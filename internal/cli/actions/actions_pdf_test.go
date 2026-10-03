@@ -1,7 +1,10 @@
 package actions
 
 import (
+	"bytes"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -126,4 +129,68 @@ func TestPDFAutoNamedLandsInTempDirWithAbsolutePath(t *testing.T) {
 	assertAutoNamedOutsideCwd(t, "page-", ".pdf", func() string {
 		return captureStdout(t, func() { PDF(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, newPDFCmd()) })
 	})
+}
+
+func TestPDFFileOutputPrintsTheServerPathAndWritesNothingLocally(t *testing.T) {
+	const serverPath = "/srv/state/pdfs/page-1.pdf"
+	m := newMockServer()
+	defer m.close()
+	m.response = `{"path":"` + serverPath + `","size":864}`
+
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	t.Chdir(t.TempDir())
+	cwd, _ := os.Getwd()
+
+	cmd := newPDFCmd()
+	_ = cmd.Flags().Set("file-output", "true")
+	out := captureStdout(t, func() { PDF(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd) })
+
+	if !strings.Contains(m.lastQuery, "output=file") || strings.Contains(m.lastQuery, "raw=true") {
+		t.Errorf("query = %s, want output=file without raw=true", m.lastQuery)
+	}
+	if !strings.Contains(out, serverPath) || !strings.Contains(out, "864 bytes") {
+		t.Errorf("stdout = %q, want the server path %s and its 864 bytes", out, serverPath)
+	}
+	for _, dir := range []string{tmp, cwd} {
+		_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				t.Errorf("--file-output created local file %s", path)
+			}
+			return nil
+		})
+	}
+}
+
+const pdfFileOutputWithOutputChildEnv = "PINCHTAB_TEST_PDF_FILE_OUTPUT_WITH_OUTPUT"
+
+func TestPDFFileOutputWithOutputIsAUsageError(t *testing.T) {
+	if outFile := os.Getenv(pdfFileOutputWithOutputChildEnv); outFile != "" {
+		m := newMockServer()
+		defer m.close()
+		m.response = `{"path":"/srv/state/pdfs/page-1.pdf","size":864}`
+		cmd := newPDFCmd()
+		_ = cmd.Flags().Set("file-output", "true")
+		_ = cmd.Flags().Set("output", outFile)
+		PDF(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd)
+		return
+	}
+
+	outFile := filepath.Join(t.TempDir(), "b.pdf")
+	child := exec.Command(os.Args[0], "-test.run=^TestPDFFileOutputWithOutputIsAUsageError$", "-test.timeout=60s") // #nosec G204 -- re-executes this test binary.
+	child.Env = append(os.Environ(), pdfFileOutputWithOutputChildEnv+"="+outFile)
+	var stderr bytes.Buffer
+	child.Stderr = &stderr
+
+	err := child.Run()
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 2 {
+		t.Fatalf("err = %v, want usage exit 2 (stderr=%q)", err, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "--file-output") {
+		t.Errorf("stderr = %q, want it to name --file-output", stderr.String())
+	}
+	if _, statErr := os.Stat(outFile); !os.IsNotExist(statErr) {
+		t.Errorf("%s exists after the refusal (stat err = %v)", outFile, statErr)
+	}
 }
