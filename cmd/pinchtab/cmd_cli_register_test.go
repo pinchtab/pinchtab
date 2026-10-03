@@ -2,11 +2,6 @@ package main
 
 import (
 	"errors"
-	"go/ast"
-	"go/parser"
-	"go/token"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -224,155 +219,47 @@ func TestPostActionFlagsBundle(t *testing.T) {
 	}
 }
 
-// tailRunnerWithoutTailFlags names the Action/ActionSimple commands that keep
-// the runner's tail unreachable, each with the reason a post-action read
-// answers nothing for it.
-var tailRunnerWithoutTailFlags = map[string]string{
-	"focusCmd":          "moving focus changes no page content",
-	"keydownCmd":        "half of a key chord; the read belongs after keyup or press",
-	"keyupCmd":          "pairs with keydown; press covers the one-shot key with a tail",
-	"scrollintoviewCmd": "its output is the element's bounding box; scroll carries the tail",
-}
-
-// TestEveryTailRunnerCommandRegistersTailFlags finds, by source, every command
-// whose Run reaches browseractions.Action or ActionSimple — both print the
-// --snap/--snap-diff/--text tail — and requires the flags to be registered,
-// since an unregistered flag reads as false and the tail silently never runs.
-func TestEveryTailRunnerCommandRegistersTailFlags(t *testing.T) {
-	uses := tailRunnerCommandUses(t)
-	if len(uses) < 15 {
-		t.Fatalf("source scan found %d tail-runner commands, want at least 15: the scan no longer recognises the runners", len(uses))
+func TestConstructorBuiltActionCommandsTailFlags(t *testing.T) {
+	cases := []struct {
+		cmd      *cobra.Command
+		verb     string
+		withText bool
+	}{
+		{clickCmd, "action", true},
+		{dblclickCmd, "double-click", true},
+		{hoverCmd, "hover", true},
+		{typeCmd, "typing", true},
+		{pressCmd, "key press", true},
+		{fillCmd, "fill", true},
+		{selectCmd, "select", true},
+		{checkCmd, "check", true},
+		{uncheckCmd, "uncheck", true},
+		{keyboardTypeCmd, "typing", true},
+		{keyboardInsertTextCmd, "insert", true},
+		{focusCmd, noPostActionTail, false},
+		{keydownCmd, noPostActionTail, false},
+		{keyupCmd, noPostActionTail, false},
+		{scrollintoviewCmd, noPostActionTail, false},
 	}
-
-	byUse := map[string]*cobra.Command{}
-	var index func(*cobra.Command)
-	index = func(c *cobra.Command) {
-		byUse[c.Use] = c
-		for _, child := range c.Commands() {
-			index(child)
+	for _, tc := range cases {
+		want := map[string]string{"snap": "", "snap-diff": "", "text": ""}
+		if tc.verb != noPostActionTail {
+			want["snap"] = "Output interactive snapshot after " + tc.verb
+			want["snap-diff"] = "Output snapshot diff after " + tc.verb + " (" + observe.CompactDiffSummary + ")"
+			if tc.withText {
+				want["text"] = "Output page text after " + tc.verb + " (for verification)"
+			}
 		}
-	}
-	index(rootCmd)
-
-	for name, use := range uses {
-		cmd, ok := byUse[use]
-		if !ok {
-			t.Errorf("%s (%q) is not registered under rootCmd", name, use)
-			continue
-		}
-		hasTail := cmd.Flags().Lookup("snap") != nil && cmd.Flags().Lookup("snap-diff") != nil
-		_, exempt := tailRunnerWithoutTailFlags[name]
-		switch {
-		case !hasTail && !exempt:
-			t.Errorf("%s runs on the tail runner but lacks --snap/--snap-diff: register them with addPostActionFlags", name)
-		case hasTail && exempt:
-			t.Errorf("%s now registers the tail flags: remove it from tailRunnerWithoutTailFlags", name)
-		}
-	}
-	for name := range tailRunnerWithoutTailFlags {
-		if _, ok := uses[name]; !ok {
-			t.Errorf("%s is exempt but no longer runs on the tail runner: remove it from tailRunnerWithoutTailFlags", name)
-		}
-	}
-}
-
-// tailRunnerCommandUses maps each package-level command var built on the tail
-// runners, directly or through a constructor, to its Use string.
-func tailRunnerCommandUses(t *testing.T) map[string]string {
-	t.Helper()
-	fset := token.NewFileSet()
-	paths, err := filepath.Glob("*.go")
-	if err != nil {
-		t.Fatalf("list package files: %v", err)
-	}
-	var files []*ast.File
-	for _, path := range paths {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
-		}
-		f, err := parser.ParseFile(fset, path, nil, 0)
-		if err != nil {
-			t.Fatalf("parse %s: %v", path, err)
-		}
-		files = append(files, f)
-	}
-
-	constructors := map[string]bool{}
-	for _, f := range files {
-		for _, decl := range f.Decls {
-			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv == nil && callsTailRunner(fn.Body) {
-				constructors[fn.Name.Name] = true
+		for flag, usage := range want {
+			got := ""
+			if f := tc.cmd.Flags().Lookup(flag); f != nil {
+				got = f.Usage
+			}
+			if got != usage {
+				t.Errorf("%s --%s usage = %q, want %q", tc.cmd.CommandPath(), flag, got, usage)
 			}
 		}
 	}
-
-	uses := map[string]string{}
-	for _, f := range files {
-		for _, decl := range f.Decls {
-			gen, ok := decl.(*ast.GenDecl)
-			if !ok || gen.Tok != token.VAR {
-				continue
-			}
-			for _, spec := range gen.Specs {
-				vs := spec.(*ast.ValueSpec)
-				for i, value := range vs.Values {
-					if use, ok := tailRunnerUse(value, constructors); ok {
-						uses[vs.Names[i].Name] = use
-					}
-				}
-			}
-		}
-	}
-	return uses
-}
-
-func tailRunnerUse(value ast.Expr, constructors map[string]bool) (string, bool) {
-	if call, ok := value.(*ast.CallExpr); ok {
-		if fn, ok := call.Fun.(*ast.Ident); ok && constructors[fn.Name] && len(call.Args) > 0 {
-			return stringLiteral(call.Args[0])
-		}
-		return "", false
-	}
-	unary, ok := value.(*ast.UnaryExpr)
-	if !ok {
-		return "", false
-	}
-	lit, ok := unary.X.(*ast.CompositeLit)
-	if !ok || !callsTailRunner(lit) {
-		return "", false
-	}
-	for _, elt := range lit.Elts {
-		if kv, ok := elt.(*ast.KeyValueExpr); ok {
-			if key, ok := kv.Key.(*ast.Ident); ok && key.Name == "Use" {
-				return stringLiteral(kv.Value)
-			}
-		}
-	}
-	return "", false
-}
-
-func callsTailRunner(node ast.Node) bool {
-	found := false
-	ast.Inspect(node, func(n ast.Node) bool {
-		sel, ok := n.(*ast.SelectorExpr)
-		if !ok {
-			return !found
-		}
-		if pkg, ok := sel.X.(*ast.Ident); ok && pkg.Name == "browseractions" && (sel.Sel.Name == "Action" || sel.Sel.Name == "ActionSimple") {
-			found = true
-		}
-		return !found
-	})
-	return found
-}
-
-func stringLiteral(expr ast.Expr) (string, bool) {
-	lit, ok := expr.(*ast.BasicLit)
-	if !ok || lit.Kind != token.STRING {
-		return "", false
-	}
-	s, err := strconv.Unquote(lit.Value)
-	return s, err == nil
 }
 
 // --css-1x was removed in favor of --scale; it must remain registered as a

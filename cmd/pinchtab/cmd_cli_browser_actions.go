@@ -12,8 +12,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newOptionalRefActionCmd(use, short, action string) *cobra.Command {
-	return &cobra.Command{
+const noPostActionTail = ""
+
+func withPostActionTail(cmd *cobra.Command, verb string, withText bool) *cobra.Command {
+	if verb != noPostActionTail {
+		addPostActionFlags(cmd, verb, withText)
+	}
+	return cmd
+}
+
+func newOptionalRefActionCmd(use, short, action, tailVerb string, withText bool) *cobra.Command {
+	return withPostActionTail(&cobra.Command{
 		Use:   use,
 		Short: short,
 		Args:  cobra.MaximumNArgs(1),
@@ -22,11 +31,11 @@ func newOptionalRefActionCmd(use, short, action string) *cobra.Command {
 				browseractions.Action(rt, action, optionalArg(args), cmd)
 			})
 		},
-	}
+	}, tailVerb, withText)
 }
 
-func newSimpleActionCmd(use, short, action string, argsValidator cobra.PositionalArgs) *cobra.Command {
-	return &cobra.Command{
+func newSimpleActionCmd(use, short, action string, argsValidator cobra.PositionalArgs, tailVerb string, withText bool) *cobra.Command {
+	return withPostActionTail(&cobra.Command{
 		Use:   use,
 		Short: short,
 		Args:  argsValidator,
@@ -35,11 +44,11 @@ func newSimpleActionCmd(use, short, action string, argsValidator cobra.Positiona
 				browseractions.ActionSimple(rt, action, args, cmd)
 			})
 		},
-	}
+	}, tailVerb, withText)
 }
 
-func newRequiredRefActionCmd(use, short, action string) *cobra.Command {
-	return &cobra.Command{
+func newRequiredRefActionCmd(use, short, action, tailVerb string, withText bool) *cobra.Command {
+	return withPostActionTail(&cobra.Command{
 		Use:   use,
 		Short: short,
 		Args:  cobra.ExactArgs(1),
@@ -48,7 +57,7 @@ func newRequiredRefActionCmd(use, short, action string) *cobra.Command {
 				browseractions.Action(rt, action, args[0], cmd)
 			})
 		},
-	}
+	}, tailVerb, withText)
 }
 
 func newMouseActionCmd(use, short, action string, argsValidator cobra.PositionalArgs) *cobra.Command {
@@ -64,17 +73,17 @@ func newMouseActionCmd(use, short, action string, argsValidator cobra.Positional
 	}
 }
 
-var clickCmd = newOptionalRefActionCmd("click <ref>", "Click element", "click")
+var clickCmd = newOptionalRefActionCmd("click <ref>", "Click element", "click", "action", true)
 
-var dblclickCmd = newOptionalRefActionCmd("dblclick <ref>", "Double-click element", "dblclick")
+var dblclickCmd = newOptionalRefActionCmd("dblclick <ref>", "Double-click element", "dblclick", "double-click", true)
 
-var typeCmd = newSimpleActionCmd("type <ref> <text>", "Type into element", "type", cobra.MinimumNArgs(2))
+var typeCmd = newSimpleActionCmd("type <ref> <text>", "Type into element", "type", cobra.MinimumNArgs(2), "typing", true)
 
-var pressCmd = newSimpleActionCmd("press [ref] <key|chord>", "Press a key or chord (Enter, Ctrl+A, Shift+ArrowLeft), optionally focusing a ref first", "press", cobra.MinimumNArgs(1))
+var pressCmd = newSimpleActionCmd("press [ref] <key|chord>", "Press a key or chord (Enter, Ctrl+A, Shift+ArrowLeft), optionally focusing a ref first", "press", cobra.MinimumNArgs(1), "key press", true)
 
-var fillCmd = newSimpleActionCmd("fill <ref|selector> <text>", "Fill input directly", "fill", cobra.MinimumNArgs(2))
+var fillCmd = newSimpleActionCmd("fill <ref|selector> <text>", "Fill input directly", "fill", cobra.MinimumNArgs(2), "fill", true)
 
-var hoverCmd = newOptionalRefActionCmd("hover <ref>", "Hover element", "hover")
+var hoverCmd = newOptionalRefActionCmd("hover <ref>", "Hover element", "hover", "hover", true)
 
 var mouseCmd = &cobra.Command{
 	Use:   "mouse",
@@ -116,7 +125,7 @@ dragstart and the destination receives drop.
 	},
 }
 
-var focusCmd = newOptionalRefActionCmd("focus <ref>", "Focus element", "focus")
+var focusCmd = newOptionalRefActionCmd("focus <ref>", "Focus element", "focus", noPostActionTail, false)
 
 var scrollCmd = &cobra.Command{
 	Use:   "scroll <pixels|direction|selector>",
@@ -195,26 +204,26 @@ func scrollFlagDelta(cmd *cobra.Command, name string) int {
 	return value
 }
 
-var selectCmd = newSimpleActionCmd("select <ref> <value>", "Select option in dropdown", "select", cobra.MinimumNArgs(2))
+var selectCmd = newSimpleActionCmd("select <ref> <value>", "Select option in dropdown", "select", cobra.MinimumNArgs(2), "select", true)
 
-var checkCmd = newRequiredRefActionCmd("check <selector>", "Check a checkbox or radio", "check")
+var checkCmd = newRequiredRefActionCmd("check <selector>", "Check a checkbox or radio", "check", "check", true)
 
-var uncheckCmd = newRequiredRefActionCmd("uncheck <selector>", "Uncheck a checkbox or radio", "uncheck")
+var uncheckCmd = newRequiredRefActionCmd("uncheck <selector>", "Uncheck a checkbox or radio", "uncheck", "uncheck", true)
 
 var keyboardCmd = &cobra.Command{
 	Use:   "keyboard",
 	Short: "Keyboard commands (type, inserttext)",
 }
 
-var keyboardTypeCmd = newSimpleActionCmd("type <text>", "Type text at current focus via keystroke events", "keyboard-type", cobra.MinimumNArgs(1))
+var keyboardTypeCmd = newSimpleActionCmd("type <text>", "Type text at current focus via keystroke events", "keyboard-type", cobra.MinimumNArgs(1), "typing", true)
 
-var keyboardInsertTextCmd = newSimpleActionCmd("inserttext <text>", "Insert text at current focus (paste-like, no key events)", "keyboard-inserttext", cobra.MinimumNArgs(1))
+var keyboardInsertTextCmd = newSimpleActionCmd("inserttext <text>", "Insert text at current focus (paste-like, no key events)", "keyboard-inserttext", cobra.MinimumNArgs(1), "insert", true)
 
-var keydownCmd = newSimpleActionCmd("keydown <key>", "Hold a key down", "keydown", cobra.ExactArgs(1))
+var keydownCmd = newSimpleActionCmd("keydown <key>", "Hold a key down", "keydown", cobra.ExactArgs(1), noPostActionTail, false)
 
-var keyupCmd = newSimpleActionCmd("keyup <key>", "Release a key", "keyup", cobra.ExactArgs(1))
+var keyupCmd = newSimpleActionCmd("keyup <key>", "Release a key", "keyup", cobra.ExactArgs(1), noPostActionTail, false)
 
-var scrollintoviewCmd = newOptionalRefActionCmd("scrollintoview <selector>", "Scroll element into view and return bounding box", "scrollintoview")
+var scrollintoviewCmd = newOptionalRefActionCmd("scrollintoview <selector>", "Scroll element into view and return bounding box", "scrollintoview", noPostActionTail, false)
 
 var dialogCmd = &cobra.Command{
 	Use:   "dialog",
@@ -247,7 +256,6 @@ func configureBrowserActionsFlags() {
 	clickCmd.Flags().Bool("wait-nav", false, "Wait for navigation after click")
 	clickCmd.Flags().Bool("dismiss-banners", false, "Dismiss cookie/consent banners after a wait-nav click (no-op without --wait-nav)")
 	clickCmd.Flags().Bool("dismiss-known-interstitials", false, "Dismiss a recognized portal interstitial before resolving the click target")
-	addPostActionFlags(clickCmd, "action", true)
 	clickCmd.Flags().String("dialog-action", "", "Auto-handle a JS dialog opened by the click: "+strings.Join(bridge.DialogActions(), " | "))
 	clickCmd.Flags().String("dialog-text", "", "Prompt response text (with --dialog-action accept on prompt())")
 	clickCmd.Flags().String("mode", "", "Click delivery mode override: "+strings.Join(bridge.ClickModes(), " | "))
@@ -263,7 +271,6 @@ func configureBrowserActionsFlags() {
 	addMouseButtonFlag(mouseUpCmd)
 	addPointerActionFlags(mouseWheelCmd, bridge.ActionMouseWheel)
 	typeCmd.Flags().Bool("humanize", false, "Use humanized per-character keypress timing (overrides instance config)")
-	addPostActionFlags(pressCmd, "key press", true)
 	mouseWheelCmd.Flags().Int("dx", 0, "Wheel delta X")
 	mouseWheelCmd.Flags().Int("dy", 0, "Wheel delta Y")
 	scrollCmd.Flags().Int("dy", 0, "Vertical scroll in pixels (negative scrolls up)")
@@ -272,17 +279,8 @@ func configureBrowserActionsFlags() {
 	dragCmd.Flags().Int("drag-x", 0, "Horizontal pixel offset for single-step drag action")
 	dragCmd.Flags().Int("drag-y", 0, "Vertical pixel offset for single-step drag action")
 	focusCmd.Flags().String("css", "", "CSS selector instead of ref")
-	addPostActionFlags(fillCmd, "fill", true)
 	fillCmd.Flags().Bool("submit", false, "Press Enter after filling the field")
-	addPostActionFlags(selectCmd, "select", true)
 	addPostActionFlags(scrollCmd, "scroll", false)
-	addPostActionFlags(checkCmd, "check", true)
-	addPostActionFlags(uncheckCmd, "uncheck", true)
-	addPostActionFlags(typeCmd, "typing", true)
-	addPostActionFlags(keyboardTypeCmd, "typing", true)
-	addPostActionFlags(keyboardInsertTextCmd, "insert", true)
-	addPostActionFlags(dblclickCmd, "double-click", true)
-	addPostActionFlags(hoverCmd, "hover", true)
 	addTabFlag(clickCmd)
 	addTabFlag(dblclickCmd)
 	addTabFlag(hoverCmd)
