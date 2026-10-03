@@ -735,6 +735,9 @@ func TestHandleNavigate_StaticFirstServesWithoutChromeLaunch(t *testing.T) {
 	if resp["tabId"] != "lite-1" {
 		t.Fatalf("tabId = %v, want lite-1", resp["tabId"])
 	}
+	if _, ok := resp["route"]; ok {
+		t.Fatalf("trivial static-first route leaked into reply: %v", resp["route"])
+	}
 	if m.ensureBrowserCall != 0 {
 		t.Fatalf("Chrome was launched (%d ensure calls) for a static-served navigate", m.ensureBrowserCall)
 	}
