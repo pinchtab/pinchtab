@@ -49,31 +49,12 @@ func CleanupOrphanedChromeProcesses(profileDir string) {
 	}
 }
 
-// Matches both persistent profiles (--user-data-dir=.../profiles/...) and
-// temp profiles (--user-data-dir=.../pinchtab-profile-*), and spares any that
-// a live peer server launched. Called on server shutdown, immediate SIGKILL.
-func KillAllPinchtabChrome() int {
-	var matched []int
-	tempPids := findPIDsByNeedle("pinchtab-profile")
-	persistPids := findPIDsByNeedle(".pinchtab/profiles")
+var pinchtabProfileNeedles = []string{"pinchtab-profile", ".pinchtab/profiles"}
 
-	seen := make(map[int]bool)
-	for _, pid := range append(tempPids, persistPids...) {
-		if !seen[pid] {
-			seen[pid] = true
-			matched = append(matched, pid)
-		}
-	}
-
-	pids := reclaimableChromePIDs(matched)
-	if len(pids) == 0 {
-		return 0
-	}
-
+func killPIDsNow(pids []int) int {
 	for _, pid := range pids {
 		_ = syscall.Kill(pid, syscall.SIGKILL)
 	}
-	slog.Info("shutdown: killed pinchtab chrome processes", "count", len(pids))
 	return len(pids)
 }
 
@@ -275,7 +256,7 @@ func killChromeByProfileDir(profileDir string) int {
 	if len(pids) == 0 {
 		return 0
 	}
-	return forceKillPIDs(pids)
+	return forceKillPIDsFunc(pids)
 }
 
 // Sends SIGTERM, waits briefly, then SIGKILL any survivors.

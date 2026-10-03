@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"bytes"
+	"log/slog"
 	"os"
 	"slices"
 	"strconv"
@@ -14,6 +15,8 @@ var (
 	allChromePIDsByProfileDirFunc  = findChromePIDsByProfileDir
 	forceKillPIDsFunc              = forceKillPIDs
 	findChromePIDsByProfileDirFunc = findReclaimableChromePIDsByProfileDir
+	findPIDsByNeedleFunc           = findPIDsByNeedle
+	killPIDsNowFunc                = killPIDsNow
 )
 
 const (
@@ -107,6 +110,29 @@ func killOrphanedChromeByProfileDir(profileDir string) int {
 		return 0
 	}
 	return forceKillPIDsFunc(orphans)
+}
+
+// Matches both persistent and temp profiles, and spares any that a live peer
+// server launched. Called on server shutdown, so survivors are killed at once.
+func KillAllPinchtabChrome() int {
+	var matched []int
+	seen := make(map[int]bool)
+	for _, needle := range pinchtabProfileNeedles {
+		for _, pid := range findPIDsByNeedleFunc(needle) {
+			if !seen[pid] {
+				seen[pid] = true
+				matched = append(matched, pid)
+			}
+		}
+	}
+
+	pids := reclaimableChromePIDs(matched)
+	if len(pids) == 0 {
+		return 0
+	}
+	killed := killPIDsNowFunc(pids)
+	slog.Info("shutdown: killed pinchtab chrome processes", "count", killed)
+	return killed
 }
 
 func parsePIDPairs(out []byte) map[int]int {

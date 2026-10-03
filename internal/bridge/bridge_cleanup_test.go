@@ -416,3 +416,49 @@ func TestParsePIDPairs(t *testing.T) {
 		t.Fatalf("parsePIDPairs = %v, want %v", got, want)
 	}
 }
+
+func peerAndOwnChromeTree() map[int]int {
+	return map[int]int{
+		fakeInit: 0, fakePeerServer: fakeInit, os.Getpid(): fakeInit, fakeOwnBridge: os.Getpid(),
+		fakeChromeMain: fakePeerServer, fakeChromeGPU: fakeChromeMain,
+		fakeRenderer: fakeOwnBridge,
+	}
+}
+
+func TestKillAllPinchtabChrome_SparesLivePeerAndKillsOwnChrome(t *testing.T) {
+	withProcessTree(t, peerAndOwnChromeTree(), nil)
+	origFind, origKill := findPIDsByNeedleFunc, killPIDsNowFunc
+	t.Cleanup(func() { findPIDsByNeedleFunc, killPIDsNowFunc = origFind, origKill })
+
+	findPIDsByNeedleFunc = func(string) []int { return []int{fakeChromeMain, fakeChromeGPU, fakeRenderer} }
+	var killed []int
+	killPIDsNowFunc = func(pids []int) int {
+		killed = append(killed, pids...)
+		return len(pids)
+	}
+
+	if got := KillAllPinchtabChrome(); got != 1 {
+		t.Errorf("KillAllPinchtabChrome = %d, want 1", got)
+	}
+	if !slices.Equal(killed, []int{fakeRenderer}) {
+		t.Fatalf("killed = %v, want only this server's chrome %d", killed, fakeRenderer)
+	}
+}
+
+func TestKillChromeByProfileDir_SparesLivePeerAndKillsOwnChrome(t *testing.T) {
+	const peerProfile, ownProfile = "/profiles/peer", "/profiles/own"
+	killed := withProcessTree(t, peerAndOwnChromeTree(), map[string][]int{
+		peerProfile: {fakeChromeMain, fakeChromeGPU},
+		ownProfile:  {fakeRenderer},
+	})
+
+	killChromeByProfileDir(peerProfile)
+	if len(*killed) != 0 {
+		t.Fatalf("live peer's chrome was killed: %v", *killed)
+	}
+
+	killChromeByProfileDir(ownProfile)
+	if !slices.Equal(*killed, []int{fakeRenderer}) {
+		t.Fatalf("killed = %v, want only this server's chrome %d", *killed, fakeRenderer)
+	}
+}

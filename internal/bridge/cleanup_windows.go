@@ -18,7 +18,7 @@ Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" |
 Where-Object { $_.CommandLine -and $_.CommandLine.Contains($needle) } |
 Select-Object -ExpandProperty ProcessId`
 
-func findPIDsByPowerShell(needle string) []int {
+func findPIDsByNeedle(needle string) []int {
 	cmd := exec.Command("powershell", "-NoProfile", "-Command", findPIDsByPowerShellScript)
 	cmd.Env = append(os.Environ(), "PINCHTAB_NEEDLE="+needle)
 
@@ -67,7 +67,7 @@ func forceKillPIDs(pids []int) int {
 }
 
 func findChromePIDsByProfileDir(profileDir string) []int {
-	return findPIDsByPowerShell(fmt.Sprintf("--user-data-dir=%s", profileDir))
+	return findPIDsByNeedle(fmt.Sprintf("--user-data-dir=%s", profileDir))
 }
 
 func killChromeByProfileDir(profileDir string) int {
@@ -75,7 +75,7 @@ func killChromeByProfileDir(profileDir string) int {
 	if len(pids) == 0 {
 		return 0
 	}
-	return forceKillPIDs(pids)
+	return forceKillPIDsFunc(pids)
 }
 
 // taskkill without /F (no SIGKILL escalation).
@@ -94,28 +94,10 @@ func terminateChromeByProfileDir(profileDir string) int {
 	return len(pids)
 }
 
-// Spares Chrome that a live peer server launched.
-func KillAllPinchtabChrome() int {
-	var matched []int
-	seen := make(map[int]bool)
+var pinchtabProfileNeedles = []string{"pinchtab-profile", ".pinchtab\\profiles"}
 
-	for _, needle := range []string{"pinchtab-profile", ".pinchtab\\profiles"} {
-		for _, pid := range findPIDsByPowerShell(needle) {
-			if !seen[pid] {
-				seen[pid] = true
-				matched = append(matched, pid)
-			}
-		}
-	}
-
-	pids := reclaimableChromePIDs(matched)
-	if len(pids) == 0 {
-		return 0
-	}
-
-	killed := forceKillPIDs(pids)
-	slog.Info("shutdown: killed pinchtab chrome processes", "count", killed)
-	return killed
+func killPIDsNow(pids []int) int {
+	return forceKillPIDs(pids)
 }
 
 func CleanupOrphanedChromeProcesses(profileDir string) {
