@@ -605,3 +605,24 @@ func backendNodeIDOf(t *testing.T, ctx context.Context, selector string) int64 {
 	}
 	return nodeID
 }
+
+func TestFocusIfFocusableStillReportsADetachedNodeAsStale(t *testing.T) {
+	ctx := testbrowser.Launch(t)
+	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(doubleClickFixtureHTML))
+	if err := chromedp.Run(ctx, chromedp.Navigate(dataURL)); err != nil {
+		t.Fatalf("navigate: %v", err)
+	}
+
+	stepCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	nodeID := backendNodeIDOf(t, stepCtx, "#field")
+	if err := chromedp.Run(stepCtx, chromedp.Evaluate(`window.kept=document.querySelector('#field'); window.kept.remove()`, nil)); err != nil {
+		t.Fatal(err)
+	}
+
+	err := focusIfFocusable(stepCtx, nodeID)
+	if !errors.Is(err, ErrElementStale) {
+		t.Fatalf("focusIfFocusable(detached input) = %v, want ErrElementStale", err)
+	}
+}
