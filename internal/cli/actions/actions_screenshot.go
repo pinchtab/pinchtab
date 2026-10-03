@@ -91,13 +91,11 @@ func Screenshot(conn apiclient.Conn, cmd *cobra.Command) {
 		if err != nil {
 			cli.Fatal("Decode image: %v", err)
 		}
-		autoNamed := outFile == ""
-		if autoNamed {
-			if outFile, err = autoNamedOutputPath("screenshot", ext); err != nil {
-				cli.Fatal("Output path: %v", err)
-			}
+		target, err := resolveOutput(outFile, "screenshot", ext)
+		if err != nil {
+			cli.Fatal("Output path: %v", err)
 		}
-		saved, err := writeOutputFile(outFile, autoNamed, img)
+		saved, err := target.write(img)
 		if err != nil {
 			cli.Fatal("Write failed: %v", err)
 		}
@@ -122,18 +120,15 @@ func Screenshot(conn apiclient.Conn, cmd *cobra.Command) {
 	}
 
 	params.Set("raw", "true")
-	autoNamed := outFile == ""
-	if autoNamed {
-		var err error
-		if outFile, err = autoNamedOutputPath("screenshot", ext); err != nil {
-			cli.Fatal("Output path: %v", err)
-		}
+	target, err := resolveOutput(outFile, "screenshot", ext)
+	if err != nil {
+		cli.Fatal("Output path: %v", err)
 	}
 	data := conn.GetRaw("/screenshot", params)
 	if data == nil {
 		return
 	}
-	saved, err := writeOutputFile(outFile, autoNamed, data)
+	saved, err := target.write(data)
 	if err != nil {
 		cli.Fatal("Write failed: %v", err)
 	}

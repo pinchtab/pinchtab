@@ -27,6 +27,28 @@ func autoNamedOutputPath(prefix, ext string) (string, error) {
 	return filepath.Join(dir, prefix+"-"+time.Now().Format("20060102-150405")+ext), nil
 }
 
+type outputTarget struct {
+	path      string
+	autoNamed bool
+}
+
+// resolveOutput fails on an unsafe auto-named dir, so a caller resolving before its
+// request refuses before a capture is wasted.
+func resolveOutput(explicitPath, prefix, ext string) (outputTarget, error) {
+	if explicitPath != "" {
+		return outputTarget{path: explicitPath}, nil
+	}
+	path, err := autoNamedOutputPath(prefix, ext)
+	if err != nil {
+		return outputTarget{}, err
+	}
+	return outputTarget{path: path, autoNamed: true}, nil
+}
+
+func (t outputTarget) write(buf []byte) (string, error) {
+	return writeOutputFile(t.path, t.autoNamed, buf)
+}
+
 var errUnsafeOutputDir = errors.New("unsafe auto-named output dir")
 
 func refuseSharedOutputDir(dir string) error {

@@ -574,3 +574,41 @@ func TestAutoNamedOutputPathCreatesAFreshPrivateDir(t *testing.T) {
 		t.Errorf("path %s is not under %s", path, want)
 	}
 }
+
+func TestResolveOutputSuffixesOnlyAnAutoNamedTarget(t *testing.T) {
+	tmp := t.TempDir()
+	setTempDirEnv(t, tmp)
+
+	explicit := filepath.Join(tmp, "chosen.jpg")
+	for _, body := range []string{"first", "second"} {
+		target, err := resolveOutput(explicit, "screenshot", ".jpg")
+		if err != nil {
+			t.Fatalf("explicit path refused: %v", err)
+		}
+		if saved, err := target.write([]byte(body)); err != nil || saved != explicit {
+			t.Fatalf("explicit write = %q, %v; want %q", saved, err, explicit)
+		}
+	}
+	if got, _ := os.ReadFile(explicit); string(got) != "second" {
+		t.Errorf("explicit path holds %q, want the overwrite", got)
+	}
+	if _, err := os.Stat(filepath.Join(tmp, "pinchtab")); !os.IsNotExist(err) {
+		t.Errorf("an explicit path created the auto-named dir (stat err = %v)", err)
+	}
+
+	auto, err := resolveOutput("", "screenshot", ".jpg")
+	if err != nil {
+		t.Fatalf("auto-named path refused: %v", err)
+	}
+	first, err := auto.write([]byte("a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := auto.write([]byte("b"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != auto.path || second == first {
+		t.Errorf("auto-named writes saved %q then %q; want %q then a suffixed name", first, second, auto.path)
+	}
+}

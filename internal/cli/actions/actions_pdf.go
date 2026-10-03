@@ -78,19 +78,16 @@ func PDF(conn apiclient.Conn, cmd *cobra.Command) {
 		return
 	}
 
-	autoNamed := outFile == ""
-	if autoNamed {
-		var err error
-		if outFile, err = autoNamedOutputPath("page", ".pdf"); err != nil {
-			cli.Fatal("Output path: %v", err)
-		}
+	target, err := resolveOutput(outFile, "page", ".pdf")
+	if err != nil {
+		cli.Fatal("Output path: %v", err)
 	}
 
 	data := conn.GetRaw(apiclient.TabPath(tabID, "pdf"), params)
 	if data == nil {
 		return
 	}
-	saved, err := writeOutputFile(outFile, autoNamed, data)
+	saved, err := target.write(data)
 	if err != nil {
 		cli.Fatal("Write failed: %v", err)
 	}

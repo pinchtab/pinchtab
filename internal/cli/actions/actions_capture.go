@@ -92,13 +92,10 @@ func Capture(conn apiclient.Conn, cmd *cobra.Command) {
 	writeImage := !jsonOutput || outFileExplicit
 	var img []byte
 	if writeImage {
-		autoNamed := outFile == ""
-		if autoNamed {
-			var err error
-			if outFile, err = autoNamedOutputPath("capture", ext); err != nil {
-				output.Error("capture", fmt.Sprintf("output path: %v", err), output.ExitRuntime)
-				return
-			}
+		target, err := resolveOutput(outFile, "capture", ext)
+		if err != nil {
+			output.Error("capture", fmt.Sprintf("output path: %v", err), output.ExitRuntime)
+			return
 		}
 		decoded, err := base64.StdEncoding.DecodeString(resp.Image.Base64)
 		if err != nil {
@@ -106,7 +103,7 @@ func Capture(conn apiclient.Conn, cmd *cobra.Command) {
 			return
 		}
 		img = decoded
-		saved, err := writeOutputFile(outFile, autoNamed, img)
+		saved, err := target.write(img)
 		if err != nil {
 			output.Error("capture", fmt.Sprintf("write image: %v", err), output.ExitRuntime)
 			return
