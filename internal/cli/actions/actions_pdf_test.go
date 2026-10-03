@@ -194,3 +194,46 @@ func TestPDFFileOutputWithOutputIsAUsageError(t *testing.T) {
 		t.Errorf("%s exists after the refusal (stat err = %v)", outFile, statErr)
 	}
 }
+
+const pdfFileOutputMalformedChildEnv = "PINCHTAB_TEST_PDF_FILE_OUTPUT_MALFORMED"
+
+func TestPDFFileOutputRejectsAMalformedReply(t *testing.T) {
+	if reply := os.Getenv(pdfFileOutputMalformedChildEnv); reply != "" {
+		m := newMockServer()
+		defer m.close()
+		m.response = reply
+		t.Chdir(t.TempDir())
+		cmd := newPDFCmd()
+		_ = cmd.Flags().Set("file-output", "true")
+		PDF(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, cmd)
+		return
+	}
+
+	for name, reply := range map[string]string{
+		"not json":   `%PDF-1.4 not a json reply`,
+		"empty path": `{"path":"","size":864}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			tmp := t.TempDir()
+			child := exec.Command(os.Args[0], "-test.run=^TestPDFFileOutputRejectsAMalformedReply$", "-test.timeout=60s") // #nosec G204 -- re-executes this test binary.
+			child.Env = append(os.Environ(), pdfFileOutputMalformedChildEnv+"="+reply, "TMPDIR="+tmp)
+			var stdout, stderr bytes.Buffer
+			child.Stdout, child.Stderr = &stdout, &stderr
+
+			err := child.Run()
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
+				t.Fatalf("err = %v, want runtime exit 1 (stderr=%q)", err, stderr.String())
+			}
+			if !strings.Contains(stderr.String(), reply) {
+				t.Errorf("stderr = %q, want it to echo the reply %q", stderr.String(), reply)
+			}
+			if strings.Contains(stdout.String(), "Saved") {
+				t.Errorf("stdout = %q, want no Saved line for a malformed reply", stdout.String())
+			}
+			if _, statErr := os.Stat(filepath.Join(tmp, "pinchtab")); !os.IsNotExist(statErr) {
+				t.Errorf("malformed reply created the local output dir (stat err = %v)", statErr)
+			}
+		})
+	}
+}
