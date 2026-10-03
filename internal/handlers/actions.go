@@ -609,8 +609,8 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	refMissing := selectorResolution.refMissing
-	submitClick := bridge.IsSubmitClick(req.Kind, req)
-	if submitClick && !validateSubmitTarget(w, req, refMissing) {
+	watch := formValidationWatchFor(req, bridge.IsSubmitClick(req.Kind, req))
+	if watch == formValidationSubmitClick && !validateSubmitTarget(w, req, refMissing) {
 		return
 	}
 
@@ -624,7 +624,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var submitBefore submitStateSnapshot
-	if submitClick {
+	if watch == formValidationSubmitClick {
 		submitBefore, err = h.captureSubmitState(tCtx, resolvedTabID)
 		if err != nil {
 			httpx.ErrorCode(w, http.StatusInternalServerError, "submit_pre_state_failed", fmt.Sprintf("capture pre-submit state: %v", err), true, map[string]any{
@@ -633,7 +633,6 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	watch := formValidationWatchFor(req, submitClick)
 	validationWatched, disarmValidationWatch := h.armFormValidationWatch(ctx, tCtx, req, watch)
 	defer disarmValidationWatch()
 
@@ -643,19 +642,17 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		h.writeActionResult(w, r, routing, withOpenedDialog(result, resolvedTabID, dialog), recoveryResult)
 		return
 	}
-	if submitClick && (actionErr == nil || errors.Is(actionErr, context.DeadlineExceeded)) {
+	if watch == formValidationSubmitClick && (actionErr == nil || errors.Is(actionErr, context.DeadlineExceeded)) {
 		if result, ok = h.runSubmitClick(w, r, ctx, resolvedTabID, req.NodeID, submitBefore, result, actionErr); !ok {
 			return
 		}
 		actionErr = nil
 	}
 	if actionErr != nil {
-		h.writeActionError(w, actionErr, req, resolvedTabID, recoveryResult, submitClick)
+		h.writeActionError(w, actionErr, req, resolvedTabID, recoveryResult, watch == formValidationSubmitClick)
 		return
 	}
-	if !submitClick {
-		result = h.settleClickOutcome(tCtx, req, watch, validationWatched, result)
-	}
+	result = h.settleClickOutcome(tCtx, req, watch, validationWatched, result)
 	h.writeActionSuccess(w, r, tCtx, req, routing, resolvedTabID, result, actionBackend, recoveryResult)
 }
 
@@ -693,13 +690,16 @@ func (h *Handlers) armFormValidationWatch(tabCtx, tCtx context.Context, req brid
 }
 
 func (h *Handlers) settleClickOutcome(ctx context.Context, req bridge.ActionRequest, watch formValidationWatch, validationWatched bool, result map[string]any) map[string]any {
-	if watch == formValidationWaitNavClick {
-		return h.settleWaitNavOutcome(ctx, req.NodeID, result)
-	}
-	if !validationWatched {
+	switch {
+	case watch == formValidationSubmitClick:
 		return result
+	case watch == formValidationWaitNavClick:
+		return h.settleWaitNavOutcome(ctx, req.NodeID, result)
+	case !validationWatched:
+		return result
+	default:
+		return h.attachValidationBlocked(ctx, req.NodeID, result)
 	}
-	return h.attachValidationBlocked(ctx, req.NodeID, result)
 }
 
 func validateActionRequestFields(w http.ResponseWriter, req bridge.ActionRequest) bool {

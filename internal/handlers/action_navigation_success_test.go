@@ -435,3 +435,37 @@ func TestFormValidationWatchForEachClickMode(t *testing.T) {
 		})
 	}
 }
+
+func TestSettleClickOutcomeForEachClickMode(t *testing.T) {
+	cases := []struct {
+		name              string
+		watch             formValidationWatch
+		validationWatched bool
+		wantProbe         bool
+	}{
+		{"plain click watched", formValidationPlainClick, true, true},
+		{"plain click unwatched", formValidationPlainClick, false, false},
+		{"wait-nav click", formValidationWaitNavClick, true, true},
+		{"submit click leaves the result to the submit poll", formValidationSubmitClick, true, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			b := newSubmitActionBridge(t.Context())
+			b.armedNodeIDs = []int64{42}
+			b.invalidFields = []submitInvalidField{{Name: "email", Message: "Please include an '@' in the email address."}}
+			h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+
+			result := h.settleClickOutcome(t.Context(), bridge.ActionRequest{Kind: bridge.ActionClick, NodeID: 42}, tc.watch, tc.validationWatched, map[string]any{"clicked": true})
+
+			if probed := len(b.probedNodeIDs) > 0; probed != tc.wantProbe {
+				t.Fatalf("probed node IDs = %v, want probe %v", b.probedNodeIDs, tc.wantProbe)
+			}
+			if _, blocked := result["postState"]; blocked != tc.wantProbe {
+				t.Fatalf("result = %v, want postState %v", result, tc.wantProbe)
+			}
+			if !tc.wantProbe && len(result) != 1 {
+				t.Fatalf("result = %v, want the dispatch result untouched", result)
+			}
+		})
+	}
+}
