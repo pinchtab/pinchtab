@@ -75,6 +75,10 @@ refuses the form for validation, the result carries that `validation_blocked`
 `postState` and the CLI prints the same `BLOCKED` lines instead of `OK`. A click on
 anything that is not a submit button, or a valid submit, still prints plain `OK`.
 
+A `blocked` result exits 1 after printing the `BLOCKED` lines, in plain, `--wait-nav`,
+`--submit` and `--json` modes alike, so `pinchtab click e11 && pinchtab text` stops at
+the refused form. `SUCCEEDED`, `PENDING` and `OK no navigation` exit 0.
+
 ## CLI Flags
 
 | Flag | Description |

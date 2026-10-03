@@ -106,7 +106,7 @@ func postActionWithHeaders(conn apiclient.Conn, cmd *cobra.Command, req bridge.A
 	opts := []apiclient.RequestOption{apiclient.WithJSONBody(req), apiclient.WithHeaders(headers), apiclient.CaptureVocab(namedNoTab(cmd))}
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if jsonOutput {
-		conn.Post(path, nil, opts...)
+		exitIfSubmitBlocked(conn.Post(path, nil, opts...))
 		return
 	}
 
@@ -122,6 +122,15 @@ func postActionWithHeaders(conn apiclient.Conn, cmd *cobra.Command, req bridge.A
 	if tailRequested(cmd) {
 		settleNetwork(conn, tabID)
 		printPostActionOutput(conn, tabID, cmd)
+	}
+	exitIfSubmitBlocked(result)
+}
+
+func exitIfSubmitBlocked(result map[string]any) {
+	actionResult, _ := result["result"].(map[string]any)
+	postState, _ := actionResult["postState"].(map[string]any)
+	if postState["status"] == "blocked" {
+		os.Exit(cli.ExitRuntime)
 	}
 }
 

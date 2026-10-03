@@ -2,10 +2,15 @@ package actions
 
 import (
 	"encoding/json"
+	"errors"
+	"net/http"
 	"net/url"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
@@ -1395,5 +1400,66 @@ func TestActionWithoutTailFlagsNeverWaits(t *testing.T) {
 
 	if len(m.requests) != 1 || m.requests[0].Path != "/action" {
 		t.Fatalf("expected the action alone, got %+v", m.requests)
+	}
+}
+
+const clickExitChildEnv = "PINCHTAB_CLICK_EXIT_CHILD"
+
+var clickExitResults = map[string]string{
+	"blocked":       `{"success":true,"result":{"postState":{"status":"blocked","signal":"validation_blocked"}}}`,
+	"succeeded":     `{"success":true,"result":{"postState":{"status":"succeeded","signal":"dialog_closed"}}}`,
+	"pending":       `{"success":true,"result":{"postState":{"status":"pending"}}}`,
+	"no-navigation": `{"success":true,"result":{"clicked":true,"navigated":false}}`,
+}
+
+func runClickExitChild(result, flag string) {
+	m := newMockServer()
+	defer m.close()
+	m.setResponse(http.MethodPost, "/action", http.StatusOK, clickExitResults[result])
+	cmd := newActionCmd()
+	cmd.Flags().Bool("json", false, "")
+	if flag != "" {
+		_ = cmd.Flags().Set(flag, "true")
+	}
+	Action(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, "click", "e11", cmd)
+	os.Exit(0)
+}
+
+func TestClickExitCodeFollowsSubmitPostState(t *testing.T) {
+	if mode := os.Getenv(clickExitChildEnv); mode != "" {
+		result, flag, _ := strings.Cut(mode, ",")
+		runClickExitChild(result, flag)
+		return
+	}
+
+	for _, tc := range []struct {
+		result, flag string
+		wantExit     int
+	}{
+		{"blocked", "", cli.ExitRuntime},
+		{"blocked", "wait-nav", cli.ExitRuntime},
+		{"blocked", "submit", cli.ExitRuntime},
+		{"blocked", "json", cli.ExitRuntime},
+		{"succeeded", "", 0},
+		{"succeeded", "json", 0},
+		{"pending", "submit", 0},
+		{"no-navigation", "wait-nav", 0},
+	} {
+		t.Run(tc.result+"/"+tc.flag, func(t *testing.T) {
+			child := exec.Command(os.Args[0], "-test.run=TestClickExitCodeFollowsSubmitPostState", "-test.timeout=60s") // #nosec G204 -- re-executes this test binary.
+			child.Env = append(os.Environ(), clickExitChildEnv+"="+tc.result+","+tc.flag)
+			out, err := child.CombinedOutput()
+
+			exitCode := 0
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) {
+				exitCode = exitErr.ExitCode()
+			} else if err != nil {
+				t.Fatalf("child err = %v (output: %s)", err, out)
+			}
+			if exitCode != tc.wantExit {
+				t.Fatalf("exit = %d, want %d (output: %s)", exitCode, tc.wantExit, out)
+			}
+		})
 	}
 }
