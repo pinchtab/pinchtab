@@ -87,22 +87,10 @@ const submitLiveRegionsJS = `(() => {
 
 var readTopmostSubmitModal = bridge.TopmostModalNodeIDInFrame
 
-// takeASnapshotFirst is the one spelling of the only advice that re-resolves an absent
-// target. Every refusal that carries it composes it from here, so the four copies the
-// endpoint used to format cannot drift apart again.
 const takeASnapshotFirst = "take a /snapshot first"
 
-// ErrTargetNotFound is the one owner of "this target cannot be resolved" — a stale ref
-// recovery could not heal, a ref that never existed, a drag destination that is gone. Every
-// producer wraps it and the endpoint answers one 404 with the remedy, so the arm keys on the
-// sentinel rather than on the wording. Retrying is futile by construction: the target is
-// absent, not busy.
 var ErrTargetNotFound = errors.New("not found")
 
-// targetNotFound names WHAT is missing ("ref e2", "drag destination e7"). The recovery
-// matcher's threshold and score stay out of it — they describe the matcher's internals,
-// not anything the caller can act on, and ride in the recovery record the endpoint puts
-// in details.
 func targetNotFound(subject string) error {
 	return fmt.Errorf("%s %w - %s", subject, ErrTargetNotFound, takeASnapshotFirst)
 }
@@ -175,8 +163,7 @@ func (h *Handlers) captureSubmitState(ctx context.Context, tabID string) (submit
 	if err != nil {
 		return submitStateSnapshot{}, fmt.Errorf("read topmost dialog: %w", err)
 	}
-	// A failed live-region read leaves the snapshot unread rather than failing it: the
-	// frame it runs in can vanish with the very navigation the URL signal reports.
+	// The live-region frame can vanish with the very navigation the URL signal reports, so a failed read is tolerated.
 	var liveRegions string
 	liveErr := h.Bridge.EvaluateInFrame(ctx, h.selectorFrameID(tabID), submitLiveRegionsJS, &liveRegions, bridge.EvalOpts{})
 	return submitStateSnapshot{
@@ -297,9 +284,6 @@ func (h *Handlers) attachValidationBlocked(ctx context.Context, nodeID int64, re
 	return result
 }
 
-// pollSubmitPostState observes only conservative terminal signals. The caller
-// supplies a fresh bounded child of the live tab context, never the action
-// context that may already have reached its deadline.
 func (h *Handlers) pollSubmitPostState(ctx context.Context, tabID string, nodeID int64, before submitStateSnapshot, dispatch string, actionTimedOut bool) (submitPostState, error) {
 	started := time.Now()
 	after := before
@@ -360,8 +344,7 @@ func (h *Handlers) cacheActionIntent(tabID string, req bridge.ActionRequest) {
 	if h.Recovery == nil || req.Ref == "" {
 		return
 	}
-	// Don't overwrite an existing entry that has a real Query (from /find)
-	// with a descriptor-only entry.
+	// A /find entry carries a Query; a descriptor-only entry must not replace it.
 	if existing, ok := h.Recovery.IntentCache.Lookup(tabID, req.Ref); ok && existing.Query != "" {
 		return
 	}
@@ -380,21 +363,8 @@ func (h *Handlers) cacheActionIntent(tabID string, req bridge.ActionRequest) {
 	})
 }
 
-// ErrStaleSubmitTarget refuses a click whose ref is stale and whose target submits a
-// form. The exactly-once rule the submit path already states cannot be honoured by an
-// automatic retry, and the DOM — not the request — decides whether a click submits: an
-// agent working from a snapshot row `e2:button "Place order"` has no way to declare it.
-//
-// Submit-detection is a PROXY for non-idempotency, not a solution to it. A delete link is
-// as dangerous and the DOM cannot say so; a policy for non-idempotent clicks at large is a
-// separate decision and this refusal does not claim to cover the class.
 var ErrStaleSubmitTarget = fmt.Errorf("ref is stale and its target submits a form; %s and click the fresh ref", takeASnapshotFirst)
 
-// submitControlJS reports whether the node is the control that submits a form. A var so a
-// test can stub it: the guard's own effect is only visible against a real page, and the
-// stub is how the pre-fix dispatch is reproduced. A <button>
-// inside a form submits by DEFAULT — an absent type attribute means submit — which is the
-// case an agent is least likely to have declared.
 var submitControlJS = `function() {
   var el = ` + submitControlOfNodeJS + `;
   if (!el || !el.form) return false;
@@ -403,13 +373,7 @@ var submitControlJS = `function() {
   return type === '' || type === 'submit';
 }`
 
-// recoveredNodeSubmits answers whether a click about to be dispatched at a recovered node
-// would submit a form. Only clicks are asked: no other action kind dispatches a submit,
-// and a read of the DOM per recovery attempt is not free.
-//
-// A failed read answers false. The alternative — refusing when the page cannot be read —
-// would turn every transport hiccup into a refusal on the ordinary stale-link path, which
-// is the far more common one.
+// A failed read answers false: refusing on a transport hiccup would break the far more common stale-link path.
 func (h *Handlers) recoveredNodeSubmits(ctx context.Context, req bridge.ActionRequest, nodeID int64) bool {
 	if bridge.CanonicalActionKind(req.Kind) != bridge.ActionClick || nodeID <= 0 {
 		return false
@@ -431,13 +395,6 @@ func (h *Handlers) executeAction(ctx context.Context, req bridge.ActionRequest, 
 	return result, "", err
 }
 
-// executeActionResilient runs one resolved action with pointer-retry, stale-ref
-// cache refresh, and semantic self-healing. When refMissing is set it goes
-// recovery-first (Recovery.Attempt); otherwise it executes then heals on
-// failure. Callers must handle the refMissing-without-recovery case (404 /
-// per-step failure) before calling — refMissing=true assumes h.Recovery != nil.
-// req.NodeID is mutated in place, as the inline action/batch/macro paths did.
-// primarySelector is the caller's selector before resolution consumed it.
 func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.ActionRequest, primarySelector string, cfg *config.RuntimeConfig, resolvedTabID string, refMissing bool) (map[string]any, string, *recovery.RecoveryResult, error) {
 	submitClick := bridge.IsSubmitClick(req.Kind, *req)
 	dispatch := h.recoveryDispatch(req, cfg, resolvedTabID, h.refFrameID(resolvedTabID, req.Ref))
@@ -447,9 +404,6 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 		}
 		rr, recRes, recErr := h.Recovery.Attempt(ctx, resolvedTabID, req.Ref, req.Kind, dispatch)
 		if recErr != nil {
-			// Nothing was dispatched, so there is no recovery record to publish: the
-			// refusal happened before the match was used for anything. Absence cannot be
-			// misread, where a block reading recovered:true would suggest a click landed.
 			if errors.Is(recErr, ErrStaleSubmitTarget) {
 				return nil, "", nil, recErr
 			}
@@ -500,10 +454,6 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 	return result, backend, rr, err
 }
 
-// recoveryDispatch is the one executor both recovery arms hand to the engine. Recovery
-// dispatches at a node it MATCHED rather than resolved, so every guard on a matched node
-// lives here: a guard added to one arm only is how a cached stale ref came to place an
-// order the missing-ref arm refused.
 func (h *Handlers) recoveryDispatch(req *bridge.ActionRequest, cfg *config.RuntimeConfig, tabID, mintedIn string) recovery.ActionExecutor {
 	return func(ctx context.Context, _ string, nodeID int64) (map[string]any, error) {
 		req.NodeID = nodeID
@@ -521,8 +471,6 @@ func (h *Handlers) recoveryDispatch(req *bridge.ActionRequest, cfg *config.Runti
 	}
 }
 
-// errRefFrameReplaced refuses a recovery match outside the frame the ref was minted in:
-// a replaced iframe is a new document, so a lookalike there is a different field.
 var errRefFrameReplaced = errors.New("the frame the ref was in has been replaced")
 
 func (h *Handlers) refFrameID(tabID, ref string) string {
@@ -573,18 +521,10 @@ func shouldRetryPointerAction(req bridge.ActionRequest, err error) bool {
 	return bridge.IsStaleNodeError(err)
 }
 
-// onlyRecoveryCanRepoint reports a request whose dead primary node nothing in the
-// retry arm can replace: a ref is positional per snapshot, so re-resolving it can
-// denote another element, and with no secondary target the arm has nothing else to
-// refresh, so re-dispatching at the same node id is a guaranteed failure that
-// recovery's descriptor match then heals.
 func onlyRecoveryCanRepoint(req bridge.ActionRequest) bool {
 	return req.Ref != "" && strings.TrimSpace(req.ToSelector) == ""
 }
 
-// reresolveStalePrimary re-points a selector-addressed primary target whose node the
-// page destroyed, through the same frame- and modal-scoped resolver that resolved it
-// first. A ref is left to recovery, which re-finds it by descriptor rather than position.
 func (h *Handlers) reresolveStalePrimary(ctx context.Context, tabID, primarySelector string, req *bridge.ActionRequest, dispatchErr error) error {
 	if !bridge.IsStaleNodeError(dispatchErr) || primarySelector == "" || selector.Parse(primarySelector).Kind == selector.KindRef {
 		return nil
@@ -597,22 +537,6 @@ func (h *Handlers) reresolveStalePrimary(ctx context.Context, tabID, primarySele
 	return nil
 }
 
-// refreshActionSecondaryTargets re-resolves every selector-bearing field the request
-// carries BEYOND the primary target. A node id resolved before a refresh can denote a
-// node the DOM change destroyed, so these are re-derived, never carried over. Today
-// the only secondary field is the drag destination; a future selector-bearing field
-// is re-resolved by adding it HERE, not at each site — the census in
-// action_drag_destination_test.go pins that every re-resolution site calls this.
-//
-// A destination ref that no longer resolves is re-found by EXACT identity — the
-// unique node in the refreshed snapshot with the intent-cached descriptor's role and
-// name — never by the fuzzy heal the source gets. Refs are positional per snapshot,
-// so an ordinal re-lookup can denote a different element; and a drop is positional
-// too, so a fuzzy lookalike match would land the payload somewhere the caller never
-// named while reporting dragged:true. Measured: the default 0.4 match confidence
-// happily "recovers" a deleted destination onto its sibling. Whether the source's
-// fuzzy heal should report what it did is a separate, pending question; nothing here
-// classifies recovery outcomes.
 func (h *Handlers) refreshActionSecondaryTargets(ctx context.Context, tabID string, req *bridge.ActionRequest) error {
 	toSelector := strings.TrimSpace(req.ToSelector)
 	if toSelector == "" {
@@ -636,9 +560,7 @@ func (h *Handlers) refreshActionSecondaryTargets(ctx context.Context, tabID stri
 	return h.targetNotFoundOn(tabID, "drag destination "+toSelector)
 }
 
-// uniqueNodeForDescriptor returns the one node matching the descriptor's role and
-// name exactly, and refuses when zero or several do — an ambiguous destination is a
-// coin flip over where the payload lands.
+// Several nodes matching the descriptor would make the drop a coin flip, so that case refuses like zero.
 func uniqueNodeForDescriptor(cache *bridge.RefCache, desc semantic.ElementDescriptor) (int64, bool) {
 	if cache == nil || (desc.Role == "" && desc.Name == "") {
 		return 0, false
