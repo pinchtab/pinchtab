@@ -180,7 +180,7 @@ curl -X POST /wait -H 'Content-Type: application/json' \
   -d '{"url":"**/dashboard","timeout":15000}'
 
 curl -X POST /wait -H 'Content-Type: application/json' \
-  -d '{"load":"networkidle","timeout":15000}'
+  -d '{"load":"network-idle","timeout":15000}'
 
 curl -X POST /wait -H 'Content-Type: application/json' \
   -d '{"fn":"document.readyState === \"complete\"","timeout":15000}'
