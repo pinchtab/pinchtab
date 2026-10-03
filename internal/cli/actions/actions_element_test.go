@@ -229,6 +229,41 @@ func TestFailedOnStaleRefMatchesTheEngineVocabulary(t *testing.T) {
 	}
 }
 
+const staleFailureChildEnv = "PINCHTAB_TEST_STALE_FAILURE_TYPE"
+
+func TestPrintActionResultFailureHintsReSnapOnlyForAStaleRef(t *testing.T) {
+	if failType := os.Getenv(staleFailureChildEnv); failType != "" {
+		printActionResult("click", map[string]any{
+			"success":  false,
+			"error":    "node gone",
+			"recovery": recoveryBlock(t, recovery.RecoveryResult{FailureType: failType}),
+		})
+		return
+	}
+
+	for failType, wantHint := range map[string]bool{
+		recovery.FailureElementStale.String():    true,
+		recovery.FailureElementNotFound.String(): false,
+	} {
+		t.Run(failType, func(t *testing.T) {
+			child := exec.Command(os.Args[0], "-test.run=TestPrintActionResultFailureHintsReSnapOnlyForAStaleRef", "-test.timeout=60s") // #nosec G204 -- re-executes this test binary.
+			child.Env = append(os.Environ(), staleFailureChildEnv+"="+failType)
+			raw, err := child.CombinedOutput()
+
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) {
+				t.Fatalf("failed action exited with %v, want non-zero; output:\n%s", err, raw)
+			}
+			if !strings.Contains(string(raw), "ERROR: click: node gone") {
+				t.Errorf("output lacks the error line:\n%s", raw)
+			}
+			if got := strings.Contains(string(raw), "snap -i"); got != wantHint {
+				t.Errorf("re-snap hint present = %v, want %v; output:\n%s", got, wantHint, raw)
+			}
+		})
+	}
+}
+
 func TestPrintActionResultSubmitSuccessNamesObservedSignal(t *testing.T) {
 	got := captureStdout(t, func() {
 		printActionResult("click", map[string]any{
