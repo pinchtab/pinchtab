@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -58,12 +57,12 @@ func RecordStart(conn apiclient.Conn, cmd *cobra.Command, args []string) {
 func RecordStop(conn apiclient.Conn) {
 	outFile := readRecordingState()
 	autoNamed := outFile == ""
+	var err error
 	if autoNamed {
-		outFile = fmt.Sprintf("recording-%s.gif", time.Now().Format("20060102-150405"))
-	}
-
-	abs, err := filepath.Abs(outFile)
-	if err == nil {
+		if outFile, err = autoNamedOutputPath("recording", ".gif"); err != nil {
+			cli.Fatal("Output path: %v", err)
+		}
+	} else if abs, absErr := filepath.Abs(outFile); absErr == nil {
 		outFile = abs
 	}
 

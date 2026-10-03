@@ -3,10 +3,25 @@ package actions
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/fileout"
 )
+
+// autoNamedOutputPath builds the absolute path for an output the user did not name. It
+// lives under the OS temp dir rather than the cwd, which is usually a work tree.
+func autoNamedOutputPath(prefix, ext string) (string, error) {
+	dir, err := filepath.Abs(filepath.Join(os.TempDir(), "pinchtab"))
+	if err != nil {
+		return "", fmt.Errorf("resolve auto-named output dir: %w", err)
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", fmt.Errorf("create auto-named output dir: %w", err)
+	}
+	return filepath.Join(dir, prefix+"-"+time.Now().Format("20060102-150405")+ext), nil
+}
 
 // writeOutputFile writes buf to path and returns the path actually used.
 //

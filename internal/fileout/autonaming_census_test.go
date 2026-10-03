@@ -48,11 +48,8 @@ var autoNamingSites = map[string]string{
 	"internal/handlers/binary_export.go": "exportTimestamp only builds the base name; fileout.WriteUnique reserves the path and writes it",
 	"internal/handlers/record_handlers.go": "the recording base name is reserved by " +
 		"fileout.ReserveUnique before it is returned",
-	"internal/handlers/memory.go":                "the heap snapshot path is reserved by fileout.ReserveUnique before the stream writes it",
-	"internal/cli/actions/actions_capture.go":    "writeOutputFile with autoNamed",
-	"internal/cli/actions/actions_pdf.go":        "writeOutputFile with autoNamed",
-	"internal/cli/actions/actions_screenshot.go": "writeOutputFile with autoNamed",
-	"internal/cli/actions/actions_record.go":     "fileout.ReservePath before the rename",
+	"internal/handlers/memory.go":         "the heap snapshot path is reserved by fileout.ReserveUnique before the stream writes it",
+	"internal/cli/actions/output_file.go": "autoNamedOutputPath only builds the name; callers reserve it via writeOutputFile or fileout.ReservePath",
 
 	// The two developer-tool artefact writers, accounted DELIBERATELY rather than fixed.
 	// They are benchmark outputs a human runs one at a time, their paths are also

@@ -60,3 +60,12 @@ func TestScreenshotInfersPNGFromOutputExtension(t *testing.T) {
 		t.Fatalf("query = %q, want format=png inferred from output extension", m.lastQuery)
 	}
 }
+
+func TestScreenshotAutoNamedLandsInTempDirWithAbsolutePath(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	m.response = "rawimagebytes"
+	assertAutoNamedOutsideCwd(t, "screenshot-", ".jpg", func() string {
+		return captureStdout(t, func() { Screenshot(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, screenshotCmd()) })
+	})
+}

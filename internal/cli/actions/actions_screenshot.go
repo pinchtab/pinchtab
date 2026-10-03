@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -94,7 +93,9 @@ func Screenshot(conn apiclient.Conn, cmd *cobra.Command) {
 		}
 		autoNamed := outFile == ""
 		if autoNamed {
-			outFile = fmt.Sprintf("screenshot-%s%s", time.Now().Format("20060102-150405"), ext)
+			if outFile, err = autoNamedOutputPath("screenshot", ext); err != nil {
+				cli.Fatal("Output path: %v", err)
+			}
 		}
 		saved, err := writeOutputFile(outFile, autoNamed, img)
 		if err != nil {
@@ -123,7 +124,10 @@ func Screenshot(conn apiclient.Conn, cmd *cobra.Command) {
 	params.Set("raw", "true")
 	autoNamed := outFile == ""
 	if autoNamed {
-		outFile = fmt.Sprintf("screenshot-%s%s", time.Now().Format("20060102-150405"), ext)
+		var err error
+		if outFile, err = autoNamedOutputPath("screenshot", ext); err != nil {
+			cli.Fatal("Output path: %v", err)
+		}
 	}
 	data := conn.GetRaw("/screenshot", params)
 	if data == nil {

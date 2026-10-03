@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/cli/output"
@@ -95,7 +94,11 @@ func Capture(conn apiclient.Conn, cmd *cobra.Command) {
 	if writeImage {
 		autoNamed := outFile == ""
 		if autoNamed {
-			outFile = fmt.Sprintf("capture-%s%s", time.Now().Format("20060102-150405"), ext)
+			var err error
+			if outFile, err = autoNamedOutputPath("capture", ext); err != nil {
+				output.Error("capture", fmt.Sprintf("output path: %v", err), output.ExitRuntime)
+				return
+			}
 		}
 		decoded, err := base64.StdEncoding.DecodeString(resp.Image.Base64)
 		if err != nil {

@@ -1,9 +1,7 @@
 package actions
 
 import (
-	"fmt"
 	"net/url"
-	"time"
 
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
@@ -72,7 +70,10 @@ func PDF(conn apiclient.Conn, cmd *cobra.Command) {
 
 	autoNamed := outFile == ""
 	if autoNamed {
-		outFile = fmt.Sprintf("page-%s.pdf", time.Now().Format("20060102-150405"))
+		var err error
+		if outFile, err = autoNamedOutputPath("page", ".pdf"); err != nil {
+			cli.Fatal("Output path: %v", err)
+		}
 	}
 
 	data := conn.GetRaw(apiclient.TabPath(tabID, "pdf"), params)

@@ -59,7 +59,7 @@ other read endpoints.
 
 ### CLI
 
-Without `-o` the CLI saves to `screenshot-<timestamp>.jpg` (or `.png`) in the current directory.
+Without `-o` the CLI saves to `screenshot-<timestamp>.jpg` (or `.png`) under `pinchtab/` in the OS temp dir (`$TMPDIR/pinchtab`, created on demand) and prints the absolute path. `pdf`, `capture` and `record` auto-name their files there too.
 
 - `-o <path>`: Save to a specific path. A `.png` extension selects PNG when `--format` is omitted; other extensions use JPEG.
 - `--format <jpeg|png>`: Explicitly select the image format, overriding extension inference.

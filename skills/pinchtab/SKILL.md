@@ -242,9 +242,9 @@ Timeout 10s default, 30s max via `--timeout-ms <ms>`. All non-`ms` wait modes po
 ### Export, debug, verification
 
 ```bash
-pinchtab screenshot [-o path.png] [-q <jpeg-quality>] [--beyond-viewport] [--scale 0.5]   # format by extension; --beyond-viewport captures the full scrollable page; --scale rescales the bitmap
+pinchtab screenshot [-o path.png] [-q <jpeg-quality>] [--beyond-viewport] [--scale 0.5]   # format by extension; --beyond-viewport captures full page; --scale rescales the bitmap
 pinchtab capture [-o path.jpg] [--beyond-viewport] [--require-pair] [--scale 0.5]         # paired image + snapshot from same DOM epoch; nodes carry boundingBox — use when the model reads pixels AND acts on refs
-pinchtab pdf [-o path.pdf] [--landscape]
+pinchtab pdf [-o path.pdf] [--landscape]  # no -o: $TMPDIR/pinchtab/
 pinchtab record start out.gif [--fps 5] [--scale 1.0]  # .gif/.webm/.mp4; requires security.allowScreencast; .gif works without ffmpeg, .webm/.mp4 need ffmpeg
 pinchtab record stop                                    # stop, encode, and save to path given at start
 pinchtab record status                                  # check active recording

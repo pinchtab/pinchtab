@@ -118,3 +118,12 @@ func TestPDFAllOptions(t *testing.T) {
 		}
 	}
 }
+
+func TestPDFAutoNamedLandsInTempDirWithAbsolutePath(t *testing.T) {
+	m := newMockServer()
+	defer m.close()
+	m.response = "%PDF-1.4 fake"
+	assertAutoNamedOutsideCwd(t, "page-", ".pdf", func() string {
+		return captureStdout(t, func() { PDF(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, newPDFCmd()) })
+	})
+}

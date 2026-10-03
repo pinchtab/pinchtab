@@ -89,7 +89,7 @@ func TestARunWhoseAutoNameIsTakenSuffixesAndPrintsTheNameItUsed(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := chdirTemp(t)
+			dir := isolateAutoNamedDir(t)
 			taken := takeEveryNameInWindow(t, dir, tc.prefix, tc.ext)
 
 			firstOut := tc.run(t)
@@ -142,7 +142,7 @@ func TestARunWhoseAutoNameIsTakenSuffixesAndPrintsTheNameItUsed(t *testing.T) {
 // it. Overwriting there is their instruction, not a collision to resolve — and a
 // suffixed name would break a script that goes on to read the path it passed.
 func TestAnExplicitOutputPathStillOverwrites(t *testing.T) {
-	dir := chdirTemp(t)
+	dir := isolateAutoNamedDir(t)
 	target := filepath.Join(dir, "chosen.jpg")
 	if err := os.WriteFile(target, []byte("stale bytes from an earlier run"), 0600); err != nil {
 		t.Fatal(err)
@@ -178,8 +178,6 @@ func TestAnExplicitOutputPathStillOverwrites(t *testing.T) {
 func printedName(t *testing.T, out, prefix, ext string) string {
 	t.Helper()
 	for field := range strings.FieldsSeq(out) {
-		// record prints an absolute path, the other four a bare name; the assertion is
-		// about which file was named, so compare the basename either way.
 		if name := filepath.Base(field); strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ext) {
 			return name
 		}
@@ -188,18 +186,24 @@ func printedName(t *testing.T, out, prefix, ext string) string {
 	return ""
 }
 
-func chdirTemp(t *testing.T) string {
+// isolateAutoNamedDir points the OS temp dir at a fresh directory and returns the
+// auto-named output dir under it, created so tests can pre-seed names in it.
+func isolateAutoNamedDir(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
-	t.Chdir(dir)
-	// t.TempDir can hand back a symlinked path (/var vs /private/var on darwin), which
-	// would make the printed path and the listed name disagree for reasons unrelated to
-	// the guard.
-	resolved, err := filepath.EvalSymlinks(dir)
-	if err != nil {
+	tmp := t.TempDir()
+	setTempDirEnv(t, tmp)
+	dir := filepath.Join(tmp, "pinchtab")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	return resolved
+	return dir
+}
+
+func setTempDirEnv(t *testing.T, dir string) {
+	t.Helper()
+	for _, key := range []string{"TMPDIR", "TMP", "TEMP"} {
+		t.Setenv(key, dir)
+	}
 }
 
 func autoNamedFiles(t *testing.T, dir, prefix, ext string) []string {
@@ -307,7 +311,7 @@ func recordStopResponse(path string) map[string]any {
 // server's name, so it reserves and renames. Two stops in one second must therefore
 // still keep both recordings and print the name each one took.
 func TestTwoRecordStopsInOneSecondKeepBothRecordings(t *testing.T) {
-	dir := chdirTemp(t)
+	dir := isolateAutoNamedDir(t)
 	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state"))
 
 	stop := func(encoded string) string {
@@ -363,7 +367,7 @@ func TestAFailedRenameReleasesTheReservation(t *testing.T) {
 	if !errors.As(err, &exitErr) {
 		t.Fatalf("child exited with %v, want the failed rename's os.Exit(1); output:\n%s", err, raw)
 	}
-	if left := autoNamedFiles(t, dir, "recording-", ".gif"); len(left) != 0 {
+	if left := autoNamedFiles(t, filepath.Join(dir, "pinchtab"), "recording-", ".gif"); len(left) != 0 {
 		t.Errorf("the failed stop left %v behind; an abandoned reservation is an empty file wearing an output's name", left)
 	}
 }
@@ -371,8 +375,10 @@ func TestAFailedRenameReleasesTheReservation(t *testing.T) {
 const recordFatalChildEnv = "PINCHTAB_TEST_RECORD_FATAL_DIR"
 
 func runFailedRenameChild(dir string) {
-	if err := os.Chdir(dir); err != nil {
-		panic(err)
+	for _, key := range []string{"TMPDIR", "TMP", "TEMP"} {
+		if err := os.Setenv(key, dir); err != nil {
+			panic(err)
+		}
 	}
 	if err := os.Setenv("XDG_STATE_HOME", filepath.Join(dir, "state")); err != nil {
 		panic(err)
@@ -460,7 +466,7 @@ func sortedNames(set map[string]bool) []string {
 // that is free is used as built. Without this, a run that suffixed unconditionally would
 // satisfy every assertion above.
 func TestARunWhoseAutoNameIsFreeUsesItUnsuffixed(t *testing.T) {
-	dir := chdirTemp(t)
+	dir := isolateAutoNamedDir(t)
 
 	m := newMockServer()
 	defer m.close()
@@ -473,5 +479,33 @@ func TestARunWhoseAutoNameIsFreeUsesItUnsuffixed(t *testing.T) {
 	}
 	if written := autoNamedFiles(t, dir, "capture-", ".jpg"); len(written) != 1 || written[0] != name {
 		t.Errorf("the run printed %s but the directory holds %v", name, written)
+	}
+}
+
+// assertAutoNamedOutsideCwd runs an auto-named command from an empty cwd and checks the
+// printed path is absolute, under the auto-named dir, and that the cwd stayed empty.
+func assertAutoNamedOutsideCwd(t *testing.T, prefix, ext string, run func() string) {
+	t.Helper()
+	dir := isolateAutoNamedDir(t)
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+
+	out := run()
+
+	var printed string
+	for field := range strings.FieldsSeq(out) {
+		if strings.HasPrefix(filepath.Base(field), prefix) && strings.HasSuffix(field, ext) {
+			printed = field
+		}
+	}
+	if !filepath.IsAbs(printed) {
+		t.Fatalf("output %q names no absolute %s*%s path", strings.TrimSpace(out), prefix, ext)
+	}
+	if filepath.Dir(printed) != dir {
+		t.Errorf("auto-named output landed in %s, want %s", filepath.Dir(printed), dir)
+	}
+	assertNonEmpty(t, printed)
+	if entries, err := os.ReadDir(cwd); err != nil || len(entries) != 0 {
+		t.Errorf("cwd holds %v (err %v); auto-named output must not land there", entries, err)
 	}
 }

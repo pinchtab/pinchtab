@@ -102,10 +102,8 @@ func TestCaptureInfersFormatFromOutputExtension(t *testing.T) {
 		})
 	}
 
-	// No -o at all still defaults to JPEG (auto-named in the working dir).
 	t.Run("no output defaults to jpeg", func(t *testing.T) {
-		dir := t.TempDir()
-		t.Chdir(dir)
+		dir := isolateAutoNamedDir(t)
 		cmd := newCaptureCmd()
 		_ = captureStdout(t, func() {
 			Capture(apiclient.Conn{Client: srv.Client(), Base: srv.URL}, cmd)
