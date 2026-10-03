@@ -16,6 +16,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/cli/output"
 	"github.com/pinchtab/pinchtab/internal/scroll"
 	"github.com/pinchtab/pinchtab/internal/selector"
+	"github.com/pinchtab/semantic/recovery"
 	"github.com/spf13/cobra"
 )
 
@@ -220,19 +221,20 @@ func printOpenedDialog(result map[string]any) bool {
 }
 
 func printActionResult(kind string, result map[string]any) {
+	rec := decodeRecovery(result)
 	if success, ok := result["success"].(bool); ok && !success {
 		errMsg := "unknown error"
 		if msg, ok := result["error"].(string); ok {
 			errMsg = msg
 		}
-		if failedOnStaleRef(result) {
+		if failedOnStaleRef(rec) {
 			output.Hint("ref may be stale — run `pinchtab snap -i` to refresh")
 		}
 		output.Error(kind, errMsg, output.ExitNotFound)
 		return
 	}
 	printActionWarning(result)
-	recovered := recoveredOnto(result)
+	recovered := recoveredOnto(rec)
 	switch {
 	case printActionHeadline(result):
 		if recovered != "" {
@@ -248,20 +250,27 @@ func printActionResult(kind string, result map[string]any) {
 	}
 }
 
-func failedOnStaleRef(result map[string]any) bool {
-	recovery, _ := result["recovery"].(map[string]any)
-	failType, _ := recovery["failure_type"].(string)
-	return failType == "element_stale" || failType == "navigation"
+func decodeRecovery(result map[string]any) recovery.RecoveryResult {
+	var rec recovery.RecoveryResult
+	raw, err := json.Marshal(result["recovery"])
+	if err != nil || json.Unmarshal(raw, &rec) != nil {
+		return recovery.RecoveryResult{}
+	}
+	return rec
 }
 
-func recoveredOnto(result map[string]any) string {
-	recovery, _ := result["recovery"].(map[string]any)
-	if recovery["recovered"] != true {
+func failedOnStaleRef(rec recovery.RecoveryResult) bool {
+	return rec.FailureType == recovery.FailureElementStale.String() ||
+		rec.FailureType == recovery.FailureNavigation.String()
+}
+
+func recoveredOnto(rec recovery.RecoveryResult) string {
+	if !rec.Recovered {
 		return ""
 	}
-	line := fmt.Sprintf("recovered %v -> %v", recovery["original_ref"], recovery["new_ref"])
-	if confidence, _ := recovery["confidence"].(string); confidence != "" {
-		line += " (" + confidence + ")"
+	line := fmt.Sprintf("recovered %s -> %s", rec.OriginalRef, rec.NewRef)
+	if rec.Confidence != "" {
+		line += " (" + rec.Confidence + ")"
 	}
 	return line
 }

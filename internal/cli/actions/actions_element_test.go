@@ -133,13 +133,13 @@ func TestPrintActionResultWaitNavWithoutNavigationSaysSo(t *testing.T) {
 }
 
 func TestPrintActionResultReportsARecoveredRef(t *testing.T) {
-	rematched := map[string]any{
-		"recovered":    true,
-		"original_ref": "e14",
-		"new_ref":      "e18",
-		"confidence":   "high",
-		"failure_type": "element_stale",
-	}
+	rematched := recoveryBlock(t, recovery.RecoveryResult{
+		Recovered:   true,
+		OriginalRef: "e14",
+		NewRef:      "e18",
+		Confidence:  "high",
+		FailureType: recovery.FailureElementStale.String(),
+	})
 	tests := []struct {
 		name     string
 		result   map[string]any
@@ -153,8 +153,24 @@ func TestPrintActionResultReportsARecoveredRef(t *testing.T) {
 		},
 		{
 			name:   "recovery attempted but not needed",
-			result: map[string]any{"success": true, "recovery": map[string]any{"recovered": false, "original_ref": "e14"}},
+			result: map[string]any{"success": true, "recovery": recoveryBlock(t, recovery.RecoveryResult{OriginalRef: "e14"})},
 			want:   "OK\n",
+		},
+		{
+			name:   "malformed recovery block",
+			result: map[string]any{"success": true, "recovery": map[string]any{"recovered": "yes", "new_ref": "e18"}},
+			want:   "OK\n",
+		},
+		{
+			name:   "recovery block of the wrong shape",
+			result: map[string]any{"success": true, "recovery": "e18"},
+			want:   "OK\n",
+		},
+		{
+			name:     "recovered without a new ref",
+			result:   map[string]any{"success": true, "recovery": recoveryBlock(t, recovery.RecoveryResult{Recovered: true, OriginalRef: "e14"})},
+			want:     "OK recovered e14 -> \n",
+			wantHint: true,
 		},
 		{
 			name:     "recovered",
@@ -186,6 +202,19 @@ func TestPrintActionResultReportsARecoveredRef(t *testing.T) {
 	}
 }
 
+func recoveryBlock(t *testing.T, rec recovery.RecoveryResult) map[string]any {
+	t.Helper()
+	raw, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatalf("marshal recovery: %v", err)
+	}
+	var block map[string]any
+	if err := json.Unmarshal(raw, &block); err != nil {
+		t.Fatalf("unmarshal recovery: %v", err)
+	}
+	return block
+}
+
 func TestFailedOnStaleRefMatchesTheEngineVocabulary(t *testing.T) {
 	for failType, want := range map[string]bool{
 		recovery.FailureElementStale.String():    true,
@@ -193,7 +222,7 @@ func TestFailedOnStaleRefMatchesTheEngineVocabulary(t *testing.T) {
 		recovery.FailureElementNotFound.String(): false,
 		"stale":                                  false,
 	} {
-		got := failedOnStaleRef(map[string]any{"recovery": map[string]any{"failure_type": failType}})
+		got := failedOnStaleRef(decodeRecovery(map[string]any{"recovery": recoveryBlock(t, recovery.RecoveryResult{FailureType: failType})}))
 		if got != want {
 			t.Errorf("failedOnStaleRef(%q) = %v, want %v", failType, got, want)
 		}
