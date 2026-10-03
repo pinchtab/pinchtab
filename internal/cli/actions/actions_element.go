@@ -235,6 +235,7 @@ func printActionResult(kind string, result map[string]any) {
 		output.Error(kind, errMsg, output.ExitNotFound)
 		return
 	}
+	printActionWarning(result)
 	if printOpenedDialog(result) {
 		return
 	}
@@ -269,6 +270,13 @@ func printActionResult(kind string, result map[string]any) {
 	}
 
 	output.Success()
+}
+
+func printActionWarning(result map[string]any) {
+	actionResult, _ := result["result"].(map[string]any)
+	if warning, _ := actionResult["warning"].(string); warning != "" {
+		output.Hint(warning)
+	}
 }
 
 func scrollDidNotMove(actionResult map[string]any) string {

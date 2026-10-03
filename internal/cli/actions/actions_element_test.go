@@ -1463,3 +1463,44 @@ func TestClickExitCodeFollowsSubmitPostState(t *testing.T) {
 		})
 	}
 }
+
+func TestFillPrintsTheServersWarningForAReactControlledInput(t *testing.T) {
+	const warned = `{"success":true,"result":{"filled":true,"warning":"fill may not have been picked up by the page (e.g. React controlled input); try 'type' instead"}}`
+	m := newMockServer()
+	defer m.close()
+	m.setResponse("POST", "/action", 200, warned)
+	conn := apiclient.Conn{Client: m.server.Client(), Base: m.base()}
+	var stdout string
+	stderr := captureStderr(t, func() {
+		stdout = captureStdout(t, func() { ActionSimple(conn, "fill", []string{"e5", "hello"}, newSimpleCmd()) })
+	})
+	if stdout != "OK\n" {
+		t.Errorf("stdout = %q, want OK", stdout)
+	}
+	if !strings.Contains(stderr, "try 'type' instead") {
+		t.Errorf("stderr = %q; the server's warning was dropped", stderr)
+	}
+}
+
+func TestPrintActionResultWarnsOnEveryResultShape(t *testing.T) {
+	const warning = "action may not have taken effect"
+	tests := []struct {
+		kind   string
+		result map[string]any
+	}{
+		{"click", map[string]any{"clicked": true, "navigated": true, "url": "https://example.com/next"}},
+		{"click", map[string]any{"clicked": true, "navigated": false}},
+		{"click", map[string]any{"clicked": true, "switchedToTab": "tab-2"}},
+		{"scroll", map[string]any{"scrolled": false, "scrollX": float64(0), "scrollY": float64(0)}},
+		{"type", map[string]any{"typed": true}},
+	}
+	for _, tt := range tests {
+		tt.result["warning"] = warning
+		stderr := captureStderr(t, func() {
+			captureStdout(t, func() { printActionResult(tt.kind, map[string]any{"success": true, "result": tt.result}) })
+		})
+		if !strings.Contains(stderr, warning) {
+			t.Errorf("%s %v: stderr = %q; the warning was dropped", tt.kind, tt.result, stderr)
+		}
+	}
+}
