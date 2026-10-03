@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"unicode"
 
 	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/semdesc"
@@ -279,26 +278,6 @@ func roundScore(s float64) float64 {
 
 func fieldQuery(prop Property) string {
 	return strings.TrimSpace(splitCaseWords(prop.Name) + " " + prop.Description)
-}
-
-func splitCaseWords(name string) string {
-	runes := []rune(name)
-	var b strings.Builder
-	for i, r := range runes {
-		if i > 0 && unicode.IsUpper(r) && startsCaseWord(runes, i) {
-			b.WriteRune(' ')
-		}
-		b.WriteRune(unicode.ToLower(r))
-	}
-	return b.String()
-}
-
-func startsCaseWord(runes []rune, i int) bool {
-	prev := runes[i-1]
-	if unicode.IsLower(prev) || unicode.IsDigit(prev) {
-		return true
-	}
-	return unicode.IsUpper(prev) && i+1 < len(runes) && unicode.IsLower(runes[i+1])
 }
 
 func readValue(t Type, node observe.A11yNode) (any, string, bool) {

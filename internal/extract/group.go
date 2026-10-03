@@ -3,7 +3,6 @@ package extract
 import (
 	"sort"
 	"strings"
-	"unicode"
 
 	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/semantic"
@@ -255,15 +254,6 @@ func exactHeader(prop Property, header []observe.A11yNode) (int, bool) {
 		}
 	}
 	return 0, false
-}
-
-func headerKey(s string) string {
-	return strings.Map(func(r rune) rune {
-		if r == '_' || r == '-' || unicode.IsSpace(r) {
-			return -1
-		}
-		return unicode.ToLower(r)
-	}, s)
 }
 
 func (r itemResolver) resolve(item int) Result {
