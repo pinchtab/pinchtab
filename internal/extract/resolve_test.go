@@ -1,6 +1,7 @@
 package extract
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/pinchtab/pinchtab/internal/bridge/observe"
@@ -88,5 +89,19 @@ func TestResolve_CamelCaseKeyMatchesLikeItsSnakeTwin(t *testing.T) {
 		if got.Data[keys[1]] != "SAVE10" || got.Fields[keys[1]].Ref != "e3" {
 			t.Errorf("%s = %#v %+v, want SAVE10 from e3", keys[1], got.Data[keys[1]], got.Fields[keys[1]])
 		}
+	}
+}
+
+func TestResolveArray_CamelCaseColumnKeyMatchesItsHeader(t *testing.T) {
+	schema := mustSchema(t, `{"type":"object","properties":{"products":{"type":"array","items":{"type":"object","properties":{
+		"name":{"type":"string"},"itemPrice":{"type":"number"}}}}}}`)
+	got := Resolve(schema, stockTableNodes(), Options{})
+	want := []map[string]any{
+		{"name": "Pen", "itemPrice": 1.5},
+		{"name": "Book", "itemPrice": 7.0},
+		{"name": "Lamp", "itemPrice": 19.99},
+	}
+	if list := items(t, got, "products"); !reflect.DeepEqual(list, want) {
+		t.Fatalf("products = %v, want %v", list, want)
 	}
 }
