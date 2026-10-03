@@ -237,6 +237,64 @@ func TestHandleNavigate_GhostChromeDowngradeRecordsBothBrowsers(t *testing.T) {
 	assertDowngradeRepliedAndRecorded(t, navigateReply(t, "ghost-chrome"))
 }
 
+type readRequest struct {
+	path  string
+	query string
+}
+
+var routedReads = map[string]readRequest{
+	"text":          {"/text", ""},
+	"snapshot":      {"/snapshot", ""},
+	"snapshot diff": {"/snapshot", "diff=true&"},
+}
+
+func readReply(t *testing.T, read readRequest, browser string) routedReply {
+	t.Helper()
+	h, tabID := newEnrichmentFixture(t)
+	h.Config.BrowsersAvailable = routeTestConfig().BrowsersAvailable
+	handler := h.HandleText
+	if read.path == "/snapshot" {
+		handler = h.HandleSnapshot
+		snapshotFor(t, h, tabID, "json")
+	}
+	return serveRouted(t, handler, httptest.NewRequest("GET", read.path+"?"+read.query+"tabId="+tabID+"&browser="+browser, nil))
+}
+
+func TestReadEndpointsOmitATrivialRoute(t *testing.T) {
+	for name, read := range routedReads {
+		t.Run(name, func(t *testing.T) {
+			assertTrivialRouteOnlyRecorded(t, readReply(t, read, config.BrowserCloak), config.BrowserCloak)
+		})
+	}
+}
+
+func TestHandleText_GhostChromeDowngradeRecordsBothBrowsers(t *testing.T) {
+	assertDowngradeRepliedAndRecorded(t, readReply(t, routedReads["text"], "ghost-chrome"))
+}
+
+func TestSnapshotWritersReplyWithADowngradedRoute(t *testing.T) {
+	h := New(&mockBridge{}, routeTestConfig(), nil, nil, nil)
+	res := snapshotResult{url: "https://example.com/", title: "Example", route: readRoute(t, h, "ghost-chrome", "text", browsers.ShapeRenderedRead)}
+	q := snapshotQuery{format: "json"}
+
+	for name, write := range map[string]func(http.ResponseWriter){
+		"snapshot": func(w http.ResponseWriter) { h.writeSnapshot(w, q, res, "", snapshotIDPIResult{}) },
+		"diff":     func(w http.ResponseWriter) { h.writeSnapshotDiff(w, q, res, nil, false) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			write(w)
+			var reply struct {
+				Route *browserops.RouteMetadata `json:"route"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &reply); err != nil {
+				t.Fatalf("decode %s: %v", w.Body.String(), err)
+			}
+			assertGhostChromeDowngrade(t, reply.Route)
+		})
+	}
+}
+
 func TestRouteMetadataTrivial(t *testing.T) {
 	oneAttempt := []browserops.RouteAttempt{{Browser: "cloak", Accepted: true}}
 	for name, tc := range map[string]struct {
