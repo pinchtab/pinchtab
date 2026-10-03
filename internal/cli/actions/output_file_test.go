@@ -12,9 +12,11 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
 )
@@ -610,5 +612,59 @@ func TestResolveOutputSuffixesOnlyAnAutoNamedTarget(t *testing.T) {
 	}
 	if first != auto.path || second == first {
 		t.Errorf("auto-named writes saved %q then %q; want %q then a suffixed name", first, second, auto.path)
+	}
+}
+
+const unsafeDirChildEnv = "PINCHTAB_UNSAFE_DIR_CHILD"
+const unsafeDirBaseEnv = "PINCHTAB_UNSAFE_DIR_BASE"
+
+func TestPDFAndRawScreenshotRefuseAnUnsafeDirBeforeTheRequest(t *testing.T) {
+	if mode := os.Getenv(unsafeDirChildEnv); mode != "" {
+		conn := apiclient.Conn{Client: http.DefaultClient, Base: os.Getenv(unsafeDirBaseEnv)}
+		switch mode {
+		case "pdf":
+			PDF(conn, pdfCmd())
+		case "screenshot":
+			Screenshot(conn, screenshotCmd())
+		}
+		os.Exit(0)
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows skips the owner and mode checks")
+	}
+
+	for _, mode := range []string{"pdf", "screenshot"} {
+		t.Run(mode, func(t *testing.T) {
+			var hits atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				hits.Add(1)
+				_, _ = w.Write([]byte("bytes"))
+			}))
+			defer srv.Close()
+
+			tmp := t.TempDir()
+			dir := filepath.Join(tmp, "pinchtab")
+			if err := os.Mkdir(dir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(dir, 0o777); err != nil { // #nosec G302 -- the unsafe dir under test.
+				t.Fatal(err)
+			}
+
+			child := exec.Command(os.Args[0], "-test.run=TestPDFAndRawScreenshotRefuseAnUnsafeDirBeforeTheRequest", "-test.timeout=60s") // #nosec G204 -- re-executes this test binary.
+			child.Env = append(os.Environ(), unsafeDirChildEnv+"="+mode, unsafeDirBaseEnv+"="+srv.URL, "TMPDIR="+tmp, "TMP="+tmp, "TEMP="+tmp)
+			out, err := child.CombinedOutput()
+
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) || exitErr.ExitCode() != cli.ExitRuntime {
+				t.Fatalf("child err = %v, want exit %d (output: %s)", err, cli.ExitRuntime, out)
+			}
+			if !strings.Contains(string(out), "Output path:") || !strings.Contains(string(out), dir) {
+				t.Errorf("output %q does not refuse the auto-named dir %s", out, dir)
+			}
+			if n := hits.Load(); n != 0 {
+				t.Errorf("%s sent %d request(s) before refusing the unsafe dir; want 0", mode, n)
+			}
+		})
 	}
 }
