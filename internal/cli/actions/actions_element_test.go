@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/spf13/cobra"
@@ -1493,6 +1494,8 @@ func TestPrintActionResultWarnsOnEveryResultShape(t *testing.T) {
 		{"click", map[string]any{"clicked": true, "switchedToTab": "tab-2"}},
 		{"scroll", map[string]any{"scrolled": false, "scrollX": float64(0), "scrollY": float64(0)}},
 		{"type", map[string]any{"typed": true}},
+		{"click", map[string]any{"clicked": true, bridge.OpenedDialogResultKey: map[string]any{"dialogType": "alert", "dialogMessage": "hi"}}},
+		{"submit", map[string]any{"submitted": true, "postState": map[string]any{"status": "succeeded", "signal": "navigation"}}},
 	}
 	for _, tt := range tests {
 		tt.result["warning"] = warning
