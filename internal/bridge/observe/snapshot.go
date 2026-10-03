@@ -731,7 +731,7 @@ func (b *snapshotBuilder) filteredName(n RawAXNode) (name string, keep bool) {
 	if dialogRoles[role] {
 		return b.dialogName(n), !b.isHidden(n.NodeID)
 	}
-	if role == "spinbutton" && b.hasDateTimeHostAncestor(n.NodeID) {
+	if role == "spinbutton" && b.nearestAncestor(n.NodeID, dateTimeHostRoles) != "" {
 		return "", false
 	}
 	if tableCellRoles[role] && b.isNamedOnlyByControls(n.NodeID) {
@@ -762,21 +762,6 @@ func (b *snapshotBuilder) hasVisibleInteractiveDescendant(nodeID string) bool {
 			}
 			pending = append(pending, childID)
 		}
-	}
-	return false
-}
-
-func (b *snapshotBuilder) hasDateTimeHostAncestor(nodeID string) bool {
-	cur := nodeID
-	for range b.maxAncestorWalk {
-		p, ok := b.parentMap[cur]
-		if !ok {
-			return false
-		}
-		if dateTimeHostRoles[b.nodeByID[p].Role.String()] {
-			return true
-		}
-		cur = p
 	}
 	return false
 }
