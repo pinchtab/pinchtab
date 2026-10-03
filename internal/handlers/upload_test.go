@@ -397,6 +397,30 @@ func TestHandleUpload_UsesConfiguredUploadLimits(t *testing.T) {
 	}
 }
 
+func TestHandleUpload_PathsAndFilesShareOneTotalBudget(t *testing.T) {
+	tmpDir := t.TempDir()
+	uploadsDir := filepath.Join(tmpDir, "uploads")
+	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(uploadsDir, "test.txt"), []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{AllowUpload: true, StateDir: tmpDir, UploadMaxTotalBytes: 8}, nil, nil, nil)
+	body := `{"paths":["uploads/test.txt"],"files":["aGVsbG8="]}`
+	req := httptest.NewRequest("POST", "/upload", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleUpload(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 when a path and a file together exceed the total, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "upload payload too large") {
+		t.Fatalf("expected the total-budget refusal, got %s", w.Body.String())
+	}
+}
+
 func TestHandleUpload_TabLocked(t *testing.T) {
 	h := New(&uploadLockBridge{
 		lock: &bridge.LockInfo{

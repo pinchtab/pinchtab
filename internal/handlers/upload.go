@@ -63,8 +63,7 @@ var (
 //
 // Either "files" (base64 data) or "paths" (relative sandbox paths) must be
 // provided. Both can be combined. Files are written to a temp dir and passed to
-// CDP. Path-based uploads are limited to StateDir/uploads/. Successful base64
-// staging dirs are retained briefly for lazy browser reads, then cleaned.
+// CDP. Path-based uploads are limited to StateDir/uploads/.
 //
 // "fileNames" is index-aligned with "files" and decides the name the page sees.
 // A supplied name wins over the content sniff even when the two disagree,
@@ -79,9 +78,6 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	tabID := r.URL.Query().Get("tabId")
 	maxRequestBytes := h.Config.EffectiveUploadMaxRequestBytes()
-	maxFiles := h.Config.EffectiveUploadMaxFiles()
-	maxFileBytes := h.Config.EffectiveUploadMaxFileBytes()
-	maxTotalBytes := h.Config.EffectiveUploadMaxTotalBytes()
 
 	var req uploadRequest
 	if err := httpx.DecodeJSON(w, r, &req, httpx.JSONBodyOptions{MaxBytes: int64(maxRequestBytes), Lenient: true}); err != nil {
@@ -89,95 +85,17 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.Files) == 0 && len(req.Paths) == 0 {
-		httpx.Error(w, 400, fmt.Errorf("either 'files' (base64) or 'paths' (sandbox paths) required"))
+	staged, stageErr := h.stageUploadFiles(req)
+	if stageErr != nil {
+		httpx.Error(w, stageErr.status, stageErr.err)
 		return
 	}
-	if len(req.Files)+len(req.Paths) > maxFiles {
-		httpx.Error(w, 400, fmt.Errorf("too many files: max %d", maxFiles))
-		return
-	}
-
-	uploadBase := filepath.Join(h.Config.StateDir, uploadSandboxDirName)
-	var totalBytes int64
-	for i, p := range req.Paths {
-		safe, size, err := validateUploadSandboxPath(uploadBase, p, maxFileBytes)
-		if err != nil {
-			httpx.Error(w, 400, fmt.Errorf("invalid path: %w", err))
-			return
-		}
-		totalBytes += size
-		if totalBytes > int64(maxTotalBytes) {
-			httpx.Error(w, 400, fmt.Errorf("upload payload too large: max %d bytes total", maxTotalBytes))
-			return
-		}
-		req.Paths[i] = safe
-	}
-
-	// Decode base64 files into a staged dir that OUTLIVES this request. CDP
-	// SetFileInputFiles only records the path on the <input>; the browser reads the
-	// bytes LAZILY at form-submit time, which is typically a separate, later
-	// request. Deleting the decoded file when this handler returns (the previous
-	// `defer os.RemoveAll`) left the file gone by submit time, so multipart
-	// submissions failed with ERR_FILE_NOT_FOUND ("Your file couldn't be accessed.
-	// It may have been moved, edited, or deleted."). Keep the staged files on the
-	// success path long enough for lazy reads, and only remove them immediately if
-	// the upload fails before attaching to a tab.
-	var tempFiles []string
-	var stagedDir string
-	uploadSucceeded := false
+	attached := false
 	defer func() {
-		if !uploadSucceeded && stagedDir != "" {
-			_ = os.RemoveAll(stagedDir)
+		if !attached {
+			staged.discard()
 		}
 	}()
-	if len(req.Files) > 0 {
-		// Stage under StateDir/uploads when configured so paths survive this
-		// request, else the OS temp dir; never the process working directory.
-		stageBase := os.TempDir()
-		if strings.TrimSpace(h.Config.StateDir) != "" {
-			if err := os.MkdirAll(uploadBase, 0o755); err != nil {
-				httpx.Error(w, 500, fmt.Errorf("create upload dir: %w", err))
-				return
-			}
-			stageBase = uploadBase
-		}
-		dir, err := os.MkdirTemp(stageBase, uploadStagedDirPrefix+"*")
-		if err != nil {
-			httpx.Error(w, 500, fmt.Errorf("create staged dir: %w", err))
-			return
-		}
-		stagedDir = dir
-
-		for i, f := range req.Files {
-			data, ext, err := decodeFileData(f)
-			if err != nil {
-				httpx.Error(w, 400, fmt.Errorf("file[%d]: %w", i, err))
-				return
-			}
-			if len(data) > maxFileBytes {
-				httpx.Error(w, 400, fmt.Errorf("file[%d] exceeds max size %d bytes", i, maxFileBytes))
-				return
-			}
-			totalBytes += int64(len(data))
-			if totalBytes > int64(maxTotalBytes) {
-				httpx.Error(w, 400, fmt.Errorf("upload payload too large: max %d bytes total", maxTotalBytes))
-				return
-			}
-			path, err := stageUploadPath(stagedDir, i, uploadFileName(req.FileNames, i), ext)
-			if err != nil {
-				httpx.Error(w, 400, fmt.Errorf("file[%d]: %w", i, err))
-				return
-			}
-			if err := os.WriteFile(path, data, 0600); err != nil {
-				httpx.Error(w, 500, fmt.Errorf("write staged file: %w", err))
-				return
-			}
-			tempFiles = append(tempFiles, path)
-		}
-	}
-
-	allPaths := append(tempFiles, req.Paths...)
 
 	ctx, resolvedTabID, err := h.tabContext(r, tabID)
 	if err != nil {
@@ -210,7 +128,7 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.Bridge.SetFileInputFiles(tCtx, nodeID, allPaths); err != nil {
+	if err := h.Bridge.SetFileInputFiles(tCtx, nodeID, staged.paths); err != nil {
 		if errors.Is(err, bridge.ErrInvalidActionRequest) {
 			httpx.ErrorCode(w, http.StatusBadRequest, "invalid_action_request", fmt.Sprintf("upload: %v", err), false, nil)
 			return
@@ -221,17 +139,127 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 
 	h.recordActivity(r, activity.Update{Action: "upload", TabID: resolvedTabID})
 
-	// Files attached successfully; keep the staged copies so the browser can read
-	// them at form-submit time, but schedule bounded cleanup.
-	uploadSucceeded = true
-	if stagedDir != "" {
-		cleanupStagedUploadDirAfter(stagedDir, uploadStagedRetention)
-	}
+	attached = true
+	cleanupStagedUploadDirAfter(staged.dir, uploadStagedRetention)
 
 	httpx.JSON(w, 200, map[string]any{
 		"status": "ok",
-		"files":  len(allPaths),
+		"files":  len(staged.paths),
 	})
+}
+
+type stagedUpload struct {
+	paths []string
+	dir   string
+}
+
+func (s stagedUpload) discard() {
+	if s.dir != "" {
+		_ = os.RemoveAll(s.dir)
+	}
+}
+
+type uploadBudget struct {
+	maxTotalBytes int
+	usedBytes     int64
+}
+
+func (b *uploadBudget) spend(n int64) error {
+	b.usedBytes += n
+	if b.usedBytes > int64(b.maxTotalBytes) {
+		return fmt.Errorf("upload payload too large: max %d bytes total", b.maxTotalBytes)
+	}
+	return nil
+}
+
+// stageUploadFiles returns the decoded files followed by the sandbox paths, in
+// the order they are attached.
+func (h *Handlers) stageUploadFiles(req uploadRequest) (stagedUpload, *statusError) {
+	if len(req.Files) == 0 && len(req.Paths) == 0 {
+		return stagedUpload{}, &statusError{400, fmt.Errorf("either 'files' (base64) or 'paths' (sandbox paths) required")}
+	}
+	if maxFiles := h.Config.EffectiveUploadMaxFiles(); len(req.Files)+len(req.Paths) > maxFiles {
+		return stagedUpload{}, &statusError{400, fmt.Errorf("too many files: max %d", maxFiles)}
+	}
+
+	uploadBase := filepath.Join(h.Config.StateDir, uploadSandboxDirName)
+	maxFileBytes := h.Config.EffectiveUploadMaxFileBytes()
+	budget := &uploadBudget{maxTotalBytes: h.Config.EffectiveUploadMaxTotalBytes()}
+
+	sandboxPaths, err := resolveUploadSandboxPaths(uploadBase, req.Paths, maxFileBytes, budget)
+	if err != nil {
+		return stagedUpload{}, err
+	}
+	if len(req.Files) == 0 {
+		return stagedUpload{paths: sandboxPaths}, nil
+	}
+
+	dir, err := h.makeUploadStagingDir(uploadBase)
+	if err != nil {
+		return stagedUpload{}, err
+	}
+	staged := stagedUpload{dir: dir}
+	for i, f := range req.Files {
+		path, err := writeStagedUploadFile(dir, i, f, uploadFileName(req.FileNames, i), maxFileBytes, budget)
+		if err != nil {
+			staged.discard()
+			return stagedUpload{}, err
+		}
+		staged.paths = append(staged.paths, path)
+	}
+	staged.paths = append(staged.paths, sandboxPaths...)
+	return staged, nil
+}
+
+func resolveUploadSandboxPaths(uploadBase string, rawPaths []string, maxFileBytes int, budget *uploadBudget) ([]string, *statusError) {
+	safePaths := make([]string, 0, len(rawPaths))
+	for _, p := range rawPaths {
+		safe, size, err := validateUploadSandboxPath(uploadBase, p, maxFileBytes)
+		if err != nil {
+			return nil, &statusError{400, fmt.Errorf("invalid path: %w", err)}
+		}
+		if err := budget.spend(size); err != nil {
+			return nil, &statusError{400, err}
+		}
+		safePaths = append(safePaths, safe)
+	}
+	return safePaths, nil
+}
+
+func (h *Handlers) makeUploadStagingDir(uploadBase string) (string, *statusError) {
+	stageBase := os.TempDir()
+	if strings.TrimSpace(h.Config.StateDir) != "" {
+		if err := os.MkdirAll(uploadBase, 0o755); err != nil {
+			return "", &statusError{500, fmt.Errorf("create upload dir: %w", err)}
+		}
+		stageBase = uploadBase
+	}
+	dir, err := os.MkdirTemp(stageBase, uploadStagedDirPrefix+"*")
+	if err != nil {
+		return "", &statusError{500, fmt.Errorf("create staged dir: %w", err)}
+	}
+	return dir, nil
+}
+
+func writeStagedUploadFile(dir string, i int, encoded, name string, maxFileBytes int, budget *uploadBudget) (string, *statusError) {
+	data, ext, err := decodeFileData(encoded)
+	if err != nil {
+		return "", &statusError{400, fmt.Errorf("file[%d]: %w", i, err)}
+	}
+	if len(data) > maxFileBytes {
+		return "", &statusError{400, fmt.Errorf("file[%d] exceeds max size %d bytes", i, maxFileBytes)}
+	}
+	if err := budget.spend(int64(len(data))); err != nil {
+		return "", &statusError{400, err}
+	}
+	path, err := stageUploadPath(dir, i, name, ext)
+	if err != nil {
+		return "", &statusError{400, fmt.Errorf("file[%d]: %w", i, err)}
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return "", &statusError{500, fmt.Errorf("write staged file: %w", err)}
+	}
+	return path, nil
 }
 
 const defaultUploadSelector = "input[type=file]"
