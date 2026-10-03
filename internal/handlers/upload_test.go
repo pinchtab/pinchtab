@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -84,6 +85,40 @@ func TestHandleUpload_SelectorNotFoundIs404(t *testing.T) {
 	h.HandleUpload(w, req)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for unresolved selector, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+type wrongElementUploadBridge struct {
+	recordingUploadBridge
+}
+
+func (*wrongElementUploadBridge) SetFileInputFiles(context.Context, int64, []string) error {
+	return fmt.Errorf("%w: target <button type=\"submit\"> is not an <input type=file> element", bridge.ErrInvalidActionRequest)
+}
+
+func TestHandleUpload_NonFileElementIs400InvalidActionRequest(t *testing.T) {
+	h := New(&wrongElementUploadBridge{}, &config.RuntimeConfig{AllowUpload: true, StateDir: t.TempDir(), ActionTimeout: time.Second}, nil, nil, nil)
+	req := httptest.NewRequest("POST", "/upload?tabId=t1", bytes.NewReader([]byte(`{"selector":"#send","files":["aGVsbG8="]}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleUpload(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("upload onto a non-file element answered %d, want 400: %s", w.Code, w.Body.String())
+	}
+	var body struct {
+		Code      string `json:"code"`
+		Error     string `json:"error"`
+		Retryable bool   `json:"retryable"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode error body: %v", err)
+	}
+	if body.Code != "invalid_action_request" || body.Retryable {
+		t.Fatalf("got code %q retryable %v, want invalid_action_request and not retryable", body.Code, body.Retryable)
+	}
+	if !strings.Contains(body.Error, `<button type="submit">`) {
+		t.Fatalf("error %q does not name the element it hit", body.Error)
 	}
 }
 

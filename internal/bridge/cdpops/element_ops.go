@@ -29,34 +29,72 @@ func (e *NoOptionMatchError) Error() string {
 	return fmt.Sprintf("no option matched %q by value or visible text", e.Value)
 }
 
-// NotSelectError reports a select target that is not a <select> element.
-type NotSelectError struct {
+type elementKind struct {
 	Tag  string `json:"tag"`
 	Type string `json:"type"`
 	Role string `json:"role"`
 }
 
+func (k elementKind) String() string {
+	target := "<" + k.Tag
+	if k.Type != "" {
+		target += fmt.Sprintf(" type=%q", k.Type)
+	}
+	if k.Role != "" {
+		target += fmt.Sprintf(" role=%q", k.Role)
+	}
+	return target + ">"
+}
+
+const elementKindJS = `{
+		tag: (this.localName || this.nodeName || '').toLowerCase(),
+		type: (this.getAttribute && this.getAttribute('type')) || '',
+		role: (this.getAttribute && this.getAttribute('role')) || ''
+	}`
+
+// NotSelectError reports a select target that is not a <select> element.
+type NotSelectError struct {
+	elementKind
+}
+
 func (e *NotSelectError) Error() string {
-	target := "<" + e.Tag
-	if e.Type != "" {
-		target += fmt.Sprintf(" type=%q", e.Type)
-	}
-	if e.Role != "" {
-		target += fmt.Sprintf(" role=%q", e.Role)
-	}
-	return "target " + target + "> is not a <select> element; use fill for a text field, check for a checkbox, or click for a custom dropdown"
+	return "target " + e.String() + " is not a <select> element; use fill for a text field, check for a checkbox, or click for a custom dropdown"
 }
 
 const notSelectJS = `function() {
 	if (this instanceof window.HTMLSelectElement) {
 		return null;
 	}
-	return {
-		tag: (this.localName || this.nodeName || '').toLowerCase(),
-		type: (this.getAttribute && this.getAttribute('type')) || '',
-		role: (this.getAttribute && this.getAttribute('role')) || ''
-	};
+	return ` + elementKindJS + `;
 }`
+
+// NotFileInputError reports an upload target that is not an <input type=file> element.
+type NotFileInputError struct {
+	elementKind
+}
+
+func (e *NotFileInputError) Error() string {
+	return "target " + e.String() + " is not an <input type=file> element; upload needs the file input itself, which a snapshot lists as a button"
+}
+
+const notFileInputJS = `function() {
+	if (this instanceof window.HTMLInputElement && this.type === 'file') {
+		return null;
+	}
+	return ` + elementKindJS + `;
+}`
+
+func NotFileInput(ctx context.Context, nodeID int64) (*NotFileInputError, error) {
+	objectID, err := ResolveNodeObjectID(ctx, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	var refusal *NotFileInputError
+	if err := cdptk.CallFunctionOn(ctx, objectID, notFileInputJS, nil, &refusal); err != nil {
+		return nil, err
+	}
+	return refusal, nil
+}
 
 // NotFillableError reports a text-entry target that holds no value of its own, such as
 // one segment of a date or time input. Host names the input it belongs to, when

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/routes"
 )
@@ -199,6 +201,10 @@ func (h *Handlers) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.Bridge.SetFileInputFiles(tCtx, nodeID, allPaths); err != nil {
+		if errors.Is(err, bridge.ErrInvalidActionRequest) {
+			httpx.ErrorCode(w, http.StatusBadRequest, "invalid_action_request", fmt.Sprintf("upload: %v", err), false, nil)
+			return
+		}
 		httpx.Error(w, 500, fmt.Errorf("upload: %w", err))
 		return
 	}
