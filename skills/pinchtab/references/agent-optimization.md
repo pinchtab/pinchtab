@@ -33,27 +33,27 @@ Need to check page state?
 
 ## Diff Snapshots for Follow-Up Reads
 
-Use `--snap-diff` on action commands to get all refs plus change markers — in one call, not two.
+Use `--snap-diff` on action commands to act and see only what changed — in one call, not two.
 
 ```bash
-pinchtab click e5 --snap-diff      # action + full refs with diff markers
+pinchtab click e5 --snap-diff      # action + changed refs only
 pinchtab fill e3 "text" --snap-diff
 ```
 
-Output format shows all valid refs with change markers:
+Output lists [+] added and [~] changed nodes plus a # removed: line, under a header showing counts:
 ```
-# Page | URL | 57 nodes | +2 ~1 -0
-e0:link "Home"
-e5:button "Submit" [+]           # added
-e12:textbox val="updated" [~]    # changed
+# Page | URL | 57 nodes | +1 ~1 -1
+e5:button "Submit" [+]
+e12:textbox val="updated" [~]
 # removed: e99
 ```
+Unchanged nodes are omitted, so keep refs from the previous snapshot.
 
 **When to use `--snap-diff`:**
 - After clicks that update part of the UI (e.g. accordion opens, toast appears)
 - After form fills that show inline validation
 - During multi-step wizards where only one section changes
-- Any interaction where you need to see the result — you get all refs plus diff info
+- Any interaction where you need to see the result — you get only what changed
 
 **When NOT to use `--snap-diff`:**
 - After `nav` to a new URL (diff would mark everything as added — use `--snap` instead)

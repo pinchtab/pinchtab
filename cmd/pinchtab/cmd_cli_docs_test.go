@@ -175,11 +175,11 @@ func compactDiffDocCopies(t *testing.T) []string {
 
 func TestCompactDiffDocCopiesMatchTheSummary(t *testing.T) {
 	copies := compactDiffDocCopies(t)
-	const floor = 8
+	const floor = 10
 	if len(copies) < floor {
 		t.Fatalf("found %d compact-diff doc copies %v, want at least %d", len(copies), copies, floor)
 	}
-	for _, required := range []string{"skills/pinchtab/SKILL.md", "skills/pinchtab/references/api.md", "skills/pinchtab/references/commands.md"} {
+	for _, required := range []string{"skills/pinchtab/SKILL.md", "skills/pinchtab/references/agent-optimization.md", "skills/pinchtab/references/api.md", "skills/pinchtab/references/commands.md"} {
 		if !slices.Contains(copies, required) {
 			t.Errorf("%s no longer describes the compact diff; discovered %v", required, copies)
 		}
