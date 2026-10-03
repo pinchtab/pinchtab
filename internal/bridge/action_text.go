@@ -132,6 +132,12 @@ func nonEditableRefusal(ctx context.Context, req ActionRequest, err error) *brid
 func (b *Bridge) fillText(ctx context.Context, req ActionRequest) (map[string]any, error) {
 	text, _ := FillText(req)
 	result := textEntryResult("filled", text)
+	if isSelect, err := fillSelect(ctx, req, text); isSelect {
+		if err != nil {
+			return nil, err
+		}
+		return finishFill(ctx, result, req.Submit)
+	}
 	if req.Selector != "" {
 		var nodes []*cdp.Node
 		if err := chromedp.Run(ctx,
@@ -159,6 +165,19 @@ func (b *Bridge) fillText(ctx context.Context, req ActionRequest) (map[string]an
 		return finishFill(ctx, result, req.Submit)
 	}
 	return nil, NewInvalidActionRequestError("need selector or ref")
+}
+
+func fillSelect(ctx context.Context, req ActionRequest, text string) (bool, error) {
+	nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
+	if err != nil || nodeID <= 0 {
+		return false, nil
+	}
+	err = bridgecdpops.SelectByNodeID(ctx, nodeID, text)
+	var notSelect *bridgecdpops.NotSelectError
+	if errors.As(err, &notSelect) {
+		return false, nil
+	}
+	return true, err
 }
 
 // Compared against what was asked for rather than against "", so a clear that

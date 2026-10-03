@@ -140,8 +140,6 @@ func FillByNodeID(ctx context.Context, nodeID int64, value string) error {
 					proto = window.HTMLTextAreaElement.prototype;
 				} else if (this instanceof window.HTMLInputElement) {
 					proto = window.HTMLInputElement.prototype;
-				} else if (this instanceof window.HTMLSelectElement) {
-					proto = window.HTMLSelectElement.prototype;
 				}
 				if (proto) {
 					Object.getOwnPropertyDescriptor(proto, 'value').set.call(this, v);

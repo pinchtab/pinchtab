@@ -1769,6 +1769,86 @@ func TestTextEntryBySelectorOnTheWrongElementTypeIsAnInvalidRequest(t *testing.T
 	}
 }
 
+func newFillSelectFixture(t *testing.T) (context.Context, *Handlers) {
+	t.Helper()
+	ctx, b, h := newRerenderFixture(t)
+	rerenderApp(t, ctx, `<select id="cat"><option value="">All</option><option value="k">Kitchen</option><option value="g">Garden</option></select>`)
+	cat, err := bridge.ResolveCSSToNodeID(ctx, "#cat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.SetRefCache("tab-rerender", &bridge.RefCache{
+		Targets: map[string]bridge.RefTarget{"e5": {BackendNodeID: cat}},
+		Nodes:   []bridge.A11yNode{{Ref: "e5", Role: "combobox", Name: "cat", NodeID: cat}},
+	})
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.getElementById("cat").value = "k"`, nil)); err != nil {
+		t.Fatal(err)
+	}
+	return ctx, h
+}
+
+var fillSelectTargets = map[string]string{
+	"by ref":      `"ref":"e5"`,
+	"by selector": `"selector":"#cat"`,
+}
+
+func TestFillOnASelectWithNoMatchingOptionIsRefusedAndKeepsTheSelection(t *testing.T) {
+	for name, target := range fillSelectTargets {
+		t.Run(name, func(t *testing.T) {
+			ctx, h := newFillSelectFixture(t)
+
+			w := postRerenderAction(t, h, `{"kind":"fill",`+target+`,"text":"cup","tabId":"tab-rerender"}`)
+
+			if w.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("status=%d body=%s, want 422", w.Code, w.Body.String())
+			}
+			var body struct {
+				Code    string `json:"code"`
+				Details struct {
+					Hint string `json:"hint"`
+				} `json:"details"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if body.Code != "option_not_found" || !strings.Contains(body.Details.Hint, "Garden") {
+				t.Errorf("code=%q hint=%q, want option_not_found and a hint listing the options", body.Code, body.Details.Hint)
+			}
+			var selectedIndex int
+			if err := chromedp.Run(ctx, chromedp.Evaluate(`document.getElementById("cat").selectedIndex`, &selectedIndex)); err != nil {
+				t.Fatal(err)
+			}
+			if selectedIndex != 1 {
+				t.Errorf("selectedIndex = %d after a refused fill, want the untouched 1", selectedIndex)
+			}
+		})
+	}
+}
+
+func TestFillOnASelectPicksTheOptionTheWaySelectDoes(t *testing.T) {
+	for name, target := range fillSelectTargets {
+		t.Run(name, func(t *testing.T) {
+			ctx, h := newFillSelectFixture(t)
+
+			w := postRerenderAction(t, h, `{"kind":"fill",`+target+`,"text":"garden","tabId":"tab-rerender"}`)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s, want 200", w.Code, w.Body.String())
+			}
+			if strings.Contains(w.Body.String(), "warning") {
+				t.Errorf("a fill that selected an option still warns: %s", w.Body.String())
+			}
+			var value string
+			if err := chromedp.Run(ctx, chromedp.Evaluate(`document.getElementById("cat").value`, &value)); err != nil {
+				t.Fatal(err)
+			}
+			if value != "g" {
+				t.Errorf("select value = %q, want g (Garden)", value)
+			}
+		})
+	}
+}
+
 const selectOptionFixtureHTML = `<label>Size <select id="native" onchange="document.body.dataset.changed='1'"><option value="sm">Small</option><option value="lg">Large</option></select></label>
 <div role="listbox" id="custom"><div role="option" id="custom-lg" onclick="document.body.dataset.picked='lg'">Large</div></div>
 <h1 id="title">Category</h1>
