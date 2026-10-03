@@ -297,7 +297,8 @@ func (h *Handlers) handleNetworkIdleWait(w http.ResponseWriter, ctx context.Cont
 var errNetworkMonitorUnavailable = errors.New("network monitor unavailable for tab")
 
 // waitNetworkIdle polls the per-tab network monitor until in-flight requests have
-// stayed at zero for idleFor, or ctx is cancelled. It returns
+// stayed at zero for idleFor since the later of the last change and the call, so a
+// request the page starts shortly after the call is still waited for. It returns
 // errNetworkMonitorUnavailable when the tab has no network buffer, and the last
 // observed in-flight count alongside any cancellation error.
 func (h *Handlers) waitNetworkIdle(ctx context.Context, tabID string, idleFor time.Duration) (matched bool, inflight int, err error) {
@@ -310,10 +311,15 @@ func (h *Handlers) waitNetworkIdle(ctx context.Context, tabID string, idleFor ti
 		return false, 0, errNetworkMonitorUnavailable
 	}
 
+	called := time.Now()
 	err = pollUntil(ctx, networkIdlePoll, func() (bool, error) {
 		count, lastChange := buf.InflightStatus()
 		inflight = count
-		return count == 0 && time.Since(lastChange) >= idleFor, nil
+		quietSince := lastChange
+		if called.After(quietSince) {
+			quietSince = called
+		}
+		return count == 0 && time.Since(quietSince) >= idleFor, nil
 	})
 	if err != nil {
 		return false, inflight, err

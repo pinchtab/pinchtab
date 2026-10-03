@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
@@ -579,5 +580,56 @@ func TestWaitRouteRegistered(t *testing.T) {
 	h.HandleWait(w, req)
 	if w.Code != 200 {
 		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func quietNetworkIdleHandler(t *testing.T, idleFor time.Duration) (*Handlers, *observe.NetworkBuffer) {
+	t.Helper()
+	nm := observe.NewNetworkMonitor(100)
+	buf := nm.GetOrCreateBufferForTest("tab1")
+	time.Sleep(idleFor + networkIdlePoll)
+	return newNetworkTestHandler(nm), buf
+}
+
+func TestWaitNetworkIdle_WaitsForRequestStartedAfterTheCall(t *testing.T) {
+	const idleFor = 300 * time.Millisecond
+	const startDelay = 200 * time.Millisecond
+	const requestLasts = 300 * time.Millisecond
+	h, buf := quietNetworkIdleHandler(t, idleFor)
+
+	go func() {
+		time.Sleep(startDelay)
+		buf.MarkRequestStart("late", "")
+		time.Sleep(requestLasts)
+		buf.MarkRequestEnd("late")
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	start := time.Now()
+	if _, _, err := h.waitNetworkIdle(ctx, "tab1", idleFor); err != nil {
+		t.Fatalf("waitNetworkIdle: %v", err)
+	}
+	if elapsed, want := time.Since(start), startDelay+requestLasts+idleFor; elapsed < want {
+		t.Fatalf("returned after %v, before the late request ended and went quiet (want >= %v)", elapsed, want)
+	}
+}
+
+func TestWaitNetworkIdle_QuietPageReturnsAfterOneIdleWindow(t *testing.T) {
+	const idleFor = 300 * time.Millisecond
+	h, _ := quietNetworkIdleHandler(t, idleFor)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	start := time.Now()
+	if _, _, err := h.waitNetworkIdle(ctx, "tab1", idleFor); err != nil {
+		t.Fatalf("waitNetworkIdle: %v", err)
+	}
+	elapsed := time.Since(start)
+	if elapsed < idleFor {
+		t.Fatalf("returned after %v, before a full idle window from the call (%v)", elapsed, idleFor)
+	}
+	if limit := idleFor + 3*networkIdlePoll; elapsed > limit {
+		t.Fatalf("returned after %v, want within %v", elapsed, limit)
 	}
 }
