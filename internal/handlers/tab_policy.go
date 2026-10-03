@@ -99,25 +99,29 @@ func (h *Handlers) applyTabGuardsAs(w http.ResponseWriter, r *http.Request, ctx 
 	return currentURL, true
 }
 
-func (h *Handlers) guardTabContext(w http.ResponseWriter, r *http.Request, ctx context.Context, tabID string, err error, guards tabGuards) (context.Context, string, bool) {
+func (h *Handlers) guardTabContext(w http.ResponseWriter, r *http.Request, ctx context.Context, tabID string, err error, bodyOwner string, guards tabGuards) (context.Context, string, bool) {
 	if err != nil {
 		WriteTabContextError(w, err, http.StatusNotFound)
 		return nil, "", false
 	}
-	if _, ok := h.applyTabGuards(w, r, ctx, tabID, guards); !ok {
+	if _, ok := h.applyTabGuardsAs(w, r, ctx, tabID, bodyOwner, guards); !ok {
 		return nil, "", false
 	}
 	return ctx, tabID, true
 }
 
 func (h *Handlers) guardedTabContext(w http.ResponseWriter, r *http.Request, tabID string, guards tabGuards) (context.Context, string, bool) {
+	return h.guardedTabContextAs(w, r, tabID, "", guards)
+}
+
+func (h *Handlers) guardedTabContextAs(w http.ResponseWriter, r *http.Request, tabID, bodyOwner string, guards tabGuards) (context.Context, string, bool) {
 	ctx, resolvedTabID, err := h.tabContext(r, tabID)
-	return h.guardTabContext(w, r, ctx, resolvedTabID, err, guards)
+	return h.guardTabContext(w, r, ctx, resolvedTabID, err, bodyOwner, guards)
 }
 
 func (h *Handlers) guardedTabContextWithHeader(w http.ResponseWriter, r *http.Request, tabID string, guards tabGuards) (context.Context, string, bool) {
 	ctx, resolvedTabID, err := h.tabContextWithHeader(w, r, tabID)
-	return h.guardTabContext(w, r, ctx, resolvedTabID, err, guards)
+	return h.guardTabContext(w, r, ctx, resolvedTabID, err, "", guards)
 }
 
 func (h *Handlers) currentTabDomainPolicyEnabled() bool {

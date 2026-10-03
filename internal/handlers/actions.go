@@ -552,23 +552,14 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var resolvedTabID string
-	var ctx context.Context
-	{
-		var err error
-		ctx, resolvedTabID, err = h.tabContext(r, req.TabID)
-		if err != nil {
-			WriteTabContextError(w, err, 404)
-			return
-		}
-		if req.TabID == "" {
-			req.TabID = resolvedTabID
-		}
-		if _, ok := h.applyTabGuardsAs(w, r, ctx, resolvedTabID, req.Owner, guardTabLease|guardDialogBlocked|guardDomainPolicy|guardHandoffPause); !ok {
-			return
-		}
-		defer h.armIdleLifecycle(resolvedTabID)
+	ctx, resolvedTabID, ok := h.guardedTabContextAs(w, r, req.TabID, req.Owner, guardTabLease|guardDialogBlocked|guardDomainPolicy|guardHandoffPause)
+	if !ok {
+		return
 	}
+	if req.TabID == "" {
+		req.TabID = resolvedTabID
+	}
+	defer h.armIdleLifecycle(resolvedTabID)
 	h.recordResolvedTab(r, resolvedTabID)
 	w.Header().Set(activity.HeaderPTTabID, resolvedTabID)
 
@@ -949,12 +940,8 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 	}
 	effectiveCfg := routing.EffectiveCfg
 
-	ctx, resolvedTabID, err := h.tabContext(r, req.TabID)
-	if err != nil {
-		WriteTabContextError(w, err, 404)
-		return
-	}
-	if _, ok := h.applyTabGuardsAs(w, r, ctx, resolvedTabID, req.Owner, guardTabLease|guardDialogBlocked); !ok {
+	ctx, resolvedTabID, ok := h.guardedTabContextAs(w, r, req.TabID, req.Owner, guardTabLease|guardDialogBlocked)
+	if !ok {
 		return
 	}
 
@@ -1202,12 +1189,8 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 		stepTimeout = parsed
 	}
 
-	ctx, resolvedTabID, err := h.tabContext(r, req.TabID)
-	if err != nil {
-		WriteTabContextError(w, err, 404)
-		return
-	}
-	if _, ok := h.applyTabGuardsAs(w, r, ctx, resolvedTabID, req.Owner, guardTabLease|guardDialogBlocked); !ok {
+	ctx, resolvedTabID, ok := h.guardedTabContextAs(w, r, req.TabID, req.Owner, guardTabLease|guardDialogBlocked)
+	if !ok {
 		return
 	}
 
