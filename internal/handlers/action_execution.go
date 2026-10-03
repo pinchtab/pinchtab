@@ -396,6 +396,13 @@ func (h *Handlers) executeAction(ctx context.Context, req bridge.ActionRequest, 
 	return result, "", err
 }
 
+func (h *Handlers) missingRefFailure(tabID string) recovery.FailureType {
+	if h.Bridge.GetRefCache(tabID) == nil {
+		return recovery.FailureNavigation
+	}
+	return recovery.FailureUnknown
+}
+
 func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.ActionRequest, primarySelector string, cfg *config.RuntimeConfig, resolvedTabID string, refMissing bool) (map[string]any, string, *recovery.RecoveryResult, error) {
 	submitClick := bridge.IsSubmitClick(req.Kind, *req)
 	dispatch := h.recoveryDispatch(req, cfg, resolvedTabID, h.refFrameID(resolvedTabID, req.Ref))
@@ -403,7 +410,7 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 		if submitClick {
 			return nil, "", nil, ErrStaleSubmitTarget
 		}
-		rr, recRes, recErr := h.Recovery.AttemptWithClassification(ctx, resolvedTabID, req.Ref, req.Kind, recovery.FailureNavigation, dispatch)
+		rr, recRes, recErr := h.Recovery.AttemptWithClassification(ctx, resolvedTabID, req.Ref, req.Kind, h.missingRefFailure(resolvedTabID), dispatch)
 		if recErr != nil {
 			if recoveryRefused(recErr) {
 				return nil, "", nil, recErr

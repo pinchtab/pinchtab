@@ -1622,26 +1622,43 @@ func TestFillAndTypeOnARerenderedInputRecoverByTheOldRef(t *testing.T) {
 	}
 }
 
-func TestARefUsedAfterANavigationClearedTheCacheRecoversAsNavigation(t *testing.T) {
-	_, b, h := newRerenderFixture(t)
-	if w := postRerenderAction(t, h, `{"kind":"fill","ref":"e0","text":"first","tabId":"tab-rerender"}`); w.Code != http.StatusOK {
-		t.Fatalf("priming fill: status=%d body=%s", w.Code, w.Body.String())
+func TestAMissingRefRecoversAsNavigationOnlyWhenTheRefCacheWasCleared(t *testing.T) {
+	cases := []struct {
+		name           string
+		dropRefs       func(b *bridge.Bridge)
+		wantNavigation bool
+	}{
+		{"cache cleared by a navigation", func(b *bridge.Bridge) { b.DeleteRefCache("tab-rerender") }, true},
+		{"ref absent from a newer snapshot", func(b *bridge.Bridge) {
+			b.SetRefCache("tab-rerender", &bridge.RefCache{Targets: map[string]bridge.RefTarget{}})
+		}, false},
 	}
-	b.DeleteRefCache("tab-rerender")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, b, h := newRerenderFixture(t)
+			if w := postRerenderAction(t, h, `{"kind":"fill","ref":"e0","text":"first","tabId":"tab-rerender"}`); w.Code != http.StatusOK {
+				t.Fatalf("priming fill: status=%d body=%s", w.Code, w.Body.String())
+			}
+			tc.dropRefs(b)
 
-	w := postRerenderAction(t, h, `{"kind":"fill","ref":"e0","text":"again","tabId":"tab-rerender"}`)
+			w := postRerenderAction(t, h, `{"kind":"fill","ref":"e0","text":"again","tabId":"tab-rerender"}`)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("fill after the ref cache was cleared: status=%d body=%s", w.Code, w.Body.String())
-	}
-	var resp struct {
-		Recovery recovery.RecoveryResult `json:"recovery"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode %s: %v", w.Body.String(), err)
-	}
-	if !resp.Recovery.Recovered || resp.Recovery.FailureType != recovery.FailureNavigation.String() {
-		t.Errorf("recovery = %+v, want recovered with failure_type %q", resp.Recovery, recovery.FailureNavigation.String())
+			if w.Code != http.StatusOK {
+				t.Fatalf("fill after e0 left the ref cache: status=%d body=%s", w.Code, w.Body.String())
+			}
+			var resp struct {
+				Recovery recovery.RecoveryResult `json:"recovery"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode %s: %v", w.Body.String(), err)
+			}
+			if !resp.Recovery.Recovered {
+				t.Fatalf("recovery = %+v, want recovered", resp.Recovery)
+			}
+			if gotNavigation := resp.Recovery.FailureType == recovery.FailureNavigation.String(); gotNavigation != tc.wantNavigation {
+				t.Errorf("failure_type = %q, want navigation=%v", resp.Recovery.FailureType, tc.wantNavigation)
+			}
+		})
 	}
 }
 
