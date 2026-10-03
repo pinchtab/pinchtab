@@ -37,15 +37,14 @@ CLI-first browser skill. Use `pinchtab` commands.
 
 **Key optimization**: Use `--snap-diff` on `nav`, `click`, `fill`, `select`, `press`, `scroll`, `back`, `forward`, `reload` to get only added/changed/removed elements — most token-efficient for multi-step flows. Use `--snap` when you need the full snapshot (e.g., first navigation, or after major page changes). `--text` is available on `nav`, `click`, `fill`, `select`, `press`, `back`, `forward`, `reload` (but NOT on `scroll`) when you need prose content for verification (skips snap, returns page text directly). `dblclick` does not support any observation flag — run a separate `snap` after.
 
-`--snap-diff` returns the same compact format as `snap`, but with change markers and a header showing counts:
+`--snap-diff` returns the compact format of `snap`, but only the changes, under a header showing counts:
 ```
-# Page Title | URL | 57 nodes | +2 ~1 -0
-e0:link "Home"
+# Page Title | URL | 57 nodes | +1 ~1 -1
 e5:button "Submit" [+]
 e12:textbox val="updated" [~]
 # removed: e99
 ```
-`[+]` = added, `[~]` = changed, removed refs listed at end. All valid refs are shown — no need to remember previous snapshot. Do not follow with redundant `snap`; only call `text` when you need prose content.
+It lists [+] added and [~] changed nodes plus a # removed: line; unchanged nodes are omitted, so keep refs from the previous snapshot. Do not follow with redundant `snap`; only call `text` when you need prose content.
 
 Fallback observation (when `--snap` wasn't used):
 - `pinchtab snap` — interactive elements plus headings, images, table cells, non-empty alerts and open dialogs, compact (default).

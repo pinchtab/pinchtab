@@ -91,24 +91,20 @@ func appendNode(b *strings.Builder, n A11yNode, style nodeStyle, marker string) 
 	b.WriteByte('\n')
 }
 
-func formatNodes(nodes []A11yNode, style nodeStyle, marker func(A11yNode) string) string {
+func formatNodes(nodes []A11yNode, style nodeStyle) string {
 	var b strings.Builder
 	for _, n := range nodes {
-		suffix := ""
-		if marker != nil {
-			suffix = marker(n)
-		}
-		appendNode(&b, n, style, suffix)
+		appendNode(&b, n, style, "")
 	}
 	return b.String()
 }
 
 func FormatSnapshotText(nodes []A11yNode) string {
-	return formatNodes(nodes, textNodeStyle, nil)
+	return formatNodes(nodes, textNodeStyle)
 }
 
 func FormatSnapshotCompact(nodes []A11yNode) string {
-	return formatNodes(nodes, compactNodeStyle, nil)
+	return formatNodes(nodes, compactNodeStyle)
 }
 
 // CompactDiffSummary is the single source for the help text describing

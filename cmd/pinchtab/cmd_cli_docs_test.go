@@ -166,7 +166,7 @@ func TestTheCookiesReferenceStatesTheBrowserWideClearEffect(t *testing.T) {
 func compactDiffDocCopies(t *testing.T) []string {
 	t.Helper()
 	out, err := exec.Command("git", "-C", filepath.Join("..", ".."), "grep", "-l", "-F",
-		"-e", "[~] changed and removed refs", "-e", "[+] added", "--", ":!*.go").Output()
+		"-e", "[~] changed and removed refs", "-e", "[+] added", "-e", "`[+]` = added", "--", ":!*.go").Output()
 	if err != nil {
 		t.Fatalf("git grep for compact-diff doc copies: %v", err)
 	}
@@ -175,11 +175,11 @@ func compactDiffDocCopies(t *testing.T) []string {
 
 func TestCompactDiffDocCopiesMatchTheSummary(t *testing.T) {
 	copies := compactDiffDocCopies(t)
-	const floor = 6
+	const floor = 8
 	if len(copies) < floor {
 		t.Fatalf("found %d compact-diff doc copies %v, want at least %d", len(copies), copies, floor)
 	}
-	for _, required := range []string{"skills/pinchtab/references/api.md", "skills/pinchtab/references/commands.md"} {
+	for _, required := range []string{"skills/pinchtab/SKILL.md", "skills/pinchtab/references/api.md", "skills/pinchtab/references/commands.md"} {
 		if !slices.Contains(copies, required) {
 			t.Errorf("%s no longer describes the compact diff; discovered %v", required, copies)
 		}
