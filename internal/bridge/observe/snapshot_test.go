@@ -385,3 +385,99 @@ func TestInteractiveSnapshotListsRolelessContentEditableAsTextbox(t *testing.T) 
 		t.Fatalf("interactive snapshot = %q, want %q", got, want)
 	}
 }
+
+func cartRowAXNodes(product string) []RawAXNode {
+	id := strings.ReplaceAll(product, " ", "-")
+	return []RawAXNode{
+		rawAXNode(id, "listitem", "", id+"-text", id+"-add"),
+		rawAXNode(id+"-text", "StaticText", product),
+		rawAXNode(id+"-add", "button", "Add to cart", id+"-add-text"),
+		rawAXNode(id+"-add-text", "StaticText", "Add to cart"),
+	}
+}
+
+func cartListAXNodes(products ...string) []RawAXNode {
+	list := rawAXNode("list", "list", "")
+	raw := []RawAXNode{rawAXNode("root", "RootWebArea", "Shop", "list", "checkout")}
+	for _, product := range products {
+		row := cartRowAXNodes(product)
+		list.ChildIDs = append(list.ChildIDs, row[0].NodeID)
+		raw = append(raw, row...)
+	}
+	raw = append(raw, list, rawAXNode("checkout", "button", "Checkout"))
+	return raw
+}
+
+func TestInteractiveSnapshotGivesRepeatedRowButtonsTheirRowText(t *testing.T) {
+	nodes, _ := BuildSnapshot(cartListAXNodes("Red Mug $8", "Blue Mug $9", "Teapot $25"), FilterInteractive, -1)
+
+	wantText := "e0:button \"Add to cart\" (Red Mug $8)\n" +
+		"e1:button \"Add to cart\" (Blue Mug $9)\n" +
+		"e2:button \"Add to cart\" (Teapot $25)\n" +
+		"e3:button \"Checkout\"\n"
+	if got := FormatSnapshotCompact(nodes); got != wantText {
+		t.Fatalf("compact snapshot =\n%s\nwant\n%s", got, wantText)
+	}
+
+	out, err := json.Marshal(nodes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded []map[string]any
+	if err := json.Unmarshal(out, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded[1]["rowContext"] != "Blue Mug $9" {
+		t.Errorf("JSON rowContext of e1 = %v, want Blue Mug $9", decoded[1]["rowContext"])
+	}
+	if _, ok := decoded[3]["rowContext"]; ok {
+		t.Errorf("JSON of the unique Checkout button carries rowContext: %s", out)
+	}
+}
+
+func TestInteractiveSnapshotLeavesUniqueRowButtonsUnchanged(t *testing.T) {
+	nodes, _ := BuildSnapshot(cartListAXNodes("Blue Mug $9"), FilterInteractive, -1)
+
+	wantText := "e0:button \"Add to cart\"\ne1:button \"Checkout\"\n"
+	if got := FormatSnapshotCompact(nodes); got != wantText {
+		t.Fatalf("compact snapshot = %q, want %q", got, wantText)
+	}
+	out, err := json.Marshal(nodes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantJSON := `[{"ref":"e0","role":"button","name":"Add to cart","depth":3},{"ref":"e1","role":"button","name":"Checkout","depth":1}]`
+	if string(out) != wantJSON {
+		t.Fatalf("JSON = %s, want %s", out, wantJSON)
+	}
+}
+
+func TestFullSnapshotLeavesRowContextToTheRowText(t *testing.T) {
+	nodes, _ := BuildSnapshot(cartListAXNodes("Red Mug $8", "Blue Mug $9"), "", -1)
+
+	for _, n := range nodes {
+		if n.RowContext != "" {
+			t.Fatalf("full snapshot node %s carries rowContext %q; the row text is already in the tree", n.Ref, n.RowContext)
+		}
+	}
+}
+
+func TestRowContextDropsTheNodesOwnNameAndCapsTheWords(t *testing.T) {
+	raw := []RawAXNode{
+		rawAXNode("root", "RootWebArea", "", "a", "b"),
+		rawAXNode("a", "article", "", "a-text", "a-btn"),
+		rawAXNode("a-text", "StaticText", "Reply to one two three four five six seven"),
+		rawAXNode("a-btn", "button", "Reply"),
+		rawAXNode("b", "article", "", "b-btn"),
+		rawAXNode("b-btn", "button", "Reply"),
+	}
+
+	nodes, _ := BuildSnapshot(raw, FilterInteractive, -1)
+
+	if got := nodes[0].RowContext; got != "to one two three four five" {
+		t.Errorf("rowContext = %q, want the first %d words without the button name", got, maxRowContextWords)
+	}
+	if got := nodes[1].RowContext; got != "" {
+		t.Errorf("rowContext of a row with no text = %q, want empty", got)
+	}
+}

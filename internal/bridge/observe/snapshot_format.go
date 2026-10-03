@@ -70,6 +70,11 @@ func appendNode(b *strings.Builder, n A11yNode, style nodeStyle, marker string) 
 		b.WriteString(n.Name)
 		b.WriteByte('"')
 	}
+	if n.RowContext != "" {
+		b.WriteString(" (")
+		b.WriteString(n.RowContext)
+		b.WriteByte(')')
+	}
 	if n.Value != "" {
 		b.WriteString(` val="`)
 		b.WriteString(n.Value)

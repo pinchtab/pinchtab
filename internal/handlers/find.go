@@ -106,7 +106,7 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := buildFindResponse(req, result, idpiWarning, start)
+	resp := buildFindResponse(req, result, labelsByRef(descs), idpiWarning, start)
 
 	h.recordActivity(r, activity.Update{Action: "find"})
 	h.recordFindIntent(resolvedTabID, req, result, descs, resp.Confidence)
@@ -213,14 +213,14 @@ const (
 	tieScoreMargin      = 0.01
 )
 
-func tiedTopMatches(matches []semantic.ElementMatch) []semantic.ElementMatch {
+func tiedTopMatches(matches []semantic.ElementMatch, labels map[string]string) []semantic.ElementMatch {
 	if len(matches) < 2 {
 		return nil
 	}
 	top := matches[0]
 	tied := []semantic.ElementMatch{top}
 	for _, m := range matches[1:] {
-		if sameRoleAndName(m, top) || top.Score-m.Score <= tieScoreMargin {
+		if (sameRoleAndName(m, top) && labels[m.Ref] == labels[top.Ref]) || top.Score-m.Score <= tieScoreMargin {
 			tied = append(tied, m)
 		}
 	}
@@ -228,6 +228,14 @@ func tiedTopMatches(matches []semantic.ElementMatch) []semantic.ElementMatch {
 		return nil
 	}
 	return tied
+}
+
+func labelsByRef(descs []semantic.ElementDescriptor) map[string]string {
+	labels := make(map[string]string, len(descs))
+	for _, d := range descs {
+		labels[d.Ref] = d.Positional.LabelledBy
+	}
+	return labels
 }
 
 func sameRoleAndName(a, b semantic.ElementMatch) bool {
@@ -278,10 +286,10 @@ func positionalRetryQuery(tied []semantic.ElementMatch) string {
 	return selector.Selector{Kind: selector.KindNth, Value: "<i>:" + role.String()}.String()
 }
 
-func buildFindResponse(req findRequest, result semantic.FindResult, idpiWarning string, start time.Time) findResponse {
+func buildFindResponse(req findRequest, result semantic.FindResult, labels map[string]string, idpiWarning string, start time.Time) findResponse {
 	confidence := result.ConfidenceLabel()
 	retryQuery := ""
-	tied := tiedTopMatches(result.Matches)
+	tied := tiedTopMatches(result.Matches, labels)
 	if tied != nil {
 		confidence = confidenceAmbiguous
 		retryQuery = positionalRetryQuery(tied)

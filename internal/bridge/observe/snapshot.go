@@ -75,6 +75,7 @@ type A11yNode struct {
 	Ref            string       `json:"ref"`
 	Role           string       `json:"role"`
 	Name           string       `json:"name"`
+	RowContext     string       `json:"rowContext,omitempty"`
 	Depth          int          `json:"depth"`
 	Value          string       `json:"value,omitempty"`
 	Label          string       `json:"label,omitempty"`
@@ -461,6 +462,7 @@ type snapshotBuilder struct {
 
 	visited map[string]bool
 	flat    []A11yNode
+	axIDs   []string
 	refs    map[string]int64
 }
 
@@ -476,6 +478,9 @@ func BuildSnapshot(nodes []RawAXNode, filter string, maxDepth int) ([]A11yNode, 
 	b.markHidden(nodes)
 	for _, rootID := range b.topRoots(nodes) {
 		b.visit(rootID, 0)
+	}
+	if filter == FilterInteractive {
+		b.addRowContextToRepeatedNodes()
 	}
 	return b.flat, b.refs
 }
@@ -618,6 +623,53 @@ func (b *snapshotBuilder) appendNode(n RawAXNode, name string, depth int) {
 	applyAXProperties(&entry, n.Properties)
 	entry.Hidden = b.isHidden(n.NodeID)
 	b.flat = append(b.flat, entry)
+	b.axIDs = append(b.axIDs, n.NodeID)
+}
+
+var rowRoles = map[string]bool{"listitem": true, "row": true, "article": true}
+
+const maxRowContextWords = 6
+
+type roleName struct{ role, name string }
+
+func (b *snapshotBuilder) addRowContextToRepeatedNodes() {
+	counts := make(map[roleName]int, len(b.flat))
+	for _, n := range b.flat {
+		counts[roleName{n.Role, n.Name}]++
+	}
+	for i, n := range b.flat {
+		if counts[roleName{n.Role, n.Name}] > 1 {
+			b.flat[i].RowContext = b.rowContext(b.axIDs[i], n.Name)
+		}
+	}
+}
+
+func (b *snapshotBuilder) rowContext(nodeID, ownName string) string {
+	rowID := b.nearestAncestor(nodeID, rowRoles)
+	if rowID == "" {
+		return ""
+	}
+	text := b.descendantText(rowID, isNonInteractive)
+	if ownName != "" {
+		text = strings.ReplaceAll(text, ownName, " ")
+	}
+	words := strings.Fields(text)
+	return strings.Join(words[:min(len(words), maxRowContextWords)], " ")
+}
+
+func (b *snapshotBuilder) nearestAncestor(nodeID string, roles map[string]bool) string {
+	cur := nodeID
+	for range b.maxAncestorWalk {
+		p, ok := b.parentMap[cur]
+		if !ok {
+			return ""
+		}
+		if roles[b.nodeByID[p].Role.String()] {
+			return p
+		}
+		cur = p
+	}
+	return ""
 }
 
 func applyAXProperties(entry *A11yNode, props []RawAXProp) {

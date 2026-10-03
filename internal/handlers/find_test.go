@@ -646,7 +646,7 @@ func TestTiedTopRefs(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := matchRefs(tiedTopMatches(tc.matches)); fmt.Sprint(got) != fmt.Sprint(tc.want) {
+			if got := matchRefs(tiedTopMatches(tc.matches, nil)); fmt.Sprint(got) != fmt.Sprint(tc.want) {
 				t.Errorf("tiedTopMatches refs = %v, want %v", got, tc.want)
 			}
 		})
@@ -734,5 +734,34 @@ func TestHandleFind_SeesWhatAClickJustChangedWithoutASnapshot(t *testing.T) {
 	clickFoundRef(t, h, ctx, tabID, closeRef)
 	if stale := findButtonRef(t, h, tabID, "Close"); stale != "" {
 		t.Errorf("find still returns Close (%s) after the click hid its dialog", stale)
+	}
+}
+
+func axTreeFromJSON(t *testing.T, tree string) []bridgeobserve.RawAXNode {
+	t.Helper()
+	var resp bridgeobserve.RawAXTreeResponse
+	if err := json.Unmarshal([]byte(tree), &resp); err != nil {
+		t.Fatalf("decode AX tree: %v", err)
+	}
+	return resp.Nodes
+}
+
+func TestHandleFind_RowContextSeparatesRepeatedRowButtons(t *testing.T) {
+	var tree strings.Builder
+	tree.WriteString(`{"nodes":[{"nodeId":"root","role":{"value":"RootWebArea"},"childIds":["list"]},{"nodeId":"list","role":{"value":"list"},"childIds":["r0","r1","r2"]}`)
+	for i, product := range []string{"Red Mug $8", "Blue Mug $9", "Teapot $25"} {
+		fmt.Fprintf(&tree, `,{"nodeId":"r%[1]d","role":{"value":"listitem"},"childIds":["t%[1]d","b%[1]d"]},{"nodeId":"t%[1]d","role":{"value":"StaticText"},"name":{"value":%[2]q}},{"nodeId":"b%[1]d","role":{"value":"button"},"name":{"value":"Add to cart"},"backendDOMNodeId":%[3]d}`, i, product, i+10)
+	}
+	tree.WriteString(`]}`)
+	nodes, refs := bridgeobserve.BuildSnapshot(axTreeFromJSON(t, tree.String()), bridgeobserve.FilterInteractive, -1)
+	h := newFindTestHandler(&bridge.RefCache{Nodes: nodes, Refs: refs}, false)
+
+	resp := postFind(t, h, `{"query": "Add Blue Mug to cart", "threshold": 0.1, "topK": 3}`)
+
+	if resp.BestRef != "e1" {
+		t.Fatalf("best_ref = %q, want e1, the Blue Mug row (matches %+v)", resp.BestRef, resp.Matches)
+	}
+	if resp.TiedRefs != nil {
+		t.Errorf("tied_refs = %v, want none: the row text tells the buttons apart", resp.TiedRefs)
 	}
 }
