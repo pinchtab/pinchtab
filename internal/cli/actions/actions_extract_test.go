@@ -174,6 +174,67 @@ func TestExtractNamesEachUnmatchedPropertyOnStderrWithItsReason(t *testing.T) {
 	}
 }
 
+func TestExtractNamesEachUnmatchedNestedPathOnceWithItsItemCount(t *testing.T) {
+	const partial = `{"data":{"products":[{"stock":"in stock","price":31},{"stock":"in stock"},{"stock":"in stock"}]},` +
+		`"fields":{"products":{"ref":"e1","confidence":"high","items":[` +
+		`{"ref":"e2","fields":{"name":{"confidence":"low","reason":"no_match"},"price":{"ref":"e3","confidence":"high"},"stock":{"ref":"e4","confidence":"high"}}},` +
+		`{"ref":"e5","fields":{"name":{"confidence":"low","reason":"no_match"},"price":{"ref":"e6","confidence":"high","reason":"not_a_number"},"stock":{"ref":"e7","confidence":"high"}}},` +
+		`{"ref":"e8","fields":{"name":{"confidence":"low","reason":"no_match"},"price":{"confidence":"low","reason":"no_match"},"stock":{"ref":"e9","confidence":"high"}}}]}},"missing":[],"truncated":false}`
+	const deep = `{"data":{"products":[{"title":"Mug","variants":[{"size":"S"},{"size":"M","name":"Medium"}]}]},` +
+		`"fields":{"products":{"ref":"e1","confidence":"high","items":[{"ref":"e2","fields":{"title":{"ref":"e3","confidence":"high"},"variants":{"ref":"e4","confidence":"high","items":[` +
+		`{"ref":"e5","fields":{"size":{"ref":"e6","confidence":"high"},"name":{"confidence":"low","reason":"no_match"}}},` +
+		`{"ref":"e7","fields":{"size":{"ref":"e8","confidence":"high"},"name":{"ref":"e9","confidence":"high"}}}]}}}]}},"missing":[],"truncated":false}`
+	const matched = `{"data":{"products":[{"name":"Mug"},{"name":"Cup"}]},` +
+		`"fields":{"products":{"ref":"e1","confidence":"high","items":[{"ref":"e2","fields":{"name":{"ref":"e3","confidence":"high"}}},{"ref":"e4","fields":{"name":{"ref":"e5","confidence":"high"}}}]}},"missing":[],"truncated":false}`
+	for _, tc := range []struct {
+		name, response, wantStderr string
+	}{
+		{"every item and some items, one line per path and reason", partial,
+			"unmatched: products[].name (no_match in 3/3 items); rerun with --explain\n" +
+				"unmatched: products[].price (no_match in 1/3 items); rerun with --explain\n" +
+				"unmatched: products[].price (not_a_number in 1/3 items); rerun with --explain\n"},
+		{"nested arrays at any depth", deep, "unmatched: products[].variants[].name (no_match in 1/2 items); rerun with --explain\n"},
+		{"unmatched array prints only its own line", `{"data":{},"fields":{"products":{"confidence":"low","reason":"no_repeated_group"}},"missing":[],"truncated":false}`,
+			"unmatched: products (no_repeated_group); rerun with --explain\n"},
+		{"fully matched", matched, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMockServer()
+			m.response = tc.response
+			defer m.close()
+
+			var stdout string
+			stderr := captureStderr(t, func() {
+				stdout = captureStdout(t, func() {
+					Extract(apiclient.Conn{Client: m.server.Client(), Base: m.base()}, newExtractCmd(writeSchemaFile(t, extractTestSchema), nil))
+				})
+			})
+			if stderr != tc.wantStderr {
+				t.Errorf("stderr =\n%s\nwant\n%s", stderr, tc.wantStderr)
+			}
+			var envelope struct {
+				Data json.RawMessage `json:"data"`
+			}
+			_ = json.Unmarshal([]byte(tc.response), &envelope)
+			var got, want any
+			_ = json.Unmarshal([]byte(stdout), &got)
+			_ = json.Unmarshal(envelope.Data, &want)
+			if gotJSON, wantJSON := mustJSON(t, got), mustJSON(t, want); gotJSON != wantJSON {
+				t.Errorf("stdout = %s, want the data object unchanged %s", gotJSON, wantJSON)
+			}
+		})
+	}
+}
+
+func mustJSON(t *testing.T, v any) string {
+	t.Helper()
+	raw, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	return string(raw)
+}
+
 func TestExtractFieldTableListsArrayItemsUnderTheirIndexWithEqualColumns(t *testing.T) {
 	var fields map[string]any
 	_ = json.Unmarshal([]byte(`{"products":{"ref":"e20","confidence":"high","items":[{"ref":"e21","fields":{"name":{"ref":"e22","confidence":"high"}}}]}}`), &fields)

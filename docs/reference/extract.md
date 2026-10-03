@@ -89,7 +89,8 @@ because the page answered:
 | Stderr line | When |
 | --- | --- |
 | `field ref confidence` (tab-separated, plus `score source reason` with `--explain`) | Header of the `--fields` / `--explain` table; every row below it has the same columns |
-| `unmatched: items (no_field_match); rerun with --explain` | One line per top-level property absent from `data`, carrying that field's `reason`; not printed with `--explain`, whose table already shows it |
+| `unmatched: items (no_field_match); rerun with --explain` | One line per property absent from `data`, carrying that field's `reason`; not printed with `--explain`, whose table already shows it |
+| `unmatched: products[].name (no_match in 50/50 items); rerun with --explain` | A field inside array items, at any depth, that some items lack: one line per path and reason with that reason's item count, never one per row |
 | `missing required fields: name, price` | A `required` property did not resolve |
 | `truncated: an array hit its item cap; ...` | An array stopped at `--max-items` or the schema's `maxItems` |
 
