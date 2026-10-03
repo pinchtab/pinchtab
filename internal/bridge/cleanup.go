@@ -15,18 +15,16 @@ import (
 	"time"
 )
 
-// Call on startup before launching Chrome.
+// Call on startup before launching Chrome. Only Chrome whose launcher is gone
+// is killed: a live peer server may share the profile base and the temp dir.
 func CleanupOrphanedChromeProcesses(profileDir string) {
-	// Kill Chrome left over from a previous crashed run that didn't shut down
-	// cleanly.
 	if profileDir != "" {
-		killed := killChromeByProfileDir(profileDir)
+		killed := killOrphanedChromeByProfileDir(profileDir)
 		if killed > 0 {
 			slog.Info("cleanup: killed orphaned chrome processes using profile", "path", profileDir, "count", killed)
 		}
 	}
 
-	// Clean up temp profile dirs from previous headless fallbacks.
 	tmpDir := os.TempDir()
 	entries, err := os.ReadDir(tmpDir)
 	if err != nil {
@@ -39,7 +37,10 @@ func CleanupOrphanedChromeProcesses(profileDir string) {
 			continue
 		}
 		dir := filepath.Join(tmpDir, e.Name())
-		killChromeByProfileDir(dir)
+		if profileHasLiveOwner(dir) {
+			continue
+		}
+		killOrphanedChromeByProfileDir(dir)
 		if err := os.RemoveAll(dir); err != nil {
 			slog.Warn("cleanup: failed to remove temp profile dir", "path", dir, "err", err)
 		} else {
@@ -49,10 +50,10 @@ func CleanupOrphanedChromeProcesses(profileDir string) {
 }
 
 // Matches both persistent profiles (--user-data-dir=.../profiles/...) and
-// temp profiles (--user-data-dir=.../pinchtab-profile-*). Called on server
-// shutdown — one ps scan, immediate SIGKILL.
+// temp profiles (--user-data-dir=.../pinchtab-profile-*), and spares any that
+// a live peer server launched. Called on server shutdown, immediate SIGKILL.
 func KillAllPinchtabChrome() int {
-	var pids []int
+	var matched []int
 	tempPids := findPIDsByNeedle("pinchtab-profile")
 	persistPids := findPIDsByNeedle(".pinchtab/profiles")
 
@@ -60,10 +61,11 @@ func KillAllPinchtabChrome() int {
 	for _, pid := range append(tempPids, persistPids...) {
 		if !seen[pid] {
 			seen[pid] = true
-			pids = append(pids, pid)
+			matched = append(matched, pid)
 		}
 	}
 
+	pids := reclaimableChromePIDs(matched)
 	if len(pids) == 0 {
 		return 0
 	}
@@ -75,8 +77,55 @@ func KillAllPinchtabChrome() int {
 	return len(pids)
 }
 
-// Test seam: overridden to simulate process presence without /proc or ps.
-var findChromePIDsByProfileDirFunc = findChromePIDsByProfileDir
+func parentPIDs() map[int]int {
+	if parents := parentPIDsViaProc(); parents != nil {
+		return parents
+	}
+	out, err := exec.Command("ps", "-axo", "pid=,ppid=").Output()
+	if err != nil {
+		return nil
+	}
+	return parsePIDPairs(out)
+}
+
+// Returns nil (not empty map) if /proc is not available.
+func parentPIDsViaProc() map[int]int {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil
+	}
+
+	parents := make(map[int]int)
+	for _, e := range entries {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil || pid <= 0 {
+			continue
+		}
+		stat, err := os.ReadFile(filepath.Join("/proc", e.Name(), "stat"))
+		if err != nil {
+			continue
+		}
+		if ppid, ok := parentPIDFromProcStat(stat); ok {
+			parents[pid] = ppid
+		}
+	}
+	return parents
+}
+
+// The comm field is parenthesised and may itself contain spaces and
+// parentheses, so the fixed fields are counted from the last ')'.
+func parentPIDFromProcStat(stat []byte) (int, bool) {
+	end := bytes.LastIndexByte(stat, ')')
+	if end < 0 {
+		return 0, false
+	}
+	fields := bytes.Fields(stat[end+1:])
+	if len(fields) < 2 {
+		return 0, false
+	}
+	ppid, err := strconv.Atoi(string(fields[1]))
+	return ppid, err == nil
+}
 
 func findChromePIDsByProfileDir(profileDir string) []int {
 	if pids := findChromePIDsByUserDataDirViaProc(profileDir); pids != nil {
@@ -221,13 +270,16 @@ func findPIDsViaPS(needle string) []int {
 	return pids
 }
 
-// Sends SIGTERM, waits briefly, then SIGKILL any survivors.
 func killChromeByProfileDir(profileDir string) int {
 	pids := findChromePIDsByProfileDirFunc(profileDir)
 	if len(pids) == 0 {
 		return 0
 	}
+	return forceKillPIDs(pids)
+}
 
+// Sends SIGTERM, waits briefly, then SIGKILL any survivors.
+func forceKillPIDs(pids []int) int {
 	for _, pid := range pids {
 		_ = syscall.Kill(pid, syscall.SIGTERM)
 	}

@@ -42,7 +42,18 @@ func findPIDsByPowerShell(needle string) []int {
 	return pids
 }
 
-func taskkillPIDs(pids []int) int {
+const parentPIDsPowerShellScript = `Get-CimInstance Win32_Process |
+ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId)" }`
+
+func parentPIDs() map[int]int {
+	out, err := exec.Command("powershell", "-NoProfile", "-Command", parentPIDsPowerShellScript).Output()
+	if err != nil {
+		return nil
+	}
+	return parsePIDPairs(out)
+}
+
+func forceKillPIDs(pids []int) int {
 	killed := 0
 	for _, pid := range pids {
 		// #nosec G204 -- pid is an int, not user-controlled string
@@ -55,9 +66,6 @@ func taskkillPIDs(pids []int) int {
 	return killed
 }
 
-// Test seam: overridden in tests.
-var findChromePIDsByProfileDirFunc = findChromePIDsByProfileDir
-
 func findChromePIDsByProfileDir(profileDir string) []int {
 	return findPIDsByPowerShell(fmt.Sprintf("--user-data-dir=%s", profileDir))
 }
@@ -67,7 +75,7 @@ func killChromeByProfileDir(profileDir string) int {
 	if len(pids) == 0 {
 		return 0
 	}
-	return taskkillPIDs(pids)
+	return forceKillPIDs(pids)
 }
 
 // taskkill without /F (no SIGKILL escalation).
@@ -86,24 +94,26 @@ func terminateChromeByProfileDir(profileDir string) int {
 	return len(pids)
 }
 
+// Spares Chrome that a live peer server launched.
 func KillAllPinchtabChrome() int {
-	var pids []int
+	var matched []int
 	seen := make(map[int]bool)
 
 	for _, needle := range []string{"pinchtab-profile", ".pinchtab\\profiles"} {
 		for _, pid := range findPIDsByPowerShell(needle) {
 			if !seen[pid] {
 				seen[pid] = true
-				pids = append(pids, pid)
+				matched = append(matched, pid)
 			}
 		}
 	}
 
+	pids := reclaimableChromePIDs(matched)
 	if len(pids) == 0 {
 		return 0
 	}
 
-	killed := taskkillPIDs(pids)
+	killed := forceKillPIDs(pids)
 	slog.Info("shutdown: killed pinchtab chrome processes", "count", killed)
 	return killed
 }
@@ -112,7 +122,7 @@ func CleanupOrphanedChromeProcesses(profileDir string) {
 	if profileDir == "" {
 		return
 	}
-	killed := killChromeByProfileDir(profileDir)
+	killed := killOrphanedChromeByProfileDir(profileDir)
 	if killed > 0 {
 		slog.Info("cleanup: killed orphaned chrome processes", "count", killed, "profileDir", profileDir)
 	}

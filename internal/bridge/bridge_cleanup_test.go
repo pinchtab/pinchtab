@@ -2,8 +2,10 @@ package bridge
 
 import (
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -270,5 +272,147 @@ func TestFetchPauseSuppressionLifecycle(t *testing.T) {
 	}
 	if b.fetchPauseSuppression("") != nil {
 		t.Fatal("empty tab ID must not allocate a flag")
+	}
+}
+
+const (
+	fakeInit       = 1
+	fakePeerServer = 1 << 28
+	fakeChromeMain = 1<<28 + 1
+	fakeChromeGPU  = 1<<28 + 2
+	fakeZygote     = 1<<28 + 3
+	fakeRenderer   = 1<<28 + 4
+	fakeOwnBridge  = 1<<28 + 5
+	fakeDeadParent = 1<<28 + 6
+)
+
+func withProcessTree(t *testing.T, parents map[int]int, chromeByDir map[string][]int) *[]int {
+	t.Helper()
+	origParents := parentPIDsFunc
+	origAll := allChromePIDsByProfileDirFunc
+	origKill := forceKillPIDsFunc
+	t.Cleanup(func() {
+		parentPIDsFunc = origParents
+		allChromePIDsByProfileDirFunc = origAll
+		forceKillPIDsFunc = origKill
+	})
+
+	var killed []int
+	parentPIDsFunc = func() map[int]int { return parents }
+	allChromePIDsByProfileDirFunc = func(dir string) []int { return chromeByDir[dir] }
+	forceKillPIDsFunc = func(pids []int) int {
+		killed = append(killed, pids...)
+		return len(pids)
+	}
+	return &killed
+}
+
+func TestChromeOwnership(t *testing.T) {
+	self := os.Getpid()
+	chrome := []int{fakeChromeMain, fakeChromeGPU}
+
+	tests := []struct {
+		name            string
+		parents         map[int]int
+		pids            []int
+		wantReclaimable []int
+		wantOrphaned    []int
+	}{
+		{
+			name: "live peer server's chrome is spared",
+			parents: map[int]int{
+				fakeInit: 0, fakePeerServer: fakeInit, self: fakeInit,
+				fakeChromeMain: fakePeerServer, fakeChromeGPU: fakeChromeMain,
+			},
+			pids: chrome,
+		},
+		{
+			name: "chrome reparented to init is ownerless",
+			parents: map[int]int{
+				fakeInit: 0, self: fakeInit,
+				fakeChromeMain: fakeInit, fakeChromeGPU: fakeChromeMain,
+			},
+			pids:            chrome,
+			wantReclaimable: chrome,
+			wantOrphaned:    chrome,
+		},
+		{
+			name: "windows leaves the dead parent pid in place",
+			parents: map[int]int{
+				self:           4,
+				fakeChromeMain: fakeDeadParent, fakeChromeGPU: fakeChromeMain,
+			},
+			pids:            chrome,
+			wantReclaimable: chrome,
+			wantOrphaned:    chrome,
+		},
+		{
+			name: "chrome under this process's own bridge is reclaimable but no orphan",
+			parents: map[int]int{
+				fakeInit: 0, self: fakeInit, fakeOwnBridge: self,
+				fakeChromeMain: fakeOwnBridge, fakeChromeGPU: fakeChromeMain,
+			},
+			pids:            chrome,
+			wantReclaimable: chrome,
+		},
+		{
+			name: "helper behind an unmatched zygote follows the main process",
+			parents: map[int]int{
+				fakeInit: 0, self: fakeInit,
+				fakeChromeMain: fakeInit, fakeZygote: fakeChromeMain, fakeRenderer: fakeZygote,
+			},
+			pids:            []int{fakeChromeMain, fakeRenderer},
+			wantReclaimable: []int{fakeChromeMain, fakeRenderer},
+			wantOrphaned:    []int{fakeChromeMain, fakeRenderer},
+		},
+		{
+			name:    "failed process probe proves nothing ownerless",
+			parents: nil,
+			pids:    chrome,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			withProcessTree(t, tt.parents, nil)
+			if got := reclaimableChromePIDs(tt.pids); !slices.Equal(got, tt.wantReclaimable) {
+				t.Errorf("reclaimable = %v, want %v", got, tt.wantReclaimable)
+			}
+			if got := orphanedChromePIDs(tt.pids); !slices.Equal(got, tt.wantOrphaned) {
+				t.Errorf("orphaned = %v, want %v", got, tt.wantOrphaned)
+			}
+		})
+	}
+}
+
+func TestCleanupOrphanedChromeProcesses_KillsOnlyOwnerlessChrome(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	const peerProfile, orphanProfile = "/profiles/peer", "/profiles/orphan"
+	killed := withProcessTree(t,
+		map[int]int{
+			fakeInit: 0, fakePeerServer: fakeInit, os.Getpid(): fakeInit,
+			fakeChromeMain: fakePeerServer, fakeChromeGPU: fakeChromeMain,
+			fakeRenderer: fakeInit,
+		},
+		map[string][]int{
+			peerProfile:   {fakeChromeMain, fakeChromeGPU},
+			orphanProfile: {fakeRenderer},
+		})
+
+	CleanupOrphanedChromeProcesses(peerProfile)
+	if len(*killed) != 0 {
+		t.Fatalf("live peer's chrome was killed: %v", *killed)
+	}
+
+	CleanupOrphanedChromeProcesses(orphanProfile)
+	if !slices.Equal(*killed, []int{fakeRenderer}) {
+		t.Fatalf("killed = %v, want the orphan %d only", *killed, fakeRenderer)
+	}
+}
+
+func TestParsePIDPairs(t *testing.T) {
+	got := parsePIDPairs([]byte("  1     0\r\n  312     1\nnot a row\n 9 x\n\n"))
+	want := map[int]int{1: 0, 312: 1}
+	if !maps.Equal(got, want) {
+		t.Fatalf("parsePIDPairs = %v, want %v", got, want)
 	}
 }
