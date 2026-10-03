@@ -14,9 +14,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/selector"
+	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 type uploadLockBridge struct {
@@ -893,5 +895,80 @@ func TestHandleUpload_SuppliedNameWinsOverSniffedContent(t *testing.T) {
 	names := stagedNames(t, fmt.Sprintf(`{"files":[%q],"fileNames":["actually-a-png.csv"]}`, png))
 	if len(names) != 1 || names[0] != "actually-a-png.csv" {
 		t.Fatalf("staged %v, want [actually-a-png.csv]", names)
+	}
+}
+
+func TestHandleUpload_EveryRefusedCandidateTargetsItsOwnInput(t *testing.T) {
+	ctx, cancelTimeout := context.WithTimeout(testbrowser.Tab(t), 60*time.Second)
+	t.Cleanup(cancelTimeout)
+
+	html := `<label>CV <input type="file" id="cv" data-k="cv"></label>
+		<input type="file" name="doc" data-k="doc-1">
+		<input type="file" name="doc" data-k="doc-2">
+		<input type="FILE" data-k="bare">`
+	if err := chromedp.Run(ctx, chromedp.Navigate("data:text/html;base64,"+base64.StdEncoding.EncodeToString([]byte(html)))); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.RuntimeConfig{AllowUpload: true, ActionTimeout: 5 * time.Second, DefaultBrowser: config.BrowserChrome, StateDir: t.TempDir()}
+	b := browserBridge(ctx, cfg)
+	b.RegisterTab("tab-upload", ctx)
+	h := New(b, cfg, nil, nil, nil)
+
+	upload := func(body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", "/upload?tabId=tab-upload", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		h.HandleUpload(w, req)
+		return w
+	}
+
+	w := upload(`{"files":["aGVsbG8="]}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("four file inputs and no selector answered %d, want 400: %s", w.Code, w.Body.String())
+	}
+	var refusal struct {
+		Details struct {
+			Candidates []fileInputCandidate `json:"candidates"`
+		} `json:"details"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &refusal); err != nil {
+		t.Fatalf("decode error body: %v", err)
+	}
+	candidates := refusal.Details.Candidates
+	wantKeys := []string{"cv", "doc-1", "doc-2", "bare"}
+	if len(candidates) != len(wantKeys) {
+		t.Fatalf("details.candidates = %+v, want %d", candidates, len(wantKeys))
+	}
+	if candidates[0].Selector != "#cv" {
+		t.Fatalf("id-bearing input selector = %q, want #cv", candidates[0].Selector)
+	}
+	for i, c := range candidates {
+		if c.Selector == "" {
+			t.Fatalf("candidate %d (%s) has no selector", i, wantKeys[i])
+		}
+		nodeID, err := b.ResolveSelectorToNodeID(ctx, c.Selector, nil, "")
+		if err != nil {
+			t.Fatalf("candidate %d selector %q does not resolve: %v", i, c.Selector, err)
+		}
+		var key string
+		if err := b.CallFunctionOnNode(ctx, nodeID, `function() { return this.dataset.k; }`, nil, &key); err != nil {
+			t.Fatal(err)
+		}
+		if key != wantKeys[i] {
+			t.Fatalf("candidate %d selector %q resolved to %q, want %q", i, c.Selector, key, wantKeys[i])
+		}
+	}
+
+	bare := candidates[3].Selector
+	if w := upload(fmt.Sprintf(`{"selector":%q,"files":["aGVsbG8="]}`, bare)); w.Code != http.StatusOK {
+		t.Fatalf("upload with candidate selector %q answered %d: %s", bare, w.Code, w.Body.String())
+	}
+	var attached []string
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`Array.from(document.querySelectorAll('input[type=file]')).filter((el) => el.files.length > 0).map((el) => el.dataset.k)`, &attached)); err != nil {
+		t.Fatal(err)
+	}
+	if len(attached) != 1 || attached[0] != "bare" {
+		t.Fatalf("files attached to %v, want only the bare input", attached)
 	}
 }

@@ -241,10 +241,18 @@ type fileInputCandidate struct {
 	Selector string `json:"selector"`
 }
 
-const fileInputCandidatesExpr = `Array.from(document.querySelectorAll('input[type=file]')).map((el) => ({
-  label: ((el.labels && el.labels[0] && el.labels[0].textContent) || el.getAttribute('aria-label') || '').trim(),
-  selector: el.id ? '#' + CSS.escape(el.id) : el.name ? 'input[type=file][name=' + JSON.stringify(el.name) + ']' : '',
-}))`
+const fileInputCandidatesExpr = `(() => {
+  const matchesOnlyOne = (sel) => document.querySelectorAll(sel).length === 1;
+  return Array.from(document.querySelectorAll('input[type=file]')).map((el, i) => {
+    const byID = el.id ? '#' + CSS.escape(el.id) : '';
+    const byName = el.name ? 'input[type=file][name=' + JSON.stringify(el.name) + ']' : '';
+    const byIndex = "xpath:(//input[translate(@type,'FILE','file')='file'])[" + (i + 1) + ']';
+    return {
+      label: ((el.labels && el.labels[0] && el.labels[0].textContent) || el.getAttribute('aria-label') || '').trim(),
+      selector: byID && matchesOnlyOne(byID) ? byID : byName && matchesOnlyOne(byName) ? byName : byIndex,
+    };
+  });
+})()`
 
 func (h *Handlers) fileInputCandidates(ctx context.Context, tabID string) ([]fileInputCandidate, error) {
 	var candidates []fileInputCandidate
