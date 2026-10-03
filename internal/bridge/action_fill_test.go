@@ -19,14 +19,7 @@ const timeInputPage = `<input id="delivery" type="time"><div id="label" tabindex
 
 func openTimeInputPage(t *testing.T) context.Context {
 	t.Helper()
-	ctx := testbrowser.Launch(t)
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	t.Cleanup(cancel)
-	page := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(timeInputPage))
-	if err := chromedp.Run(ctx, chromedp.Navigate(page)); err != nil {
-		t.Fatalf("navigate: %v", err)
-	}
-	return ctx
+	return openPage(t, timeInputPage)
 }
 
 func axNodeByRole(t *testing.T, ctx context.Context, role string) cdp.BackendNodeID {
@@ -286,5 +279,48 @@ func TestFillOnADateInputRefusesAnISOShapedImpossibleDate(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "ISO format YYYY-MM-DD") {
 		t.Errorf("error = %q, want the ISO format hint", err)
+	}
+}
+
+func openPage(t *testing.T, html string) context.Context {
+	t.Helper()
+	ctx := testbrowser.Launch(t)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	t.Cleanup(cancel)
+	page := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(html))
+	if err := chromedp.Run(ctx, chromedp.Navigate(page)); err != nil {
+		t.Fatalf("navigate: %v", err)
+	}
+	return ctx
+}
+
+func TestFillBySelectorReachesAnInputInAnOpenShadowRoot(t *testing.T) {
+	ctx := openPage(t, `<div id="host"></div>
+	<script>
+		document.getElementById("host").attachShadow({mode: "open"}).innerHTML = '<input id="inner">';
+	</script>`)
+
+	result, err := (&Bridge{}).actionFill(ctx, ActionRequest{Selector: "#inner", Text: "hello", HasText: true})
+	if err != nil {
+		t.Fatalf("fill on a shadow-root input by selector: %v", err)
+	}
+	if warning, ok := result["warning"]; ok {
+		t.Errorf("fill warned %q, want the read-back to see the written value", warning)
+	}
+	var value string
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.getElementById("host").shadowRoot.getElementById("inner").value`, &value)); err != nil {
+		t.Fatalf("read shadow input value: %v", err)
+	}
+	if value != "hello" {
+		t.Errorf("shadow input value = %q, want %q", value, "hello")
+	}
+}
+
+func TestFillOnAMissingSelectorIsErrSelectorNoMatch(t *testing.T) {
+	ctx := openTimeInputPage(t)
+
+	_, err := (&Bridge{}).actionFill(ctx, ActionRequest{Selector: "#missing", Text: "x", HasText: true})
+	if !errors.Is(err, ErrSelectorNoMatch) {
+		t.Fatalf("fill on a missing selector: err = %v, want ErrSelectorNoMatch", err)
 	}
 }
