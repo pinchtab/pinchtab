@@ -502,10 +502,25 @@ func DoubleClickByNodeID(ctx context.Context, nodeID int64) error {
 		return err
 	}
 
-	if err := FocusBackendNode(ctx, nodeID); err != nil {
+	if err := focusIfFocusable(ctx, nodeID); err != nil {
 		return err
 	}
 	return chromedp.Run(WithTrustedInput(ctx), mousePressReleaseActions(x, y, 2)...)
+}
+
+// A heading or plain text is a legitimate double-click target that DOM.focus refuses.
+func focusIfFocusable(ctx context.Context, nodeID int64) error {
+	err := FocusBackendNode(ctx, nodeID)
+	if errors.Is(err, ErrElementStale) || !elementNotFocusable(err) {
+		return err
+	}
+	return nil
+}
+
+func elementNotFocusable(err error) bool {
+	var protocolErr *cdproto.Error
+	return errors.As(err, &protocolErr) && protocolErr.Code == -32000 &&
+		protocolErr.Message == "Element is not focusable"
 }
 
 func DragByNodeID(ctx context.Context, nodeID int64, dx, dy int, button string) error {

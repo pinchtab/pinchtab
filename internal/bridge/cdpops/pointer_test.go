@@ -2,6 +2,7 @@ package cdpops
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -11,8 +12,12 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto"
+	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/input"
+	"github.com/chromedp/cdproto/runtime"
+	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/srccensus"
+	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 func TestDispatchMouseMoveFallsBackToSyntheticOnDeadline(t *testing.T) {
@@ -523,4 +528,80 @@ func TestTheMoveBudgetScalesWithTheDeadlineBetweenFloorAndCeiling(t *testing.T) 
 	if got := mouseMoveBudget(context.Background()); got != mouseMoveBudgetCeiling {
 		t.Errorf("budget with no deadline = %v, want the %v ceiling", got, mouseMoveBudgetCeiling)
 	}
+}
+
+func TestElementNotFocusableOnlyMatchesTheFocusRefusal(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want bool
+	}{
+		{&cdproto.Error{Code: -32000, Message: "Element is not focusable"}, true},
+		{fmt.Errorf("focus: %w", &cdproto.Error{Code: -32000, Message: "Element is not focusable"}), true},
+		{&cdproto.Error{Code: -32000, Message: "Node is detached from document"}, false},
+		{&cdproto.Error{Code: -32602, Message: "Element is not focusable"}, false},
+		{errors.New("Element is not focusable"), false},
+		{nil, false},
+	} {
+		if got := elementNotFocusable(tc.err); got != tc.want {
+			t.Errorf("elementNotFocusable(%v) = %v, want %v", tc.err, got, tc.want)
+		}
+	}
+}
+
+const doubleClickFixtureHTML = `<!doctype html><html><body>
+<h1 id="heading" style="width:200px;height:60px" ondblclick="window.dblclicks=(window.dblclicks||0)+1">Shop</h1>
+<input id="field" style="width:200px;height:30px" onmousedown="window.focusedAtPress=window.focusedAtPress||document.activeElement.id">
+</body></html>`
+
+func TestDoubleClickFocusesOnlyWhatCanTakeFocus(t *testing.T) {
+	ctx := testbrowser.Launch(t)
+	dataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(doubleClickFixtureHTML))
+	if err := chromedp.Run(ctx, chromedp.Navigate(dataURL)); err != nil {
+		t.Fatalf("navigate: %v", err)
+	}
+
+	stepCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	if err := DoubleClickByNodeID(stepCtx, backendNodeIDOf(t, stepCtx, "#heading")); err != nil {
+		t.Fatalf("DoubleClickByNodeID(heading) = %v, want the press dispatched without focus", err)
+	}
+	var dblclicks int
+	if err := chromedp.Run(stepCtx, chromedp.Evaluate(`window.dblclicks||0`, &dblclicks)); err != nil {
+		t.Fatal(err)
+	}
+	if dblclicks != 1 {
+		t.Fatalf("heading dblclick events = %d, want 1", dblclicks)
+	}
+
+	if err := DoubleClickByNodeID(stepCtx, backendNodeIDOf(t, stepCtx, "#field")); err != nil {
+		t.Fatalf("DoubleClickByNodeID(field) = %v", err)
+	}
+	var focusedAtPress string
+	if err := chromedp.Run(stepCtx, chromedp.Evaluate(`window.focusedAtPress`, &focusedAtPress)); err != nil {
+		t.Fatal(err)
+	}
+	if focusedAtPress != "field" {
+		t.Fatalf("active element at the input's first mousedown = %q, want field focused before the press", focusedAtPress)
+	}
+}
+
+func backendNodeIDOf(t *testing.T, ctx context.Context, selector string) int64 {
+	t.Helper()
+	var nodeID int64
+	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		obj, _, err := runtime.Evaluate(fmt.Sprintf("document.querySelector(%q)", selector)).Do(ctx)
+		if err != nil {
+			return err
+		}
+		node, err := dom.DescribeNode().WithObjectID(obj.ObjectID).Do(ctx)
+		if err != nil {
+			return err
+		}
+		nodeID = int64(node.BackendNodeID)
+		return nil
+	})); err != nil {
+		t.Fatalf("resolve %s: %v", selector, err)
+	}
+	return nodeID
 }
