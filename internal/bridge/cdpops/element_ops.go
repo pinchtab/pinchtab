@@ -151,7 +151,23 @@ func FillByNodeID(ctx context.Context, nodeID int64, value string) error {
 				this.dispatchEvent(new Event('input', {bubbles: true}));
 				this.dispatchEvent(new Event('change', {bubbles: true}));
 			}`
-	return cdptk.CallFunctionOn(ctx, objectID, js, []map[string]any{{"value": value}}, nil)
+	if err := cdptk.CallFunctionOn(ctx, objectID, js, []map[string]any{{"value": value}}, nil); err != nil {
+		return err
+	}
+	return cdptk.CallFunctionOn(ctx, objectID, collapseEditableCaretToEndJS, nil, nil)
+}
+
+// Replacing a contenteditable's text leaves its caret at offset 0, where a
+// text control's value setter leaves it at the end.
+const collapseEditableCaretToEndJS = `function() {
+	if (!this.isContentEditable) return;
+	var selection = this.ownerDocument.getSelection();
+	selection.selectAllChildren(this);
+	selection.collapseToEnd();
+}`
+
+func CollapseEditableCaretToEnd(ctx context.Context, nodeID int64) error {
+	return CallFunctionOnNode(ctx, nodeID, collapseEditableCaretToEndJS, nil, nil)
 }
 
 type RejectedValueError struct {

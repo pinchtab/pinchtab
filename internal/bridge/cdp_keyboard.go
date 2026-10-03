@@ -216,9 +216,49 @@ func dispatchKeyChord(ctx context.Context, key, code string, vk int64, text stri
 	)
 }
 
+const focusEntersEditableJS = `function() {
+	return this.isContentEditable && this.getRootNode().activeElement !== this;
+}`
+
+type nodeTypingSteps struct {
+	focusEntersEditable func(ctx context.Context, nodeID int64) (bool, error)
+	focus               func(ctx context.Context, nodeID int64) error
+	collapseCaretToEnd  func(ctx context.Context, nodeID int64) error
+	keyText             func(ctx context.Context, text string) error
+}
+
+var nodeTyping = nodeTypingSteps{
+	focusEntersEditable: func(ctx context.Context, nodeID int64) (bool, error) {
+		var entering bool
+		err := bridgecdpops.CallFunctionOnNode(ctx, nodeID, focusEntersEditableJS, nil, &entering)
+		return entering, err
+	},
+	focus:              bridgecdpops.FocusBackendNode,
+	collapseCaretToEnd: bridgecdpops.CollapseEditableCaretToEnd,
+	keyText: func(ctx context.Context, text string) error {
+		return chromedp.Run(ctx, bridgecdpops.TrustedInputAction(chromedp.KeyEvent(text)))
+	},
+}
+
 func TypeByNodeID(ctx context.Context, nodeID int64, text string) error {
-	if err := bridgecdpops.FocusBackendNode(ctx, nodeID); err != nil {
+	return nodeTyping.typeInto(ctx, nodeID, text)
+}
+
+// A contenteditable gains focus with its caret at offset 0, unlike a text
+// control that restores its own selection, so the caret is moved to the end
+// only when focus enters it; an editable already focused keeps its caret.
+func (s nodeTypingSteps) typeInto(ctx context.Context, nodeID int64, text string) error {
+	entering, probeErr := s.focusEntersEditable(ctx, nodeID)
+	if err := s.focus(ctx, nodeID); err != nil {
 		return err
 	}
-	return chromedp.Run(ctx, bridgecdpops.TrustedInputAction(chromedp.KeyEvent(text)))
+	if probeErr != nil {
+		return fmt.Errorf("probe caret placement: %w", probeErr)
+	}
+	if entering {
+		if err := s.collapseCaretToEnd(ctx, nodeID); err != nil {
+			return fmt.Errorf("move caret to end: %w", err)
+		}
+	}
+	return s.keyText(ctx, text)
 }

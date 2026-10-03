@@ -2,7 +2,15 @@ package bridge
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
+	"slices"
 	"testing"
+	"time"
+
+	"github.com/chromedp/chromedp"
+	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
+	"github.com/pinchtab/pinchtab/internal/testbrowser"
 )
 
 // TestDispatchNamedKey_RecognisedKeys checks that namedKeyDefs contains the
@@ -150,6 +158,141 @@ func TestW3CKeyName(t *testing.T) {
 	for in, want := range cases {
 		if got := w3cKeyName(in); got != want {
 			t.Errorf("w3cKeyName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+type typingStepRecorder struct {
+	calls    []string
+	entering bool
+}
+
+func (r *typingStepRecorder) steps() nodeTypingSteps {
+	return nodeTypingSteps{
+		focusEntersEditable: func(context.Context, int64) (bool, error) {
+			r.calls = append(r.calls, "probe")
+			return r.entering, nil
+		},
+		focus: func(context.Context, int64) error {
+			r.calls = append(r.calls, "focus")
+			return nil
+		},
+		collapseCaretToEnd: func(context.Context, int64) error {
+			r.calls = append(r.calls, "collapse")
+			return nil
+		},
+		keyText: func(context.Context, string) error {
+			r.calls = append(r.calls, "keys")
+			return nil
+		},
+	}
+}
+
+func TestTypeIntoMovesTheCaretToTheEndOnlyWhenFocusEntersAnEditable(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		entering bool
+		want     []string
+	}{
+		{"focus enters a contenteditable", true, []string{"probe", "focus", "collapse", "keys"}},
+		{"already focused or a text control", false, []string{"probe", "focus", "keys"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := &typingStepRecorder{entering: tc.entering}
+			if err := rec.steps().typeInto(context.Background(), 1, "x"); err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(rec.calls, tc.want) {
+				t.Errorf("steps = %v, want %v", rec.calls, tc.want)
+			}
+		})
+	}
+}
+
+func TestTypeIntoReportsTheFocusFailureOverTheProbeFailure(t *testing.T) {
+	focusErr := errors.New("focus failed")
+	steps := (&typingStepRecorder{}).steps()
+	steps.focusEntersEditable = func(context.Context, int64) (bool, error) { return false, errors.New("probe failed") }
+	steps.focus = func(context.Context, int64) error { return focusErr }
+
+	if err := steps.typeInto(context.Background(), 1, "x"); !errors.Is(err, focusErr) {
+		t.Errorf("error = %v, want the focus failure", err)
+	}
+}
+
+const typingPage = `<div id="notes" contenteditable aria-label="Notes">old</div>
+<textarea id="body" aria-label="Body"></textarea>
+<button id="away">away</button>`
+
+func openTypingPage(t *testing.T) context.Context {
+	t.Helper()
+	ctx := testbrowser.Launch(t)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	t.Cleanup(cancel)
+	page := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(typingPage))
+	if err := chromedp.Run(ctx, chromedp.Navigate(page)); err != nil {
+		t.Fatalf("navigate: %v", err)
+	}
+	return ctx
+}
+
+func notesText(t *testing.T, ctx context.Context) string {
+	t.Helper()
+	var text string
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector("#notes").textContent`, &text)); err != nil {
+		t.Fatal(err)
+	}
+	return text
+}
+
+func TestTypeIntoAnUnfocusedContenteditableAppends(t *testing.T) {
+	ctx := openTypingPage(t)
+	if err := TypeByNodeID(ctx, backendNodeID(t, ctx, "#notes"), " plus"); err != nil {
+		t.Fatal(err)
+	}
+	if got := notesText(t, ctx); got != "old plus" {
+		t.Errorf("notes = %q, want %q", got, "old plus")
+	}
+}
+
+func TestTypeIntoAFocusedContenteditableKeepsItsCaret(t *testing.T) {
+	ctx := openTypingPage(t)
+	placeCaretAtStart := `(() => {
+		const notes = document.querySelector("#notes");
+		notes.focus();
+		getSelection().collapse(notes.firstChild, 0);
+	})()`
+	if err := chromedp.Run(ctx, chromedp.Evaluate(placeCaretAtStart, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if err := TypeByNodeID(ctx, backendNodeID(t, ctx, "#notes"), "very "); err != nil {
+		t.Fatal(err)
+	}
+	if got := notesText(t, ctx); got != "very old" {
+		t.Errorf("notes = %q, want %q", got, "very old")
+	}
+}
+
+func TestTypeAfterFillAppendsToAContenteditableLikeATextarea(t *testing.T) {
+	ctx := openTypingPage(t)
+
+	for _, field := range []struct{ selector, read string }{
+		{"#notes", "textContent"},
+		{"#body", "value"},
+	} {
+		node := backendNodeID(t, ctx, field.selector)
+		if err := bridgecdpops.FillByNodeID(ctx, node, "filled text"); err != nil {
+			t.Fatalf("fill %s: %v", field.selector, err)
+		}
+		if err := TypeByNodeID(ctx, node, " plus"); err != nil {
+			t.Fatalf("type %s: %v", field.selector, err)
+		}
+		var got string
+		if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector("`+field.selector+`").`+field.read, &got)); err != nil {
+			t.Fatal(err)
+		}
+		if got != "filled text plus" {
+			t.Errorf("%s = %q, want %q", field.selector, got, "filled text plus")
 		}
 	}
 }
