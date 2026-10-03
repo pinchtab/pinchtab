@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 
@@ -65,9 +66,11 @@ func (s *epochServer) handle(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-PinchTab-Vocab", s.token())
 		_, _ = w.Write([]byte("e0 button \"Go\"\n"))
 	case r.URL.Path == "/navigate":
-		s.epoch++ // navigation renumbers refs, minting a fresh token
+		s.epoch++
 		_, _ = w.Write([]byte(`{"tabId":"` + s.tab + `","url":"http://example.test"}`))
-	default: // an action (/action or /tabs/<id>/action)
+	case strings.HasSuffix(r.URL.Path, "/wait"):
+		_, _ = w.Write([]byte(`{"waited":true}`))
+	default:
 		body, _ := io.ReadAll(r.Body)
 		var decoded map[string]any
 		_ = json.Unmarshal(body, &decoded)
@@ -75,7 +78,7 @@ func (s *epochServer) handle(w http.ResponseWriter, r *http.Request) {
 		if v, ok := decoded["vocab"].(string); ok {
 			s.lastVocab, s.hadVocab = v, true
 		}
-		s.epoch++ // the action changed the page, renumbering refs as a navigation would
+		s.epoch++
 		_, _ = w.Write([]byte(`{"success":true}`))
 	}
 }
