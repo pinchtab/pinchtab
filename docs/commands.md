@@ -303,7 +303,9 @@ pinchtab wait --url <glob>              # Wait for URL match (glob: **, *, ?)
 pinchtab wait --load <state>            # state: ready-state | content-loaded | network-idle
                                         #   ready-state    → document.readyState === 'complete'
                                         #   content-loaded → readyState in {interactive, complete}
-                                        #   network-idle   → 0 in-flight requests for 500ms (HTTP `idleFor` overrides; no CLI flag)
+                                        #   network-idle   → 0 in-flight requests for 500ms (HTTP `idleFor` overrides; no CLI flag),
+                                        #                    counted from the later of the last request change and the wait call:
+                                        #                    an already-quiet page returns after 500ms plus one 100ms poll
 pinchtab wait --fn <expression>         # Wait for JS to become truthy
 pinchtab wait ... --timeout-ms <ms>     # Override timeout in ms (default 10000, max 30000); --timeout is a deprecated alias
 pinchtab network                        # List captured network requests

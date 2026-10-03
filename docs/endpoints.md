@@ -855,7 +855,7 @@ Wait body fields:
   - `load` — one of:
     - `ready-state` → `document.readyState === 'complete'`
     - `content-loaded` → `document.readyState` in {`interactive`, `complete`}
-    - `network-idle` → zero in-flight CDP requests held for `idleFor` ms (default 500, max 10000). Legacy alias `networkidle` accepted.
+    - `network-idle` → zero in-flight CDP requests held for `idleFor` ms (default 500, max 10000). The quiet window is counted from the later of the last request change and the wait call, so a request the page starts within `idleFor` of the call is waited for, and an already-quiet page returns after `idleFor` plus one 100 ms poll rather than immediately. Legacy alias `networkidle` accepted.
   - `fn` — JS expression polled until truthy (requires `security.allowEvaluate`)
   - `ms` — fixed sleep in milliseconds, max 30000 (escape hatch; prefer condition-based waits)
 - optional `tabId`
