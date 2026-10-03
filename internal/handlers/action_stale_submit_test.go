@@ -143,7 +143,7 @@ func TestAStaleRefOnASubmitControlIsRefusedBeforeAnyOrderIsPlaced(t *testing.T) 
 	f := newOrderFixture(t)
 	h, ctx, tabID := staleSubmitHandlers(t, f)
 
-	_, _, rr, err := h.executeActionResilient(ctx, staleClick(), h.Config, tabID, true)
+	_, _, rr, err := h.executeActionResilient(ctx, staleClick(), "", h.Config, tabID, true)
 
 	if !errors.Is(err, ErrStaleSubmitTarget) {
 		t.Fatalf("error = %v, want the stale-submit refusal", err)
@@ -169,7 +169,7 @@ func TestAStaleRefWithNoSubmitControlIsNotRefusedByTheSubmitGuard(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	_, _, _, err := h.executeActionResilient(ctx, staleClick(), h.Config, tabID, true)
+	_, _, _, err := h.executeActionResilient(ctx, staleClick(), "", h.Config, tabID, true)
 
 	if errors.Is(err, ErrStaleSubmitTarget) {
 		t.Errorf("a page with no form answered the submit refusal: %v", err)
@@ -192,7 +192,7 @@ func TestTheSubmitCheckIsWhatStopsTheOrder(t *testing.T) {
 	t.Cleanup(func() { submitControlJS = original })
 	submitControlJS = `function() { return false; }`
 
-	_, _, _, err := h.executeActionResilient(ctx, staleClick(), h.Config, tabID, true)
+	_, _, _, err := h.executeActionResilient(ctx, staleClick(), "", h.Config, tabID, true)
 
 	if errors.Is(err, ErrStaleSubmitTarget) {
 		t.Fatalf("the stubbed check still refused, so the refusal is not coming from the DOM check: %v", err)
@@ -210,7 +210,7 @@ func TestAStaleRefWhoseRecoveredClickNavigatesSucceedsAndDisclosesTheSubstitutio
 	f := newOrderFixture(t)
 	h, ctx, tabID := staleSubmitHandlers(t, f)
 
-	result, _, rr, err := h.executeActionResilient(ctx, &bridge.ActionRequest{Kind: bridge.ActionClick, Ref: "e3"}, h.Config, tabID, true)
+	result, _, rr, err := h.executeActionResilient(ctx, &bridge.ActionRequest{Kind: bridge.ActionClick, Ref: "e3"}, "", h.Config, tabID, true)
 
 	if err != nil {
 		t.Fatalf("a recovered click that navigated reported failure: %v", err)
@@ -238,7 +238,7 @@ func TestTheRefusalPublishesNoRecoveryRecordWhileTheNavigationDoes(t *testing.T)
 	f := newOrderFixture(t)
 	h, ctx, tabID := staleSubmitHandlers(t, f)
 
-	_, _, refused, refusalErr := h.executeActionResilient(ctx, staleClick(), h.Config, tabID, true)
+	_, _, refused, refusalErr := h.executeActionResilient(ctx, staleClick(), "", h.Config, tabID, true)
 	if !errors.Is(refusalErr, ErrStaleSubmitTarget) {
 		t.Fatalf("refusal error = %v", refusalErr)
 	}
@@ -246,7 +246,7 @@ func TestTheRefusalPublishesNoRecoveryRecordWhileTheNavigationDoes(t *testing.T)
 		t.Errorf("the refusal published a recovery record for a click that never happened: %+v", refused)
 	}
 
-	_, _, navigated, navErr := h.executeActionResilient(ctx, &bridge.ActionRequest{Kind: bridge.ActionClick, Ref: "e3"}, h.Config, tabID, true)
+	_, _, navigated, navErr := h.executeActionResilient(ctx, &bridge.ActionRequest{Kind: bridge.ActionClick, Ref: "e3"}, "", h.Config, tabID, true)
 	if navErr != nil {
 		t.Fatalf("the navigating click reported failure: %v", navErr)
 	}
@@ -309,7 +309,7 @@ func TestAStaleRefInANewEpochIsNotDispatchedAtTheRenumberedControl(t *testing.T)
 	click := cachedClick(t, h, ctx, tabID, "button", "Apply coupon")
 	renderBody(t, ctx, renumberPage(true))
 
-	result, _, rr, err := h.executeActionResilient(ctx, click, h.Config, tabID, false)
+	result, _, rr, err := h.executeActionResilient(ctx, click, "", h.Config, tabID, false)
 
 	if ids := clickedIDs(t, ctx); slices.Contains(ids, "b") {
 		t.Fatalf("clicked %v: the stale ref was dispatched at the control that inherited its number", ids)
@@ -336,7 +336,7 @@ func TestAStaleRefRenumberedOntoASubmitControlPlacesNoOrder(t *testing.T) {
 		`<form action="/order" method="post"><button id="p">Place order</button></form>`+
 		`<a id="b" href="#">Browse catalogue</a>`)
 
-	_, _, rr, err := h.executeActionResilient(ctx, click, h.Config, tabID, false)
+	_, _, rr, err := h.executeActionResilient(ctx, click, "", h.Config, tabID, false)
 
 	if placed := f.settleForOrder(); placed != 0 {
 		t.Fatalf("%d order(s) placed by a click on a ref minted for a different control", placed)
@@ -355,7 +355,7 @@ func TestACachedStaleRefOnASubmitControlIsRefusedBeforeAnyOrderIsPlaced(t *testi
 	click := cachedClick(t, h, ctx, tabID, "button", "Place order")
 	rerenderElement(t, ctx, "b")
 
-	_, _, rr, err := h.executeActionResilient(ctx, click, h.Config, tabID, false)
+	_, _, rr, err := h.executeActionResilient(ctx, click, "", h.Config, tabID, false)
 
 	if !errors.Is(err, ErrStaleSubmitTarget) {
 		t.Fatalf("error = %v, want the stale-submit refusal", err)
@@ -377,7 +377,7 @@ func TestACachedStaleRefOnALinkStillRecoversAndClicks(t *testing.T) {
 	click := cachedClick(t, h, ctx, tabID, "link", "Read the terms")
 	rerenderElement(t, ctx, "t")
 
-	result, _, rr, err := h.executeActionResilient(ctx, click, h.Config, tabID, false)
+	result, _, rr, err := h.executeActionResilient(ctx, click, "", h.Config, tabID, false)
 
 	if err != nil {
 		t.Fatalf("a cached stale ref on a link was not recovered: %v", err)
@@ -527,7 +527,7 @@ func TestTheStepPathTurnsTheRefusalIntoAFailedStepNamingTheSnapshot(t *testing.T
 		ctx, ctx,
 		httptest.NewRequest(http.MethodPost, "/actions", strings.NewReader("{}")),
 		httptest.NewRecorder(),
-		step, h.Config, tabID, 0, true,
+		step, "", h.Config, tabID, 0, true,
 		func(err error) string { return err.Error() },
 	)
 
@@ -606,7 +606,7 @@ func TestAnActionThatNavigatedIsNotDispatchedTwice(t *testing.T) {
 			}
 
 			req := &bridge.ActionRequest{Kind: kind, Ref: "e6", NodeID: 18}
-			result, _, rr, err := h.executeActionResilient(context.Background(), req, h.Config, tabID, false)
+			result, _, rr, err := h.executeActionResilient(context.Background(), req, "", h.Config, tabID, false)
 
 			if err != nil {
 				t.Fatalf("an action that ran and moved the page reported failure: %v", err)
@@ -637,7 +637,7 @@ func TestANavigationClassifiedFailureThatNeverDispatchedStillHeals(t *testing.T)
 			mb, h, tabID := navigatingHandlers(t, actionErr)
 
 			req := &bridge.ActionRequest{Kind: bridge.ActionClick, Ref: "e6", NodeID: 18}
-			_, _, _, err := h.executeActionResilient(context.Background(), req, h.Config, tabID, false)
+			_, _, _, err := h.executeActionResilient(context.Background(), req, "", h.Config, tabID, false)
 
 			if err == nil {
 				t.Fatalf("%s reported success", name)
@@ -659,7 +659,7 @@ func TestAStaleRefIsNotRedispatchedAtTheDeadNodeBeforeRecovery(t *testing.T) {
 	mb.failFirst = errors.New("node is detached")
 
 	req := &bridge.ActionRequest{Kind: bridge.ActionClick, Ref: "e6", NodeID: 18}
-	_, _, rr, err := h.executeActionResilient(context.Background(), req, h.Config, tabID, false)
+	_, _, rr, err := h.executeActionResilient(context.Background(), req, "", h.Config, tabID, false)
 
 	if err != nil {
 		t.Fatalf("recovery did not heal the stale ref: %v", err)
@@ -687,7 +687,7 @@ func TestAStaleDragWithADestinationStillRetriesBeforeRecovery(t *testing.T) {
 	})
 
 	req := &bridge.ActionRequest{Kind: bridge.ActionDrag, Ref: "e6", NodeID: 18, ToSelector: "e9", ToNodeID: 77}
-	_, _, rr, err := h.executeActionResilient(context.Background(), req, h.Config, tabID, false)
+	_, _, rr, err := h.executeActionResilient(context.Background(), req, "", h.Config, tabID, false)
 
 	if err != nil {
 		t.Fatalf("the retry did not heal the drag: %v", err)
@@ -697,5 +697,34 @@ func TestAStaleDragWithADestinationStillRetriesBeforeRecovery(t *testing.T) {
 	}
 	if got := mb.dispatches.Load(); got != 2 {
 		t.Errorf("%d dispatches; want the failed one and the retry", got)
+	}
+}
+
+// A CSS selector, unlike a ref, names its element by content rather than position, so the
+// retry arm re-resolves it and dispatches at the node the re-render created. There is no
+// ref for recovery to heal, so a retry at the dead node would be the final answer.
+func TestAStaleCSSSelectorClickRedispatchesAtTheReResolvedNode(t *testing.T) {
+	f := newOrderFixture(t)
+	h, ctx, tabID := checkoutHandlers(t, f, "/")
+	click := &bridge.ActionRequest{Kind: bridge.ActionClick, Selector: "#t"}
+	if _, err := h.resolveActionRequestSelector(ctx, tabID, click); err != nil {
+		t.Fatal(err)
+	}
+	deadNodeID := click.NodeID
+	rerenderElement(t, ctx, "t")
+
+	result, _, rr, err := h.executeActionResilient(ctx, click, "#t", h.Config, tabID, false)
+
+	if err != nil {
+		t.Fatalf("the stale CSS-selector click was not re-resolved: %v", err)
+	}
+	if click.NodeID == deadNodeID {
+		t.Errorf("node id %d is the one the re-render destroyed", deadNodeID)
+	}
+	if landed, _ := result[bridge.ResultLandedURL].(string); !strings.Contains(landed, "/terms") {
+		t.Errorf("landed url = %v, want the link's own target", result[bridge.ResultLandedURL])
+	}
+	if rr != nil {
+		t.Errorf("recovery ran for a selector the retry arm re-resolved: %+v", rr)
 	}
 }

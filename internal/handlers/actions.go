@@ -198,6 +198,7 @@ func (h *Handlers) runResolvedActionStep(
 	r *http.Request,
 	w http.ResponseWriter,
 	step *bridge.ActionRequest,
+	primarySelector string,
 	cfg *config.RuntimeConfig,
 	tabID string,
 	index int,
@@ -206,7 +207,7 @@ func (h *Handlers) runResolvedActionStep(
 ) (actionResult, context.Context, string) {
 	validationWatched, disarmValidationWatch := h.armFormValidationWatch(ctx, tCtx, *step, false)
 	defer disarmValidationWatch()
-	res, _, _, err := h.executeActionResilient(tCtx, step, cfg, tabID, refMissing)
+	res, _, _, err := h.executeActionResilient(tCtx, step, primarySelector, cfg, tabID, refMissing)
 	if dialog := h.dialogOpenedByInput(step, tabID, res, err); dialog != nil {
 		return actionResult{Index: index, Success: true, Result: withOpenedDialog(res, tabID, dialog)}, ctx, tabID
 	}
@@ -597,6 +598,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	primarySelector := req.Selector
 	selectorResolution, err := h.resolveActionRequestSelector(tCtx, resolvedTabID, &req)
 	if err != nil {
 		h.errorWithCrashContext(w, selectorResolution.httpStatus(), err)
@@ -633,7 +635,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	validationWatched, disarmValidationWatch := h.armFormValidationWatch(ctx, tCtx, req, submitClick)
 	defer disarmValidationWatch()
 
-	result, actionBackend, recoveryResult, actionErr := h.executeActionResilient(tCtx, &req, effectiveCfg, resolvedTabID, refMissing)
+	result, actionBackend, recoveryResult, actionErr := h.executeActionResilient(tCtx, &req, primarySelector, effectiveCfg, resolvedTabID, refMissing)
 	h.publishVocabIfReepoched(w, resolvedTabID, vocabBefore)
 	if dialog := h.dialogOpenedByInput(&req, resolvedTabID, result, actionErr); dialog != nil {
 		h.writeActionResult(w, r, routing, withOpenedDialog(result, resolvedTabID, dialog), recoveryResult)
@@ -1009,6 +1011,7 @@ func (h *Handlers) runMultiStepAction(
 	step *bridge.ActionRequest, plan multiStepPlan,
 	tabID string, index int,
 ) (actionResult, context.Context, string) {
+	primarySelector := step.Selector
 	selectorResolution, resolveErr := h.resolveActionRequestSelector(tCtx, tabID, step)
 	if resolveErr != nil {
 		return h.failedStep(index, step.Kind, tabID, resolveErr, resolveErr.Error()), ctx, tabID
@@ -1023,7 +1026,7 @@ func (h *Handlers) runMultiStepAction(
 	if refMissing && h.Recovery == nil {
 		return actionResult{Index: index, Success: false, Error: h.refNotFoundOn(tabID, step.Ref).Error()}, ctx, tabID
 	}
-	return h.runResolvedActionStep(ctx, tCtx, r, w, step, plan.cfg, tabID, index, refMissing, func(err error) string {
+	return h.runResolvedActionStep(ctx, tCtx, r, w, step, primarySelector, plan.cfg, tabID, index, refMissing, func(err error) string {
 		return plan.errFmt(step.Kind, err)
 	})
 }

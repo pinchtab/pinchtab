@@ -178,7 +178,7 @@ func TestTheRecoveryMatchersInternalsStayOutOfTheCallerFacingError(t *testing.T)
 	h := New(mb, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
 	req := bridge.ActionRequest{Kind: bridge.ActionHover, Ref: "e99", TabID: "tab1"}
 
-	_, _, rr, err := h.executeActionResilient(context.Background(), &req, h.Config, "tab1", true)
+	_, _, rr, err := h.executeActionResilient(context.Background(), &req, "", h.Config, "tab1", true)
 
 	if !errors.Is(err, ErrTargetNotFound) {
 		t.Fatalf("exhausted recovery returned %v, which no arm classifies as an absent target", err)

@@ -696,7 +696,7 @@ func clickFoundRef(t *testing.T, h *Handlers, ctx context.Context, tabID, ref st
 		t.Fatalf("ref %s returned by find does not resolve in the ref cache the click reads", ref)
 	}
 	req := &bridge.ActionRequest{Kind: bridge.ActionClick, Ref: ref, NodeID: target.BackendNodeID}
-	if _, _, _, err := h.executeActionResilient(ctx, req, h.Config, tabID, false); err != nil {
+	if _, _, _, err := h.executeActionResilient(ctx, req, "", h.Config, tabID, false); err != nil {
 		t.Fatalf("click %s: %v", ref, err)
 	}
 }

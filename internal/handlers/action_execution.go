@@ -437,7 +437,8 @@ func (h *Handlers) executeAction(ctx context.Context, req bridge.ActionRequest, 
 // failure. Callers must handle the refMissing-without-recovery case (404 /
 // per-step failure) before calling — refMissing=true assumes h.Recovery != nil.
 // req.NodeID is mutated in place, as the inline action/batch/macro paths did.
-func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.ActionRequest, cfg *config.RuntimeConfig, resolvedTabID string, refMissing bool) (map[string]any, string, *recovery.RecoveryResult, error) {
+// primarySelector is the caller's selector before resolution consumed it.
+func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.ActionRequest, primarySelector string, cfg *config.RuntimeConfig, resolvedTabID string, refMissing bool) (map[string]any, string, *recovery.RecoveryResult, error) {
 	submitClick := bridge.IsSubmitClick(req.Kind, *req)
 	dispatch := h.recoveryDispatch(req, cfg, resolvedTabID, h.refFrameID(resolvedTabID, req.Ref))
 	if refMissing {
@@ -465,8 +466,9 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 			h.refreshRefCache(ctx, resolvedTabID)
 		}
 		if !stale || !onlyRecoveryCanRepoint(*req) {
-			h.refreshActionNodeIDFromSelector(ctx, req)
-			if secErr := h.refreshActionSecondaryTargets(ctx, resolvedTabID, req); secErr != nil {
+			if primaryErr := h.reresolveStalePrimary(ctx, resolvedTabID, primarySelector, req, err); primaryErr != nil {
+				err = primaryErr
+			} else if secErr := h.refreshActionSecondaryTargets(ctx, resolvedTabID, req); secErr != nil {
 				err = secErr
 			} else if waitFor(ctx, pointerRetryDelay) == nil {
 				result, backend, err = h.executeAction(ctx, *req, cfg)
@@ -572,11 +574,27 @@ func shouldRetryPointerAction(req bridge.ActionRequest, err error) bool {
 }
 
 // onlyRecoveryCanRepoint reports a request whose dead primary node nothing in the
-// retry arm can replace: a ref carries no selector to re-resolve, and with no
-// secondary target the arm has nothing else to refresh, so re-dispatching at the
-// same node id is a guaranteed failure that recovery's descriptor match then heals.
+// retry arm can replace: a ref is positional per snapshot, so re-resolving it can
+// denote another element, and with no secondary target the arm has nothing else to
+// refresh, so re-dispatching at the same node id is a guaranteed failure that
+// recovery's descriptor match then heals.
 func onlyRecoveryCanRepoint(req bridge.ActionRequest) bool {
-	return req.Ref != "" && strings.TrimSpace(req.Selector) == "" && strings.TrimSpace(req.ToSelector) == ""
+	return req.Ref != "" && strings.TrimSpace(req.ToSelector) == ""
+}
+
+// reresolveStalePrimary re-points a selector-addressed primary target whose node the
+// page destroyed, through the same frame- and modal-scoped resolver that resolved it
+// first. A ref is left to recovery, which re-finds it by descriptor rather than position.
+func (h *Handlers) reresolveStalePrimary(ctx context.Context, tabID, primarySelector string, req *bridge.ActionRequest, dispatchErr error) error {
+	if !bridge.IsStaleNodeError(dispatchErr) || primarySelector == "" || selector.Parse(primarySelector).Kind == selector.KindRef {
+		return nil
+	}
+	primary := bridge.ActionRequest{Kind: req.Kind, TabID: req.TabID, Selector: primarySelector}
+	if _, err := h.resolveActionRequestSelector(ctx, tabID, &primary); err != nil {
+		return fmt.Errorf("re-resolve stale target: %w", err)
+	}
+	req.NodeID = primary.NodeID
+	return nil
 }
 
 // refreshActionSecondaryTargets re-resolves every selector-bearing field the request
@@ -639,17 +657,6 @@ func uniqueNodeForDescriptor(cache *bridge.RefCache, desc semantic.ElementDescri
 		return 0, false
 	}
 	return match, true
-}
-
-func (h *Handlers) refreshActionNodeIDFromSelector(ctx context.Context, req *bridge.ActionRequest) {
-	if req == nil || req.NodeID > 0 || strings.TrimSpace(req.Selector) == "" {
-		return
-	}
-	nid, err := bridge.ResolveCSSToNodeID(ctx, req.Selector)
-	if err != nil {
-		return
-	}
-	req.NodeID = nid
 }
 
 func (h *Handlers) refreshRefCache(ctx context.Context, tabID string) {
