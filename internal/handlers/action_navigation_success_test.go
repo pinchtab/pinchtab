@@ -409,3 +409,29 @@ func TestBrowserSubmitClickOnARequestSubmitButtonIsValidationBlocked(t *testing.
 		t.Fatalf("postState = %+v, want validation_blocked on the email field", post)
 	}
 }
+
+func TestFormValidationWatchForEachClickMode(t *testing.T) {
+	cases := []struct {
+		name              string
+		req               bridge.ActionRequest
+		want              formValidationWatch
+		requiresSubmitter bool
+	}{
+		{"plain ref click", bridge.ActionRequest{Kind: bridge.ActionClick, Ref: "e1", NodeID: 7}, formValidationPlainClick, true},
+		{"selector click", bridge.ActionRequest{Kind: bridge.ActionClick, Selector: "#b", NodeID: 7}, formValidationPlainClick, true},
+		{"wait-nav click", bridge.ActionRequest{Kind: bridge.ActionClick, Ref: "e1", NodeID: 7, WaitNav: true}, formValidationWaitNavClick, false},
+		{"submit click", bridge.ActionRequest{Kind: bridge.ActionClick, Ref: "e1", NodeID: 7, Submit: true}, formValidationSubmitClick, false},
+		{"non-click kind", bridge.ActionRequest{Kind: bridge.ActionType, Ref: "e1", NodeID: 7, WaitNav: true}, formValidationUnwatched, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := formValidationWatchFor(tc.req, bridge.IsSubmitClick(tc.req.Kind, tc.req))
+			if got != tc.want {
+				t.Fatalf("watch = %d, want %d", got, tc.want)
+			}
+			if got.requiresSubmitter() != tc.requiresSubmitter {
+				t.Fatalf("requiresSubmitter = %v, want %v", got.requiresSubmitter(), tc.requiresSubmitter)
+			}
+		})
+	}
+}

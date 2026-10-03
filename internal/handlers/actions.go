@@ -205,14 +205,15 @@ func (h *Handlers) runResolvedActionStep(
 	refMissing bool,
 	errFallback func(error) string,
 ) (actionResult, context.Context, string) {
-	validationWatched, disarmValidationWatch := h.armFormValidationWatch(ctx, tCtx, *step, false)
+	watch := formValidationWatchFor(*step, false)
+	validationWatched, disarmValidationWatch := h.armFormValidationWatch(ctx, tCtx, *step, watch)
 	defer disarmValidationWatch()
 	res, _, _, err := h.executeActionResilient(tCtx, step, primarySelector, cfg, tabID, refMissing)
 	if dialog := h.dialogOpenedByInput(step, tabID, res, err); dialog != nil {
 		return actionResult{Index: index, Success: true, Result: withOpenedDialog(res, tabID, dialog)}, ctx, tabID
 	}
 	if err == nil {
-		res = h.settleClickOutcome(tCtx, *step, validationWatched, res)
+		res = h.settleClickOutcome(tCtx, *step, watch, validationWatched, res)
 	}
 	nextCtx := ctx
 	nextTabID := tabID
@@ -632,7 +633,8 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	validationWatched, disarmValidationWatch := h.armFormValidationWatch(ctx, tCtx, req, submitClick)
+	watch := formValidationWatchFor(req, submitClick)
+	validationWatched, disarmValidationWatch := h.armFormValidationWatch(ctx, tCtx, req, watch)
 	defer disarmValidationWatch()
 
 	result, actionBackend, recoveryResult, actionErr := h.executeActionResilient(tCtx, &req, primarySelector, effectiveCfg, resolvedTabID, refMissing)
@@ -652,29 +654,46 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !submitClick {
-		result = h.settleClickOutcome(tCtx, req, validationWatched, result)
+		result = h.settleClickOutcome(tCtx, req, watch, validationWatched, result)
 	}
 	h.writeActionSuccess(w, r, tCtx, req, routing, resolvedTabID, result, actionBackend, recoveryResult)
 }
 
-func isWaitNavClick(req bridge.ActionRequest) bool {
-	return req.WaitNav && req.Kind == bridge.ActionClick
+type formValidationWatch int
+
+const (
+	formValidationUnwatched formValidationWatch = iota
+	formValidationPlainClick
+	formValidationWaitNavClick
+	formValidationSubmitClick
+)
+
+func formValidationWatchFor(req bridge.ActionRequest, submitClick bool) formValidationWatch {
+	switch {
+	case submitClick:
+		return formValidationSubmitClick
+	case req.Kind != bridge.ActionClick:
+		return formValidationUnwatched
+	case req.WaitNav:
+		return formValidationWaitNavClick
+	default:
+		return formValidationPlainClick
+	}
 }
 
-func watchesFormValidation(req bridge.ActionRequest, submitClick bool) bool {
-	return submitClick || (req.Kind == bridge.ActionClick && req.NodeID > 0)
+func (m formValidationWatch) requiresSubmitter() bool {
+	return m == formValidationPlainClick
 }
 
-func (h *Handlers) armFormValidationWatch(tabCtx, tCtx context.Context, req bridge.ActionRequest, submitClick bool) (armed bool, disarm func()) {
-	requireSubmitter := !submitClick && !isWaitNavClick(req)
-	if !watchesFormValidation(req, submitClick) || !h.armSubmitInvalidWatch(tCtx, req.NodeID, requireSubmitter) {
+func (h *Handlers) armFormValidationWatch(tabCtx, tCtx context.Context, req bridge.ActionRequest, watch formValidationWatch) (armed bool, disarm func()) {
+	if watch == formValidationUnwatched || req.NodeID <= 0 || !h.armSubmitInvalidWatch(tCtx, req.NodeID, watch.requiresSubmitter()) {
 		return false, func() {}
 	}
 	return true, func() { h.disarmSubmitInvalidWatch(tabCtx, req.NodeID) }
 }
 
-func (h *Handlers) settleClickOutcome(ctx context.Context, req bridge.ActionRequest, validationWatched bool, result map[string]any) map[string]any {
-	if isWaitNavClick(req) {
+func (h *Handlers) settleClickOutcome(ctx context.Context, req bridge.ActionRequest, watch formValidationWatch, validationWatched bool, result map[string]any) map[string]any {
+	if watch == formValidationWaitNavClick {
 		return h.settleWaitNavOutcome(ctx, req.NodeID, result)
 	}
 	if !validationWatched {
