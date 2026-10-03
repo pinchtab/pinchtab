@@ -36,7 +36,7 @@ var hintSites = map[string]struct {
 }{
 	"../actions/actions_navigate.go:Navigate":                           {advisory, 1, "no agent session: a steady state, and on a bridge one the caller cannot leave"},
 	"../actions/actions_navigate.go:reportFallbackNewTab":               {occurrence, 2, "this navigation's tab was gone and a new one was opened"},
-	"../actions/actions_element.go:printActionResult":                   {occurrence, 1, "this action's refs went stale"},
+	"../actions/actions_element.go:printActionResult":                   {occurrence, 2, "this action's ref went stale, or was re-matched onto another element"},
 	"../actions/actions_element.go:printActionWarning":                  {occurrence, 1, "the server warned this action may not have taken effect"},
 	"../actions/actions_element.go:printSubmitPostState":                {occurrence, 1, "this submit is still pending"},
 	"../actions/actions_element.go:printOpenedTab":                      {occurrence, 1, "this click opened a tab"},

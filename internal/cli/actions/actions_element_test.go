@@ -13,6 +13,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
+	"github.com/pinchtab/semantic/recovery"
 	"github.com/spf13/cobra"
 )
 
@@ -128,6 +129,74 @@ func TestPrintActionResultWaitNavWithoutNavigationSaysSo(t *testing.T) {
 	})
 	if got != "OK no navigation\n" {
 		t.Fatalf("no-navigation output = %q, want %q", got, "OK no navigation\n")
+	}
+}
+
+func TestPrintActionResultReportsARecoveredRef(t *testing.T) {
+	rematched := map[string]any{
+		"recovered":    true,
+		"original_ref": "e14",
+		"new_ref":      "e18",
+		"confidence":   "high",
+		"failure_type": "element_stale",
+	}
+	tests := []struct {
+		name     string
+		result   map[string]any
+		want     string
+		wantHint bool
+	}{
+		{
+			name:   "direct hit",
+			result: map[string]any{"success": true, "result": map[string]any{"clicked": true}},
+			want:   "OK\n",
+		},
+		{
+			name:   "recovery attempted but not needed",
+			result: map[string]any{"success": true, "recovery": map[string]any{"recovered": false, "original_ref": "e14"}},
+			want:   "OK\n",
+		},
+		{
+			name:     "recovered",
+			result:   map[string]any{"success": true, "result": map[string]any{"clicked": true}, "recovery": rematched},
+			want:     "OK recovered e14 -> e18 (high)\n",
+			wantHint: true,
+		},
+		{
+			name: "recovered and navigated",
+			result: map[string]any{
+				"success":  true,
+				"result":   map[string]any{"clicked": true, "navigated": true, "url": "https://example.com/next"},
+				"recovery": rematched,
+			},
+			want:     "OK navigated https://example.com/next\nrecovered e14 -> e18 (high)\n",
+			wantHint: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := captureStdout(t, func() { printActionResult("click", tt.result) }); got != tt.want {
+				t.Errorf("stdout = %q, want %q", got, tt.want)
+			}
+			hint := captureStderr(t, func() { printActionResult("click", tt.result) })
+			if got := strings.Contains(hint, "re-matched"); got != tt.wantHint {
+				t.Errorf("stderr = %q; re-match hint present = %v, want %v", hint, got, tt.wantHint)
+			}
+		})
+	}
+}
+
+func TestFailedOnStaleRefMatchesTheEngineVocabulary(t *testing.T) {
+	for failType, want := range map[string]bool{
+		recovery.FailureElementStale.String():    true,
+		recovery.FailureNavigation.String():      true,
+		recovery.FailureElementNotFound.String(): false,
+		"stale":                                  false,
+	} {
+		got := failedOnStaleRef(map[string]any{"recovery": map[string]any{"failure_type": failType}})
+		if got != want {
+			t.Errorf("failedOnStaleRef(%q) = %v, want %v", failType, got, want)
+		}
 	}
 }
 

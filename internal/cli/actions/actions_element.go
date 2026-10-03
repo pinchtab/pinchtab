@@ -225,19 +225,50 @@ func printActionResult(kind string, result map[string]any) {
 		if msg, ok := result["error"].(string); ok {
 			errMsg = msg
 		}
-		if recovery, ok := result["recovery"].(map[string]any); ok {
-			if failType, ok := recovery["failure_type"].(string); ok {
-				if failType == "stale" || failType == "navigation" {
-					output.Hint("ref may be stale — run `pinchtab snap -i` to refresh")
-				}
-			}
+		if failedOnStaleRef(result) {
+			output.Hint("ref may be stale — run `pinchtab snap -i` to refresh")
 		}
 		output.Error(kind, errMsg, output.ExitNotFound)
 		return
 	}
 	printActionWarning(result)
+	recovered := recoveredOnto(result)
+	switch {
+	case printActionHeadline(result):
+		if recovered != "" {
+			output.Value(recovered)
+		}
+	case recovered != "":
+		output.Value("OK " + recovered)
+	default:
+		output.Success()
+	}
+	if recovered != "" {
+		output.Hint("the ref you named was gone, so the action landed on a re-matched element — check it is the one you meant, and run `pinchtab snap -i` before using other refs")
+	}
+}
+
+func failedOnStaleRef(result map[string]any) bool {
+	recovery, _ := result["recovery"].(map[string]any)
+	failType, _ := recovery["failure_type"].(string)
+	return failType == "element_stale" || failType == "navigation"
+}
+
+func recoveredOnto(result map[string]any) string {
+	recovery, _ := result["recovery"].(map[string]any)
+	if recovery["recovered"] != true {
+		return ""
+	}
+	line := fmt.Sprintf("recovered %v -> %v", recovery["original_ref"], recovery["new_ref"])
+	if confidence, _ := recovery["confidence"].(string); confidence != "" {
+		line += " (" + confidence + ")"
+	}
+	return line
+}
+
+func printActionHeadline(result map[string]any) bool {
 	if printOpenedDialog(result) {
-		return
+		return true
 	}
 	if actionResult, ok := result["result"].(map[string]any); ok {
 		// A submit reports its own bounded post-state, which says more than "it
@@ -245,10 +276,10 @@ func printActionResult(kind string, result map[string]any) {
 		// rather than replacing it.
 		if postState, ok := actionResult["postState"].(map[string]any); ok && printSubmitPostState(postState, actionResult) {
 			printOpenedTab(result, "")
-			return
+			return true
 		}
 		if printOpenedTab(result, "OK ") {
-			return
+			return true
 		}
 		// A click that moved the page succeeded. It used to exit 1 with a 409, which
 		// is the signal every agent loop and CI harness branches on, so the natural
@@ -257,19 +288,18 @@ func printActionResult(kind string, result map[string]any) {
 			landed, _ := actionResult["url"].(string)
 			output.Value("OK navigated " + landed)
 			printStaleRefsHint()
-			return
+			return true
 		}
 		if actionResult["navigated"] == false {
 			output.Value("OK no navigation")
-			return
+			return true
 		}
 		if actionResult["scrolled"] == false {
 			output.Value(scrollDidNotMove(actionResult))
-			return
+			return true
 		}
 	}
-
-	output.Success()
+	return false
 }
 
 func printActionWarning(result map[string]any) {
