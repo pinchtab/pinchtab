@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -404,7 +405,7 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 		}
 		rr, recRes, recErr := h.Recovery.Attempt(ctx, resolvedTabID, req.Ref, req.Kind, dispatch)
 		if recErr != nil {
-			if errors.Is(recErr, ErrStaleSubmitTarget) {
+			if recoveryRefused(recErr) {
 				return nil, "", nil, recErr
 			}
 			return nil, "", &rr, h.refNotFoundOn(resolvedTabID, req.Ref)
@@ -437,7 +438,7 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 			recovery.ClassifyFailure(err),
 			dispatch,
 		)
-		if errors.Is(recErr, ErrStaleSubmitTarget) {
+		if recoveryRefused(recErr) {
 			return nil, "", nil, recErr
 		}
 		rr = &r2
@@ -463,6 +464,9 @@ func (h *Handlers) recoveryDispatch(req *bridge.ActionRequest, cfg *config.Runti
 		if h.recoveredNodeSubmits(ctx, *req, nodeID) {
 			return nil, ErrStaleSubmitTarget
 		}
+		if err := h.refuseTiedRecovery(tabID, req.Ref, nodeID); err != nil {
+			return nil, err
+		}
 		if err := h.refreshActionSecondaryTargets(ctx, tabID, req); err != nil {
 			return nil, err
 		}
@@ -472,6 +476,26 @@ func (h *Handlers) recoveryDispatch(req *bridge.ActionRequest, cfg *config.Runti
 }
 
 var errRefFrameReplaced = errors.New("the frame the ref was in has been replaced")
+
+var errRecoveryTied = errors.New("recovery match is tied")
+
+func recoveryRefused(err error) bool {
+	return errors.Is(err, ErrStaleSubmitTarget) || errors.Is(err, errRecoveryTied)
+}
+
+func (h *Handlers) refuseTiedRecovery(tabID, staleRef string, nodeID int64) error {
+	nodes := h.resolveSnapshotNodes(tabID)
+	candidate := slices.IndexFunc(nodes, func(n bridge.A11yNode) bool { return n.NodeID == nodeID })
+	if candidate < 0 {
+		return nil
+	}
+	tied := twinRefs(semanticDescriptorsFromNodes(nodes), candidate)
+	if len(tied) < 2 {
+		return nil
+	}
+	return fmt.Errorf("ref %s %w - %w: refs %s share its role and name; %s and pick one",
+		staleRef, ErrTargetNotFound, errRecoveryTied, strings.Join(tied, ", "), takeASnapshotFirst)
+}
 
 func (h *Handlers) refFrameID(tabID, ref string) string {
 	target, _ := h.Bridge.GetRefCache(tabID).Lookup(ref)

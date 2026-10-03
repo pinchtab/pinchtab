@@ -234,6 +234,21 @@ func sameRoleAndName(a, b semantic.ElementMatch) bool {
 	return a.Role == b.Role && a.Name == b.Name
 }
 
+func twinRefs(descs []semantic.ElementDescriptor, of int) []string {
+	target := descriptorMatch(descs[of])
+	tied := []string{target.Ref}
+	for i, d := range descs {
+		if i != of && sameRoleAndName(descriptorMatch(d), target) {
+			tied = append(tied, d.Ref)
+		}
+	}
+	return tied
+}
+
+func descriptorMatch(d semantic.ElementDescriptor) semantic.ElementMatch {
+	return semantic.ElementMatch{Ref: d.Ref, Role: d.Role, Name: d.Name}
+}
+
 func matchRefs(matches []semantic.ElementMatch) []string {
 	if matches == nil {
 		return nil

@@ -59,6 +59,14 @@ func newOrderFixture(t *testing.T) orderFixture {
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = w.Write([]byte(`<script>window.clicked = []</script>` + renumberPage(false)))
 	})
+	mux.HandleFunc("/rows", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<h1>Accounts</h1><input aria-label="Search"><table>` +
+			`<tr id="A1"><td>Ann</td><td><button id="b" onclick="this.closest('tr').remove()">Delete</button></td></tr>` +
+			`<tr id="B2"><td>Bob</td><td><button onclick="this.closest('tr').remove()">Delete</button></td></tr>` +
+			`<tr id="C3"><td>Cid</td><td><button onclick="this.closest('tr').remove()">Delete</button></td></tr>` +
+			`</table>`))
+	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return orderFixture{server: srv, orders: &orders}
@@ -817,5 +825,62 @@ func TestBothEndpointsRedispatchAStaleCSSSelectorClickAtTheReResolvedNode(t *tes
 				t.Errorf("landed url = %q, want the link's own target", landed)
 			}
 		})
+	}
+}
+
+func remainingRows(t *testing.T, ctx context.Context) []string {
+	t.Helper()
+	var ids []string
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`[...document.querySelectorAll("tr")].map(r => r.id)`, &ids)); err != nil {
+		t.Fatal(err)
+	}
+	return ids
+}
+
+func TestARetriedClickOnADeletedRowsButtonIsRefusedRatherThanDeletingASiblingRow(t *testing.T) {
+	f := newOrderFixture(t)
+	h, ctx, tabID := checkoutHandlers(t, f, "/rows")
+	h.refreshRefCache(ctx, tabID)
+	var deletes []bridge.A11yNode
+	for _, node := range h.Bridge.GetRefCache(tabID).Nodes {
+		if node.Role == "button" && node.Name == "Delete" {
+			deletes = append(deletes, node)
+		}
+	}
+	if len(deletes) != 3 {
+		t.Fatalf("snapshot has %d Delete buttons, want 3", len(deletes))
+	}
+	bob := deletes[1]
+	h.Recovery.RecordIntent(tabID, bob.Ref, recovery.IntentEntry{
+		Descriptor: semantic.ElementDescriptor{Ref: bob.Ref, Role: "button", Name: "Delete"},
+		CachedAt:   time.Now(),
+	})
+	click := func() (*recovery.RecoveryResult, error) {
+		_, _, rr, err := h.executeActionResilient(ctx, &bridge.ActionRequest{Kind: bridge.ActionClick, Ref: bob.Ref, NodeID: bob.NodeID}, "", h.Config, tabID, false)
+		return rr, err
+	}
+
+	if _, err := click(); err != nil {
+		t.Fatalf("first click on Bob's Delete failed: %v", err)
+	}
+	if rows := remainingRows(t, ctx); !slices.Equal(rows, []string{"A1", "C3"}) {
+		t.Fatalf("rows after deleting Bob = %v, want [A1 C3]", rows)
+	}
+
+	rr, err := click()
+
+	if rows := remainingRows(t, ctx); !slices.Equal(rows, []string{"A1", "C3"}) {
+		t.Fatalf("rows after the retried click = %v: the stale ref was recovered onto another row", rows)
+	}
+	if !errors.Is(err, errRecoveryTied) || !errors.Is(err, ErrTargetNotFound) {
+		t.Fatalf("error = %v, want the tied-recovery refusal as ref-not-found", err)
+	}
+	for _, survivor := range []bridge.A11yNode{deletes[0], deletes[2]} {
+		if !strings.Contains(err.Error(), survivor.Ref) {
+			t.Errorf("refusal %q does not name tied ref %s", err, survivor.Ref)
+		}
+	}
+	if rr != nil {
+		t.Errorf("a recovery record was published for a click that never happened: %+v", rr)
 	}
 }
