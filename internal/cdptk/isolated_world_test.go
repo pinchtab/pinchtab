@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/token"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -170,21 +171,9 @@ func TestAnExemptWorldCannotProduceObjectHandles(t *testing.T) {
 func describeWorldSites(sites []worldSite) []string {
 	out := make([]string, 0, len(sites))
 	for _, site := range sites {
-		out = append(out, filepath.ToSlash(site.file)+":"+itoa(site.line))
+		out = append(out, filepath.ToSlash(site.file)+":"+strconv.Itoa(site.line))
 	}
 	return out
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var digits []byte
-	for n > 0 {
-		digits = append([]byte{byte('0' + n%10)}, digits...)
-		n /= 10
-	}
-	return string(digits)
 }
 
 // The frame a caller names must be the frame the world is created for. Merging the
