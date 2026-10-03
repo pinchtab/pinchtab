@@ -748,20 +748,22 @@ func axTreeFromJSON(t *testing.T, tree string) []bridgeobserve.RawAXNode {
 
 func TestHandleFind_RowContextSeparatesRepeatedRowButtons(t *testing.T) {
 	var tree strings.Builder
-	tree.WriteString(`{"nodes":[{"nodeId":"root","role":{"value":"RootWebArea"},"childIds":["list"]},{"nodeId":"list","role":{"value":"list"},"childIds":["r0","r1","r2"]}`)
-	for i, product := range []string{"Red Mug $8", "Blue Mug $9", "Teapot $25"} {
+	tree.WriteString(`{"nodes":[{"nodeId":"root","role":{"value":"RootWebArea"},"childIds":["list"]},{"nodeId":"list","role":{"value":"list"},"childIds":["r0","r1","r2","r3"]}`)
+	for i, product := range []string{"Red Mug $8", "Blue Mug $9", "Teapot $25", "Kettle $30"} {
 		fmt.Fprintf(&tree, `,{"nodeId":"r%[1]d","role":{"value":"listitem"},"childIds":["t%[1]d","b%[1]d"]},{"nodeId":"t%[1]d","role":{"value":"StaticText"},"name":{"value":%[2]q}},{"nodeId":"b%[1]d","role":{"value":"button"},"name":{"value":"Add to cart"},"backendDOMNodeId":%[3]d}`, i, product, i+10)
 	}
 	tree.WriteString(`]}`)
 	nodes, refs := bridgeobserve.BuildSnapshot(axTreeFromJSON(t, tree.String()), bridgeobserve.FilterInteractive, -1)
 	h := newFindTestHandler(&bridge.RefCache{Nodes: nodes, Refs: refs}, false)
 
-	resp := postFind(t, h, `{"query": "Add Blue Mug to cart", "threshold": 0.1, "topK": 3}`)
+	for query, want := range map[string]string{"Add Blue Mug to cart": "e1", "Add Teapot to cart": "e2", "Add Kettle to cart": "e3"} {
+		resp := postFind(t, h, fmt.Sprintf(`{"query": %q, "threshold": 0.1, "topK": 4}`, query))
 
-	if resp.BestRef != "e1" {
-		t.Fatalf("best_ref = %q, want e1, the Blue Mug row (matches %+v)", resp.BestRef, resp.Matches)
-	}
-	if resp.TiedRefs != nil {
-		t.Errorf("tied_refs = %v, want none: the row text tells the buttons apart", resp.TiedRefs)
+		if resp.BestRef != want {
+			t.Errorf("%q: best_ref = %q, want %s (matches %+v)", query, resp.BestRef, want, resp.Matches)
+		}
+		if resp.TiedRefs != nil {
+			t.Errorf("%q: tied_refs = %v, want none: the row text tells the buttons apart", query, resp.TiedRefs)
+		}
 	}
 }

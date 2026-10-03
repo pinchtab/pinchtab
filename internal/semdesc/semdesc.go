@@ -104,6 +104,7 @@ func Build(nodes []observe.A11yNode) []semantic.ElementDescriptor {
 		}
 		if node.RowContext != "" {
 			desc.Positional.LabelledBy = node.RowContext
+			desc.Text = strings.TrimSpace(desc.Text + " " + node.RowContext)
 		}
 		if section := nearestSection(nodes, parentIdx, i); section != "" {
 			desc.Section = section
