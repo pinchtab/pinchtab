@@ -728,3 +728,94 @@ func TestAStaleCSSSelectorClickRedispatchesAtTheReResolvedNode(t *testing.T) {
 		t.Errorf("recovery ran for a selector the retry arm re-resolved: %+v", rr)
 	}
 }
+
+type rerenderOnFirstDispatchBridge struct {
+	bridge.BridgeAPI
+	t          *testing.T
+	ctx        context.Context
+	elementID  string
+	dispatches atomic.Int64
+}
+
+func (b *rerenderOnFirstDispatchBridge) ExecuteAction(ctx context.Context, kind string, req bridge.ActionRequest) (map[string]any, error) {
+	if b.dispatches.Add(1) == 1 {
+		rerenderElement(b.t, b.ctx, b.elementID)
+	}
+	return b.BridgeAPI.ExecuteAction(ctx, kind, req)
+}
+
+// Both endpoints resolve the selector before dispatch and clear it, so the retry arm can only
+// re-resolve if the caller hands it the selector the request arrived with.
+func TestBothEndpointsRedispatchAStaleCSSSelectorClickAtTheReResolvedNode(t *testing.T) {
+	endpoints := []struct {
+		name    string
+		path    string
+		body    func(tabID string) string
+		handler func(h *Handlers) http.HandlerFunc
+		landed  func(t *testing.T, body []byte) string
+	}{
+		{
+			name: "action",
+			path: "/action",
+			body: func(tabID string) string {
+				return `{"kind":"click","selector":"#t","tabId":"` + tabID + `"}`
+			},
+			handler: func(h *Handlers) http.HandlerFunc { return h.HandleAction },
+			landed: func(t *testing.T, body []byte) string {
+				var resp struct {
+					Result map[string]any `json:"result"`
+				}
+				if err := json.Unmarshal(body, &resp); err != nil {
+					t.Fatalf("decode: %v (%s)", err, body)
+				}
+				landed, _ := resp.Result[bridge.ResultLandedURL].(string)
+				return landed
+			},
+		},
+		{
+			name: "actions",
+			path: "/actions",
+			body: func(tabID string) string {
+				return `{"tabId":"` + tabID + `","actions":[{"kind":"click","selector":"#t"}]}`
+			},
+			handler: func(h *Handlers) http.HandlerFunc { return h.HandleActions },
+			landed: func(t *testing.T, body []byte) string {
+				var resp struct {
+					Results []struct {
+						Success bool           `json:"success"`
+						Result  map[string]any `json:"result"`
+					} `json:"results"`
+				}
+				if err := json.Unmarshal(body, &resp); err != nil {
+					t.Fatalf("decode: %v (%s)", err, body)
+				}
+				if len(resp.Results) != 1 || !resp.Results[0].Success {
+					t.Fatalf("step did not succeed: %s", body)
+				}
+				landed, _ := resp.Results[0].Result[bridge.ResultLandedURL].(string)
+				return landed
+			},
+		},
+	}
+	for _, ep := range endpoints {
+		t.Run(ep.name, func(t *testing.T) {
+			f := newOrderFixture(t)
+			h, ctx, tabID := checkoutHandlers(t, f, "/")
+			rerendering := &rerenderOnFirstDispatchBridge{BridgeAPI: h.Bridge, t: t, ctx: ctx, elementID: "t"}
+			h.Bridge = rerendering
+
+			rec := httptest.NewRecorder()
+			ep.handler(h)(rec, httptest.NewRequest(http.MethodPost, ep.path, strings.NewReader(ep.body(tabID))))
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+			}
+			if got := rerendering.dispatches.Load(); got < 2 {
+				t.Fatalf("dispatches = %d, so the first click never hit the dead node", got)
+			}
+			if landed := ep.landed(t, rec.Body.Bytes()); !strings.Contains(landed, "/terms") {
+				t.Errorf("landed url = %q, want the link's own target", landed)
+			}
+		})
+	}
+}
