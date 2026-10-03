@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/chromedp/chromedp"
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	"github.com/pinchtab/pinchtab/internal/cdptk"
 	"github.com/pinchtab/pinchtab/internal/readiness"
@@ -47,13 +46,14 @@ func readCheckableState(ctx context.Context, objectID string) (checkableState, e
 }
 
 func (b *Bridge) actionFocus(ctx context.Context, req ActionRequest) (map[string]any, error) {
-	if req.Selector != "" {
-		return map[string]any{"focused": true}, chromedp.Run(ctx, chromedp.Focus(req.Selector, chromedp.ByQuery))
+	nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
+	if err != nil {
+		return nil, err
 	}
-	if req.NodeID > 0 {
-		return map[string]any{"focused": true}, bridgecdpops.FocusBackendNode(ctx, req.NodeID)
+	if nodeID > 0 {
+		err = bridgecdpops.FocusBackendNode(ctx, nodeID)
 	}
-	return map[string]any{"focused": true}, nil
+	return map[string]any{"focused": true}, err
 }
 
 func (b *Bridge) actionSelect(ctx context.Context, req ActionRequest) (map[string]any, error) {

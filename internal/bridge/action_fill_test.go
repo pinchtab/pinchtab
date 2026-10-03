@@ -324,3 +324,49 @@ func TestFillOnAMissingSelectorIsErrSelectorNoMatch(t *testing.T) {
 		t.Fatalf("fill on a missing selector: err = %v, want ErrSelectorNoMatch", err)
 	}
 }
+
+func TestTextActionsOnAMissingSelectorAreErrSelectorNoMatchWithoutWaiting(t *testing.T) {
+	ctx := openTimeInputPage(t)
+	b := &Bridge{}
+	actions := map[string]func(context.Context) (map[string]any, error){
+		"type": func(ctx context.Context) (map[string]any, error) {
+			return b.typeText(ctx, ActionRequest{Selector: "#missing", Text: "x"})
+		},
+		"humanized type": func(ctx context.Context) (map[string]any, error) {
+			return b.actionHumanizedType(ctx, ActionRequest{Selector: "#missing", Text: "x"})
+		},
+		"press": func(ctx context.Context) (map[string]any, error) {
+			return b.pressKey(ctx, ActionRequest{Selector: "#missing", Key: "Enter"})
+		},
+		"focus": func(ctx context.Context) (map[string]any, error) {
+			return b.actionFocus(ctx, ActionRequest{Selector: "#missing"})
+		},
+	}
+	for name, action := range actions {
+		t.Run(name, func(t *testing.T) {
+			actionCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			if _, err := action(actionCtx); !errors.Is(err, ErrSelectorNoMatch) {
+				t.Fatalf("%s on a missing selector: err = %v, want ErrSelectorNoMatch", name, err)
+			}
+		})
+	}
+}
+
+func TestTypeBySelectorReachesAnInputInAnOpenShadowRoot(t *testing.T) {
+	ctx := openPage(t, `<div id="host"></div>
+	<script>
+		document.getElementById("host").attachShadow({mode: "open"}).innerHTML = '<input id="inner">';
+	</script>`)
+
+	if _, err := (&Bridge{}).typeText(ctx, ActionRequest{Selector: "#inner", Text: "hello"}); err != nil {
+		t.Fatalf("type on a shadow-root input by selector: %v", err)
+	}
+	var value string
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.getElementById("host").shadowRoot.getElementById("inner").value`, &value)); err != nil {
+		t.Fatalf("read shadow input value: %v", err)
+	}
+	if value != "hello" {
+		t.Errorf("shadow input value = %q, want %q", value, "hello")
+	}
+}

@@ -90,16 +90,14 @@ func (b *Bridge) typeText(ctx context.Context, req ActionRequest) (map[string]an
 	if b.effectiveHumanize(req) {
 		return b.actionHumanizedType(ctx, req)
 	}
-	if req.Selector != "" {
-		return textEntryResult("typed", req.Text), chromedp.Run(ctx,
-			bridgecdpops.TrustedInputAction(chromedp.Click(req.Selector, chromedp.ByQuery)),
-			bridgecdpops.TrustedInputAction(chromedp.SendKeys(req.Selector, req.Text, chromedp.ByQuery)),
-		)
+	nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
+	if err != nil {
+		return nil, err
 	}
-	if req.NodeID > 0 {
-		return textEntryResult("typed", req.Text), refuseNonEditable(ctx, req.NodeID, TypeByNodeID(ctx, req.NodeID, req.Text))
+	if nodeID <= 0 {
+		return nil, NewInvalidActionRequestError("need selector or ref")
 	}
-	return nil, NewInvalidActionRequestError("need selector or ref")
+	return textEntryResult("typed", req.Text), refuseNonEditable(ctx, nodeID, TypeByNodeID(ctx, nodeID, req.Text))
 }
 
 func refuseNonEditable(ctx context.Context, nodeID int64, err error) error {
@@ -200,12 +198,12 @@ func (b *Bridge) pressKey(ctx context.Context, req ActionRequest) (map[string]an
 	if err := validateKeyName(req.Key); err != nil {
 		return nil, err
 	}
-	if req.NodeID > 0 {
-		if err := bridgecdpops.FocusBackendNode(ctx, req.NodeID); err != nil {
-			return nil, err
-		}
-	} else if req.Selector != "" {
-		if err := chromedp.Run(ctx, chromedp.Focus(req.Selector, chromedp.ByQuery)); err != nil {
+	nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
+	if err != nil {
+		return nil, err
+	}
+	if nodeID > 0 {
+		if err := bridgecdpops.FocusBackendNode(ctx, nodeID); err != nil {
 			return nil, err
 		}
 	}
@@ -251,23 +249,16 @@ func (b *Bridge) actionHumanizedType(ctx context.Context, req ActionRequest) (ma
 	if req.Text == "" {
 		return nil, NewInvalidActionRequestError("text required for type")
 	}
-
-	if req.Selector != "" {
-		if err := chromedp.Run(ctx, chromedp.Focus(req.Selector, chromedp.ByQuery)); err != nil {
-			nodeID, resolveErr := ResolveCSSToNodeID(ctx, req.Selector)
-			if resolveErr != nil {
-				return nil, err
-			}
-			return nil, refuseNonEditable(ctx, nodeID, err)
-		}
-	} else if req.NodeID > 0 {
-		if err := bridgecdpops.FocusBackendNode(ctx, req.NodeID); err != nil {
-			return nil, refuseNonEditable(ctx, req.NodeID, err)
-		}
-	} else {
+	nodeID, err := targetNodeID(ctx, req.NodeID, req.Selector)
+	if err != nil {
+		return nil, err
+	}
+	if nodeID <= 0 {
 		return nil, NewInvalidActionRequestError("need selector, ref, or nodeId")
 	}
-
+	if err := bridgecdpops.FocusBackendNode(ctx, nodeID); err != nil {
+		return nil, refuseNonEditable(ctx, nodeID, err)
+	}
 	return b.humanizedTypeFocused(ctx, req)
 }
 
