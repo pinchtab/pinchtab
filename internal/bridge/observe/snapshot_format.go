@@ -113,7 +113,7 @@ func FormatSnapshotCompact(nodes []A11yNode) string {
 
 // CompactDiffSummary is the single source for the help text describing
 // FormatSnapshotCompactDiff; agent-facing docs are held to it by a sync test.
-const CompactDiffSummary = "all nodes, marking [+] added, [~] changed and removed refs"
+const CompactDiffSummary = "[+] added and [~] changed nodes plus a # removed: line"
 
 func diffMarker(added, changed []A11yNode) func(A11yNode) string {
 	markers := make(map[string]string, len(added)+len(changed))
@@ -139,18 +139,19 @@ func appendRemovedRefs(b *strings.Builder, removed []A11yNode) {
 }
 
 func FormatSnapshotCompactDiff(nodes []A11yNode, added, changed, removed []A11yNode) string {
-	var b strings.Builder
-	b.WriteString(formatNodes(nodes, compactNodeStyle, diffMarker(added, changed)))
-	appendRemovedRefs(&b, removed)
-	return b.String()
+	return formatChangedNodes(nodes, compactNodeStyle, added, changed, removed)
 }
 
 func FormatSnapshotTextDiff(nodes []A11yNode, added, changed, removed []A11yNode) string {
+	return formatChangedNodes(nodes, textNodeStyle, added, changed, removed)
+}
+
+func formatChangedNodes(nodes []A11yNode, style nodeStyle, added, changed, removed []A11yNode) string {
 	marker := diffMarker(added, changed)
 	var b strings.Builder
 	for _, n := range nodes {
 		if m := marker(n); m != "" {
-			appendNode(&b, n, textNodeStyle, m)
+			appendNode(&b, n, style, m)
 		}
 	}
 	appendRemovedRefs(&b, removed)

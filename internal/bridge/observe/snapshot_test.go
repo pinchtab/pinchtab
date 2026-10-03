@@ -225,7 +225,7 @@ func TestSnapshotDiffTreatsARenamedNodeAsChanged(t *testing.T) {
 	}
 }
 
-func TestSnapshotTextDiffListsOnlyAddedAndChangedNodes(t *testing.T) {
+func TestSnapshotDiffFormatsListOnlyAddedAndChangedNodes(t *testing.T) {
 	before := []A11yNode{
 		{Ref: "e1", Role: "textbox", Name: "Name", NodeID: 5},
 		{Ref: "e2", Role: "status", Name: "Thanks Bob", NodeID: 9},
@@ -238,10 +238,22 @@ func TestSnapshotTextDiffListsOnlyAddedAndChangedNodes(t *testing.T) {
 	}
 
 	added, changed, removed := DiffSnapshot(before, after)
-	got := FormatSnapshotTextDiff(after, added, changed, removed)
-	want := "e2 status \"Thanks Dee\" [~]\n  e4 button \"Close\" [+]\n# removed: e3\n"
-	if got != want {
-		t.Fatalf("text diff = %q, want %q", got, want)
+	if got, want := FormatSnapshotTextDiff(after, added, changed, removed), "e2 status \"Thanks Dee\" [~]\n  e4 button \"Close\" [+]\n# removed: e3\n"; got != want {
+		t.Errorf("text diff = %q, want %q", got, want)
+	}
+	if got, want := FormatSnapshotCompactDiff(after, added, changed, removed), "e2:status \"Thanks Dee\" [~]\ne4:button \"Close\" [+]\n# removed: e3\n"; got != want {
+		t.Errorf("compact diff = %q, want %q", got, want)
+	}
+}
+
+func TestSnapshotDiffFormatsAreEmptyWithoutChanges(t *testing.T) {
+	nodes := []A11yNode{{Ref: "e1", Role: "textbox", Name: "Name", NodeID: 5}}
+	added, changed, removed := DiffSnapshot(nodes, nodes)
+	if got := FormatSnapshotCompactDiff(nodes, added, changed, removed); got != "" {
+		t.Errorf("compact diff = %q, want empty", got)
+	}
+	if got := FormatSnapshotTextDiff(nodes, added, changed, removed); got != "" {
+		t.Errorf("text diff = %q, want empty", got)
 	}
 }
 

@@ -206,8 +206,11 @@ func TestSnapshotDiffHonoursEveryFormat(t *testing.T) {
 	}
 
 	contentType, compact := diffIn("compact")
-	if !strings.HasPrefix(contentType, "text/plain") || !strings.Contains(compact, unchangedLine) {
-		t.Errorf("compact diff (%s) no longer lists the whole tree:\n%s", contentType, compact)
+	if !strings.HasPrefix(contentType, "text/plain") || !strings.Contains(compact, " nodes | +") || !strings.Contains(compact, addedLine) {
+		t.Errorf("compact diff (%s) lacks the counts header or the added node:\n%s", contentType, compact)
+	}
+	if strings.Contains(compact, unchangedLine) {
+		t.Errorf("compact diff repeats an unchanged node:\n%s", compact)
 	}
 
 	contentType, jsonBody := diffIn("json")

@@ -51,7 +51,7 @@ pinchtab snap --max-tokens 2000         # Limit output size
 | `filter` | `interactive` for interactive elements plus headings, images, table cells and non-empty alert/status messages and open dialogs (named with their text), `all` (default) for the whole tree |
 | `interactive` | Boolean alias for `filter`: `true` is `filter=interactive`, `false` is `filter=all`. Contradicting an explicit `filter` is a 400 |
 | `format` | `compact`, `text`, `yaml`, or default JSON. The CLI and the MCP tool both ask for `compact`; the HTTP default is unchanged |
-| `diff` | `true` for diff mode. It honours every `format`: `compact` lists all nodes, marking `[+]` added, `[~]` changed and removed refs; `text` lists only the added and changed nodes, with the same markers and a `# removed:` line; `yaml` and JSON return `added`, `changed`, `removed` and `counts` |
+| `diff` | `true` for diff mode. It honours every `format`: `compact` and `text` list only the added and changed nodes, marking `[+]` added and `[~]` changed, plus a `# removed:` line; `yaml` and JSON return `added`, `changed`, `removed` and `counts` |
 | `selector` | Unified selector (ref, CSS, XPath, text, …) to scope |
 | `maxTokens` | Token budget limit (positive integer; anything else is a 400) |
 | `depth` | Tree depth limit (`-1` = no limit; below `-1` is a 400) |
