@@ -903,6 +903,7 @@ func TestHandleUpload_EveryRefusedCandidateTargetsItsOwnInput(t *testing.T) {
 	t.Cleanup(cancelTimeout)
 
 	html := `<label>CV <input type="file" id="cv" data-k="cv"></label>
+		<input type="file" name="photo" data-k="photo">
 		<input type="file" name="doc" data-k="doc-1">
 		<input type="file" name="doc" data-k="doc-2">
 		<input type="FILE" data-k="bare">`
@@ -925,7 +926,7 @@ func TestHandleUpload_EveryRefusedCandidateTargetsItsOwnInput(t *testing.T) {
 
 	w := upload(`{"files":["aGVsbG8="]}`)
 	if w.Code != http.StatusBadRequest {
-		t.Fatalf("four file inputs and no selector answered %d, want 400: %s", w.Code, w.Body.String())
+		t.Fatalf("five file inputs and no selector answered %d, want 400: %s", w.Code, w.Body.String())
 	}
 	var refusal struct {
 		Details struct {
@@ -936,12 +937,15 @@ func TestHandleUpload_EveryRefusedCandidateTargetsItsOwnInput(t *testing.T) {
 		t.Fatalf("decode error body: %v", err)
 	}
 	candidates := refusal.Details.Candidates
-	wantKeys := []string{"cv", "doc-1", "doc-2", "bare"}
+	wantKeys := []string{"cv", "photo", "doc-1", "doc-2", "bare"}
 	if len(candidates) != len(wantKeys) {
 		t.Fatalf("details.candidates = %+v, want %d", candidates, len(wantKeys))
 	}
 	if candidates[0].Selector != "#cv" {
 		t.Fatalf("id-bearing input selector = %q, want #cv", candidates[0].Selector)
+	}
+	if want := `input[type=file][name="photo"]`; candidates[1].Selector != want {
+		t.Fatalf("uniquely named input selector = %q, want %s", candidates[1].Selector, want)
 	}
 	for i, c := range candidates {
 		if c.Selector == "" {
@@ -960,7 +964,7 @@ func TestHandleUpload_EveryRefusedCandidateTargetsItsOwnInput(t *testing.T) {
 		}
 	}
 
-	bare := candidates[3].Selector
+	bare := candidates[len(candidates)-1].Selector
 	if w := upload(fmt.Sprintf(`{"selector":%q,"files":["aGVsbG8="]}`, bare)); w.Code != http.StatusOK {
 		t.Fatalf("upload with candidate selector %q answered %d: %s", bare, w.Code, w.Body.String())
 	}
