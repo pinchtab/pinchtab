@@ -188,6 +188,22 @@ func TestPrintActionResultReportsARecoveredRef(t *testing.T) {
 			want:     "OK navigated https://example.com/next\nrecovered e14 -> e18 (high)\n",
 			wantHint: true,
 		},
+		{
+			name: "re-matched onto the same ref after a navigation cleared the refs",
+			result: map[string]any{"success": true, "recovery": recoveryBlock(t, recovery.RecoveryResult{
+				Recovered: true, OriginalRef: "e1", NewRef: "e1", Confidence: "high", FailureType: recovery.FailureNavigation.String(),
+			})},
+			want:     "OK re-matched e1 after navigation (high)\n",
+			wantHint: true,
+		},
+		{
+			name: "retargeted after a navigation cleared the refs",
+			result: map[string]any{"success": true, "recovery": recoveryBlock(t, recovery.RecoveryResult{
+				Recovered: true, OriginalRef: "e1", NewRef: "e3", Confidence: "high", FailureType: recovery.FailureNavigation.String(),
+			})},
+			want:     "OK recovered e1 -> e3 after navigation (high)\n",
+			wantHint: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -243,6 +259,7 @@ func TestPrintActionResultFailureHintsReSnapOnlyForAStaleRef(t *testing.T) {
 
 	for failType, wantHint := range map[string]bool{
 		recovery.FailureElementStale.String():    true,
+		recovery.FailureNavigation.String():      true,
 		recovery.FailureElementNotFound.String(): false,
 	} {
 		t.Run(failType, func(t *testing.T) {

@@ -403,7 +403,7 @@ func (h *Handlers) executeActionResilient(ctx context.Context, req *bridge.Actio
 		if submitClick {
 			return nil, "", nil, ErrStaleSubmitTarget
 		}
-		rr, recRes, recErr := h.Recovery.Attempt(ctx, resolvedTabID, req.Ref, req.Kind, dispatch)
+		rr, recRes, recErr := h.Recovery.AttemptWithClassification(ctx, resolvedTabID, req.Ref, req.Kind, recovery.FailureNavigation, dispatch)
 		if recErr != nil {
 			if recoveryRefused(recErr) {
 				return nil, "", nil, recErr

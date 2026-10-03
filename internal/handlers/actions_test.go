@@ -28,6 +28,7 @@ import (
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/pinchtab/pinchtab/internal/srccensus"
 	"github.com/pinchtab/pinchtab/internal/testbrowser"
+	"github.com/pinchtab/semantic/recovery"
 )
 
 type failMockBridge struct {
@@ -1618,6 +1619,29 @@ func TestFillAndTypeOnARerenderedInputRecoverByTheOldRef(t *testing.T) {
 				t.Errorf("re-created input value = %q, want hello", value)
 			}
 		})
+	}
+}
+
+func TestARefUsedAfterANavigationClearedTheCacheRecoversAsNavigation(t *testing.T) {
+	_, b, h := newRerenderFixture(t)
+	if w := postRerenderAction(t, h, `{"kind":"fill","ref":"e0","text":"first","tabId":"tab-rerender"}`); w.Code != http.StatusOK {
+		t.Fatalf("priming fill: status=%d body=%s", w.Code, w.Body.String())
+	}
+	b.DeleteRefCache("tab-rerender")
+
+	w := postRerenderAction(t, h, `{"kind":"fill","ref":"e0","text":"again","tabId":"tab-rerender"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("fill after the ref cache was cleared: status=%d body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Recovery recovery.RecoveryResult `json:"recovery"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode %s: %v", w.Body.String(), err)
+	}
+	if !resp.Recovery.Recovered || resp.Recovery.FailureType != recovery.FailureNavigation.String() {
+		t.Errorf("recovery = %+v, want recovered with failure_type %q", resp.Recovery, recovery.FailureNavigation.String())
 	}
 }
 

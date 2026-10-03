@@ -268,11 +268,23 @@ func recoveredOnto(rec recovery.RecoveryResult) string {
 	if !rec.Recovered {
 		return ""
 	}
-	line := fmt.Sprintf("recovered %s -> %s", rec.OriginalRef, rec.NewRef)
+	line := recoveryMove(rec)
 	if rec.Confidence != "" {
 		line += " (" + rec.Confidence + ")"
 	}
 	return line
+}
+
+func recoveryMove(rec recovery.RecoveryResult) string {
+	afterNavigation := rec.FailureType == recovery.FailureNavigation.String()
+	switch {
+	case afterNavigation && rec.NewRef == rec.OriginalRef:
+		return fmt.Sprintf("re-matched %s after navigation", rec.NewRef)
+	case afterNavigation:
+		return fmt.Sprintf("recovered %s -> %s after navigation", rec.OriginalRef, rec.NewRef)
+	default:
+		return fmt.Sprintf("recovered %s -> %s", rec.OriginalRef, rec.NewRef)
+	}
 }
 
 func printActionHeadline(result map[string]any) bool {
