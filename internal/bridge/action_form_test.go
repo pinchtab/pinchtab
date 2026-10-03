@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -111,5 +112,27 @@ func TestSelectAppliesASuppliedEmptyValueToThePage(t *testing.T) {
 	}
 	if got := selected(); got != "fr" {
 		t.Errorf("the refused select changed the page to %q; a refusal must not act", got)
+	}
+}
+
+func TestActionCheckRefusesANonCheckableElementNamingIt(t *testing.T) {
+	ctx := newActionTab(t, 30*time.Second)
+	html := `<body><button type="submit" id="send">Send</button></body>`
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate("data:text/html;base64,"+base64.StdEncoding.EncodeToString([]byte(html))),
+		chromedp.WaitVisible("#send", chromedp.ByID),
+	); err != nil {
+		t.Fatal(err)
+	}
+	b := &Bridge{}
+
+	_, err := b.actionCheck(ctx, ActionRequest{Kind: "check", Selector: "#send"})
+
+	if !errors.Is(err, ErrInvalidActionRequest) {
+		t.Fatalf("got %v, want ErrInvalidActionRequest", err)
+	}
+	want := `invalid action request: target <button type="submit"> is not a checkbox, radio, or role=checkbox control`
+	if err.Error() != want {
+		t.Fatalf("got %q, want %q", err.Error(), want)
 	}
 }

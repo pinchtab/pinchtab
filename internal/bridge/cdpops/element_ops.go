@@ -46,7 +46,7 @@ func (k elementKind) String() string {
 	return target + ">"
 }
 
-const elementKindJS = `{
+const ElementKindJS = `{
 		tag: (this.localName || this.nodeName || '').toLowerCase(),
 		type: (this.getAttribute && this.getAttribute('type')) || '',
 		role: (this.getAttribute && this.getAttribute('role')) || ''
@@ -65,7 +65,7 @@ const notSelectJS = `function() {
 	if (this instanceof window.HTMLSelectElement) {
 		return null;
 	}
-	return ` + elementKindJS + `;
+	return ` + ElementKindJS + `;
 }`
 
 // NotFileInputError reports an upload target that is not an <input type=file> element.
@@ -81,7 +81,7 @@ const notFileInputJS = `function() {
 	if (this instanceof window.HTMLInputElement && this.type === 'file') {
 		return null;
 	}
-	return ` + elementKindJS + `;
+	return ` + ElementKindJS + `;
 }`
 
 func NotFileInput(ctx context.Context, nodeID int64) (*NotFileInputError, error) {
@@ -94,6 +94,15 @@ func NotFileInput(ctx context.Context, nodeID int64) (*NotFileInputError, error)
 		return nil, err
 	}
 	return refusal, nil
+}
+
+// NotCheckableError reports a check target that is not a checkbox, radio, or role=checkbox control.
+type NotCheckableError struct {
+	elementKind
+}
+
+func (e *NotCheckableError) Error() string {
+	return "target " + e.String() + " is not a checkbox, radio, or role=checkbox control"
 }
 
 // NotFillableError reports a text-entry target that holds no value of its own, such as

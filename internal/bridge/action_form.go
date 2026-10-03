@@ -25,19 +25,23 @@ const checkableStateJS = `function() {
 		}
 		return {error: "role=checkbox requires aria-checked=true, false, or mixed"};
 	}
-	return {error: "element is not a checkbox, radio, or role=checkbox control (got " + tag + "[type=" + type + "][role=" + role + "])"};
+	return {notCheckable: ` + bridgecdpops.ElementKindJS + `};
 }`
 
 type checkableState struct {
-	Error string `json:"error"`
-	Kind  string `json:"kind"`
-	State string `json:"state"`
+	Error        string                          `json:"error"`
+	NotCheckable *bridgecdpops.NotCheckableError `json:"notCheckable"`
+	Kind         string                          `json:"kind"`
+	State        string                          `json:"state"`
 }
 
 func readCheckableState(ctx context.Context, objectID string) (checkableState, error) {
 	var state checkableState
 	if err := cdptk.CallFunctionOn(ctx, objectID, checkableStateJS, nil, &state); err != nil {
 		return checkableState{}, err
+	}
+	if state.NotCheckable != nil {
+		return checkableState{}, fmt.Errorf("%w: %w", ErrInvalidActionRequest, state.NotCheckable)
 	}
 	if state.Error != "" {
 		return checkableState{}, NewInvalidActionRequestError(state.Error)
