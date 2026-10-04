@@ -10,7 +10,9 @@ import (
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
+	"github.com/pinchtab/pinchtab/internal/browsers"
 	"github.com/pinchtab/pinchtab/internal/cdptk"
+	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 type ScreenshotFormat = page.CaptureScreenshotFormat
@@ -85,6 +87,11 @@ type ScreenshotOpts struct {
 	Quality        int
 	Clip           *page.Viewport
 	BeyondViewport bool
+
+	// ClipToViewport fetches the layout and captures exactly the emulated viewport,
+	// including scroll offsets, instead of reading the window surface when neither
+	// Clip nor BeyondViewport is set.
+	ClipToViewport bool
 
 	// Scale rescales the rendered output bitmap. 1 (or 0) = native. 0.5
 	// halves the image in each axis (quarter of the pixels). Applied via
@@ -169,6 +176,12 @@ func captureScreenshotWithoutActivation(ctx context.Context, shot *page.CaptureS
 // top-level capture call has no scale parameter outside of clip, so this is
 // the only way to apply a render-time rescale.
 func CaptureScreenshot(ctx context.Context, opts ScreenshotOpts) ([]byte, error) {
+	if opts.ClipToViewport && opts.Clip == nil && !opts.BeyondViewport {
+		if vp, err := FetchLayout(ctx); err == nil {
+			opts.Clip = cdptk.ViewportClip(vp.ScrollX, vp.ScrollY, vp.Width, vp.Height)
+		}
+	}
+
 	// Known issue: two back-to-back /capture?scale=<n!=1> on the same
 	// tab without nav between can hang on the second call. Workaround:
 	// nav between captures (see e2e cli/capture-basic.sh).
@@ -204,6 +217,17 @@ func CaptureScreenshot(ctx context.Context, opts ScreenshotOpts) ([]byte, error)
 		}))
 		return buf, err
 	})
+}
+
+// ClipsToViewport reports whether the configured browser supports idle surface
+// captures, allowing screenshots to match the emulated viewport.
+func ClipsToViewport(cfg *config.RuntimeConfig) bool {
+	if cfg == nil {
+		return false
+	}
+	// Same provider lookup as shouldUsePollingScreencast (screencast.go).
+	browser, ok := browsers.Get(config.NormalizeBrowser(cfg.DefaultBrowser))
+	return ok && browser.Capabilities().Has(browsers.CapSurfaceCapture)
 }
 
 // ScreenshotClipForNode returns a page-coordinate clip for a backend node ID.
@@ -308,6 +332,7 @@ func (b *Bridge) CaptureScreenshot(ctx context.Context, format string, quality i
 		Format:            cdpFormat,
 		Quality:           quality,
 		Clip:              vp,
+		ClipToViewport:    ClipsToViewport(b.Config),
 		DisableActivation: disableActivation,
 	})
 	if err != nil {

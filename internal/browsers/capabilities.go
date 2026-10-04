@@ -19,6 +19,12 @@ const (
 	// is a bot-detection vector; the bridge falls back to the deprecated Console
 	// domain on a side session for such browsers.
 	CapRuntimeConsoleEvents BrowserCapability = "runtimeConsoleEvents"
+	// CapSurfaceCapture marks browsers that composite a fresh surface frame on
+	// demand, so fromSurface=true captures of idle pages do not stall. Screenshots
+	// use an emulated-viewport clip for these browsers; browsers without it (e.g.
+	// Cloak) keep the read-the-view fast path, which ignores
+	// Emulation.setDeviceMetricsOverride.
+	CapSurfaceCapture BrowserCapability = "surfaceCapture"
 )
 
 // CapabilitySet is an immutable set of BrowserCapability values.

@@ -51,6 +51,7 @@ func TestCapabilities(t *testing.T) {
 		browsers.CapNetworkInterception,
 		browsers.CapEventScreencast,
 		browsers.CapRuntimeConsoleEvents,
+		browsers.CapSurfaceCapture,
 	}
 
 	for _, c := range want {

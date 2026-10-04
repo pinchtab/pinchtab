@@ -107,10 +107,12 @@ func TestCloakCapabilitySupersetOfChrome(t *testing.T) {
 	// does not support Page.startScreencast — polling is used instead — and
 	// CapRuntimeConsoleEvents because its native patches suppress Runtime
 	// domain events (bot-detection hardening); the bridge uses the Console
-	// domain fallback instead.
+	// domain fallback instead. CapSurfaceCapture is also absent because idle
+	// surface captures can stall; Cloak keeps the read-the-view path.
 	chromeOnly := map[browsers.BrowserCapability]bool{
 		browsers.CapEventScreencast:      true,
 		browsers.CapRuntimeConsoleEvents: true,
+		browsers.CapSurfaceCapture:       true,
 	}
 
 	for _, c := range chromeCaps {

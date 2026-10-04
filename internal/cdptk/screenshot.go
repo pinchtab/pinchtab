@@ -120,12 +120,13 @@ func ClipForNode(ctx context.Context, nodeID int64, css1x bool) (*ScreenshotClip
 // full viewport with their annotation boxes mapped into the clip's coordinate space.
 //
 // fromSurface=false reads the renderer's current view directly instead of waiting for a
-// fresh compositor surface frame. On idle pages in headed browsers (e.g. Cloak) the
-// surface stops swapping frames, so the default fromSurface=true blocks until the action
-// deadline (~30s) — stalling one-shot screenshots and polling screencast alike. That is
-// why the nil-clip fast path matters and must be preserved outside Windows. Windows
+// fresh compositor surface frame. On idle pages in Cloak the surface stops swapping
+// frames, so fromSurface=true can block until the action deadline (~30s); browsers
+// without CapSurfaceCapture keep the nil-clip fast path outside Windows. Chrome for
+// Testing 151 on macOS took 16 to 70 ms with a viewport clip versus 230 to 800 ms reading
+// the view, without stalls even when headed, minimized, or idle for 4 to 6 s. Windows
 // headless Chrome with software rendering can return an unpainted white view through
-// that path, so it always requests a freshly composited surface.
+// the fast path, so it always requests a freshly composited surface.
 //
 // Anything that changes the captured region needs the page recomposited, which only
 // happens with fromSurface=true: capture-beyond-viewport, a render-time rescale, and the
@@ -167,12 +168,10 @@ func captureFromSurface(goos string, beyondViewport bool, clip *page.Viewport) b
 // multiplies a clipped capture by the page dpr itself, so a scale of dpr would square
 // it. Coordinates are page-relative, hence the scroll offsets.
 //
-// The cost is stated rather than hidden: a clipped capture takes fromSurface=true, so
-// the default /capture gives up the read-the-view fast path this file documents and an
-// idle headed browser can stall it until the action deadline. /screenshot and the
-// screencast keep the fast path — they publish no coordinate contract to break — so the
-// latency trade is paid only by the endpoint whose whole purpose is mapping refs onto
-// pixels.
+// The default /capture always uses a viewport clip; /screenshot and polling screencast
+// use it for browsers with CapSurfaceCapture (Chrome and Ghost Chrome), while Cloak
+// keeps the read-the-view path because idle surface captures can stall. The Chrome
+// measurements above show the viewport-clip path is faster and does not stall there.
 func ViewportClip(scrollX, scrollY, width, height float64) *page.Viewport {
 	if width <= 0 || height <= 0 {
 		return nil

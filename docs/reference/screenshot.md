@@ -4,6 +4,9 @@ Capture the current page as an image. The API defaults to **JPEG**. The CLI
 uses PNG when `-o` ends in `.png` and JPEG otherwise; an explicit `--format`
 always takes precedence.
 
+Default capture matches exactly the current (emulated) viewport; Cloak keeps
+the window-surface path.
+
 ```bash
 # Get raw PNG bytes
 curl "http://localhost:9867/screenshot?format=png&raw=true" > page.png

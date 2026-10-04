@@ -117,6 +117,7 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 		Quality:           req.quality,
 		Clip:              clip,
 		BeyondViewport:    req.beyondViewport,
+		ClipToViewport:    bridge.ClipsToViewport(h.Config),
 		Scale:             req.scale,
 		DisableActivation: !h.Config.CaptureAllowActivation,
 	})
