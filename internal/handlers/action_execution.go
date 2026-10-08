@@ -285,6 +285,25 @@ func (h *Handlers) attachValidationBlocked(ctx context.Context, nodeID int64, re
 	return result
 }
 
+func (h *Handlers) succeededSubmitPostState(before, after submitStateSnapshot, dispatch string, actionTimedOut bool, started time.Time) (submitPostState, bool) {
+	signal, liveRegionText := submitTransitionSignal(before, after)
+	if signal == "" {
+		return submitPostState{}, false
+	}
+	post := submitPostState{
+		Status:         "succeeded",
+		Signal:         signal,
+		Dispatch:       dispatch,
+		ActionTimedOut: actionTimedOut,
+		ElapsedMS:      time.Since(started).Milliseconds(),
+		LiveRegionText: liveRegionText,
+		Before:         before,
+		After:          after,
+	}
+	h.guardLiveRegionText(&post)
+	return post, true
+}
+
 func (h *Handlers) pollSubmitPostState(ctx context.Context, tabID string, nodeID int64, before submitStateSnapshot, dispatch string, actionTimedOut bool) (submitPostState, error) {
 	started := time.Now()
 	after := before
@@ -299,18 +318,7 @@ func (h *Handlers) pollSubmitPostState(ctx context.Context, tabID string, nodeID
 			observedPostState = true
 			lastReadErr = nil
 			after = observed
-			if signal, liveRegionText := submitTransitionSignal(before, after); signal != "" {
-				post := submitPostState{
-					Status:         "succeeded",
-					Signal:         signal,
-					Dispatch:       dispatch,
-					ActionTimedOut: actionTimedOut,
-					ElapsedMS:      time.Since(started).Milliseconds(),
-					LiveRegionText: liveRegionText,
-					Before:         before,
-					After:          after,
-				}
-				h.guardLiveRegionText(&post)
+			if post, ok := h.succeededSubmitPostState(before, after, dispatch, actionTimedOut, started); ok {
 				return post, nil
 			}
 			if blocked, ok := h.probeValidationBlocked(ctx, nodeID, dispatch, actionTimedOut, started); ok {

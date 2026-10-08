@@ -208,12 +208,14 @@ func (h *Handlers) runResolvedActionStep(
 	watch := formValidationWatchFor(*step, false)
 	validationWatched, disarmValidationWatch := h.armFormValidationWatch(ctx, tCtx, *step, watch)
 	defer disarmValidationWatch()
+	baseline := h.captureSubmitterClickBaseline(tCtx, tabID, watch, validationWatched)
 	res, _, _, err := h.executeActionResilient(tCtx, step, primarySelector, cfg, tabID, refMissing)
 	if dialog := h.dialogOpenedByInput(step, tabID, res, err); dialog != nil {
 		return actionResult{Index: index, Success: true, Result: withOpenedDialog(res, tabID, dialog)}, ctx, tabID
 	}
 	if err == nil {
 		res = h.settleClickOutcome(tCtx, *step, watch, validationWatched, res)
+		res = h.attachSubmitterClickSucceeded(tCtx, tabID, baseline, res)
 	}
 	nextCtx := ctx
 	nextTabID := tabID
@@ -626,6 +628,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 	}
 	validationWatched, disarmValidationWatch := h.armFormValidationWatch(ctx, tCtx, req, watch)
 	defer disarmValidationWatch()
+	baseline := h.captureSubmitterClickBaseline(tCtx, resolvedTabID, watch, validationWatched)
 
 	result, actionBackend, recoveryResult, actionErr := h.executeActionResilient(tCtx, &req, primarySelector, effectiveCfg, resolvedTabID, refMissing)
 	h.publishVocabIfReepoched(w, resolvedTabID, vocabBefore)
@@ -644,6 +647,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result = h.settleClickOutcome(tCtx, req, watch, validationWatched, result)
+	result = h.attachSubmitterClickSucceeded(tCtx, resolvedTabID, baseline, result)
 	h.writeActionSuccess(w, r, tCtx, req, routing, resolvedTabID, result, actionBackend, recoveryResult)
 }
 
@@ -691,6 +695,43 @@ func (h *Handlers) settleClickOutcome(ctx context.Context, req bridge.ActionRequ
 	default:
 		return h.attachValidationBlocked(ctx, req.NodeID, result)
 	}
+}
+
+type submitterClickBaseline struct {
+	before   submitStateSnapshot
+	captured bool
+}
+
+func (h *Handlers) captureSubmitterClickBaseline(ctx context.Context, tabID string, watch formValidationWatch, validationWatched bool) submitterClickBaseline {
+	if watch != formValidationPlainClick || !validationWatched {
+		return submitterClickBaseline{}
+	}
+	before, err := h.captureSubmitState(ctx, tabID)
+	return submitterClickBaseline{before: before, captured: err == nil}
+}
+
+// One read, never a poll: a plain click that changed nothing must cost what it did before the success report existed.
+func (h *Handlers) attachSubmitterClickSucceeded(ctx context.Context, tabID string, baseline submitterClickBaseline, result map[string]any) map[string]any {
+	if !baseline.captured {
+		return result
+	}
+	if _, settled := result["postState"]; settled {
+		return result
+	}
+	started := time.Now()
+	after, err := h.captureSubmitState(ctx, tabID)
+	if err != nil {
+		return result
+	}
+	post, ok := h.succeededSubmitPostState(baseline.before, after, "acknowledged", false, started)
+	if !ok {
+		return result
+	}
+	if result == nil {
+		result = make(map[string]any)
+	}
+	result["postState"] = post
+	return result
 }
 
 func validateActionRequestFields(w http.ResponseWriter, req bridge.ActionRequest) bool {
