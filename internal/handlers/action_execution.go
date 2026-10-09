@@ -353,23 +353,32 @@ func (h *Handlers) cacheActionIntent(tabID string, req bridge.ActionRequest) {
 	if h.Recovery == nil || req.Ref == "" {
 		return
 	}
-	// A /find entry carries a Query; a descriptor-only entry must not replace it.
+	desc, found := h.cachedRefDescriptor(tabID, req.Ref)
 	if existing, ok := h.Recovery.IntentCache.Lookup(tabID, req.Ref); ok && existing.Query != "" {
-		return
-	}
-	desc := semantic.ElementDescriptor{Ref: req.Ref}
-	if cache := h.Bridge.GetRefCache(tabID); cache != nil {
-		for i := range cache.Nodes {
-			if cache.Nodes[i].Ref == req.Ref {
-				desc = descriptorFromNode(cache.Nodes[i])
-				break
-			}
+		if !found || sameElement(existing.Descriptor, desc) {
+			return
 		}
 	}
 	h.Recovery.RecordIntent(tabID, req.Ref, recovery.IntentEntry{
 		Descriptor: desc,
 		CachedAt:   time.Now(),
 	})
+}
+
+func (h *Handlers) cachedRefDescriptor(tabID, ref string) (semantic.ElementDescriptor, bool) {
+	if cache := h.Bridge.GetRefCache(tabID); cache != nil {
+		for i := range cache.Nodes {
+			if cache.Nodes[i].Ref == ref {
+				return descriptorFromNode(cache.Nodes[i]), true
+			}
+		}
+	}
+	return semantic.ElementDescriptor{Ref: ref}, false
+}
+
+// Value is left out: typing into the element a /find located must not discard its query.
+func sameElement(a, b semantic.ElementDescriptor) bool {
+	return a.Role == b.Role && a.Name == b.Name && a.Tag == b.Tag
 }
 
 var ErrStaleSubmitTarget = fmt.Errorf("ref is stale and its target submits a form; %s and click the fresh ref", takeASnapshotFirst)
