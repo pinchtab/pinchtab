@@ -222,6 +222,28 @@ func (c *RefCache) Lookup(ref string) (RefTarget, bool) {
 	return RefTarget{}, false
 }
 
+func (c *RefCache) nodeByBackendID(backendNodeID int64) (A11yNode, bool) {
+	if c == nil || backendNodeID == 0 {
+		return A11yNode{}, false
+	}
+	for _, node := range c.Nodes {
+		if node.NodeID == backendNodeID && node.Ref != "" {
+			return node, true
+		}
+	}
+	for ref, target := range c.Targets {
+		if target.BackendNodeID == backendNodeID {
+			return A11yNode{Ref: ref}, true
+		}
+	}
+	for ref, nid := range c.Refs {
+		if nid == backendNodeID {
+			return A11yNode{Ref: ref}, true
+		}
+	}
+	return A11yNode{}, false
+}
+
 func MintVocabToken() string {
 	return mintDomEpoch()
 }

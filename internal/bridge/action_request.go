@@ -354,7 +354,7 @@ func (b *Bridge) ExecuteAction(ctx context.Context, kind string, req ActionReque
 	if err != nil {
 		// The action's own navigation can destroy the context its last call ran in; it still landed.
 		if !executionContextGone(err) || !nav.awaitCommit(ctx) {
-			return nil, classifyActionError(err)
+			return nil, classifyActionError(b.nameOccluder(req.TabID, err))
 		}
 		res = actionResultFor(kind)
 	} else if OpenedDialog(res) != nil {

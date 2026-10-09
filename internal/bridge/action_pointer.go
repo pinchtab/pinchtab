@@ -426,24 +426,29 @@ func closedSelectOption(ctx context.Context, nodeID int64) (*ClosedSelectOptionE
 	if err != nil || selectObjectID == "" {
 		return nil, err
 	}
-	selectNodeID, err := backendNodeIDOfObject(ctx, selectObjectID)
+	selectNodeID, err := cdptk.BackendNodeIDForHandle(ctx, selectObjectID)
 	if err != nil {
 		return nil, err
 	}
 	return &ClosedSelectOptionError{SelectBackendNodeID: selectNodeID, OptionText: *text}, nil
 }
 
-func backendNodeIDOfObject(ctx context.Context, objectID string) (int64, error) {
-	var desc struct {
-		Node struct {
-			BackendNodeID int64 `json:"backendNodeId"`
-		} `json:"node"`
+func (b *Bridge) nameOccluder(tabID string, err error) error {
+	var occluded *bridgecdpops.OccludedError
+	if !errors.As(err, &occluded) || b.TabManager == nil {
+		return err
 	}
-	err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.describeNode", map[string]any{"objectId": objectID}, &desc)
-	if err != nil {
-		return 0, fmt.Errorf("describe node: %w", err)
+	cache := b.GetRefCache(tabID)
+	if cache == nil {
+		return err
 	}
-	return desc.Node.BackendNodeID, nil
+	for _, nodeID := range occluded.Ancestry {
+		if node, ok := cache.nodeByBackendID(nodeID); ok {
+			occluded.Describe(node.Ref, node.Role, node.Name)
+			return err
+		}
+	}
+	return err
 }
 
 // runWatchingDialogs runs click with a one-shot dialog auto-handler armed when

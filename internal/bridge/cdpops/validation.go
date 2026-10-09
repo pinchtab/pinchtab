@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,18 +20,122 @@ var (
 )
 
 type pointerProbe struct {
-	X            float64 `json:"x"`
-	Y            float64 `json:"y"`
-	Width        float64 `json:"width"`
-	Height       float64 `json:"height"`
-	InViewport   bool    `json:"inViewport"`
-	Visible      bool    `json:"visible"`
-	PointerEvent string  `json:"pointerEvent"`
-	Occluded     bool    `json:"occluded"`
-	TopTag       string  `json:"topTag"`
+	X            float64  `json:"x"`
+	Y            float64  `json:"y"`
+	Width        float64  `json:"width"`
+	Height       float64  `json:"height"`
+	InViewport   bool     `json:"inViewport"`
+	Visible      bool     `json:"visible"`
+	PointerEvent string   `json:"pointerEvent"`
+	Occluded     bool     `json:"occluded"`
+	LocalX       float64  `json:"localX"`
+	LocalY       float64  `json:"localY"`
+	Top          occluder `json:"top"`
 	// TransparentAncestor is kept apart from Visible because it is the one
 	// hidden state the pointer itself can end: see revealTransparentAncestor.
 	TransparentAncestor bool `json:"transparentAncestor"`
+}
+
+// occluder is the element the hit-test found instead of the target. Role and
+// name come from the nearest ancestor-or-self that exposes either, because the
+// element a pointer lands on is usually an anonymous div inside the overlay the
+// agent actually sees.
+type occluder struct {
+	Tag  string `json:"tag"`
+	Role string `json:"role"`
+	Name string `json:"name"`
+}
+
+func (o occluder) String() string {
+	label := strings.TrimSpace(o.Role)
+	if o.Name != "" {
+		label = strings.TrimSpace(label + " " + strconv.Quote(o.Name))
+	}
+	if label == "" {
+		label = o.Tag
+	}
+	return label
+}
+
+// OccludedError carries the occluder's backend-node ancestry, hit element first,
+// so a caller holding the tab's ref cache can name the overlay by the ref the
+// agent already has.
+type OccludedError struct {
+	Top      occluder
+	Ref      string
+	Ancestry []int64
+}
+
+func (e *OccludedError) Error() string {
+	msg := ErrElementOccluded.Error()
+	if label := e.Top.String(); label != "" {
+		msg += " by " + label
+	}
+	if e.Ref != "" {
+		msg += " (" + e.Ref + ")"
+	}
+	return msg
+}
+
+func (e *OccludedError) Is(target error) bool { return target == ErrElementOccluded }
+
+func (e *OccludedError) Describe(ref, role, name string) {
+	e.Ref = ref
+	if role != "" || name != "" {
+		e.Top.Role, e.Top.Name = role, name
+	}
+}
+
+const maxOccluderAncestry = 64
+
+const elementAtLocalPointJS = `function(node, x, y) {
+	const root = node.getRootNode();
+	const doc = node.ownerDocument || document;
+	return (typeof root.elementFromPoint === 'function' ? root : doc).elementFromPoint(x, y);
+}`
+
+const describeOccluderJS = `function(hit) {
+	const implied = {a: 'link', button: 'button', dialog: 'dialog', nav: 'navigation', main: 'main',
+		header: 'banner', footer: 'contentinfo', aside: 'complementary', form: 'form', img: 'img',
+		select: 'combobox', textarea: 'textbox', h1: 'heading', h2: 'heading', h3: 'heading'};
+	const text = (s) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+	const attr = (el, n) => el.getAttribute ? text(el.getAttribute(n)) : '';
+	const nameOf = (el) => {
+		const ids = attr(el, 'aria-labelledby');
+		const byId = ids ? ids.split(' ').map((id) => el.getRootNode().getElementById && el.getRootNode().getElementById(id)).filter(Boolean).map((n) => text(n.textContent)).join(' ') : '';
+		return byId || attr(el, 'aria-label') || attr(el, 'title') || attr(el, 'alt') || '';
+	};
+	const tag = String(hit.tagName || '').toLowerCase();
+	for (let el = hit; el && el.nodeType === 1; el = el.parentElement || (el.getRootNode().host || null)) {
+		const t = String(el.tagName || '').toLowerCase();
+		const role = attr(el, 'role') || (t === 'a' && !el.hasAttribute('href') ? '' : implied[t]) || (t === 'input' ? (attr(el, 'type') === 'checkbox' ? 'checkbox' : 'textbox') : '');
+		let name = nameOf(el);
+		if (!name && (role === 'button' || role === 'link' || role === 'heading')) name = text(el.textContent);
+		if (role || name) return {tag, role, name};
+	}
+	return {tag, role: '', name: ''};
+}`
+
+const parentAcrossShadowJS = `function() { return this.parentElement || (this.getRootNode().host || null); }`
+
+func occluderAncestry(ctx context.Context, objectID string, probe pointerProbe) []int64 {
+	handle, err := cdptk.CallFunctionOnForHandle(ctx, objectID, `function(x, y) { return (`+elementAtLocalPointJS+`)(this, x, y); }`,
+		[]map[string]any{{"value": probe.LocalX}, {"value": probe.LocalY}})
+	if err != nil {
+		return nil
+	}
+	var chain []int64
+	for handle != "" && len(chain) < maxOccluderAncestry {
+		nodeID, err := cdptk.BackendNodeIDForHandle(ctx, handle)
+		if err != nil {
+			break
+		}
+		chain = append(chain, nodeID)
+		if handle, err = cdptk.CallFunctionOnForHandle(ctx, handle, parentAcrossShadowJS, nil); err != nil {
+			break
+		}
+	}
+	return chain
 }
 
 // transparentRevealWindow bounds how long a node hidden only by an opacity:0
@@ -117,14 +222,12 @@ func PointerPointForNode(ctx context.Context, backendNodeID int64, requireTopMos
 		const visible = !!style && style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || '1') > 0;
 		const pointerEvent = style ? String(style.pointerEvents || '') : '';
 		let occluded = false;
-		let topTag = '';
+		let top = {tag: '', role: '', name: ''};
 		if (localX >= 0 && localY >= 0 && localX <= view.innerWidth && localY <= view.innerHeight) {
-			const root = this.getRootNode();
-			const top = (typeof root.elementFromPoint === 'function' ? root : doc).elementFromPoint(localX, localY);
-			if (top) {
-				topTag = String(top.tagName || '').toLowerCase();
-				const related = top === this || this.contains(top) || top.contains(this);
-				occluded = !related;
+			const hit = (` + elementAtLocalPointJS + `)(this, localX, localY);
+			if (hit) {
+				top = (` + describeOccluderJS + `)(hit);
+				occluded = !(hit === this || this.contains(hit) || hit.contains(this));
 			}
 		}
 		return {
@@ -136,7 +239,9 @@ func PointerPointForNode(ctx context.Context, backendNodeID int64, requireTopMos
 			visible,
 			pointerEvent,
 			occluded,
-			topTag,
+			localX,
+			localY,
+			top,
 			transparentAncestor: transparentAncestor()
 		};
 	}`
@@ -169,7 +274,7 @@ func PointerPointForNode(ctx context.Context, backendNodeID int64, requireTopMos
 		return 0, 0, fmt.Errorf("%w: pointer-events=none", ErrElementBlocked)
 	}
 	if requireTopMost && probe.Occluded {
-		return 0, 0, fmt.Errorf("%w: top=%s", ErrElementOccluded, probe.TopTag)
+		return 0, 0, &OccludedError{Top: probe.Top, Ancestry: occluderAncestry(ctx, objectID, probe)}
 	}
 
 	return probe.X, probe.Y, nil

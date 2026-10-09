@@ -11,6 +11,7 @@ import (
 	"github.com/chromedp/chromedp"
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
+	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 func newPointerFixture(t *testing.T, html string) context.Context {
@@ -161,6 +162,73 @@ func TestPointerPointOcclusionUnchanged(t *testing.T) {
 	}
 	if _, _, err := bridgecdpops.PointerPointForNode(ctx, nodeID, true); err != nil {
 		t.Errorf("uncovered element: err = %v, want a clickable point", err)
+	}
+}
+
+const pointerCookieWallHTML = `<body style="margin:0">
+<button id="target" style="position:absolute;left:40px;top:60px;width:120px;height:40px">Add</button>
+<div id="wall" role="dialog" aria-label="Cookies" style="position:absolute;left:0;top:0;width:400px;height:300px;background:#fff">
+  <div id="pane"><button id="accept">Accept all</button></div>
+</div>
+</body>`
+
+// Nearly every page has a div on top, so "top=div" told the agent nothing. The
+// refusal has to name the overlay the way the snapshot does, and its ref when
+// the tab's cache still holds that ancestor, so the agent's next move is
+// "dismiss e0" rather than a retry or a DOM-mode click through the wall.
+func TestOccludedClickNamesTheOverlayAndItsRef(t *testing.T) {
+	ctx := newPointerFixture(t, pointerCookieWallHTML)
+
+	targetID, err := ResolveCSSToNodeID(ctx, "#target")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wallID, err := ResolveCSSToNodeID(ctx, "#wall")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = bridgecdpops.PointerPointForNode(ctx, targetID, true)
+	var occluded *bridgecdpops.OccludedError
+	if !errors.As(err, &occluded) || !errors.Is(err, bridgecdpops.ErrElementOccluded) {
+		t.Fatalf("err = %v, want OccludedError", err)
+	}
+	if got, want := err.Error(), `element is occluded by dialog "Cookies"`; got != want {
+		t.Errorf("without a ref cache: %q, want %q", got, want)
+	}
+	if len(occluded.Ancestry) < 2 || occluded.Ancestry[0] != wallID {
+		t.Errorf("ancestry = %v, want dialog %d then its ancestors", occluded.Ancestry, wallID)
+	}
+
+	b := &Bridge{TabManager: NewTabManager(ctx, &config.RuntimeConfig{}, nil, nil)}
+	b.SetRefCache("tab1", &RefCache{Nodes: []A11yNode{{Ref: "e0", Role: "dialog", Name: "Cookies", NodeID: wallID}}})
+	if got := b.nameOccluder("other", err).Error(); strings.Contains(got, "(e0)") {
+		t.Errorf("a tab without that snapshot must not borrow its ref: %q", got)
+	}
+	if got, want := b.nameOccluder("tab1", err).Error(), `element is occluded by dialog "Cookies" (e0)`; got != want {
+		t.Errorf("with a ref cache: %q, want %q", got, want)
+	}
+}
+
+func TestExecuteActionNamesTheNearestCachedAncestorOfTheOccluder(t *testing.T) {
+	b := newTestBridge()
+	b.Actions = map[string]ActionFunc{
+		ActionClick: func(context.Context, ActionRequest) (map[string]any, error) {
+			return nil, &bridgecdpops.OccludedError{Ancestry: []int64{91, 57, 12}}
+		},
+	}
+	b.SetRefCache("tab1", &RefCache{Nodes: []A11yNode{
+		{Ref: "e0", Role: "dialog", Name: "Cookies", NodeID: 57},
+		{Ref: "e4", Role: "main", NodeID: 12},
+	}})
+
+	_, err := b.ExecuteAction(context.Background(), ActionClick, ActionRequest{TabID: "tab1"})
+
+	if !errors.Is(err, ErrElementOccluded) {
+		t.Fatalf("err = %v, want ErrElementOccluded", err)
+	}
+	if got, want := err.Error(), `element is occluded by dialog "Cookies" (e0)`; got != want {
+		t.Errorf("err = %q, want %q", got, want)
 	}
 }
 

@@ -324,3 +324,20 @@ func topFrameID(ctx context.Context) (string, error) {
 	}
 	return frameID, nil
 }
+
+// BackendNodeIDForHandle maps an object handle back to the backend node id the
+// ref cache and every DOM.* call key on.
+func BackendNodeIDForHandle(ctx context.Context, objectID string) (int64, error) {
+	var desc struct {
+		Node struct {
+			BackendNodeID int64 `json:"backendNodeId"`
+		} `json:"node"`
+	}
+	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.describeNode", map[string]any{"objectId": objectID}, &desc)
+	}))
+	if err != nil {
+		return 0, fmt.Errorf("describe node: %w", err)
+	}
+	return desc.Node.BackendNodeID, nil
+}
