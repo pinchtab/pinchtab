@@ -88,9 +88,9 @@ func (e *OccludedError) Describe(ref, role, name string) {
 
 const maxOccluderAncestry = 64
 
-const elementAtLocalPointJS = `function(node, x, y) {
-	const root = node.getRootNode();
-	const doc = node.ownerDocument || document;
+const elementAtLocalPointJS = `function(x, y) {
+	const root = this.getRootNode();
+	const doc = this.ownerDocument;
 	return (typeof root.elementFromPoint === 'function' ? root : doc).elementFromPoint(x, y);
 }`
 
@@ -116,26 +116,42 @@ const describeOccluderJS = `function(hit) {
 	return {tag, role: '', name: ''};
 }`
 
-const parentAcrossShadowJS = `function() { return this.parentElement || (this.getRootNode().host || null); }`
+const occluderObjectGroup = "pinchtab.occluder"
+
+const occluderChainJS = `function(x, y, max) {
+	const chain = [];
+	for (let el = (` + elementAtLocalPointJS + `).call(this, x, y); el && chain.length < max; el = el.parentElement || (el.getRootNode().host || null)) {
+		chain.push(el);
+	}
+	return chain;
+}`
 
 func occluderAncestry(ctx context.Context, objectID string, probe pointerProbe) []int64 {
-	handle, err := cdptk.CallFunctionOnForHandle(ctx, objectID, `function(x, y) { return (`+elementAtLocalPointJS+`)(this, x, y); }`,
-		[]map[string]any{{"value": probe.LocalX}, {"value": probe.LocalY}})
+	chainID, err := cdptk.CallFunctionOnForGroupedHandle(ctx, objectID, occluderChainJS,
+		[]map[string]any{{"value": probe.LocalX}, {"value": probe.LocalY}, {"value": maxOccluderAncestry}}, occluderObjectGroup)
 	if err != nil {
 		return nil
 	}
-	var chain []int64
-	for handle != "" && len(chain) < maxOccluderAncestry {
+	defer releaseOccluderHandles(ctx)
+	handles, err := cdptk.ArrayElementHandles(ctx, chainID)
+	if err != nil {
+		return nil
+	}
+	chain := make([]int64, 0, len(handles))
+	for _, handle := range handles {
 		nodeID, err := cdptk.BackendNodeIDForHandle(ctx, handle)
 		if err != nil {
 			break
 		}
 		chain = append(chain, nodeID)
-		if handle, err = cdptk.CallFunctionOnForHandle(ctx, handle, parentAcrossShadowJS, nil); err != nil {
-			break
-		}
 	}
 	return chain
+}
+
+func releaseOccluderHandles(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	defer cancel()
+	_ = cdptk.ReleaseObjectGroup(ctx, occluderObjectGroup)
 }
 
 // transparentRevealWindow bounds how long a node hidden only by an opacity:0
@@ -163,7 +179,7 @@ func PointerPointForNode(ctx context.Context, backendNodeID int64, requireTopMos
 	// against the top frame for a node that lives in an iframe.
 	const probeJS = `function() {
 		const view = (this.ownerDocument && this.ownerDocument.defaultView) || window;
-		const doc = this.ownerDocument || document;
+		const doc = this.ownerDocument;
 		const r = this.getBoundingClientRect();
 		const style = view.getComputedStyle(this);
 		const localX = r.left + (r.width / 2);
@@ -224,7 +240,7 @@ func PointerPointForNode(ctx context.Context, backendNodeID int64, requireTopMos
 		let occluded = false;
 		let top = {tag: '', role: '', name: ''};
 		if (localX >= 0 && localY >= 0 && localX <= view.innerWidth && localY <= view.innerHeight) {
-			const hit = (` + elementAtLocalPointJS + `)(this, localX, localY);
+			const hit = (` + elementAtLocalPointJS + `).call(this, localX, localY);
 			if (hit) {
 				top = (` + describeOccluderJS + `)(hit);
 				occluded = !(hit === this || this.contains(hit) || hit.contains(this));

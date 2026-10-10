@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/chromedp/chromedp"
 )
@@ -213,11 +214,65 @@ func CallFunctionOn(ctx context.Context, objectID, functionDecl string, args []m
 // the object handle it yields, or "" when it yields null, undefined or a
 // primitive. A thrown script is an error, never the Error object's handle.
 func CallFunctionOnForHandle(ctx context.Context, objectID, functionDecl string, args []map[string]any) (string, error) {
-	obj, err := runScript(ctx, "Runtime.callFunctionOn", callParams(objectID, functionDecl, args, false))
+	return CallFunctionOnForGroupedHandle(ctx, objectID, functionDecl, args, "")
+}
+
+// CallFunctionOnForGroupedHandle is CallFunctionOnForHandle with the yielded
+// handle filed under objectGroup, so ReleaseObjectGroup can free it together
+// with every handle later derived from it instead of leaving them alive until
+// the page navigates.
+func CallFunctionOnForGroupedHandle(ctx context.Context, objectID, functionDecl string, args []map[string]any, objectGroup string) (string, error) {
+	params := callParams(objectID, functionDecl, args, false)
+	if objectGroup != "" {
+		params["objectGroup"] = objectGroup
+	}
+	obj, err := runScript(ctx, "Runtime.callFunctionOn", params)
 	if err != nil {
 		return "", fmt.Errorf("call function on node: %w", err)
 	}
 	return obj.ObjectID, nil
+}
+
+// ArrayElementHandles returns one handle per element of the array behind
+// arrayObjectID, in index order, in one Runtime.getProperties call. The handles
+// share the array's object group.
+func ArrayElementHandles(ctx context.Context, arrayObjectID string) ([]string, error) {
+	var props struct {
+		Result []struct {
+			Name  string       `json:"name"`
+			Value remoteObject `json:"value"`
+		} `json:"result"`
+	}
+	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.getProperties",
+			map[string]any{"objectId": arrayObjectID, "ownProperties": true}, &props)
+	}))
+	if err != nil {
+		return nil, fmt.Errorf("array elements: %w", err)
+	}
+	byIndex := map[int]string{}
+	for _, p := range props.Result {
+		if i, err := strconv.Atoi(p.Name); err == nil && p.Value.ObjectID != "" {
+			byIndex[i] = p.Value.ObjectID
+		}
+	}
+	handles := make([]string, 0, len(byIndex))
+	for i := 0; i < len(byIndex); i++ {
+		h, ok := byIndex[i]
+		if !ok {
+			break
+		}
+		handles = append(handles, h)
+	}
+	return handles, nil
+}
+
+// ReleaseObjectGroup frees every handle filed under objectGroup.
+func ReleaseObjectGroup(ctx context.Context, objectGroup string) error {
+	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "Runtime.releaseObjectGroup",
+			map[string]any{"objectGroup": objectGroup}, nil)
+	}))
 }
 
 func evaluateParams(execID int64, expression string, awaitPromise, byValue bool) map[string]any {

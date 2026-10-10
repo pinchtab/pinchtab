@@ -210,6 +210,33 @@ func TestOccludedClickNamesTheOverlayAndItsRef(t *testing.T) {
 	}
 }
 
+func TestOccludedAncestryIsCappedAndHitFirst(t *testing.T) {
+	const depth = 80
+	html := `<body style="margin:0"><button id="target" style="position:absolute;left:40px;top:60px;width:120px;height:40px">Add</button>` +
+		`<div id="wall" style="position:absolute;left:0;top:0;width:400px;height:300px;background:#fff">` +
+		strings.Repeat(`<div style="width:100%;height:100%">`, depth) + `<span id="hit" style="display:block;width:100%;height:100%"></span>` +
+		strings.Repeat(`</div>`, depth) + `</div></body>`
+	ctx := newPointerFixture(t, html)
+
+	targetID, err := ResolveCSSToNodeID(ctx, "#target")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hitID, err := ResolveCSSToNodeID(ctx, "#hit")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = bridgecdpops.PointerPointForNode(ctx, targetID, true)
+	var occluded *bridgecdpops.OccludedError
+	if !errors.As(err, &occluded) {
+		t.Fatalf("err = %v, want OccludedError", err)
+	}
+	if len(occluded.Ancestry) != 64 || occluded.Ancestry[0] != hitID {
+		t.Errorf("ancestry has %d entries starting at %d, want 64 starting at the hit %d", len(occluded.Ancestry), occluded.Ancestry[0], hitID)
+	}
+}
+
 func TestExecuteActionNamesTheNearestCachedAncestorOfTheOccluder(t *testing.T) {
 	b := newTestBridge()
 	b.Actions = map[string]ActionFunc{
