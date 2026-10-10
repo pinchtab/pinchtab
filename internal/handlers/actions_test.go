@@ -2323,3 +2323,29 @@ func TestPlainClickOnASubmitterScansLiveRegionTextWithTheContentGuard(t *testing
 		t.Fatalf("postState = %+v, want the live region text dropped by the strict guard", post)
 	}
 }
+
+func TestPlainClickOnASubmitterInABatchReportsSucceeded(t *testing.T) {
+	b := &liveRegionSubmitBridge{submitActionBridge: newSubmitActionBridge(t.Context()), liveRegions: []string{"", "Thanks Ada"}}
+	b.urls = []string{"https://example.test/wizard"}
+	installSubmitModalReader(t, func(context.Context, string) (int64, bool, error) {
+		return 0, false, nil
+	})
+	h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
+	req := httptest.NewRequest(http.MethodPost, "/actions", bytes.NewBufferString(`{"tabId":"tab1","actions":[{"kind":"click","nodeId":42}]}`))
+	w := httptest.NewRecorder()
+
+	h.HandleActions(w, req)
+
+	var resp struct {
+		Results []struct {
+			Result map[string]any `json:"result"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || len(resp.Results) != 1 {
+		t.Fatalf("status = %d body = %s: %v", w.Code, w.Body.String(), err)
+	}
+	post := plainClickPostState(t, resp.Results[0].Result)
+	if post == nil || post.Status != "succeeded" || post.Signal != "live_region_changed" || post.LiveRegionText != "Thanks Ada" {
+		t.Fatalf("postState = %+v, want succeeded live_region_changed %q", post, "Thanks Ada")
+	}
+}
