@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 	"github.com/pinchtab/pinchtab/internal/config"
@@ -44,6 +45,8 @@ func (b *Bridge) applyWorkerStealth(parent context.Context, targetID target.ID, 
 
 	workerCtx, cancel := chromedp.NewContext(parent, chromedp.WithTargetID(targetID))
 	defer cancel()
+	// Deferred after cancel so it runs first: the worker must outlive this attach.
+	defer detachWithoutClosing(workerCtx)
 
 	runCtx, runCancel := context.WithTimeout(workerCtx, 5*time.Second)
 	defer runCancel()
@@ -63,6 +66,26 @@ func (b *Bridge) applyWorkerStealth(parent context.Context, targetID target.ID, 
 	); err != nil {
 		slog.Debug("worker stealth parity failed", "targetId", targetID, "targetType", targetType, "err", err)
 	}
+}
+
+// detachWithoutClosing releases a target that was attached with
+// chromedp.WithTargetID but must keep running. Cancelling such a context makes
+// chromedp detach AND call Target.closeTarget (chromedp v0.16 chromedp.go:197),
+// which terminates a service worker mid-install and leaves it "redundant", so a
+// PWA whose install waits on a timer or the network never installs. chromedp
+// skips both calls when Context.Target is nil, so detach our session here and
+// clear it before cancel runs.
+func detachWithoutClosing(ctx context.Context) {
+	c := chromedp.FromContext(ctx)
+	if c == nil || c.Target == nil || c.Browser == nil {
+		return
+	}
+	detachCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := target.DetachFromTarget().WithSessionID(c.Target.SessionID).Do(cdp.WithExecutor(detachCtx, c.Browser)); err != nil {
+		slog.Debug("worker stealth detach failed", "targetId", c.Target.TargetID, "err", err)
+	}
+	c.Target = nil
 }
 
 // workerStealthPersona returns the persona the worker-stealth parity script
