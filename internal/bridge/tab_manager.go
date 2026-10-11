@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
 	cdp "github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
@@ -249,6 +251,22 @@ func (tm *TabManager) createTab(url, browserContextID string) (string, context.C
 		}
 	}
 
+	// focus=false above leaves the new tab in the background, where Chromium
+	// reports document.hidden and runs no requestAnimationFrame callbacks, so a
+	// motion exit animation never finishes and a multi-step form never
+	// advances. Focus emulation renders the tab without activating it (the
+	// remedy renderHiddenPage applies before a snapshot), so every tab in the
+	// instance keeps rendering at once. Headed and attached browsers are left
+	// alone: a human may be looking at them, and their pages would report a
+	// focus the human never gave.
+	if tm.emulatesFocusOnNewTabs() {
+		if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+			return emulation.SetFocusEmulationEnabled(true).Do(ctx)
+		})); err != nil {
+			slog.Warn("enable focus emulation on new tab failed", "tabId", tabID, "err", err)
+		}
+	}
+
 	if blockPatterns := tm.tabBlockPatterns(); len(blockPatterns) > 0 {
 		_ = SetResourceBlocking(ctx, blockPatterns)
 	}
@@ -366,6 +384,14 @@ func (tm *TabManager) CloseTab(tabID string) error {
 	}
 	tm.purgeTrackedTabState(tabID, cdpTargetID)
 	return nil
+}
+
+// emulatesFocusOnNewTabs reports whether CreateTab renders the tab it opens
+// as focused: only in a headless browser PinchTab launched itself.
+func (tm *TabManager) emulatesFocusOnNewTabs() bool {
+	c := tm.config
+	return c != nil && c.Headless &&
+		strings.TrimSpace(c.CDPAttachURL) == "" && strings.TrimSpace(c.RemoteCDPURL) == ""
 }
 
 func (tm *TabManager) FocusTab(tabID string) error {
