@@ -72,8 +72,13 @@ result carries the same `postState` a `--submit` click reports — `status: "blo
 
 A plain ref click on a form's submit button gets the same check: if the browser
 refuses the form for validation, the result carries that `validation_blocked`
-`postState` and the CLI prints the same `BLOCKED` lines instead of `OK`. A click on
-anything that is not a submit button, or a valid submit, still prints plain `OK`.
+`postState` and the CLI prints the same `BLOCKED` lines instead of `OK`. When the form
+goes through, the click waits up to 500ms for the page to confirm it, returning as soon
+as the URL changes, an open modal closes, or a live region shows new text; that
+confirmation arrives as a `succeeded` `postState` and the CLI prints `SUCCEEDED`. A
+submit that changes nothing within the 500ms prints plain `OK`, and so does a click on
+anything that is not a submit button, which pays no wait at all. Use `--submit` when
+the confirmation may take longer.
 
 A `blocked` result exits 1 after printing the `BLOCKED` lines, in plain, `--wait-nav`,
 `--submit` and `--json` modes alike, so `pinchtab click e11 && pinchtab text` stops at

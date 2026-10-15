@@ -179,7 +179,7 @@ func TestPollClickSubmitReportsURLChange(t *testing.T) {
 	defer cancel()
 	post, err := h.pollSubmitPostState(ctx, "tab1", 42, submitStateSnapshot{
 		URL: "https://example.test/wizard",
-	}, "acknowledged", false)
+	}, "acknowledged", false, submitClickPoll)
 	if err != nil {
 		t.Fatalf("poll post-state: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestPollClickSubmitReportsPendingWithoutTerminalChange(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
-	post, err := h.pollSubmitPostState(ctx, "tab1", 42, before, "unconfirmed", true)
+	post, err := h.pollSubmitPostState(ctx, "tab1", 42, before, "unconfirmed", true, submitClickPoll)
 	if err != nil {
 		t.Fatalf("poll post-state: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestPollClickSubmitCancellationAndUnobservableStateAreErrors(t *testing.T) 
 		h := &Handlers{Bridge: b}
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		_, err := h.pollSubmitPostState(ctx, "tab1", 42, submitStateSnapshot{URL: b.urls[0], DialogOpen: true}, "unconfirmed", true)
+		_, err := h.pollSubmitPostState(ctx, "tab1", 42, submitStateSnapshot{URL: b.urls[0], DialogOpen: true}, "unconfirmed", true, submitClickPoll)
 		if err == nil || !strings.Contains(err.Error(), "observation canceled") {
 			t.Fatalf("canceled observation error = %v", err)
 		}
@@ -249,7 +249,7 @@ func TestPollClickSubmitCancellationAndUnobservableStateAreErrors(t *testing.T) 
 		h := &Handlers{Bridge: b}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
-		_, err := h.pollSubmitPostState(ctx, "tab1", 42, submitStateSnapshot{}, "unconfirmed", true)
+		_, err := h.pollSubmitPostState(ctx, "tab1", 42, submitStateSnapshot{}, "unconfirmed", true, submitClickPoll)
 		if err == nil || !strings.Contains(err.Error(), "never observable") || !strings.Contains(err.Error(), "target closed") {
 			t.Fatalf("unobservable post-state error = %v", err)
 		}
@@ -436,7 +436,7 @@ func TestPollClickSubmitIgnoresInvalidFieldsWithoutAnArmedWatch(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
-	post, err := h.pollSubmitPostState(ctx, "tab1", 42, submitStateSnapshot{URL: "https://example.test/wizard"}, "acknowledged", false)
+	post, err := h.pollSubmitPostState(ctx, "tab1", 42, submitStateSnapshot{URL: "https://example.test/wizard"}, "acknowledged", false, submitClickPoll)
 	if err != nil {
 		t.Fatalf("poll post-state: %v", err)
 	}
@@ -457,7 +457,7 @@ func TestPollClickSubmitTransitionSignalWinsOverInvalidFields(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	post, err := h.pollSubmitPostState(ctx, "tab1", 42, submitStateSnapshot{URL: "https://example.test/wizard"}, "acknowledged", false)
+	post, err := h.pollSubmitPostState(ctx, "tab1", 42, submitStateSnapshot{URL: "https://example.test/wizard"}, "acknowledged", false, submitClickPoll)
 	if err != nil {
 		t.Fatalf("poll post-state: %v", err)
 	}

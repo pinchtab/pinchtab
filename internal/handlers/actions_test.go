@@ -2263,6 +2263,7 @@ func TestPlainClickOnASubmitterReportsTheSameOutcomeAsSubmit(t *testing.T) {
 		{"live region success", []string{"https://example.test/wizard"}, []string{"Cart ready", "Cart ready\nThanks Ada"}, nil, "succeeded", "live_region_changed", "Thanks Ada"},
 		{"url change success", []string{"https://example.test/wizard", "https://example.test/done"}, []string{""}, nil, "succeeded", "url_changed", ""},
 		{"blocked", []string{"https://example.test/wizard"}, []string{""}, []submitInvalidField{{Name: "name", Message: "Please fill out this field."}}, "blocked", "validation_blocked", ""},
+		{"async confirmation after the first read", []string{"https://example.test/wizard"}, []string{"Cart ready", "Cart ready", "Cart ready", "Cart ready\nThanks Ada"}, nil, "succeeded", "live_region_changed", "Thanks Ada"},
 		{"no change", []string{"https://example.test/wizard"}, []string{"Cart ready"}, nil, "", "", ""},
 	}
 	for _, tc := range cases {
@@ -2275,17 +2276,23 @@ func TestPlainClickOnASubmitterReportsTheSameOutcomeAsSubmit(t *testing.T) {
 			})
 			h := New(b, &config.RuntimeConfig{ActionTimeout: time.Second}, nil, nil, nil)
 
+			started := time.Now()
 			result := postPlainClick(t, h, plainSubmitterClick)
+			elapsed := time.Since(started)
 
 			post := plainClickPostState(t, result)
 			if tc.wantStatus == "" {
 				if post != nil {
 					t.Fatalf("postState = %+v, want none when nothing changed", post)
 				}
-				if b.liveReads != 2 {
-					t.Fatalf("live region reads = %d, want one before and one after the click, never a poll", b.liveReads)
+				if elapsed < plainSubmitterClickWait || elapsed > plainSubmitterClickWait+plainSubmitterClickPollInterval {
+					t.Fatalf("plain click took %v, want the bounded %v wait and nothing more", elapsed, plainSubmitterClickWait)
 				}
+				t.Logf("no-change plain submitter click took %v after %d live-region reads", elapsed, b.liveReads)
 				return
+			}
+			if elapsed >= plainSubmitterClickWait {
+				t.Fatalf("plain click took %v, want it to return on the first observed change", elapsed)
 			}
 			if post == nil || post.Status != tc.wantStatus || post.Signal != tc.wantSignal || post.LiveRegionText != tc.wantText {
 				t.Fatalf("postState = %+v, want %s %s %q", post, tc.wantStatus, tc.wantSignal, tc.wantText)

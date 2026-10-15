@@ -21,6 +21,9 @@ const (
 	postSubmitPollTimeout  = 3 * time.Second
 	postSubmitPollInterval = 250 * time.Millisecond
 
+	plainSubmitterClickWait         = 500 * time.Millisecond
+	plainSubmitterClickPollInterval = 100 * time.Millisecond
+
 	submitLiveRegionTextLimit = 500
 )
 
@@ -304,12 +307,22 @@ func (h *Handlers) succeededSubmitPostState(before, after submitStateSnapshot, d
 	return post, true
 }
 
-func (h *Handlers) pollSubmitPostState(ctx context.Context, tabID string, nodeID int64, before submitStateSnapshot, dispatch string, actionTimedOut bool) (submitPostState, error) {
+type submitPollPlan struct {
+	interval     time.Duration
+	probeBlocked bool
+}
+
+var (
+	submitClickPoll         = submitPollPlan{interval: postSubmitPollInterval, probeBlocked: true}
+	plainSubmitterClickPoll = submitPollPlan{interval: plainSubmitterClickPollInterval}
+)
+
+func (h *Handlers) pollSubmitPostState(ctx context.Context, tabID string, nodeID int64, before submitStateSnapshot, dispatch string, actionTimedOut bool, plan submitPollPlan) (submitPostState, error) {
 	started := time.Now()
 	after := before
 	observedPostState := false
 	var lastReadErr error
-	ticker := time.NewTicker(postSubmitPollInterval)
+	ticker := time.NewTicker(plan.interval)
 	defer ticker.Stop()
 
 	for {
@@ -321,7 +334,7 @@ func (h *Handlers) pollSubmitPostState(ctx context.Context, tabID string, nodeID
 			if post, ok := h.succeededSubmitPostState(before, after, dispatch, actionTimedOut, started); ok {
 				return post, nil
 			}
-			if blocked, ok := h.probeValidationBlocked(ctx, nodeID, dispatch, actionTimedOut, started); ok {
+			if blocked, ok := h.probeBlockedSubmit(ctx, plan, nodeID, dispatch, actionTimedOut, started); ok {
 				blocked.Before, blocked.After = before, after
 				return blocked, nil
 			}
@@ -347,6 +360,13 @@ func (h *Handlers) pollSubmitPostState(ctx context.Context, tabID string, nodeID
 		case <-ticker.C:
 		}
 	}
+}
+
+func (h *Handlers) probeBlockedSubmit(ctx context.Context, plan submitPollPlan, nodeID int64, dispatch string, actionTimedOut bool, started time.Time) (submitPostState, bool) {
+	if !plan.probeBlocked {
+		return submitPostState{}, false
+	}
+	return h.probeValidationBlocked(ctx, nodeID, dispatch, actionTimedOut, started)
 }
 
 func (h *Handlers) cacheActionIntent(tabID string, req bridge.ActionRequest) {

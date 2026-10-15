@@ -710,7 +710,6 @@ func (h *Handlers) captureSubmitterClickBaseline(ctx context.Context, tabID stri
 	return submitterClickBaseline{before: before, captured: err == nil}
 }
 
-// One read, never a poll: a plain click that changed nothing must cost what it did before the success report existed.
 func (h *Handlers) attachSubmitterClickSucceeded(ctx context.Context, tabID string, baseline submitterClickBaseline, result map[string]any) map[string]any {
 	if !baseline.captured {
 		return result
@@ -718,13 +717,10 @@ func (h *Handlers) attachSubmitterClickSucceeded(ctx context.Context, tabID stri
 	if _, settled := result["postState"]; settled {
 		return result
 	}
-	started := time.Now()
-	after, err := h.captureSubmitState(ctx, tabID)
-	if err != nil {
-		return result
-	}
-	post, ok := h.succeededSubmitPostState(baseline.before, after, "acknowledged", false, started)
-	if !ok {
+	waitCtx, cancel := context.WithTimeout(ctx, plainSubmitterClickWait)
+	defer cancel()
+	post, err := h.pollSubmitPostState(waitCtx, tabID, 0, baseline.before, "acknowledged", false, plainSubmitterClickPoll)
+	if err != nil || post.Status != "succeeded" {
 		return result
 	}
 	if result == nil {
@@ -822,7 +818,7 @@ func (h *Handlers) runSubmitClick(w http.ResponseWriter, r *http.Request, tabCtx
 	// The action's context may be expired here. Keep the live tab context as the parent
 	// and give post-state observation its own bounded, client-cancelable child.
 	postCtx, postCancel := httpx.WithClientTimeout(r.Context(), tabCtx, postSubmitPollTimeout)
-	postState, postErr := h.pollSubmitPostState(postCtx, tabID, nodeID, before, dispatch, actionTimedOut)
+	postState, postErr := h.pollSubmitPostState(postCtx, tabID, nodeID, before, dispatch, actionTimedOut, submitClickPoll)
 	postCancel()
 	if postErr != nil {
 		httpx.ErrorCode(w, http.StatusInternalServerError, "submit_post_state_failed", postErr.Error(), false, map[string]any{
