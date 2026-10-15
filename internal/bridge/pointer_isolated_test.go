@@ -11,6 +11,7 @@ import (
 	"github.com/chromedp/chromedp"
 	bridgecdpops "github.com/pinchtab/pinchtab/internal/bridge/cdpops"
 	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
+	"github.com/pinchtab/pinchtab/internal/cdptk"
 	"github.com/pinchtab/pinchtab/internal/config"
 )
 
@@ -207,6 +208,34 @@ func TestOccludedClickNamesTheOverlayAndItsRef(t *testing.T) {
 	}
 	if got, want := b.nameOccluder("tab1", err).Error(), `element is occluded by dialog "Cookies" (e0)`; got != want {
 		t.Errorf("with a ref cache: %q, want %q", got, want)
+	}
+}
+
+func TestOccludedClickReleasesItsAncestryHandles(t *testing.T) {
+	ctx := newPointerFixture(t, pointerCookieWallHTML)
+
+	targetID, err := ResolveCSSToNodeID(ctx, "#target")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wallID, err := ResolveCSSToNodeID(ctx, "#wall")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wallObject, err := cdptk.IsolatedNodeObjectID(ctx, wallID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sentinel, err := cdptk.CallFunctionOnForGroupedHandle(ctx, wallObject, `function() { return {}; }`, nil, "pinchtab.occluder")
+	if err != nil || sentinel == "" {
+		t.Fatalf("sentinel handle = %q, %v", sentinel, err)
+	}
+
+	if _, _, err := bridgecdpops.PointerPointForNode(ctx, targetID, true); !errors.Is(err, bridgecdpops.ErrElementOccluded) {
+		t.Fatalf("err = %v, want ErrElementOccluded", err)
+	}
+	if err := cdptk.CallFunctionOn(ctx, sentinel, `function() { return 1; }`, nil, nil); err == nil {
+		t.Error("a handle in the occluder group survived the occluded click")
 	}
 }
 
