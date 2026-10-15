@@ -45,11 +45,27 @@ func decodeDialogBlocked(t *testing.T, w *httptest.ResponseRecorder, dialog *bri
 	if failure.Details.DialogType != dialog.Type || failure.Details.DialogMessage != dialog.Message {
 		t.Fatalf("dialog not named: %s", w.Body.String())
 	}
-	if failure.Details.Remedy != dialogBlockedRemedy.String() {
-		t.Fatalf("remedy = %q, want %q", failure.Details.Remedy, dialogBlockedRemedy)
+	if failure.Details.Remedy != wantDialogRemedy(dialog) {
+		t.Fatalf("remedy = %q, want %q for a %s", failure.Details.Remedy, wantDialogRemedy(dialog), dialog.Type)
 	}
-	if failure.Details.Hint == "" {
-		t.Fatalf("missing hint: %s", w.Body.String())
+	assertHintNamesBothAnswers(t, failure.Details.Hint)
+}
+
+// Only an alert has one valid answer. A confirm, prompt or beforeunload has two, and a
+// remedy an agent may run without reading English would commit whatever the page asks.
+func wantDialogRemedy(dialog *bridge.DialogState) string {
+	if dialog.Type == "alert" {
+		return "pinchtab dialog accept"
+	}
+	return ""
+}
+
+func assertHintNamesBothAnswers(t *testing.T, hint string) {
+	t.Helper()
+	for _, answer := range []string{"pinchtab dialog accept", "pinchtab dialog dismiss"} {
+		if !strings.Contains(hint, answer) {
+			t.Fatalf("hint %q does not name %q", hint, answer)
+		}
 	}
 }
 
@@ -58,6 +74,7 @@ func TestDialogBlockedIsTheSameContractOnReadsAndActions(t *testing.T) {
 		{Type: "alert", Message: "hello alert"},
 		{Type: "confirm", Message: "are you sure?"},
 		{Type: "prompt", Message: "your name?", DefaultPrompt: "anon"},
+		{Type: "beforeunload", Message: ""},
 	}
 
 	paths := []struct {
@@ -216,6 +233,27 @@ func assertOpenedDialogResult(t *testing.T, result map[string]any, dialog *bridg
 	}
 	if got["hint"] != dialogOpenedHint {
 		t.Fatalf("hint = %v, want %q", got["hint"], dialogOpenedHint)
+	}
+	assertHintNamesBothAnswers(t, dialogOpenedHint)
+}
+
+func TestOnlyAnAlertCarriesARemedyOnBothSurfaces(t *testing.T) {
+	for _, dialog := range []*bridge.DialogState{
+		{Type: "alert", Message: "saved"},
+		{Type: "confirm", Message: "Delete order 1?"},
+		{Type: "prompt", Message: "your name?", DefaultPrompt: "anon"},
+		{Type: "beforeunload"},
+	} {
+		t.Run(dialog.Type, func(t *testing.T) {
+			blocked := dialogBlockedDetails("tab1", dialog)
+			opened, _ := withOpenedDialog(nil, "tab1", dialog)[bridge.OpenedDialogResultKey].(map[string]any)
+			for surface, details := range map[string]map[string]any{"409 details": blocked, "result.dialog": opened} {
+				got, present := details["remedy"]
+				if want := wantDialogRemedy(dialog); present != (want != "") || (present && got != want) {
+					t.Fatalf("%s remedy = %v (present=%v), want %q", surface, got, present, want)
+				}
+			}
+		})
 	}
 }
 

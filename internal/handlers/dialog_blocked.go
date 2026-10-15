@@ -11,11 +11,13 @@ import (
 
 const dialogBlockedCode = "dialog_blocked"
 
-const dialogBlockedHint = "a JavaScript dialog is open on this tab and blocks every page interaction until it is answered. It belongs to this tab, so retrying, activating the tab or opening a fresh one cannot clear it. Use pinchtab dialog dismiss to cancel it instead of accepting, or pass --dialog-action accept|dismiss on the action that opens the dialog."
+const dialogBlockedHint = "a JavaScript dialog is open on this tab and blocks every page interaction until it is answered. It belongs to this tab, so retrying, activating the tab or opening a fresh one cannot clear it. Answer it with pinchtab dialog accept to confirm or pinchtab dialog dismiss to cancel; accepting a confirm commits whatever it asks, so choose deliberately. Or pass --dialog-action accept|dismiss on the action that opens the dialog."
 
-const dialogOpenedHint = "this action landed and opened a JavaScript dialog, so do not repeat it. The dialog blocks every page interaction on this tab until it is answered. Use pinchtab dialog dismiss to cancel it instead of accepting."
+const dialogOpenedHint = "this action landed and opened a JavaScript dialog, so do not repeat it. The dialog blocks every page interaction on this tab until it is answered. Answer it with pinchtab dialog accept to confirm or pinchtab dialog dismiss to cancel; accepting a confirm commits whatever it asks, so choose deliberately."
 
-var dialogBlockedRemedy = remedy.Declare("pinchtab dialog accept")
+const alertDialogType = "alert"
+
+var alertDialogRemedy = remedy.Declare("pinchtab dialog accept")
 
 const dialogBlockedStepRemedy = "answer it with pinchtab dialog accept or pinchtab dialog dismiss, or pass --dialog-action accept on the action that opens the dialog"
 
@@ -38,8 +40,15 @@ func dialogBlockedMessage(tabID string, dialog *bridge.DialogState) string {
 	return fmt.Sprintf("tab %s is blocked by a JavaScript dialog (%s: %q)", tabID, dialog.Type, dialog.Message)
 }
 
+func dialogRemedy(dialog *bridge.DialogState) remedy.Remedy {
+	if dialog.Type == alertDialogType {
+		return alertDialogRemedy.Remedy()
+	}
+	return remedy.None
+}
+
 func dialogDetails(hint, tabID string, dialog *bridge.DialogState) map[string]any {
-	details := remedy.Details(hint, dialogBlockedRemedy.Remedy())
+	details := remedy.Details(hint, dialogRemedy(dialog))
 	details["tabId"] = tabID
 	details["dialogType"] = dialog.Type
 	details["dialogMessage"] = dialog.Message

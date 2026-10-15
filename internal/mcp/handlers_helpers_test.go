@@ -252,6 +252,17 @@ func TestMCPRefusalTranslatesTheRemedyIntoAToolCall(t *testing.T) {
 	if quiet := resultText(t, noToolResult); strings.Contains(quiet, "call pinchtab_") {
 		t.Fatalf("a verb with no MCP counterpart produced tool guidance: %q", quiet)
 	}
+
+	// A blocked confirm carries no remedy, because accepting it commits whatever the page
+	// asks; the funnel must not invent a pinchtab_dialog call from the hint's prose.
+	confirm := []byte(`{"code":"dialog_blocked","details":{"dialogType":"confirm","dialogMessage":"Delete order 1?","hint":"Answer it with pinchtab dialog accept to confirm or pinchtab dialog dismiss to cancel."}}`)
+	confirmResult, err := resultFromBytes(confirm, http.StatusConflict)
+	if err != nil {
+		t.Fatalf("resultFromBytes: %v", err)
+	}
+	if text := resultText(t, confirmResult); strings.Contains(text, "call pinchtab_dialog") {
+		t.Fatalf("a blocked confirm produced a pinchtab_dialog call: %q", text)
+	}
 }
 
 // Every mapping entry must name a registered tool and a real parameter of it, or the guidance
