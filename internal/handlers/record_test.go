@@ -12,14 +12,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pinchtab/pinchtab/internal/activity"
-	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/session"
 	"image"
 	"image/jpeg"
 	"log/slog"
 	"os"
 	"path/filepath"
+
+	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/session"
 )
 
 func TestHandleRecordStart_Disabled(t *testing.T) {

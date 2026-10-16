@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	bridgeobserve "github.com/pinchtab/pinchtab/internal/bridge/observe"
 
 	"github.com/pinchtab/pinchtab/internal/api/types"
 	"github.com/pinchtab/pinchtab/internal/bridge"

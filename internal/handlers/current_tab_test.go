@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"

@@ -11,10 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"sort"
+
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/bridge/observe"
 	"github.com/pinchtab/pinchtab/internal/config"
-	"sort"
 )
 
 type noFlusherResponseWriter struct {

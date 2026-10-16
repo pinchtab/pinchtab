@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	bridgetabs "github.com/pinchtab/pinchtab/internal/bridge/tabs"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
