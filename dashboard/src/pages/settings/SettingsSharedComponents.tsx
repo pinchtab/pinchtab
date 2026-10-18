@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Card } from "../../components/atoms";
 
 export function SectionCard({
@@ -10,10 +11,14 @@ export function SectionCard({
   description: string;
   children: ReactNode;
 }) {
+  const { t } = useTranslation();
+
   return (
     <Card className="p-5">
       <div className="mb-5 border-b border-border-subtle pb-4">
-        <div className="dashboard-section-label mb-2">Settings</div>
+        <div className="dashboard-section-label mb-2">
+          {t("settings.title")}
+        </div>
         <h3 className="text-lg font-semibold text-text-primary">{title}</h3>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-text-muted">
           {description}

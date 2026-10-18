@@ -1,7 +1,9 @@
+import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/useAppStore";
 import { resumeTab } from "../../services/api";
 
 export default function HandoffNotifications() {
+  const { t } = useTranslation();
   const notifications = useAppStore((state) => state.handoffNotifications);
   const dismiss = useAppStore((state) => state.dismissHandoffNotification);
 
@@ -27,13 +29,13 @@ export default function HandoffNotifications() {
         >
           <div className="mb-1 flex items-start justify-between gap-2">
             <div className="font-semibold text-warning">
-              Human intervention required
+              {t("handoff.required")}
             </div>
             <button
               type="button"
               onClick={() => dismiss(n.tabId)}
               className="text-text-muted hover:text-text-primary"
-              aria-label="Dismiss notification"
+              aria-label={t("handoff.dismiss")}
             >
               ×
             </button>
@@ -43,10 +45,12 @@ export default function HandoffNotifications() {
             {n.title && <span className="ml-2 text-text-muted">{n.title}</span>}
           </div>
           <div className="mb-2 text-text-secondary">
-            <span className="text-text-muted">Reason:</span>{" "}
+            <span className="text-text-muted">{t("handoff.reason")}</span>{" "}
             <code className="text-xs">{n.reason}</code>
             {n.source && (
-              <span className="ml-2 text-text-muted">via {n.source}</span>
+              <span className="ml-2 text-text-muted">
+                {t("handoff.via", { source: n.source })}
+              </span>
             )}
           </div>
           {n.hint && (
@@ -58,7 +62,7 @@ export default function HandoffNotifications() {
               onClick={() => handleResume(n.tabId)}
               className="rounded-sm border border-border-subtle px-3 py-1 text-xs text-text-primary transition-all duration-150 hover:border-primary/30 hover:bg-bg-elevated"
             >
-              Resume
+              {t("handoff.resume")}
             </button>
           </div>
         </div>

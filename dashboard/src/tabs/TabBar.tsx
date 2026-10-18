@@ -1,4 +1,5 @@
 import type { InstanceTab } from "../generated/types";
+import { useTranslation } from "react-i18next";
 import * as api from "../services/api";
 
 interface Props {
@@ -16,10 +17,12 @@ interface Props {
 }
 
 function HandoffDot() {
+  const { t } = useTranslation();
+
   return (
     <span
-      aria-label="tab paused for human handoff"
-      title="Tab is paused for human handoff"
+      aria-label={t("tabs.handoffDot")}
+      title={t("tabs.handoffDotTitle")}
       className="inline-block h-2 w-2 shrink-0 rounded-full bg-red-500 ring-2 ring-bg-surface"
     />
   );
@@ -57,6 +60,7 @@ export default function TabBar({
   onToggleTelemetry,
   onSetTelemetry,
 }: Props) {
+  const { t } = useTranslation();
   const showTabsAttention = newTabsCount > 0;
 
   const handleClose = async (e: React.MouseEvent, tabId: string) => {
@@ -74,7 +78,7 @@ export default function TabBar({
         const isSelected = tab.id === selectedTabId && !telemetryActive;
         const isPinned = tab.id === pinnedTabId;
         const isInHandoff = handoffTabs?.has(tab.id) ?? false;
-        const title = tab.title || "Untitled";
+        const title = tab.title || t("tabs.untitled");
 
         return (
           <div
@@ -102,13 +106,11 @@ export default function TabBar({
                   onTogglePinned(tab.id);
                 }}
                 aria-label={
-                  isPinned ? `Unpin ${title} and follow focus` : `Pin ${title}`
-                }
-                title={
                   isPinned
-                    ? "Unpin and follow the focused tab again"
-                    : "Pin this tab selection"
+                    ? t("tabs.unpin", { title })
+                    : t("tabs.pin", { title })
                 }
+                title={isPinned ? t("tabs.unpinTitle") : t("tabs.pinTitle")}
                 className={`shrink-0 rounded p-0.5 transition-all ${
                   isPinned
                     ? "text-text-primary opacity-100"
@@ -121,7 +123,7 @@ export default function TabBar({
             <button
               type="button"
               onClick={(e) => handleClose(e, tab.id)}
-              aria-label={`Close ${title}`}
+              aria-label={t("tabs.close", { title })}
               className="ml-0.5 shrink-0 rounded p-0.5 text-[10px] leading-none text-text-muted/40 opacity-0 transition-all hover:bg-white/10 hover:text-text-primary group-hover:opacity-100"
             >
               ✕
@@ -136,9 +138,11 @@ export default function TabBar({
             onClick={() =>
               onSetTelemetry ? onSetTelemetry(false) : onToggleTelemetry?.()
             }
-            title="Tabs"
+            title={t("tabs.telemetryTabs")}
             aria-label={
-              showTabsAttention ? `Tabs (${newTabsCount} new)` : "Tabs"
+              showTabsAttention
+                ? t("tabs.telemetryTabsNew", { count: newTabsCount })
+                : t("tabs.telemetryTabs")
             }
             className={`relative shrink-0 rounded p-1.5 transition-colors ${
               !telemetryActive
@@ -172,7 +176,7 @@ export default function TabBar({
             onClick={() =>
               onSetTelemetry ? onSetTelemetry(true) : onToggleTelemetry?.()
             }
-            title="Monitoring"
+            title={t("nav.monitoring")}
             className={`mr-1 shrink-0 rounded p-1.5 transition-colors ${
               telemetryActive
                 ? "bg-bg-hover text-text-primary"

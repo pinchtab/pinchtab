@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { EmptyState } from "../components/atoms";
 import type { Session } from "../services/api";
 import ActivityItemLine from "./ActivityItemLine";
@@ -26,6 +27,7 @@ export default function AgentStreamPanel({
   activeSessionId,
   onFilterChange,
 }: AgentStreamPanelProps) {
+  const { t } = useTranslation();
   const sessionLabels = new Map(
     sessions
       .filter((session) => session.label?.trim())
@@ -76,8 +78,8 @@ export default function AgentStreamPanel({
         {!loading && events.length === 0 ? (
           <EmptyState
             icon="📡"
-            title="No matching activity"
-            description="Adjust the filters or generate some traffic from the CLI, MCP, or dashboard."
+            title={t("activityTimeline.noMatching")}
+            description={t("activityTimeline.adjustFilters")}
           />
         ) : (
           <div className="divide-y divide-border-subtle/70">

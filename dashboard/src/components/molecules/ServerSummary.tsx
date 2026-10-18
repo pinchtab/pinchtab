@@ -1,7 +1,9 @@
+import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../stores/useAppStore";
 import { Card } from "../atoms";
 
 export default function ServerSummary() {
+  const { t } = useTranslation();
   const { serverInfo } = useAppStore();
 
   if (!serverInfo) return null;
@@ -24,18 +26,20 @@ export default function ServerSummary() {
     <div className="flex flex-col gap-4">
       <Card className="flex flex-col gap-4 p-4">
         <div className="border-b border-border-subtle pb-3">
-          <div className="dashboard-section-label mb-2">Settings</div>
+          <div className="dashboard-section-label mb-2">
+            {t("settings.title")}
+          </div>
           <h2 className="text-[0.72rem] font-bold tracking-[0.18em] text-text-muted uppercase">
-            Server Information
+            {t("serverSummary.title")}
           </h2>
           <p className="mt-1 text-[0.7rem] text-text-muted italic opacity-70">
-            Technical details for current session
+            {t("serverSummary.subtitle")}
           </p>
         </div>
 
         <div className="flex flex-col gap-1">
           <label className="dashboard-section-title text-[0.68rem]">
-            Version
+            {t("serverSummary.version")}
           </label>
           <div className="dashboard-mono text-sm text-text-secondary">
             {serverInfo.version}
@@ -44,7 +48,7 @@ export default function ServerSummary() {
 
         <div className="flex flex-col gap-1">
           <label className="dashboard-section-title text-[0.68rem]">
-            Uptime
+            {t("serverSummary.uptime")}
           </label>
           <div className="dashboard-mono text-sm text-text-secondary">
             {uptimeStr(serverInfo.uptime)}

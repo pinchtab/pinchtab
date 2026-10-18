@@ -3,6 +3,8 @@ import type {
   InstanceMetrics,
   InstanceTab,
 } from "../../generated/types";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 
 interface Props {
   instance?: Instance | null;
@@ -54,9 +56,9 @@ function fmt(n: number, decimals = 0): string {
   }).format(n);
 }
 
-function formatUptime(startTime: string): string {
+function formatUptime(startTime: string, t: TFunction): string {
   const ms = Date.now() - new Date(startTime).getTime();
-  if (ms < 0) return "just now";
+  if (ms < 0) return t("instanceStats.justNow");
   const secs = Math.floor(ms / 1000);
   if (secs < 60) return `${secs}s`;
   const mins = Math.floor(secs / 60);
@@ -87,24 +89,41 @@ function countUniqueDomains(tabs: InstanceTab[]): number {
 }
 
 export default function InstanceStats({ instance, metrics, tabs }: Props) {
+  const { t } = useTranslation();
   const uniqueDomains = countUniqueDomains(tabs);
 
   return (
     <div className="grid grid-cols-2 gap-y-4 border-t border-border-subtle px-4 py-4">
-      <StatGroup title="Instance">
+      <StatGroup title={t("instanceStats.groups.instance")}>
         {instance && (
           <>
-            <StatItem label="Status" value={instance.status} />
-            <StatItem label="Uptime" value={formatUptime(instance.startTime)} />
-            <StatItem label="Port" value={instance.port} />
+            <StatItem
+              label={t("instanceStats.status")}
+              value={instance.status}
+            />
+            <StatItem
+              label={t("instanceStats.uptime")}
+              value={formatUptime(instance.startTime, t)}
+            />
+            <StatItem label={t("instanceStats.port")} value={instance.port} />
             {instance.crashes && instance.crashes.total > 0 && (
               <StatItem
-                label="Crashes"
+                label={t("instanceStats.crashes")}
                 value={fmt(instance.crashes.total)}
                 sub={
                   instance.crashes.recent.length > 0
-                    ? `last: ${instance.crashes.recent[instance.crashes.recent.length - 1].reason} at ${formatCrashTime(instance.crashes.recent[instance.crashes.recent.length - 1].time)} · tabs open before it were lost`
-                    : "tabs open before it were lost"
+                    ? t("instanceStats.crashSummary", {
+                        reason:
+                          instance.crashes.recent[
+                            instance.crashes.recent.length - 1
+                          ].reason,
+                        time: formatCrashTime(
+                          instance.crashes.recent[
+                            instance.crashes.recent.length - 1
+                          ].time,
+                        ),
+                      })
+                    : t("instanceStats.tabsLost")
                 }
               />
             )}
@@ -112,48 +131,61 @@ export default function InstanceStats({ instance, metrics, tabs }: Props) {
         )}
       </StatGroup>
 
-      <StatGroup title="Browsing">
-        <StatItem label="Tabs" value={fmt(tabs.length)} />
-        <StatItem label="Domains" value={fmt(uniqueDomains)} />
+      <StatGroup title={t("instanceStats.groups.browsing")}>
+        <StatItem label={t("instanceStats.tabs")} value={fmt(tabs.length)} />
+        <StatItem
+          label={t("instanceStats.domains")}
+          value={fmt(uniqueDomains)}
+        />
       </StatGroup>
 
       {metrics && (
-        <StatGroup title="Resources">
+        <StatGroup title={t("instanceStats.groups.resources")}>
           <StatItem
-            label="Memory"
+            label={t("instanceStats.memory")}
             value={`${fmt(metrics.memoryMB, 1)} MB`}
-            sub="RSS across the browser process tree"
+            sub={t("instanceStats.memorySub")}
           />
-          <StatItem label="Renderers" value={fmt(metrics.renderers)} />
+          <StatItem
+            label={t("instanceStats.renderers")}
+            value={fmt(metrics.renderers)}
+          />
         </StatGroup>
       )}
 
       {metrics && (metrics.page || metrics.unreadableTargets > 0) && (
-        <StatGroup title="Pages">
+        <StatGroup title={t("instanceStats.groups.pages")}>
           {metrics.page && (
             <>
               <StatItem
-                label="JS heap"
+                label={t("instanceStats.jsHeap")}
                 value={`${fmt(metrics.page.jsHeapUsedMB, 1)} / ${fmt(metrics.page.jsHeapTotalMB, 1)} MB`}
-                sub={`used / total, summed over ${fmt(metrics.page.targets)} tab${metrics.page.targets === 1 ? "" : "s"}`}
+                sub={t("instanceStats.jsHeapSub", {
+                  count: metrics.page.targets,
+                })}
               />
-              <StatItem label="DOM nodes" value={fmt(metrics.page.nodes)} />
               <StatItem
-                label="Listeners"
+                label={t("instanceStats.domNodes")}
+                value={fmt(metrics.page.nodes)}
+              />
+              <StatItem
+                label={t("instanceStats.listeners")}
                 value={fmt(metrics.page.jsEventListeners)}
               />
               <StatItem
-                label="Frames"
+                label={t("instanceStats.frames")}
                 value={fmt(metrics.page.frames)}
-                sub={`${fmt(metrics.page.documents)} documents`}
+                sub={t("instanceStats.documentsSub", {
+                  count: metrics.page.documents,
+                })}
               />
             </>
           )}
           {metrics.unreadableTargets > 0 && (
             <StatItem
-              label="Unreadable"
+              label={t("instanceStats.unreadable")}
               value={fmt(metrics.unreadableTargets)}
-              sub="tabs that did not answer; not counted"
+              sub={t("instanceStats.unreadableSub")}
             />
           )}
         </StatGroup>

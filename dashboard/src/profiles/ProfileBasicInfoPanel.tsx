@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Input } from "../components/atoms";
 import type { Profile } from "../generated/types";
 
@@ -13,6 +14,7 @@ export default function ProfileBasicInfoPanel({
   onChange,
   minHeight = "min-h-[180px]",
 }: Props) {
+  const { t } = useTranslation();
   const [name, setName] = useState(profile.name);
   const [useWhen, setUseWhen] = useState(profile.useWhen || "");
 
@@ -28,14 +30,14 @@ export default function ProfileBasicInfoPanel({
   return (
     <div className="space-y-4">
       <Input
-        label="Name"
+        label={t("profileMeta.name")}
         value={name}
         onChange={(e) => setName(e.target.value)}
       />
 
       <div>
         <label className="dashboard-section-title mb-1 block text-[0.68rem]">
-          Use this profile when
+          {t("profileMeta.useWhen")}
         </label>
         <textarea
           value={useWhen}

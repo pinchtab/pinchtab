@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import en from "../i18n/locales/en.json";
 import {
   AUTH_REQUIRED_EVENT,
   AUTH_STATE_CHANGED_EVENT,
-  INSECURE_DASHBOARD_TRANSPORT_WARNING,
   SERVER_UNREACHABLE_EVENT,
   dispatchAuthRequired,
   dispatchAuthStateChanged,
@@ -56,7 +56,7 @@ describe("auth helpers", () => {
     vi.stubGlobal("location", new URL("http://192.168.1.50:9867/dashboard"));
 
     expect(isInsecureDashboardTransport()).toBe(true);
-    expect(INSECURE_DASHBOARD_TRANSPORT_WARNING).toContain("insecure HTTP");
+    expect(en.app.insecureTransportWarning).toContain("insecure HTTP");
 
     vi.unstubAllGlobals();
   });

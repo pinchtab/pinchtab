@@ -10,11 +10,11 @@ import {
 import { ActivityPage, AgentsPage } from "./activities";
 import { HandoffNotifications, NavBar } from "./components/molecules";
 import { LoginPage, MonitoringPage, ProfilesPage, SettingsPage } from "./pages";
+import { useTranslation } from "react-i18next";
 import * as api from "./services/api";
 import {
   AUTH_REQUIRED_EVENT,
   AUTH_STATE_CHANGED_EVENT,
-  INSECURE_DASHBOARD_TRANSPORT_WARNING,
   SERVER_UNREACHABLE_EVENT,
   isInsecureDashboardTransport,
 } from "./services/auth";
@@ -25,6 +25,7 @@ type AuthMode = "probing" | "required" | "open" | "unreachable";
 const AUTH_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 15000] as const;
 
 function AppContent() {
+  const { t } = useTranslation();
   const setInstances = useAppStore((state) => state.setInstances);
   const setProfiles = useAppStore((state) => state.setProfiles);
   const setAgents = useAppStore((state) => state.setAgents);
@@ -188,7 +189,7 @@ function AppContent() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-bg-app px-4">
         <div className="rounded-sm border border-border-subtle bg-black/10 px-4 py-3 text-sm text-text-muted">
-          Checking server authentication...
+          {t("app.connection.checkingAuth")}
         </div>
       </div>
     );
@@ -204,10 +205,11 @@ function AppContent() {
       <div className="flex min-h-screen items-center justify-center bg-bg-app px-4">
         <div className="max-w-md space-y-3 rounded-sm border border-border-subtle bg-black/10 px-4 py-3 text-sm text-text-muted">
           <div>
-            PinchTab is restarting or unreachable.
             {nextRetryDelay !== null
-              ? ` Retrying in ${Math.ceil(nextRetryDelay / 1000)}s...`
-              : " Automatic retries stopped."}
+              ? t("app.connection.unreachableRetrying", {
+                  seconds: Math.ceil(nextRetryDelay / 1000),
+                })
+              : t("app.connection.unreachableStopped")}
           </div>
           {nextRetryDelay === null && (
             <div className="flex justify-end gap-2">
@@ -219,14 +221,14 @@ function AppContent() {
                   setAuthMode("probing");
                 }}
               >
-                Retry now
+                {t("app.connection.retryNow")}
               </button>
               <button
                 type="button"
                 className="rounded-sm border border-border-subtle px-3 py-2 text-sm text-text-primary transition-all duration-150 hover:border-primary/30 hover:bg-bg-elevated"
                 onClick={() => window.location.reload()}
               >
-                Refresh
+                {t("app.connection.refresh")}
               </button>
             </div>
           )}
@@ -249,7 +251,7 @@ function AppContent() {
       <NavBar showLogout={authProtected} />
       {insecureDashboardTransport && (
         <div className="border-b border-warning/25 bg-warning/10 px-4 py-2 text-sm text-warning">
-          {INSECURE_DASHBOARD_TRANSPORT_WARNING}
+          {t("app.insecureTransportWarning")}
         </div>
       )}
       <HandoffNotifications />

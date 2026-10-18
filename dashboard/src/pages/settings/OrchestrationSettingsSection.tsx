@@ -1,5 +1,6 @@
 import { Select } from "../../components/atoms";
 import type { BackendConfig } from "../../types";
+import { useTranslation } from "react-i18next";
 import type { UpdateBackendSection } from "./settingsShared";
 import { fieldClass } from "./settingsShared";
 import { SectionCard, SettingRow } from "./SettingsSharedComponents";
@@ -13,14 +14,16 @@ export function OrchestrationSettingsSection({
   backendConfig,
   updateBackendSection,
 }: OrchestrationSettingsSectionProps) {
+  const { t } = useTranslation();
+
   return (
     <SectionCard
-      title="Orchestration"
-      description="Port range and allocation policy can be applied immediately for future launches. Strategy and restart-policy changes require a dashboard restart because strategy routes and lifecycle state are registered at startup."
+      title={t("settings.sections.orchestration.label")}
+      description={t("settings.panels.orchestration.description")}
     >
       <SettingRow
-        label="Strategy"
-        description="Controls instance lifecycle and how shorthand routes are routed."
+        label={t("settings.orchestration.strategy.label")}
+        description={t("settings.orchestration.strategy.description")}
       >
         <Select
           value={backendConfig.multiInstance.strategy}
@@ -31,28 +34,38 @@ export function OrchestrationSettingsSection({
             })
           }
         >
-          <option value="always-on">Always on</option>
-          <option value="simple">Simple</option>
-          <option value="explicit">Explicit</option>
-          <option value="simple-autorestart">Simple autorestart</option>
-          <option value="no-instance">No instance (hub)</option>
+          <option value="always-on">
+            {t("settings.orchestration.strategy.alwaysOn")}
+          </option>
+          <option value="simple">
+            {t("settings.orchestration.strategy.simple")}
+          </option>
+          <option value="explicit">
+            {t("settings.orchestration.strategy.explicit")}
+          </option>
+          <option value="simple-autorestart">
+            {t("settings.orchestration.strategy.simpleAutorestart")}
+          </option>
+          <option value="no-instance">
+            {t("settings.orchestration.strategy.noInstance")}
+          </option>
         </Select>
         <div className="mt-2 text-[11px] leading-relaxed text-text-muted">
           {backendConfig.multiInstance.strategy === "always-on" &&
-            "Launches a default instance at boot and relaunches on crash."}
+            t("settings.orchestration.strategyHint.alwaysOn")}
           {backendConfig.multiInstance.strategy === "simple" &&
-            "Launches one instance on first request. No auto-restart."}
+            t("settings.orchestration.strategyHint.simple")}
           {backendConfig.multiInstance.strategy === "explicit" &&
-            "All instances managed via API. No automatic launches."}
+            t("settings.orchestration.strategyHint.explicit")}
           {backendConfig.multiInstance.strategy === "simple-autorestart" &&
-            "Launches on first request and relaunches on crash."}
+            t("settings.orchestration.strategyHint.simpleAutorestart")}
           {backendConfig.multiInstance.strategy === "no-instance" &&
-            "No local Chrome processes. Acts as a hub for remote bridges only."}
+            t("settings.orchestration.strategyHint.noInstance")}
         </div>
       </SettingRow>
       <SettingRow
-        label="Allocation policy"
-        description="Determines how running instances are chosen for shorthand requests."
+        label={t("settings.orchestration.allocationPolicy.label")}
+        description={t("settings.orchestration.allocationPolicy.description")}
       >
         <Select
           value={backendConfig.multiInstance.allocationPolicy}
@@ -63,14 +76,20 @@ export function OrchestrationSettingsSection({
             })
           }
         >
-          <option value="fcfs">First available</option>
-          <option value="round_robin">Round robin</option>
-          <option value="random">Random</option>
+          <option value="fcfs">
+            {t("settings.orchestration.allocationPolicy.fcfs")}
+          </option>
+          <option value="round_robin">
+            {t("settings.orchestration.allocationPolicy.roundRobin")}
+          </option>
+          <option value="random">
+            {t("settings.orchestration.allocationPolicy.random")}
+          </option>
         </Select>
       </SettingRow>
       <SettingRow
-        label="Instance port start"
-        description="Lower bound for auto-allocated instance ports."
+        label={t("settings.orchestration.instancePortStart.label")}
+        description={t("settings.orchestration.instancePortStart.description")}
       >
         <input
           type="number"
@@ -85,8 +104,8 @@ export function OrchestrationSettingsSection({
         />
       </SettingRow>
       <SettingRow
-        label="Instance port end"
-        description="Upper bound for auto-allocated instance ports."
+        label={t("settings.orchestration.instancePortEnd.label")}
+        description={t("settings.orchestration.instancePortEnd.description")}
       >
         <input
           type="number"
@@ -104,8 +123,10 @@ export function OrchestrationSettingsSection({
         backendConfig.multiInstance.strategy === "simple-autorestart") && (
         <>
           <SettingRow
-            label="Max restarts"
-            description="Maximum restart attempts. Use -1 for unlimited, 0 for no restarts."
+            label={t("settings.orchestration.restart.maxRestarts.label")}
+            description={t(
+              "settings.orchestration.restart.maxRestarts.description",
+            )}
           >
             <input
               type="number"
@@ -123,8 +144,10 @@ export function OrchestrationSettingsSection({
             />
           </SettingRow>
           <SettingRow
-            label="Initial backoff"
-            description="Delay in seconds before the first restart attempt."
+            label={t("settings.orchestration.restart.initBackoff.label")}
+            description={t(
+              "settings.orchestration.restart.initBackoff.description",
+            )}
           >
             <input
               type="number"
@@ -142,8 +165,10 @@ export function OrchestrationSettingsSection({
             />
           </SettingRow>
           <SettingRow
-            label="Max backoff"
-            description="Upper bound in seconds for exponential restart backoff."
+            label={t("settings.orchestration.restart.maxBackoff.label")}
+            description={t(
+              "settings.orchestration.restart.maxBackoff.description",
+            )}
           >
             <input
               type="number"
@@ -161,8 +186,10 @@ export function OrchestrationSettingsSection({
             />
           </SettingRow>
           <SettingRow
-            label="Stable after"
-            description="Seconds the instance must stay healthy before the restart counter resets."
+            label={t("settings.orchestration.restart.stableAfter.label")}
+            description={t(
+              "settings.orchestration.restart.stableAfter.description",
+            )}
           >
             <input
               type="number"

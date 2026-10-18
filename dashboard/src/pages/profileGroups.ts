@@ -5,11 +5,14 @@ export type ProfileGroupKind = "user" | "temporary" | "quarantined";
 // groupOrder puts the operator's own profiles first, so quarantine debris and ephemeral
 // instance directories can never push them out of view — the rows someone made are at the
 // top whether there are ten quarantined siblings or none.
-export const groupOrder: { kind: ProfileGroupKind; label: string }[] = [
-  { kind: "user", label: "Profiles" },
-  { kind: "temporary", label: "Temporary" },
-  { kind: "quarantined", label: "Quarantined" },
-];
+export const groupOrder = [
+  { kind: "user", labelKey: "profilesPage.heading" },
+  { kind: "temporary", labelKey: "profileGroups.temporary" },
+  { kind: "quarantined", labelKey: "profileGroups.quarantined" },
+] as const satisfies ReadonlyArray<{
+  kind: ProfileGroupKind;
+  labelKey: string;
+}>;
 
 // groupProfiles splits the listing on the FLAGS the API sends, never on the name. A profile
 // a user called "my.quarantine-notes" is theirs; a directory quarantine renamed aside is

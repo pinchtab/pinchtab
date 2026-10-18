@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { EmptyState, Button, Badge } from "../components/atoms";
 import type { Instance, Profile } from "../generated/types";
 import {
@@ -15,9 +16,14 @@ import {
 import ProfileDetailsPanel from "../profiles/ProfileDetailsPanel";
 import { useProfilesController, getProfileKey } from "./useProfilesController";
 
-const kindBadge: Partial<Record<ProfileGroupKind, string>> = {
-  temporary: "temporary",
-  quarantined: "quarantined",
+const kindBadge: Partial<
+  Record<
+    ProfileGroupKind,
+    "profilesPage.badgeTemporary" | "profilesPage.badgeQuarantined"
+  >
+> = {
+  temporary: "profilesPage.badgeTemporary",
+  quarantined: "profilesPage.badgeQuarantined",
 };
 
 function ProfileRow({
@@ -33,8 +39,9 @@ function ProfileRow({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const { t } = useTranslation();
   const accountText =
-    profile.accountEmail || profile.accountName || "No account";
+    profile.accountEmail || profile.accountName || t("profiles.noAccount");
   const statusVariant =
     instance?.status === "running"
       ? "success"
@@ -45,8 +52,8 @@ function ProfileRow({
     instance?.status === "running"
       ? `:${instance.port}`
       : instance?.status === "error"
-        ? "error"
-        : "stopped";
+        ? t("profiles.statusError")
+        : t("profiles.statusStopped");
   const badge = kindBadge[kind];
 
   return (
@@ -65,7 +72,7 @@ function ProfileRow({
           <div className="mt-1 text-xs text-text-muted">{accountText}</div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {badge && <Badge variant="warning">{badge}</Badge>}
+          {badge && <Badge variant="warning">{t(badge)}</Badge>}
           <Badge variant={statusVariant}>{statusLabel}</Badge>
         </div>
       </div>
@@ -97,6 +104,7 @@ export default function ProfilesPage() {
     deleteNotice,
     handleSave,
   } = useProfilesController();
+  const { t } = useTranslation();
   const [showCreate, setShowCreate] = useState(false);
   const groups = groupProfiles(orderedProfiles);
 
@@ -106,15 +114,15 @@ export default function ProfilesPage() {
         <div className="h-full">
           {profilesLoading && profiles.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-text-muted">
-              Loading profiles...
+              {t("profilesPage.loading")}
             </div>
           ) : profiles.length === 0 ? (
             <EmptyState
-              title="No profiles yet"
-              description="Click New Profile to create one"
+              title={t("profilesPage.emptyTitle")}
+              description={t("profilesPage.emptyDescription")}
               action={
                 <Button variant="primary" onClick={() => setShowCreate(true)}>
-                  New Profile
+                  {t("profilesPage.newProfile")}
                 </Button>
               }
             />
@@ -123,19 +131,19 @@ export default function ProfilesPage() {
               <div className="flex max-h-88 w-full shrink-0 flex-col overflow-hidden border-r border-border-subtle bg-bg-surface/50 lg:max-h-none lg:w-80">
                 <div className="flex items-center justify-between border-b border-border-subtle px-4 py-2.5">
                   <span className="text-xs font-medium text-text-muted">
-                    Profiles
+                    {t("profilesPage.heading")}
                   </span>
                   <button
                     type="button"
                     onClick={() => setShowCreate(true)}
                     className="rounded bg-primary px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-primary/90"
                   >
-                    New Profile
+                    {t("profilesPage.newProfile")}
                   </button>
                 </div>
 
                 <div className="flex-1 overflow-auto">
-                  {groupOrder.map(({ kind, label }) => {
+                  {groupOrder.map(({ kind, labelKey }) => {
                     const rows = groups[kind];
                     if (rows.length === 0) {
                       return null;
@@ -148,10 +156,12 @@ export default function ProfilesPage() {
                             data-testid={`profile-group-${kind}`}
                           >
                             <span className="font-medium uppercase tracking-[0.08em]">
-                              {label} ({rows.length})
+                              {t(labelKey)} ({rows.length})
                             </span>
                             <span>
-                              {formatProfileBytes(groupBytes(rows))} total
+                              {t("profilesPage.groupTotal", {
+                                size: formatProfileBytes(groupBytes(rows)),
+                              })}
                             </span>
                           </div>
                         )}

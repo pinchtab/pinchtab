@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { ErrorBoundary } from "../components/atoms";
 import InstanceListItem from "../instances/InstanceListItem";
 import InstanceTabsPanel from "../tabs/InstanceTabsPanel";
@@ -6,6 +7,7 @@ import MonitoringEmptyState from "./monitoring/MonitoringEmptyState";
 import DefaultInstanceModal from "./monitoring/DefaultInstanceModal";
 
 export default function MonitoringPage() {
+  const { t } = useTranslation();
   const m = useMonitoringController();
 
   const emptyState = (
@@ -44,12 +46,12 @@ export default function MonitoringPage() {
                   <div className="w-64 shrink-0 overflow-auto border-r border-border-subtle bg-bg-surface/50">
                     <div className="flex items-center justify-between border-b border-border-subtle px-3 py-1.5">
                       <span className="text-xs font-medium text-text-muted">
-                        Instances
+                        {t("instancesList.instances")}
                       </span>
                       <button
                         type="button"
                         onClick={() => m.setSidebarCollapsed(true)}
-                        title="Collapse sidebar"
+                        title={t("instancesList.collapseSidebar")}
                         className="rounded p-1 text-text-muted transition-colors hover:bg-white/10 hover:text-text-secondary"
                       >
                         <svg

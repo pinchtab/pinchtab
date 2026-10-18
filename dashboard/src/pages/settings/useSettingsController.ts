@@ -1,5 +1,6 @@
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import * as api from "../../services/api";
 import { useAppStore } from "../../stores/useAppStore";
 import type {
@@ -64,6 +65,7 @@ export function useSettingsController(): UseSettingsControllerResult {
   const [elevationToken, setElevationToken] = useState("");
   const [elevationError, setElevationError] = useState("");
   const [elevating, setElevating] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     setLocalSettings(settings);
@@ -84,14 +86,14 @@ export function useSettingsController(): UseSettingsControllerResult {
           setServerInfo(health);
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load settings");
+        setError(e instanceof Error ? e.message : t("settings.loadFailed"));
       } finally {
         setLoading(false);
       }
     };
 
     load();
-  }, [setServerInfo]);
+  }, [setServerInfo, t]);
 
   const hasDashboardChanges = useMemo(
     () => !deepEqual(localSettings, settings),
@@ -188,7 +190,7 @@ export function useSettingsController(): UseSettingsControllerResult {
       }
 
       if (hasBackendChanges) {
-        setNotice(backendSaveNotice(latestBackendState));
+        setNotice(backendSaveNotice(latestBackendState, t));
       }
 
       const health = await api.fetchHealth().catch(() => null);
@@ -197,7 +199,7 @@ export function useSettingsController(): UseSettingsControllerResult {
       }
 
       if (!hasBackendChanges) {
-        setNotice("Dashboard preferences saved in this browser.");
+        setNotice(t("settings.dashboardSavedNotice"));
       }
     } catch (e) {
       if (api.isApiError(e) && e.code === "elevation_required") {
@@ -206,7 +208,7 @@ export function useSettingsController(): UseSettingsControllerResult {
         setPendingElevatedAction("save");
         return;
       }
-      setError(e instanceof Error ? e.message : "Failed to save settings");
+      setError(e instanceof Error ? e.message : t("settings.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -241,7 +243,7 @@ export function useSettingsController(): UseSettingsControllerResult {
       }
     } catch (e) {
       setElevationError(
-        e instanceof Error ? e.message : "Failed to verify API token",
+        e instanceof Error ? e.message : t("settings.verifyFailed"),
       );
     } finally {
       setElevating(false);

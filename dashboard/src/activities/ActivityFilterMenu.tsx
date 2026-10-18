@@ -1,4 +1,5 @@
 import { useState, type ChangeEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { Button, Input, Select } from "../components/atoms";
 import { SidebarPanelFooterActions } from "../components/molecules";
 import type { Profile, Instance, InstanceTab } from "../types";
@@ -65,16 +66,17 @@ export function ActivityFilterFields({
   onProfileChange,
   onInstanceChange,
 }: ActivityFilterFieldsProps) {
+  const { t } = useTranslation();
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   return (
     <div className="space-y-4 p-4">
       <div className="space-y-3">
         <FilterSelect
-          label="Profile"
+          label={t("activityFilters.profile")}
           value={filters.profileName}
           options={[
-            { value: "", label: "Any profile" },
+            { value: "", label: t("activityFilters.anyProfile") },
             ...profileOptions.map((profile) => ({
               value: profile.name,
               label: profile.name,
@@ -83,10 +85,10 @@ export function ActivityFilterFields({
           onChange={(event) => onProfileChange(event.target.value)}
         />
         <FilterSelect
-          label="Tab"
+          label={t("activityFilters.tab")}
           value={filters.tabId}
           options={[
-            { value: "", label: "Any tab" },
+            { value: "", label: t("activityFilters.anyTab") },
             ...tabOptions.map((tab) => ({
               value: tab.id,
               label: `${tab.title || tab.url || tab.id} · ${tab.id}`,
@@ -99,20 +101,20 @@ export function ActivityFilterFields({
       <div className="space-y-3 border-t border-border-subtle pt-4">
         {showAgentFilter && (
           <FilterSelect
-            label="Agent"
+            label={t("activityFilters.agent")}
             value={filters.agentId}
             options={[
-              { value: "", label: "Any agent" },
+              { value: "", label: t("activityFilters.anyAgent") },
               ...agentOptions.map((id) => ({ value: id, label: id })),
             ]}
             onChange={(event) => onFilterChange("agentId", event.target.value)}
           />
         )}
         <FilterSelect
-          label="Action"
+          label={t("activityFilters.action")}
           value={filters.action}
           options={[
-            { value: "", label: "Any action" },
+            { value: "", label: t("activityFilters.anyAction") },
             ...actionOptions
               .filter(Boolean)
               .map((option) => ({ value: option, label: option })),
@@ -130,20 +132,22 @@ export function ActivityFilterFields({
           aria-controls="activity-advanced-filters"
         >
           <span className="dashboard-section-title text-[0.68rem]">
-            Advanced filters
+            {t("activityFilters.advanced")}
           </span>
           <span className="text-[0.68rem] uppercase tracking-[0.16em] text-text-muted">
-            {showAdvanced ? "Hide" : "Show"}
+            {showAdvanced
+              ? t("activityFilters.hide")
+              : t("activityFilters.show")}
           </span>
         </button>
 
         {showAdvanced && (
           <div id="activity-advanced-filters" className="mt-3 space-y-3">
             <FilterSelect
-              label="Instance"
+              label={t("activityFilters.instance")}
               value={filters.instanceId}
               options={[
-                { value: "", label: "Any instance" },
+                { value: "", label: t("activityFilters.anyInstance") },
                 ...instanceOptions.map((instance) => ({
                   value: instance.id,
                   label: `${instance.profileName} · ${instance.id}`,
@@ -152,21 +156,21 @@ export function ActivityFilterFields({
               onChange={(event) => onInstanceChange(event.target.value)}
             />
             <Input
-              label="Path prefix"
-              placeholder="/tabs/ or /instances/"
+              label={t("activityFilters.pathPrefix")}
+              placeholder={t("activityFilters.pathPrefixPlaceholder")}
               value={filters.pathPrefix}
               onChange={(event) =>
                 onFilterChange("pathPrefix", event.target.value)
               }
             />
             <Input
-              label="Age (seconds)"
+              label={t("activityFilters.ageSeconds")}
               placeholder="3600"
               value={filters.ageSec}
               onChange={(event) => onFilterChange("ageSec", event.target.value)}
             />
             <Input
-              label="Limit"
+              label={t("activityFilters.limit")}
               placeholder="200"
               value={filters.limit}
               onChange={(event) => onFilterChange("limit", event.target.value)}
@@ -183,6 +187,8 @@ export function ActivityFilterActions({
   onClear,
   onRefresh,
 }: Pick<Props, "loading" | "onClear" | "onRefresh">) {
+  const { t } = useTranslation();
+
   return (
     <SidebarPanelFooterActions>
       <Button
@@ -192,7 +198,7 @@ export function ActivityFilterActions({
         disabled={loading}
         className="flex-1"
       >
-        Clear
+        {t("activityFilters.clear")}
       </Button>
       <Button
         variant="primary"
@@ -201,7 +207,7 @@ export function ActivityFilterActions({
         loading={loading}
         className="flex-1"
       >
-        Search
+        {t("activityFilters.search")}
       </Button>
     </SidebarPanelFooterActions>
   );

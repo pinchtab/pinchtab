@@ -1,4 +1,5 @@
 import type { Instance } from "../../generated/types";
+import { useTranslation } from "react-i18next";
 import type { DashboardServerInfo } from "../../types";
 
 interface Props {
@@ -20,12 +21,13 @@ export default function ServerStatusBadge({
   hasRunningInstance = false,
   onToggleSidebar,
 }: Props) {
+  const { t } = useTranslation();
   const serverRunning = !!serverInfo && serverInfo.status !== "error";
 
   if (serverRunning && !hasRunningInstance) {
     const title = serverInfo.restartRequired
-      ? serverInfo.restartReasons?.join(", ") || "Server running, no instances"
-      : "Server running, no instances";
+      ? serverInfo.restartReasons?.join(", ") || t("serverStatus.noInstances")
+      : t("serverStatus.noInstances");
 
     return (
       <div className="mr-2 flex items-center px-2 py-1" title={title}>
@@ -59,7 +61,9 @@ export default function ServerStatusBadge({
         onClick={onToggleSidebar}
         className="mr-2 flex items-center gap-1.5 px-2 py-1 text-text-muted transition-colors hover:text-text-primary"
         title={
-          sidebarCollapsed ? "Expand instance list" : "Collapse instance list"
+          sidebarCollapsed
+            ? t("serverStatus.expandList")
+            : t("serverStatus.collapseList")
         }
       >
         <svg
@@ -79,8 +83,10 @@ export default function ServerStatusBadge({
           {instance.profileName} ·
         </span>
         <span className="hidden text-[10px] tracking-wider lg:inline">
-          {instance.status} · {tabCount} tab
-          {tabCount !== 1 ? "s" : ""} ·{" "}
+          {t("serverStatus.statusTabs", {
+            status: instance.status,
+            count: tabCount,
+          })}{" "}
         </span>
         <span className="text-[10px] tracking-wider">{instance.port}</span>
       </button>
@@ -98,8 +104,9 @@ export default function ServerStatusBadge({
       }`}
       title={
         serverInfo.restartRequired
-          ? serverInfo.restartReasons?.join(", ") || "Restart required"
-          : "Server running"
+          ? serverInfo.restartReasons?.join(", ") ||
+            t("settings.restartRequired")
+          : t("serverStatus.runningTitle")
       }
     >
       <div
@@ -112,7 +119,9 @@ export default function ServerStatusBadge({
           serverInfo.restartRequired ? "text-warning" : "text-success"
         }`}
       >
-        {serverInfo.restartRequired ? "Restart Required" : "Running"}
+        {serverInfo.restartRequired
+          ? t("serverStatus.restartRequiredLabel")
+          : t("serverStatus.running")}
       </span>
     </div>
   );

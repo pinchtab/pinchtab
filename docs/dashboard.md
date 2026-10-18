@@ -226,6 +226,21 @@ If the React dashboard assets are not built into the binary, the server serves a
 
 ---
 
+## Internationalization
+
+Every user-visible string in the dashboard goes through `react-i18next`; the
+English copy lives in `dashboard/src/i18n/locales/en.json`.
+
+- English is the only shipped language. The bundle is imported statically: there
+  is no language detector, no language switcher, no per-language chunk and
+  nothing persisted to storage.
+- Keys are type-checked (`dashboard/src/i18n/i18next.d.ts`), so a missing or
+  misspelled key fails `bun run typecheck` instead of rendering the raw key.
+- Strings produced by the backend (error messages, status values) are rendered
+  exactly as returned; the dashboard does not translate them.
+
+---
+
 ## Troubleshooting
 
 ### Dashboard not loading

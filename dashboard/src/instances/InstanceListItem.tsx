@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { Instance } from "../generated/types";
 
 interface Props {
@@ -21,6 +22,7 @@ export default function InstanceListItem({
   onStop,
   onOpenProfile,
 }: Props) {
+  const { t } = useTranslation();
   const statusColor =
     instance.status === "running"
       ? "bg-success"
@@ -28,7 +30,9 @@ export default function InstanceListItem({
         ? "bg-destructive"
         : "bg-text-muted";
 
-  const stopLabel = autoRestart ? "Restart" : "Stop";
+  const stopLabel: string = autoRestart
+    ? t("instancesList.restart")
+    : t("profiles.stop");
   const stopStyle = autoRestart
     ? "rounded bg-warning/10 px-2 py-0.5 text-[10px] font-medium uppercase text-warning transition-colors hover:bg-warning/20"
     : "rounded bg-destructive/10 px-2 py-0.5 text-[10px] font-medium uppercase text-destructive transition-colors hover:bg-destructive/20";
@@ -47,11 +51,14 @@ export default function InstanceListItem({
             {instance.profileName}
           </h3>
           <div className="dashboard-mono text-xs text-text-muted">
-            :{instance.port} · {instance.browser || "chrome"} · {tabCount} tabs
+            :{instance.port} · {instance.browser || "chrome"} ·{" "}
+            {t("instancesList.tabsCount", { count: tabCount })}
             {memoryMB !== undefined && ` · ${memoryMB.toFixed(0)}MB`}
             {instance.crashes && instance.crashes.total > 0 && (
               <span className="text-destructive">
-                {` · crashed ×${instance.crashes.total}`}
+                {t("instancesList.crashedCount", {
+                  count: instance.crashes.total,
+                })}
               </span>
             )}
           </div>
@@ -62,7 +69,7 @@ export default function InstanceListItem({
           {onOpenProfile && (
             <span
               role="button"
-              aria-label="Open Profile"
+              aria-label={t("instancesList.openProfile")}
               tabIndex={0}
               onClick={(e) => {
                 e.stopPropagation();
@@ -76,7 +83,7 @@ export default function InstanceListItem({
               }}
               className="rounded bg-bg-elevated px-2 py-0.5 text-[10px] font-medium uppercase text-text-muted transition-colors hover:bg-border-subtle hover:text-text-primary"
             >
-              Open Profile
+              {t("instancesList.openProfile")}
             </span>
           )}
           {onStop && instance.status === "running" && (

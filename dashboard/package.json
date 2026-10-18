@@ -19,8 +19,10 @@
     "check": "bun run typecheck && bun run lint && bun run format:check && bun run test:run"
   },
   "dependencies": {
+    "i18next": "^26.4.7",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-i18next": "^17.0.20",
     "react-router-dom": "^7.13.1",
     "recharts": "^3.7.0",
     "zustand": "^5.0.11"

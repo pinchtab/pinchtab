@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 function compactId(value: string): string {
   if (value.length <= 12) {
@@ -18,6 +19,7 @@ export default function CopyIdPill({
   compact = false,
   inline = false,
 }: CopyIdPillProps) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -48,10 +50,10 @@ export default function CopyIdPill({
       onClick={() => {
         void handleClick();
       }}
-      title={copied ? "Copied" : `Copy tab ID ${id}`}
+      title={copied ? t("common.copiedShort") : t("common.copyTabId", { id })}
     >
       <span className="block truncate">
-        {copied ? "Copied" : compact ? compactId(id) : id}
+        {copied ? t("common.copiedShort") : compact ? compactId(id) : id}
       </span>
     </button>
   );

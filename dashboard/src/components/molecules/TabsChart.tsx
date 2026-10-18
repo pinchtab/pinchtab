@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import {
   AreaChart,
   Area,
@@ -80,6 +81,8 @@ function GlassTooltip({
   label?: TooltipContentProps<number, string>["label"];
   seriesByKey: Map<string, SeriesDescriptor>;
 }) {
+  const { t } = useTranslation();
+
   if (!active || !payload?.length) return null;
 
   return (
@@ -112,7 +115,7 @@ function GlassTooltip({
         const nameStr = String(entry.dataKey);
         const s = seriesByKey.get(nameStr);
         const displayName = s?.displayName ?? nameStr;
-        const suffix = s?.suffix ?? " (tabs)";
+        const suffix = s?.suffix ?? t("tabsChart.suffixTabs");
         const formattedVal = formatSeriesValue(
           s?.kind ?? "tabs",
           Number(entry.value),
@@ -214,6 +217,7 @@ export default function TabsChart({
   selectedInstanceId,
   onSelectInstance,
 }: Props) {
+  const { t } = useTranslation();
   const instanceColors = useMemo(() => {
     const colors: Record<string, string> = {};
     instances.forEach((inst, i) => {
@@ -232,7 +236,7 @@ export default function TabsChart({
         instanceId: inst.id,
         kind: "tabs",
         displayName,
-        suffix: " (tabs)",
+        suffix: t("tabsChart.suffixTabs"),
         color,
       });
       list.push({
@@ -240,7 +244,7 @@ export default function TabsChart({
         instanceId: inst.id,
         kind: "mem",
         displayName,
-        suffix: " (mem)",
+        suffix: t("tabsChart.suffixMem"),
         color,
       });
     });
@@ -248,12 +252,12 @@ export default function TabsChart({
       dataKey: "goHeapMB",
       instanceId: "",
       kind: "heap",
-      displayName: "Server Heap",
+      displayName: t("tabsChart.serverHeap"),
       suffix: "",
       color: HEAP_COLOR,
     });
     return list;
-  }, [instances, instanceColors]);
+  }, [instances, instanceColors, t]);
 
   const seriesByKey = useMemo(
     () => new Map(series.map((s) => [s.dataKey, s])),
@@ -307,25 +311,27 @@ export default function TabsChart({
       if (s.kind === "tabs") {
         vals.push({
           label: s.displayName,
-          value: `${formatMetricValue(num)} tabs`,
+          value: t("tabsChart.tabsValue", {
+            value: formatMetricValue(num),
+          }),
           color: s.color,
         });
       } else if (s.kind === "mem") {
         vals.push({
-          label: `${s.displayName} mem`,
+          label: t("tabsChart.memLabel", { name: s.displayName }),
           value: `${formatMetricValue(num, 1)}MB`,
           color: s.color,
         });
       } else {
         vals.push({
-          label: "Heap",
+          label: t("tabsChart.heap"),
           value: `${formatMetricValue(num, 1)}MB`,
           color: s.color,
         });
       }
     }
     return vals;
-  }, [mergedData, series]);
+  }, [mergedData, series, t]);
 
   const tooltipContent: NonNullable<TooltipProps<number, string>["content"]> = (
     props: TooltipContentProps<number, string>,
@@ -336,8 +342,8 @@ export default function TabsChart({
       <LoadingDots
         text={
           mergedData.length === 0
-            ? "Collecting data..."
-            : "Waiting for more data..."
+            ? t("tabsChart.collecting")
+            : t("tabsChart.waiting")
         }
       />
     );
@@ -351,9 +357,11 @@ export default function TabsChart({
       <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
         <div className="flex items-center gap-2.5">
           <div>
-            <div className="dashboard-section-label">Monitoring</div>
+            <div className="dashboard-section-label">
+              {t("tabsChart.eyebrow")}
+            </div>
             <div className="mt-1 flex items-center gap-2 text-sm font-semibold text-text-primary">
-              Live telemetry
+              {t("tabsChart.liveTelemetry")}
               {/* Pulse indicator */}
               <span className="relative flex h-2.5 w-2.5">
                 <span
@@ -386,16 +394,16 @@ export default function TabsChart({
           ))}
           {/* Metric type badges */}
           <span className="rounded-sm border border-border-subtle bg-white/[0.03] px-2 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-text-secondary">
-            Tabs
+            {t("tabsChart.tabs")}
           </span>
           {hasMemory && (
             <span className="rounded-sm border border-info/35 bg-info/10 px-2 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-info">
-              Memory
+              {t("tabsChart.memory")}
             </span>
           )}
           {hasServer && (
             <span className="rounded-sm border border-primary/35 bg-primary/10 px-2 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-primary">
-              Heap
+              {t("tabsChart.heap")}
             </span>
           )}
         </div>

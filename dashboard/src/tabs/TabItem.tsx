@@ -1,14 +1,17 @@
 import type { InstanceTab } from "../generated/types";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   tab: InstanceTab;
 }
 
 export default function TabItem({ tab }: Props) {
+  const { t } = useTranslation();
+
   return (
     <div className="rounded-md border border-border-subtle/80 bg-white/2 px-3 py-2.5 transition-colors hover:border-border-default hover:bg-white/3">
       <div className="truncate text-sm font-medium text-text-primary">
-        {tab.title || "Untitled"}
+        {tab.title || t("tabs.untitled")}
       </div>
       <div className="mt-1 line-clamp-2 text-xs text-text-muted opacity-80 break-all">
         {tab.url}

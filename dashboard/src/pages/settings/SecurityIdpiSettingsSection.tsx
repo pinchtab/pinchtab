@@ -1,5 +1,6 @@
 import type { BackendConfig } from "../../types";
 import type { UpdateBackendSection } from "./settingsShared";
+import { useTranslation } from "react-i18next";
 import {
   csvToList,
   fieldClass,
@@ -23,10 +24,11 @@ export function SecurityIdpiSettingsSection({
   idpiWildcard,
   updateBackendSection,
 }: SecurityIdpiSettingsSectionProps) {
+  const { t } = useTranslation();
   return (
     <SectionCard
-      title="Security IDPI"
-      description="Indirect prompt injection controls restrict which websites are allowed and add protections around extracted content before it reaches downstream automation."
+      title={t("settings.sections.security-idpi.label")}
+      description={t("settings.panels.security-idpi.description")}
     >
       <div
         className={`mb-4 rounded-sm px-4 py-3 text-sm leading-6 ${
@@ -38,15 +40,19 @@ export function SecurityIdpiSettingsSection({
         }`}
       >
         {!idpiEnabled
-          ? "IDPI is disabled. Browser content is not being filtered by website allowlist or content protections."
+          ? t("settings.idpi.banner.disabled")
           : !idpiDomainsConfigured
-            ? "The website whitelist is not set to a restricted domain list. This is the main IDPI defense and should be configured."
+            ? t("settings.idpi.banner.noDomains")
             : idpiWildcard
-              ? "The website whitelist contains '*', which effectively disables domain restriction."
-              : "IDPI is enforcing a specific website whitelist and content protections."}
+              ? t("settings.idpi.banner.wildcard")
+              : t("settings.idpi.banner.enforcing")}
       </div>
-      {idpiToggleRows.map(([key, label, description]) => (
-        <SettingRow key={key} label={label} description={description}>
+      {idpiToggleRows.map(([key, labelKey, descriptionKey]) => (
+        <SettingRow
+          key={key}
+          label={t(labelKey)}
+          description={t(descriptionKey)}
+        >
           <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
             <input
               type="checkbox"
@@ -61,13 +67,13 @@ export function SecurityIdpiSettingsSection({
               }
               className="h-4 w-4"
             />
-            Enable
+            {t("common.enable")}
           </label>
         </SettingRow>
       ))}
       <SettingRow
-        label="Custom patterns"
-        description="Optional comma-separated phrases to treat as suspicious prompt-injection content."
+        label={t("settings.idpi.customPatterns.label")}
+        description={t("settings.idpi.customPatterns.description")}
       >
         <input
           value={listToCsv(backendConfig.security.idpi.customPatterns)}
@@ -80,7 +86,7 @@ export function SecurityIdpiSettingsSection({
             })
           }
           className={fieldClass}
-          placeholder="ignore previous instructions, exfiltrate data"
+          placeholder={t("settings.idpi.customPatterns.placeholder")}
         />
       </SettingRow>
     </SectionCard>

@@ -10,6 +10,7 @@ import {
   securityEndpointRows,
 } from "./settingsShared";
 import { SectionCard, SettingRow } from "./SettingsSharedComponents";
+import { useTranslation } from "react-i18next";
 
 interface SecuritySettingsSectionProps {
   backendConfig: BackendConfig;
@@ -22,10 +23,12 @@ export function SecuritySettingsSection({
   sensitiveEndpointsEnabled,
   updateBackendSection,
 }: SecuritySettingsSectionProps) {
+  const { t } = useTranslation();
+
   return (
     <SectionCard
-      title="Security"
-      description="These controls define what risky capabilities PinchTab exposes."
+      title={t("settings.sections.security.label")}
+      description={t("settings.panels.security.description")}
     >
       <div
         className={`rounded-sm px-4 py-3 text-sm leading-6 ${
@@ -35,17 +38,21 @@ export function SecuritySettingsSection({
         }`}
       >
         {sensitiveEndpointsEnabled
-          ? "One or more sensitive endpoint families are enabled. Features like script execution, downloads, uploads, and live capture can expose high-risk capabilities. Only enable them in trusted environments. You are responsible for securing network access, authentication, and downstream use."
-          : "These endpoint families can expose high-risk capabilities when enabled. Only turn them on in trusted environments, and only when you accept responsibility for network access, authentication, and downstream use."}
+          ? t("settings.security.banner.risky")
+          : t("settings.security.banner.warning")}
       </div>
       {securityEndpointRows.map((row) => {
-        const [key, label] = row;
-        const description: string =
+        const [key, labelKey] = row;
+        const descriptionKey =
           row.length > 2 && typeof row[2] === "string"
             ? row[2]
-            : "Controls whether the corresponding endpoint family is enabled.";
+            : "settings.endpointFallbackDescription";
         return (
-          <SettingRow key={key} label={label} description={description}>
+          <SettingRow
+            key={key}
+            label={t(labelKey)}
+            description={t(descriptionKey)}
+          >
             <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
               <input
                 type="checkbox"
@@ -59,14 +66,14 @@ export function SecuritySettingsSection({
                 }
                 className="h-4 w-4"
               />
-              Enable
+              {t("common.enable")}
             </label>
           </SettingRow>
         );
       })}
       <SettingRow
-        label="Allowed websites"
-        description="Comma-separated domain allowlist for web content. Use exact hosts or patterns like *.example.com."
+        label={t("settings.security.allowedDomains.label")}
+        description={t("settings.security.allowedDomains.description")}
       >
         <div className="space-y-2">
           <input
@@ -77,18 +84,16 @@ export function SecuritySettingsSection({
               })
             }
             className={fieldClass}
-            placeholder="127.0.0.1, localhost, ::1"
+            placeholder={t("settings.security.allowedDomains.placeholder")}
           />
           <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning">
-            Keep this list narrow. Empty or wildcard entries weaken the main
-            IDPI boundary. Allowing non-local or non-trusted sites increases
-            browser attack surface even when IDPI is enabled.
+            {t("settings.security.allowedDomains.note")}
           </div>
         </div>
       </SettingRow>
       <SettingRow
-        label="Trusted proxy CIDRs"
-        description="Comma-separated CIDRs or IPs whose browser-reported remote IP should be trusted during navigation. Use this only for known internal proxies."
+        label={t("settings.security.trustedProxyCIDRs.label")}
+        description={t("settings.security.trustedProxyCIDRs.description")}
       >
         <div className="space-y-2">
           <input
@@ -99,18 +104,16 @@ export function SecuritySettingsSection({
               } as Partial<Pick<BackendSecurityConfig, "trustedProxyCIDRs">>)
             }
             className={fieldClass}
-            placeholder="10.1.2.3, 10.0.0.0/8"
+            placeholder={t("settings.security.trustedProxyCIDRs.placeholder")}
           />
           <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning">
-            This weakens navigation IP checks for matching remote IPs. Prefer
-            specific proxy addresses over broad private ranges. Bare IP entries
-            are treated as single hosts.
+            {t("settings.security.trustedProxyCIDRs.note")}
           </div>
         </div>
       </SettingRow>
       <SettingRow
-        label="Trusted resolve CIDRs"
-        description="Comma-separated CIDRs or IPs that a hostname may resolve to during navigation preflight. This is intended for internal DNS or proxy setups."
+        label={t("settings.security.trustedResolveCIDRs.label")}
+        description={t("settings.security.trustedResolveCIDRs.description")}
       >
         <div className="space-y-2">
           <input
@@ -121,12 +124,10 @@ export function SecuritySettingsSection({
               } as Partial<Pick<BackendSecurityConfig, "trustedResolveCIDRs">>)
             }
             className={fieldClass}
-            placeholder="198.18.0.0/15, 10.1.2.3"
+            placeholder={t("settings.security.trustedResolveCIDRs.placeholder")}
           />
           <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning">
-            This allows hostnames to resolve to non-public IPs. Keep the list
-            narrow and only include infrastructure you control. Bare IP entries
-            are treated as single hosts.
+            {t("settings.security.trustedResolveCIDRs.note")}
           </div>
         </div>
       </SettingRow>

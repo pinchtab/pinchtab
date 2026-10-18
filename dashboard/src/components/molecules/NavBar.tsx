@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import * as api from "../../services/api";
 import { dispatchAuthRequired } from "../../services/auth";
 import { useAppStore } from "../../stores/useAppStore";
@@ -9,14 +10,18 @@ import "./NavBar.css";
 interface Tab {
   id: string;
   path: string;
-  label: string;
+  labelKey: "nav.monitoring" | "nav.agents" | "nav.profiles" | "nav.settings";
 }
 
 const tabs: Tab[] = [
-  { id: "monitoring", path: "/dashboard/monitoring", label: "Monitoring" },
-  { id: "agents", path: "/dashboard/agents", label: "Agents" },
-  { id: "profiles", path: "/dashboard/profiles", label: "Profiles" },
-  { id: "settings", path: "/dashboard/settings", label: "Settings" },
+  {
+    id: "monitoring",
+    path: "/dashboard/monitoring",
+    labelKey: "nav.monitoring",
+  },
+  { id: "agents", path: "/dashboard/agents", labelKey: "nav.agents" },
+  { id: "profiles", path: "/dashboard/profiles", labelKey: "nav.profiles" },
+  { id: "settings", path: "/dashboard/settings", labelKey: "nav.settings" },
 ];
 
 interface NavBarProps {
@@ -25,6 +30,7 @@ interface NavBarProps {
 }
 
 export default function NavBar({ onRefresh, showLogout = false }: NavBarProps) {
+  const { t } = useTranslation();
   const {
     serverInfo,
     instances,
@@ -94,7 +100,7 @@ export default function NavBar({ onRefresh, showLogout = false }: NavBarProps) {
     <header className="sticky top-0 z-50 border-b border-border-subtle bg-bg-app/95 backdrop-blur">
       <div className="flex h-15 items-center gap-0 px-4 sm:px-5">
         <span className="min-w-32 text-sm font-semibold tracking-[0.2em] text-text-primary uppercase">
-          PinchTab
+          {t("app.name")}
         </span>
 
         {/* Desktop nav */}
@@ -110,9 +116,9 @@ export default function NavBar({ onRefresh, showLogout = false }: NavBarProps) {
                     : "text-text-secondary"
                 }`
               }
-              title={`${tab.label} (⌘${i + 1})`}
+              title={`${t(tab.labelKey)} (⌘${i + 1})`}
             >
-              {tab.label}
+              {t(tab.labelKey)}
             </NavLink>
           ))}
         </nav>
@@ -141,7 +147,7 @@ export default function NavBar({ onRefresh, showLogout = false }: NavBarProps) {
                 void handleLogout();
               }}
             >
-              Logout
+              {t("nav.logout")}
             </button>
           )}
           {onRefresh && (
@@ -150,7 +156,7 @@ export default function NavBar({ onRefresh, showLogout = false }: NavBarProps) {
                 refreshing ? "spinning" : ""
               }`}
               onClick={handleRefresh}
-              title="Refresh (⌘R)"
+              title={t("nav.refreshTitle")}
             >
               ↻
             </button>
@@ -159,7 +165,7 @@ export default function NavBar({ onRefresh, showLogout = false }: NavBarProps) {
           <button
             className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-sm border border-transparent bg-transparent text-lg text-text-muted transition-all duration-150 hover:border-border-subtle hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 sm:hidden"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            aria-label="Toggle menu"
+            aria-label={t("nav.toggleMenu")}
           >
             {mobileMenuOpen ? "✕" : "☰"}
           </button>
@@ -181,7 +187,7 @@ export default function NavBar({ onRefresh, showLogout = false }: NavBarProps) {
                 }`
               }
             >
-              {tab.label}
+              {t(tab.labelKey)}
             </NavLink>
           ))}
           {showLogout && (
@@ -192,7 +198,7 @@ export default function NavBar({ onRefresh, showLogout = false }: NavBarProps) {
                 void handleLogout();
               }}
             >
-              Logout
+              {t("nav.logout")}
             </button>
           )}
         </nav>

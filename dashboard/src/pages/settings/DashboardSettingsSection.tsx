@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
+import { useTranslation } from "react-i18next";
 import { Select } from "../../components/atoms";
 import type { LocalDashboardSettings } from "../../types";
 import { SectionCard, SettingRow } from "./SettingsSharedComponents";
@@ -12,14 +13,16 @@ export function DashboardSettingsSection({
   localSettings,
   setLocalSettings,
 }: DashboardSettingsSectionProps) {
+  const { t } = useTranslation();
+
   return (
     <SectionCard
-      title="Dashboard Preferences"
-      description="These controls affect this dashboard UI only. They are stored locally in your browser and do not require a backend restart."
+      title={t("settings.panels.dashboard.title")}
+      description={t("settings.panels.dashboard.description")}
     >
       <SettingRow
-        label="Screencast frame rate"
-        description="Controls how often live previews request new frames."
+        label={t("settings.dashboard.screencastFps.label")}
+        description={t("settings.dashboard.screencastFps.description")}
       >
         <div className="flex items-center gap-3">
           <input
@@ -44,8 +47,8 @@ export function DashboardSettingsSection({
         </div>
       </SettingRow>
       <SettingRow
-        label="Screencast quality"
-        description="JPEG quality for tab preview streams."
+        label={t("settings.dashboard.screencastQuality.label")}
+        description={t("settings.dashboard.screencastQuality.description")}
       >
         <div className="flex items-center gap-3">
           <input
@@ -70,8 +73,8 @@ export function DashboardSettingsSection({
         </div>
       </SettingRow>
       <SettingRow
-        label="Screencast width"
-        description="Maximum preview width for live tiles."
+        label={t("settings.dashboard.screencastMaxWidth.label")}
+        description={t("settings.dashboard.screencastMaxWidth.description")}
       >
         <Select
           value={localSettings.screencast.maxWidth}
@@ -93,8 +96,8 @@ export function DashboardSettingsSection({
         </Select>
       </SettingRow>
       <SettingRow
-        label="Memory metrics"
-        description="Poll every running instance for browser memory on each monitoring tick: RSS across the Chrome process tree plus JS heap and DOM counters read from each open tab over CDP. Measured cost: about a millisecond per open tab plus a few tens of milliseconds for the process-tree walk, per instance per tick."
+        label={t("settings.dashboard.memoryMetrics.label")}
+        description={t("settings.dashboard.memoryMetrics.description")}
       >
         <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
           <input
@@ -111,12 +114,12 @@ export function DashboardSettingsSection({
             }
             className="h-4 w-4"
           />
-          Enable
+          {t("common.enable")}
         </label>
       </SettingRow>
       <SettingRow
-        label="Polling interval"
-        description="How frequently the dashboard asks the backend for fresh metrics."
+        label={t("settings.dashboard.pollInterval.label")}
+        description={t("settings.dashboard.pollInterval.description")}
       >
         <div className="flex items-center gap-3">
           <input
@@ -142,8 +145,8 @@ export function DashboardSettingsSection({
         </div>
       </SettingRow>
       <SettingRow
-        label="Reasoning output"
-        description="Choose whether the live agent feed shows tool calls, progress updates, or both."
+        label={t("settings.dashboard.reasoningOutput.label")}
+        description={t("settings.dashboard.reasoningOutput.description")}
       >
         <Select
           value={localSettings.agents.reasoningMode}
@@ -160,9 +163,15 @@ export function DashboardSettingsSection({
             }))
           }
         >
-          <option value="tool_calls">Tool calls only</option>
-          <option value="progress">Progress only</option>
-          <option value="both">Both</option>
+          <option value="tool_calls">
+            {t("settings.dashboard.reasoningOutput.toolCallsOnly")}
+          </option>
+          <option value="progress">
+            {t("settings.dashboard.reasoningOutput.progressOnly")}
+          </option>
+          <option value="both">
+            {t("settings.dashboard.reasoningOutput.both")}
+          </option>
         </Select>
       </SettingRow>
     </SectionCard>

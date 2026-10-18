@@ -10,6 +10,8 @@ interface MonitoringEmptyStateProps {
   onOpenDefaultProfile: () => void;
 }
 
+import { useTranslation } from "react-i18next";
+
 export default function MonitoringEmptyState({
   waitingForExpectedInstance,
   startupRetriesRemaining,
@@ -19,11 +21,15 @@ export default function MonitoringEmptyState({
   onStartDefault,
   onOpenDefaultProfile,
 }: MonitoringEmptyStateProps) {
+  const { t } = useTranslation();
+
   if (waitingForExpectedInstance) {
     return (
       <EmptyState
-        title="Starting default instance..."
-        description={`PinchTab is waiting for the default profile to come online. Checking again automatically (${startupRetriesRemaining} checks left).`}
+        title={t("monitoringEmpty.starting")}
+        description={t("monitoringEmpty.waiting", {
+          count: startupRetriesRemaining,
+        })}
         icon="⏳"
       />
     );
@@ -36,10 +42,10 @@ export default function MonitoringEmptyState({
         onClick={onStartDefault}
         loading={startingDefaultInstance}
       >
-        Start Default Instance
+        {t("monitoringEmpty.startDefault")}
       </Button>
       <Button variant="secondary" onClick={onOpenDefaultProfile}>
-        Open Default Profile
+        {t("monitoringEmpty.openDefaultProfile")}
       </Button>
     </div>
   );
@@ -52,11 +58,11 @@ export default function MonitoringEmptyState({
         </div>
       )}
       <EmptyState
-        title="No active instances"
+        title={t("monitoringEmpty.noActive")}
         description={
           expectsAutoInstance
-            ? "PinchTab expected a default instance, but it never became available. Start it manually or inspect the profile."
-            : "Start the default instance or open Profiles to launch a different one."
+            ? t("monitoringEmpty.expectedMissing")
+            : t("monitoringEmpty.startHint")
         }
         icon="📡"
         action={manualActions}

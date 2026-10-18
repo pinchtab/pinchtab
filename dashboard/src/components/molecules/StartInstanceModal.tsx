@@ -3,6 +3,7 @@ import { Button, Input, Modal } from "../atoms";
 import { useAppStore } from "../../stores/useAppStore";
 import * as api from "../../services/api";
 import type { LaunchInstanceRequest, Profile } from "../../generated/types";
+import { Trans, useTranslation } from "react-i18next";
 
 interface Props {
   open: boolean;
@@ -10,12 +11,11 @@ interface Props {
   onClose: () => void;
 }
 
-const PORT_VALIDATION_ERROR =
-  "Port must be a whole number between 1 and 65535.";
+const PORT_VALIDATION_ERROR_KEY = "instanceStart.portInvalid";
 
 function normalizeLaunchPort(rawPort: string): {
   port?: string;
-  error?: string;
+  errorKey?: typeof PORT_VALIDATION_ERROR_KEY;
 } {
   const trimmed = rawPort.trim();
   if (!trimmed) {
@@ -23,18 +23,19 @@ function normalizeLaunchPort(rawPort: string): {
   }
 
   if (!/^\d+$/.test(trimmed)) {
-    return { error: PORT_VALIDATION_ERROR };
+    return { errorKey: PORT_VALIDATION_ERROR_KEY };
   }
 
   const numericPort = Number(trimmed);
   if (numericPort < 1 || numericPort > 65535) {
-    return { error: PORT_VALIDATION_ERROR };
+    return { errorKey: PORT_VALIDATION_ERROR_KEY };
   }
 
   return { port: String(numericPort) };
 }
 
 export default function StartInstanceModal({ open, profile, onClose }: Props) {
+  const { t } = useTranslation();
   const { setInstances } = useAppStore();
   const [port, setPort] = useState("");
   const [headless, setHeadless] = useState(false);
@@ -42,10 +43,11 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
   const [launchError, setLaunchError] = useState("");
   const [launchLoading, setLaunchLoading] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState("");
-  const { port: normalizedPort, error: portError } = useMemo(
+  const { port: normalizedPort, errorKey: portErrorKey } = useMemo(
     () => normalizeLaunchPort(port),
     [port],
   );
+  const portError = portErrorKey ? t(portErrorKey) : "";
 
   useEffect(() => {
     if (open) {
@@ -78,7 +80,7 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
   const handleLaunch = async () => {
     if (!profile || launchLoading) return;
     if (!profile.id) {
-      setLaunchError("Profile ID missing");
+      setLaunchError(t("instanceStart.profileIdMissing"));
       return;
     }
     if (portError) {
@@ -103,7 +105,8 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
       onClose();
     } catch (e) {
       console.error("Launch failed:", e);
-      const msg = e instanceof Error ? e.message : "Failed to launch instance";
+      const msg =
+        e instanceof Error ? e.message : t("instanceStart.launchFailed");
       setLaunchError(msg);
     } finally {
       setLaunchLoading(false);
@@ -113,10 +116,10 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
   const handleCopyCommand = async () => {
     try {
       await navigator.clipboard.writeText(launchCommand);
-      setCopyFeedback("Copied!");
+      setCopyFeedback(t("common.copied"));
       setTimeout(() => setCopyFeedback(""), 2000);
     } catch {
-      setCopyFeedback("Failed to copy");
+      setCopyFeedback(t("common.copyFailed"));
       setTimeout(() => setCopyFeedback(""), 2000);
     }
   };
@@ -129,7 +132,7 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
           onClose();
         }
       }}
-      title="🖥️ Start Profile"
+      title={t("instanceStart.title")}
       actions={
         <>
           <Button
@@ -137,7 +140,7 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
             disabled={launchLoading}
             onClick={onClose}
           >
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             variant="primary"
@@ -145,7 +148,7 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
             loading={launchLoading}
             disabled={Boolean(portError)}
           >
-            Start
+            {t("instanceStart.start")}
           </Button>
         </>
       }
@@ -157,8 +160,8 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
           </div>
         )}
         <Input
-          label="Port"
-          placeholder="Auto-select from configured range"
+          label={t("instanceStart.port")}
+          placeholder={t("instanceStart.portPlaceholder")}
           value={port}
           onChange={(e) => setPort(e.target.value)}
         />
@@ -166,8 +169,7 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
           <p className="-mt-2 text-xs text-destructive">{portError}</p>
         ) : (
           <p className="-mt-2 text-xs text-text-muted">
-            Leave blank to auto-select a free port from the configured instance
-            port range.
+            {t("instanceStart.portHint")}
           </p>
         )}
         <label className="flex items-center gap-2 text-sm text-text-secondary">
@@ -177,26 +179,34 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
             onChange={(e) => setHeadless(e.target.checked)}
             className="h-4 w-4"
           />
-          Headless (best for Docker/VPS)
+          {t("instanceStart.headless")}
         </label>
 
         <div>
-          <label className="mb-1 block text-xs text-text-muted">Browser</label>
+          <label className="mb-1 block text-xs text-text-muted">
+            {t("instanceStart.browser")}
+          </label>
           <select
             value={browser}
             onChange={(e) => setBrowser(e.target.value)}
             className="w-full rounded border border-border-subtle bg-bg-elevated px-3 py-2 text-sm text-text-primary"
           >
-            <option value="">Server default</option>
-            <option value="chrome">Chrome</option>
-            <option value="cloak">CloakBrowser</option>
-            <option value="ghost-chrome">Ghost + Chrome</option>
+            <option value="">{t("instanceStart.browserDefault")}</option>
+            <option value="chrome">
+              {t("settings.browser.provider.chrome")}
+            </option>
+            <option value="cloak">
+              {t("settings.browser.provider.cloak")}
+            </option>
+            <option value="ghost-chrome">
+              {t("settings.browser.provider.ghostChrome")}
+            </option>
           </select>
         </div>
 
         <div>
           <label className="mb-1 block text-xs text-text-muted">
-            Direct launch command (backup)
+            {t("instanceStart.commandLabel")}
           </label>
           <textarea
             readOnly
@@ -205,15 +215,18 @@ export default function StartInstanceModal({ open, profile, onClose }: Props) {
           />
           <div className="mt-2 flex items-center gap-2">
             <Button size="sm" variant="secondary" onClick={handleCopyCommand}>
-              Copy Command
+              {t("instanceStart.copyCommand")}
             </Button>
             {copyFeedback && (
               <span className="text-xs text-success">{copyFeedback}</span>
             )}
           </div>
           <p className="mt-2 text-xs text-text-muted">
-            Replace <code>{"<token>"}</code> with the value from{" "}
-            <code>pinchtab config token</code> when auth is enabled.
+            <Trans
+              i18nKey="instanceStart.commandHint"
+              values={{ token: "<token>" }}
+              components={{ code: <code /> }}
+            />
           </p>
         </div>
       </div>

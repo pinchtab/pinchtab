@@ -2,6 +2,7 @@ import type { BackendConfig } from "../../types";
 import type { UpdateBackendSection } from "./settingsShared";
 import { fieldClass } from "./settingsShared";
 import { SectionCard, SettingRow } from "./SettingsSharedComponents";
+import { useTranslation } from "react-i18next";
 
 interface ProfilesSettingsSectionProps {
   backendConfig: BackendConfig;
@@ -12,14 +13,16 @@ export function ProfilesSettingsSection({
   backendConfig,
   updateBackendSection,
 }: ProfilesSettingsSectionProps) {
+  const { t } = useTranslation();
+
   return (
     <SectionCard
-      title="Profiles"
-      description="Profile storage is host-level. Changing the base directory requires restart because the profile manager and orchestrator are created with it at boot."
+      title={t("settings.sections.profiles.label")}
+      description={t("settings.panels.profiles.description")}
     >
       <SettingRow
-        label="Profiles base directory"
-        description="Root directory where browser profiles are stored."
+        label={t("settings.profiles.baseDir.label")}
+        description={t("settings.profiles.baseDir.description")}
       >
         <input
           value={backendConfig.profiles.baseDir}
@@ -32,8 +35,8 @@ export function ProfilesSettingsSection({
         />
       </SettingRow>
       <SettingRow
-        label="Default profile"
-        description="Profile name used when the server needs an implicit default."
+        label={t("settings.profiles.defaultProfile.label")}
+        description={t("settings.profiles.defaultProfile.description")}
       >
         <input
           value={backendConfig.profiles.defaultProfile}

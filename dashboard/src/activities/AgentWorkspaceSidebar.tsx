@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { AgentItem, SidebarPanel } from "../components/molecules";
 import type { Agent, Instance, InstanceTab, Profile } from "../types";
 import type { Session } from "../services/api";
@@ -59,6 +60,7 @@ export default function AgentWorkspaceSidebar({
   onProfileChange,
   onInstanceChange,
 }: AgentWorkspaceSidebarProps) {
+  const { t } = useTranslation();
   const sessionsByAgent = useMemo(() => {
     const map = new Map<string, Session[]>();
     for (const session of sessions) {
@@ -87,8 +89,8 @@ export default function AgentWorkspaceSidebar({
       header={
         <div className="flex">
           {[
-            { id: "agents" as const, label: "Agents" },
-            { id: "activities" as const, label: "Activities" },
+            { id: "agents" as const, label: t("nav.agents") },
+            { id: "activities" as const, label: t("nav.activities") },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -120,7 +122,7 @@ export default function AgentWorkspaceSidebar({
         visibleAgents.length === 0 ? (
           <div className="py-8 text-center text-sm text-text-muted">
             <div className="mb-2 text-2xl">🦀</div>
-            No agent activity observed yet
+            {t("agents.noActivity")}
           </div>
         ) : (
           <div className="flex flex-col">
@@ -134,7 +136,7 @@ export default function AgentWorkspaceSidebar({
                 }`}
                 onClick={() => onSelectAgent("")}
               >
-                All Agents
+                {t("agents.allAgents")}
               </button>
             )}
             {visibleAgents.map((agent) => (

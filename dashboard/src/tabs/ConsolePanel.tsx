@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import * as api from "../services/api";
 import type { ConsoleLogEntry } from "../services/api";
 
@@ -23,6 +24,7 @@ function formatTime(ts: string): string {
 }
 
 export default function ConsolePanel({ tabId }: Props) {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState<ConsoleLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -55,7 +57,7 @@ export default function ConsolePanel({ tabId }: Props) {
   if (loading) {
     return (
       <div className="flex h-full flex-1 items-center justify-center text-sm text-text-muted">
-        Loading console logs...
+        {t("consolePanel.loading")}
       </div>
     );
   }
@@ -63,7 +65,7 @@ export default function ConsolePanel({ tabId }: Props) {
   if (logs.length === 0) {
     return (
       <div className="flex h-full flex-1 items-center justify-center text-sm text-text-muted">
-        No console logs yet
+        {t("consolePanel.empty")}
       </div>
     );
   }

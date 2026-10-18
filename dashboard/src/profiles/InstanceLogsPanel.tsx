@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import * as api from "../services/api";
 
 interface Props {
@@ -8,10 +9,8 @@ interface Props {
 
 const MAX_LOG_CHARS = 256 * 1024;
 
-export default function InstanceLogsPanel({
-  instanceId,
-  emptyMessage = "No instance logs available.",
-}: Props) {
+export default function InstanceLogsPanel({ instanceId, emptyMessage }: Props) {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -77,7 +76,7 @@ export default function InstanceLogsPanel({
   if (loading && !logs) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-text-muted">
-        Loading logs...
+        {t("instanceLogs.loading")}
       </div>
     );
   }
@@ -85,7 +84,7 @@ export default function InstanceLogsPanel({
   if (!logs) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-text-muted">
-        {emptyMessage}
+        {emptyMessage || t("instanceLogs.empty")}
       </div>
     );
   }

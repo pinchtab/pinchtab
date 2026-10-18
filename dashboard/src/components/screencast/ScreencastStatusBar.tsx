@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { IconCamera } from "../atoms/Icon";
 import * as api from "../../services/api";
 
@@ -21,6 +22,7 @@ export default function ScreencastStatusBar({
   fpsDisplay,
   sizeDisplay,
 }: Props) {
+  const { t } = useTranslation();
   const [isCapturing, setIsCapturing] = useState(false);
   const [isPdfGenerating, setIsPdfGenerating] = useState(false);
 
@@ -73,7 +75,7 @@ export default function ScreencastStatusBar({
           <button
             onClick={() => setLocalFps((prev) => Math.max(1, prev - 1))}
             className="flex h-5 w-5 items-center justify-center hover:bg-white/5 active:bg-white/10"
-            title="Decrease FPS"
+            title={t("screencast.decreaseFps")}
           >
             -
           </button>
@@ -83,7 +85,7 @@ export default function ScreencastStatusBar({
           <button
             onClick={() => setLocalFps((prev) => Math.min(30, prev + 1))}
             className="flex h-5 w-5 items-center justify-center hover:bg-white/5 active:bg-white/10"
-            title="Increase FPS"
+            title={t("screencast.increaseFps")}
           >
             +
           </button>
@@ -95,7 +97,7 @@ export default function ScreencastStatusBar({
           className={`flex h-6 w-6 items-center justify-center rounded-md border border-border-subtle transition-colors hover:bg-white/5 disabled:opacity-50 ${
             isCapturing ? "bg-primary/20" : "bg-black/20"
           }`}
-          title="Take full quality screenshot (PNG)"
+          title={t("screencast.screenshotPng")}
         >
           {isCapturing ? (
             <span className="animate-pulse">⌛</span>
@@ -110,7 +112,7 @@ export default function ScreencastStatusBar({
           className={`flex h-6 w-6 items-center justify-center rounded-md border border-border-subtle transition-colors hover:bg-white/5 disabled:opacity-50 ${
             isPdfGenerating ? "bg-primary/20" : "bg-black/20"
           }`}
-          title="Download as PDF"
+          title={t("screencast.downloadPdf")}
         >
           {isPdfGenerating ? (
             <span className="animate-pulse">⌛</span>

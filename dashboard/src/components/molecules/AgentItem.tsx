@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+import { useTranslation } from "react-i18next";
 import { IconRobot, IconBolt } from "../atoms/Icon";
 import type { Agent } from "../../types";
 import type { Session } from "../../services/api";
@@ -14,22 +16,26 @@ interface Props {
 }
 
 function HandoffDot() {
+  const { t } = useTranslation();
+
   return (
     <span
-      aria-label="tab paused for human handoff"
+      aria-label={t("tabs.handoffDot")}
       className="inline-block h-2 w-2 shrink-0 rounded-full bg-red-500 ring-2 ring-bg-surface"
     />
   );
 }
 
-function timeAgo(date: string): string {
+function timeAgo(date: string, t: TFunction): string {
   const diff = Date.now() - new Date(date).getTime();
   const secs = Math.floor(diff / 1000);
-  if (secs < 5) return "just now";
-  if (secs < 60) return `${secs}s ago`;
-  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
-  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
-  return `${Math.floor(secs / 86400)}d`;
+  if (secs < 5) return t("agents.justNow");
+  if (secs < 60) return t("agents.secondsAgo", { count: secs });
+  if (secs < 3600)
+    return t("agents.minutesAgo", { count: Math.floor(secs / 60) });
+  if (secs < 86400)
+    return t("agents.hoursAgo", { count: Math.floor(secs / 3600) });
+  return t("agents.daysAgo", { count: Math.floor(secs / 86400) });
 }
 
 function formatSessionTime(ts: string): string {
@@ -39,11 +45,13 @@ function formatSessionTime(ts: string): string {
   });
 }
 
-function sessionDisplayName(session: Session): string {
+function sessionDisplayName(session: Session, t: TFunction): string {
   if (session.label) return session.label;
   const start = formatSessionTime(session.createdAt);
   const end = formatSessionTime(session.lastSeenAt || session.createdAt);
-  return start === end ? `Session ${start}` : `Session ${start}–${end}`;
+  return start === end
+    ? t("agents.sessionLabel", { start })
+    : t("agents.sessionLabelRange", { start, end });
 }
 
 export default function AgentItem({
@@ -56,6 +64,8 @@ export default function AgentItem({
   onClick,
   onSelectSession,
 }: Props) {
+  const { t } = useTranslation();
+
   return (
     <div>
       <button
@@ -76,7 +86,7 @@ export default function AgentItem({
           {hasHandoff && <HandoffDot />}
         </div>
         <span className="dashboard-mono text-[0.65rem] text-text-muted">
-          {timeAgo(agent.lastActivity || agent.connectedAt)}
+          {timeAgo(agent.lastActivity || agent.connectedAt, t)}
         </span>
       </button>
 
@@ -98,7 +108,7 @@ export default function AgentItem({
               >
                 <IconBolt size={14} />
                 <span className="min-w-0 flex-1 truncate text-xs font-medium">
-                  {sessionDisplayName(session)}
+                  {sessionDisplayName(session, t)}
                 </span>
                 {sessionHasHandoff && <HandoffDot />}
               </button>

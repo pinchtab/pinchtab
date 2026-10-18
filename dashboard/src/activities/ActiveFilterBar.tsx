@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { ActivityFilters } from "./types";
 
 interface ActiveFilterBarProps {
@@ -13,6 +14,7 @@ export default function ActiveFilterBar({
   hideSessionFilter = false,
   onClear,
 }: ActiveFilterBarProps) {
+  const { t } = useTranslation();
   const activeFilters = [
     !hideAgentFilter && filters.agentId ? `agent:${filters.agentId}` : "",
     filters.profileName ? `profile:${filters.profileName}` : "",
@@ -44,7 +46,7 @@ export default function ActiveFilterBar({
         className="ml-auto text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-text-muted transition-colors hover:text-text-primary"
         onClick={onClear}
       >
-        Clear filters
+        {t("activityFilters.clearFilters")}
       </button>
     </div>
   );

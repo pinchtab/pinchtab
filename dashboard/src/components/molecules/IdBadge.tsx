@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   id: string;
@@ -11,6 +12,7 @@ export default function IdBadge({
   copyable = true,
   variant = "default",
 }: Props) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = (e: React.MouseEvent) => {
@@ -50,7 +52,7 @@ export default function IdBadge({
     return (
       <button
         onClick={handleCopy}
-        title={`Click to copy full ID: ${id}`}
+        title={t("common.copyFullId", { id })}
         className={`group ${baseStyles} ${variantStyles[variant]}`}
       >
         {content}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { InstanceTab } from "../generated/types";
 import { useAppStore } from "../stores/useAppStore";
 import { SidebarPanel, TabsChart } from "../components/molecules";
@@ -23,10 +24,11 @@ function sameIds(left: string[], right: string[]): boolean {
 
 export default function InstanceTabsPanel({
   tabs,
-  emptyMessage = "No tabs open",
+  emptyMessage,
   instanceId,
   handoffTabs,
 }: Props) {
+  const { t } = useTranslation();
   const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
   const [selectionPinned, setSelectionPinned] = useState(false);
   const [acknowledgedTabIds, setAcknowledgedTabIds] = useState<string[]>(() =>
@@ -55,11 +57,11 @@ export default function InstanceTabsPanel({
         ? [
             {
               id: selectedInstance.id,
-              profileName: selectedInstance.profileName || "Unknown",
+              profileName: selectedInstance.profileName || t("common.unknown"),
             },
           ]
         : [],
-    [selectedInstance],
+    [selectedInstance, t],
   );
 
   useEffect(() => {
@@ -167,14 +169,14 @@ export default function InstanceTabsPanel({
     >
       {tabs.length === 0 && !showTelemetry ? (
         <div className="flex flex-1 items-center justify-center py-8 text-sm text-text-muted">
-          {emptyMessage}
+          {emptyMessage ?? t("tabs.noTabsOpen")}
         </div>
       ) : showTelemetry ? (
         <div className="flex-1 overflow-auto">
           <ErrorBoundary
             fallback={
               <div className="flex h-50 items-center justify-center rounded-lg border border-destructive/50 bg-bg-surface text-sm text-destructive">
-                Chart crashed - check console
+                {t("tabs.chartCrashed")}
               </div>
             }
           >

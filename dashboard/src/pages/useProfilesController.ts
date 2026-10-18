@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
 import { useAppStore } from "../stores/useAppStore";
 import * as api from "../services/api";
@@ -22,6 +23,7 @@ interface ProfilesLocationState {
 }
 
 export function useProfilesController() {
+  const { t } = useTranslation();
   const location = useLocation();
   const {
     profiles,
@@ -154,7 +156,7 @@ export function useProfilesController() {
     const name = selectedProfile.name;
     try {
       await api.deleteProfile(selectedProfile.id);
-      setDeleteNotice(`Profile "${name}" deleted`);
+      setDeleteNotice(t("profilesPage.deletedNotice", { name }));
       setTimeout(() => setDeleteNotice(null), 4000);
       loadProfiles();
     } catch (e) {

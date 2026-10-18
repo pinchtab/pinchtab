@@ -42,7 +42,10 @@ function formatTime(ts: string): string {
   });
 }
 
+import { useTranslation } from "react-i18next";
+
 export default function ActivityLine({ event }: Props) {
+  const { t } = useTranslation();
   const status =
     typeof event.details?.status === "number" ? event.details.status : null;
   const durationMs =
@@ -74,9 +77,11 @@ export default function ActivityLine({ event }: Props) {
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <Badge variant={typeColors.progress}>PROGRESS</Badge>
+              <Badge variant={typeColors.progress}>
+                {t("activityLine.progress")}
+              </Badge>
               <span className="truncate text-text-primary">
-                {event.message || "Agent reported progress"}
+                {event.message || t("activityLine.progressFallback")}
               </span>
             </div>
             {(progressLabel || progressValue !== undefined) && (

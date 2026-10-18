@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Button, Modal } from "../../components/atoms";
 
 interface DefaultInstanceModalProps {
@@ -21,11 +22,13 @@ export default function DefaultInstanceModal({
   onClose,
   onStart,
 }: DefaultInstanceModalProps) {
+  const { t } = useTranslation();
+
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Start Default Instance"
+      title={t("defaultInstance.title")}
       actions={
         <>
           <Button
@@ -33,7 +36,7 @@ export default function DefaultInstanceModal({
             onClick={onClose}
             disabled={startingDefaultInstance}
           >
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             variant={prefersHeadedLaunch ? "primary" : "secondary"}
@@ -43,7 +46,7 @@ export default function DefaultInstanceModal({
             loading={startingDefaultMode === "headed"}
             disabled={startingDefaultInstance}
           >
-            Start Headed
+            {t("defaultInstance.startHeaded")}
           </Button>
           <Button
             variant={prefersHeadedLaunch ? "secondary" : "primary"}
@@ -53,20 +56,24 @@ export default function DefaultInstanceModal({
             loading={startingDefaultMode === "headless"}
             disabled={startingDefaultInstance}
           >
-            Start Headless
+            {t("defaultInstance.startHeadless")}
           </Button>
         </>
       }
     >
-      <p>Choose how to launch the default profile for this session.</p>
+      <p>{t("defaultInstance.description")}</p>
       {launchError && (
         <div className="mt-3 rounded border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {launchError}
         </div>
       )}
       <p className="mt-2 text-xs text-text-muted">
-        Configured default mode:{" "}
-        {defaultLaunchMode === "headed" ? "headed" : "headless"}
+        {t("defaultInstance.configuredMode", {
+          mode:
+            defaultLaunchMode === "headed"
+              ? t("defaultInstance.modeHeaded")
+              : t("defaultInstance.modeHeadless"),
+        })}
       </p>
     </Modal>
   );

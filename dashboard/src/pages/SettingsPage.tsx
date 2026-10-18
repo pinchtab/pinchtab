@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button, Card, Input, Modal } from "../components/atoms";
 import { SidebarPanel, SidebarPanelHeader } from "../components/molecules";
 import type {
@@ -166,12 +167,14 @@ export default function SettingsPage() {
     handleElevationSubmit,
   } = useSettingsController();
 
+  const { t } = useTranslation();
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <Modal
         open={pendingElevatedAction !== null}
         onClose={closeElevationPrompt}
-        title="Confirm admin action"
+        title={t("settings.elevation.title")}
         actions={
           <>
             <Button
@@ -179,7 +182,7 @@ export default function SettingsPage() {
               onClick={closeElevationPrompt}
               disabled={elevating}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="primary"
@@ -187,7 +190,7 @@ export default function SettingsPage() {
               form="settings-elevation-form"
               disabled={elevating || elevationToken.trim() === ""}
             >
-              {elevating ? "Verifying..." : "Continue"}
+              {elevating ? t("common.verifying") : t("common.continue")}
             </Button>
           </>
         }
@@ -199,16 +202,14 @@ export default function SettingsPage() {
           onSubmit={handleElevationSubmit}
         >
           <p className="leading-6 text-text-muted">
-            Re-enter the API token to save backend configuration changes. The
-            elevated session stays active briefly so you do not need to repeat
-            this for every admin action.
+            {t("settings.elevation.body")}
           </p>
           <Input
             id="settings-elevation-password"
             type="password"
             autoComplete="off"
-            label="API token"
-            placeholder="Paste API token"
+            label={t("settings.elevation.apiToken")}
+            placeholder={t("settings.elevation.apiTokenPlaceholder")}
             value={elevationToken}
             onChange={(e) => setElevationToken(e.target.value)}
             autoFocus
@@ -233,8 +234,10 @@ export default function SettingsPage() {
           width="narrow"
           header={
             <SidebarPanelHeader
-              eyebrow="Settings"
-              description={`Version: ${serverInfo?.version || "dev"}`}
+              eyebrow={t("settings.title")}
+              description={t("settings.version", {
+                version: serverInfo?.version || "dev",
+              })}
               descriptionClassName="dashboard-mono"
             />
           }
@@ -251,9 +254,9 @@ export default function SettingsPage() {
                 }`}
                 onClick={() => setActiveSection(section.id)}
               >
-                <div className="text-sm font-medium">{section.label}</div>
+                <div className="text-sm font-medium">{t(section.labelKey)}</div>
                 <div className="mt-1 text-xs leading-5 text-text-muted">
-                  {section.description}
+                  {t(section.descriptionKey)}
                 </div>
               </button>
             ))}
@@ -264,7 +267,7 @@ export default function SettingsPage() {
           <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-border-subtle bg-bg-surface/95 p-3 backdrop-blur">
             {restartRequired && (
               <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-warning">
-                Restart required
+                {t("settings.restartRequired")}
               </div>
             )}
             <div className="flex-1" />
@@ -273,14 +276,14 @@ export default function SettingsPage() {
               onClick={handleReset}
               disabled={!hasChanges || saving}
             >
-              Reset
+              {t("common.reset")}
             </Button>
             <Button
               variant="primary"
               onClick={handleSave}
               disabled={!hasChanges || saving || !backendConfig}
             >
-              {saving ? "Saving..." : "Save"}
+              {saving ? t("common.saving") : t("common.save")}
             </Button>
           </div>
           {(error || notice || restartReasons.length > 0) && (
@@ -297,14 +300,18 @@ export default function SettingsPage() {
               )}
               {restartRequired && restartReasons.length > 0 && (
                 <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-sm text-warning">
-                  Restart needed for: {restartReasons.join(", ")}.
+                  {t("settings.restartNeededFor", {
+                    reasons: restartReasons.join(", "),
+                  })}
                 </div>
               )}
             </div>
           )}
           {loading || !backendConfig ? (
             <Card className="p-6">
-              <div className="text-sm text-text-muted">Loading settings…</div>
+              <div className="text-sm text-text-muted">
+                {t("settings.loading")}
+              </div>
             </Card>
           ) : (
             renderActiveSection(activeSection, {

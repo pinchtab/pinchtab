@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAppStore } from "../../stores/useAppStore";
 import * as api from "../../services/api";
@@ -7,6 +8,7 @@ const AUTO_INSTANCE_STRATEGIES = new Set(["always-on", "simple-autorestart"]);
 const STARTUP_REFRESH_DELAYS_MS = [500, 1000, 1500, 2500, 4000] as const;
 
 export function useMonitoringController() {
+  const { t } = useTranslation();
   const {
     instances,
     currentTabs,
@@ -162,7 +164,9 @@ export function useMonitoringController() {
     } catch (error) {
       console.error("Failed to start default instance", error);
       setLaunchError(
-        error instanceof Error ? error.message : "Failed to start instance",
+        error instanceof Error
+          ? error.message
+          : t("monitoringEmpty.startFailed"),
       );
     } finally {
       setStartingDefaultMode(null);

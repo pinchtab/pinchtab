@@ -1,0 +1,955 @@
+{
+  "app": {
+    "name": "PinchTab",
+    "sectionLabel": "Dashboard",
+    "insecureTransportWarning": "Dashboard session is running over insecure HTTP; use HTTPS or localhost for stronger session protection.",
+    "connection": {
+      "checkingAuth": "Checking server authentication...",
+      "unreachableRetrying": "PinchTab is restarting or unreachable. Retrying in {{seconds}}s...",
+      "unreachableStopped": "PinchTab is restarting or unreachable. Automatic retries stopped.",
+      "retryNow": "Retry now",
+      "refresh": "Refresh"
+    }
+  },
+  "nav": {
+    "monitoring": "Monitoring",
+    "agents": "Agents",
+    "activities": "Activities",
+    "profiles": "Profiles",
+    "settings": "Settings",
+    "logout": "Logout",
+    "refreshTitle": "Refresh (⌘R)",
+    "toggleMenu": "Toggle menu"
+  },
+  "login": {
+    "title": "Authentication",
+    "heading": "Enter API token",
+    "description": "This PinchTab server requires a bearer token before the dashboard can load protected routes and APIs.",
+    "hint": "Run <code>pinchtab config token</code> to copy the token to your clipboard.",
+    "tokenPlaceholder": "Paste bearer token",
+    "authorizing": "Authorizing...",
+    "failed": "Authentication failed"
+  },
+  "errors": {
+    "somethingWentWrong": "⚠️ Something went wrong",
+    "unknownError": "Unknown error",
+    "tryAgain": "Try again",
+    "requestFailed": "Request failed"
+  },
+  "serverSummary": {
+    "title": "Server Information",
+    "subtitle": "Technical details for current session",
+    "version": "Version",
+    "uptime": "Uptime"
+  },
+  "createProfile": {
+    "title": "📁 New Profile",
+    "create": "Create",
+    "name": "Name",
+    "namePlaceholder": "e.g. personal, work, scraping",
+    "useWhen": "Use this profile when (helps agents pick the right profile)",
+    "useWhenPlaceholder": "e.g. I need to access Gmail for the team account",
+    "source": "Import from (optional — Chrome user data path)",
+    "sourcePlaceholder": "e.g. /Users/you/Library/Application Support/Google/Chrome"
+  },
+  "handoff": {
+    "required": "Human intervention required",
+    "dismiss": "Dismiss notification",
+    "reason": "Reason:",
+    "via": "via {{source}}",
+    "resume": "Resume"
+  },
+  "debugPanel": {
+    "toggle": "🐛 Debug",
+    "title": "Debug Panel",
+    "instances": "instances:",
+    "profiles": "profiles:",
+    "agents": "agents:",
+    "tabsChartData": "tabsChartData:",
+    "serverChartData": "serverChartData:",
+    "memoryChartData": "memoryChartData:",
+    "selectedAgentId": "selectedAgentId:",
+    "profilesLoading": "profilesLoading:",
+    "instancesLoading": "instancesLoading:",
+    "instancesHeading": "Instances:"
+  },
+  "tabs": {
+    "untitled": "Untitled",
+    "handoffDot": "tab paused for human handoff",
+    "handoffDotTitle": "Tab is paused for human handoff",
+    "pin": "Pin {{title}}",
+    "unpin": "Unpin {{title}} and follow focus",
+    "pinTitle": "Pin this tab selection",
+    "unpinTitle": "Unpin and follow the focused tab again",
+    "close": "Close {{title}}",
+    "telemetryTabs": "Tabs",
+    "telemetryTabsNew": "Tabs ({{count}} new)",
+    "chartCrashed": "Chart crashed - check console",
+    "noTabsOpen": "No tabs open",
+    "noTabsOpenFull": "No tabs open.",
+    "subTabsLogs": "Logs",
+    "selectTab": "Select a tab to view details",
+    "noInstanceId": "No instance ID provided for live view.",
+    "subTabs": {
+      "live": "Live",
+      "actions": "Actions",
+      "console": "Console",
+      "errors": "Errors"
+    }
+  },
+  "instanceLogs": {
+    "loading": "Loading logs...",
+    "empty": "No instance logs available."
+  },
+  "activityFilters": {
+    "profile": "Profile",
+    "tab": "Tab",
+    "agent": "Agent",
+    "action": "Action",
+    "instance": "Instance",
+    "pathPrefix": "Path prefix",
+    "pathPrefixPlaceholder": "/tabs/ or /instances/",
+    "ageSeconds": "Age (seconds)",
+    "limit": "Limit",
+    "anyProfile": "Any profile",
+    "anyTab": "Any tab",
+    "anyAgent": "Any agent",
+    "anyAction": "Any action",
+    "anyInstance": "Any instance",
+    "all": "All",
+    "session": "Session",
+    "advanced": "Advanced filters",
+    "hide": "Hide",
+    "show": "Show",
+    "clear": "Clear",
+    "search": "Search",
+    "clearFilters": "Clear filters"
+  },
+  "activityExplorer": {
+    "requestTimeline": "Request timeline",
+    "activity": "Activity",
+    "loadFailed": "Failed to load activity",
+    "loadAgentFailed": "Failed to load agent activity",
+    "summaryEmbedded": "{{count}} events • {{agents}} agents",
+    "summaryFull": "{{count}} events • {{agents}} agents • {{tabs}} tabs • {{instances}} instances"
+  },
+  "activityTimeline": {
+    "timeline": "Timeline",
+    "recentEvents": "Recent events",
+    "noMatching": "No matching activity",
+    "adjustFilters": "Adjust the filters or generate some traffic from the CLI, MCP, or dashboard.",
+    "resumeFailed": "Resume failed",
+    "resumeTitle": "Resume automation after manual challenge solve",
+    "resuming": "Resuming…",
+    "resolveChallenge": "Resolve challenge",
+    "escalated": "escalated",
+    "escalatedTitle": "Browser was escalated"
+  },
+  "activityLine": {
+    "progress": "PROGRESS",
+    "progressFallback": "Agent reported progress"
+  },
+  "agents": {
+    "noActivity": "No agent activity observed yet",
+    "allAgents": "All Agents",
+    "justNow": "just now",
+    "secondsAgo": "{{count}}s ago",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d",
+    "sessionLabel": "Session {{start}}",
+    "sessionLabelRange": "Session {{start}}–{{end}}"
+  },
+  "consolePanel": {
+    "loading": "Loading console logs...",
+    "empty": "No console logs yet"
+  },
+  "errorsPanel": {
+    "loading": "Loading errors...",
+    "empty": "No errors yet"
+  },
+  "profiles": {
+    "size": "Size",
+    "account": "Account",
+    "noAccount": "No account",
+    "statusError": "error",
+    "statusStopped": "stopped",
+    "useWhen": "Use when",
+    "details": "Details",
+    "start": "Start",
+    "stop": "Stop",
+    "copyId": "Copy ID",
+    "copied": "Copied",
+    "copyFailed": "Failed",
+    "delete": "Delete",
+    "deleteTitle": "Delete profile",
+    "deleteConfirm": "Delete profile \"{{name}}\"? Every cookie, login and session stored in it is permanently lost. There is no undo."
+  },
+  "instancesList": {
+    "openDashboard": "Open Dashboard",
+    "openProfile": "Open Profile",
+    "restart": "Restart",
+    "tabsCount": "{{count}} tabs",
+    "crashedCount": "· crashed ×{{count}}",
+    "instances": "Instances",
+    "collapseSidebar": "Collapse sidebar"
+  },
+  "profilesPage": {
+    "heading": "Profiles",
+    "loading": "Loading profiles...",
+    "newProfile": "New Profile",
+    "emptyTitle": "No profiles yet",
+    "emptyDescription": "Click New Profile to create one",
+    "selectProfile": "Select a profile to inspect its instance, live tabs, and logs.",
+    "profileTab": "Profile: {{name}}",
+    "deletedNotice": "Profile \"{{name}}\" deleted",
+    "groupTotal": "{{size}} total",
+    "badgeTemporary": "temporary",
+    "badgeQuarantined": "quarantined"
+  },
+  "profileGroups": {
+    "temporary": "Temporary",
+    "quarantined": "Quarantined"
+  },
+  "serverStatus": {
+    "noInstances": "Server running, no instances",
+    "runningTitle": "Server running",
+    "running": "Running",
+    "restartRequiredLabel": "Restart Required",
+    "expandList": "Expand instance list",
+    "collapseList": "Collapse instance list",
+    "statusTabs_one": "{{status}} · {{count}} tab ·",
+    "statusTabs_other": "{{status}} · {{count}} tabs ·"
+  },
+  "activitySummary": {
+    "navigateTo": "Navigate to {{url}}",
+    "navigate": "Navigate to page",
+    "snapshot": "Capture page snapshot",
+    "screencast": "Open screencast stream",
+    "text": "Extract text from page",
+    "screenshot": "Take screenshot",
+    "pdf": "Export page as PDF",
+    "onTab": " on tab ",
+    "clickRef": "Click {{ref}}",
+    "click": "Click on page",
+    "dblclickRef": "Double-click {{ref}}",
+    "dblclick": "Double-click on page",
+    "typeRef": "Type into {{ref}}",
+    "type": "Type into page",
+    "hoverRef": "Hover {{ref}}",
+    "hover": "Hover on page",
+    "fillRef": "Fill {{ref}}",
+    "fill": "Fill field",
+    "selectRef": "Select {{ref}}",
+    "select": "Select option",
+    "scroll": "Scroll page",
+    "pressRef": "Press key on {{ref}}",
+    "press": "Press key",
+    "wait": "Wait for condition",
+    "evaluate": "Evaluate JavaScript",
+    "upload": "Upload file",
+    "download": "Download file"
+  },
+  "defaultInstance": {
+    "title": "Start Default Instance",
+    "description": "Choose how to launch the default profile for this session.",
+    "startHeaded": "Start Headed",
+    "startHeadless": "Start Headless",
+    "configuredMode": "Configured default mode: {{mode}}",
+    "modeHeaded": "headed",
+    "modeHeadless": "headless"
+  },
+  "monitoringEmpty": {
+    "starting": "Starting default instance...",
+    "waiting": "PinchTab is waiting for the default profile to come online. Checking again automatically ({{count}} checks left).",
+    "noActive": "No active instances",
+    "expectedMissing": "PinchTab expected a default instance, but it never became available. Start it manually or inspect the profile.",
+    "startHint": "Start the default instance or open Profiles to launch a different one.",
+    "startDefault": "Start Default Instance",
+    "openDefaultProfile": "Open Default Profile",
+    "startFailed": "Failed to start instance"
+  },
+  "screencast": {
+    "decreaseFps": "Decrease FPS",
+    "increaseFps": "Increase FPS",
+    "screenshotPng": "Take full quality screenshot (PNG)",
+    "downloadPdf": "Download as PDF",
+    "tabPreview": "Tab preview",
+    "connectionLost": "Connection lost",
+    "showStaticPreview": "Show static preview",
+    "retryConnection": "Retry connection"
+  },
+  "tabsChart": {
+    "eyebrow": "Monitoring",
+    "liveTelemetry": "Live telemetry",
+    "tabs": "Tabs",
+    "memory": "Memory",
+    "heap": "Heap",
+    "tabsValue": "{{value}} tabs",
+    "memLabel": "{{name}} mem",
+    "serverHeap": "Server Heap",
+    "collecting": "Collecting data...",
+    "waiting": "Waiting for more data...",
+    "suffixTabs": " (tabs)",
+    "suffixMem": " (mem)"
+  },
+  "profileMeta": {
+    "panel": "Profile panel",
+    "status": "Status",
+    "port": "Port",
+    "browser": "Browser",
+    "size": "Size",
+    "account": "Account",
+    "identity": "Identity",
+    "connection": "Connection",
+    "cdpUrl": "CDP URL",
+    "path": "Path",
+    "cdpAttached": "CDP attached",
+    "notFound": " (not found)",
+    "name": "Name",
+    "useWhen": "Use this profile when",
+    "instanceNotRunning": "Instance not running.",
+    "liveNotRunning": "Instance not running. Start the profile to see live view.",
+    "attachedViaCdp": "Attached via CDP",
+    "headless": "Headless",
+    "headed": "Headed"
+  },
+  "instanceStart": {
+    "title": "🖥️ Start Profile",
+    "start": "Start",
+    "port": "Port",
+    "portPlaceholder": "Auto-select from configured range",
+    "portInvalid": "Port must be a whole number between 1 and 65535.",
+    "portHint": "Leave blank to auto-select a free port from the configured instance port range.",
+    "headless": "Headless (best for Docker/VPS)",
+    "browser": "Browser",
+    "browserDefault": "Server default",
+    "commandLabel": "Direct launch command (backup)",
+    "copyCommand": "Copy Command",
+    "commandHint": "Replace <code>{{token}}</code> with the value from <code>pinchtab config token</code> when auth is enabled.",
+    "profileIdMissing": "Profile ID missing",
+    "launchFailed": "Failed to launch instance"
+  },
+  "instanceStats": {
+    "groups": {
+      "instance": "Instance",
+      "browsing": "Browsing",
+      "resources": "Resources",
+      "pages": "Pages"
+    },
+    "status": "Status",
+    "uptime": "Uptime",
+    "port": "Port",
+    "crashes": "Crashes",
+    "tabs": "Tabs",
+    "domains": "Domains",
+    "memory": "Memory",
+    "renderers": "Renderers",
+    "jsHeap": "JS heap",
+    "domNodes": "DOM nodes",
+    "listeners": "Listeners",
+    "frames": "Frames",
+    "unreadable": "Unreadable",
+    "crashSummary": "last: {{reason}} at {{time}} · tabs open before it were lost",
+    "tabsLost": "tabs open before it were lost",
+    "memorySub": "RSS across the browser process tree",
+    "jsHeapSub_one": "used / total, summed over {{count}} tab",
+    "jsHeapSub_other": "used / total, summed over {{count}} tabs",
+    "documentsSub": "{{count}} documents",
+    "unreadableSub": "tabs that did not answer; not counted",
+    "justNow": "just now"
+  },
+  "common": {
+    "save": "Save",
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "reset": "Reset",
+    "continue": "Continue",
+    "verifying": "Verifying...",
+    "enable": "Enable",
+    "close": "Close",
+    "loading": "Loading…",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "copied": "Copied!",
+    "copiedShort": "Copied",
+    "copyTabId": "Copy tab ID {{id}}",
+    "unknown": "Unknown",
+    "copyFailed": "Failed to copy",
+    "copyFullId": "Click to copy full ID: {{id}}"
+  },
+  "settings": {
+    "title": "Settings",
+    "version": "Version: {{version}}",
+    "restartRequired": "Restart required",
+    "restartNeededFor": "Restart needed for: {{reasons}}.",
+    "loading": "Loading settings…",
+    "elevation": {
+      "title": "Confirm admin action",
+      "body": "Re-enter the API token to save backend configuration changes. The elevated session stays active briefly so you do not need to repeat this for every admin action.",
+      "apiToken": "API token",
+      "apiTokenPlaceholder": "Paste API token"
+    },
+    "saveNotice": {
+      "saved": "Backend config saved. Dynamic changes were applied where possible.",
+      "restartAdvised": "Backend config saved. Dynamic changes were applied where possible. Restart advised for server-level changes."
+    },
+    "dashboardSavedNotice": "Dashboard preferences saved in this browser.",
+    "saveFailed": "Failed to save settings",
+    "loadFailed": "Failed to load settings",
+    "verifyFailed": "Failed to verify API token",
+    "sections": {
+      "dashboard": {
+        "label": "Dashboard",
+        "description": "Local monitoring and screencast preferences."
+      },
+      "defaults": {
+        "label": "Instance Defaults",
+        "description": "How new managed browser instances launch."
+      },
+      "orchestration": {
+        "label": "Orchestration",
+        "description": "Routing strategy, port range, and allocation policy."
+      },
+      "security": {
+        "label": "Security",
+        "description": "Sensitive endpoint gates and access controls."
+      },
+      "security-idpi": {
+        "label": "Security IDPI",
+        "description": "Indirect prompt injection website and content defenses."
+      },
+      "profiles": {
+        "label": "Profiles",
+        "description": "Shared profile storage and default profile behavior."
+      },
+      "network": {
+        "label": "Network & Attach",
+        "description": "Server binding, auth, and attach policy."
+      },
+      "browser": {
+        "label": "Browser Runtime",
+        "description": "Chrome binary, version, flags, and extensions."
+      },
+      "timeouts": {
+        "label": "Timeouts",
+        "description": "Action, navigation, shutdown, and wait timing."
+      },
+      "autosolver": {
+        "label": "AutoSolver",
+        "description": "Challenge-solving behavior and config-file-backed providers."
+      },
+      "observability": {
+        "label": "Observability",
+        "description": "Activity logging and retention settings."
+      }
+    },
+    "endpointFallbackDescription": "Controls whether the corresponding endpoint family is enabled.",
+    "endpoints": {
+      "allowEvaluate": {
+        "label": "Allow evaluate"
+      },
+      "allowMacro": {
+        "label": "Allow macro"
+      },
+      "allowScreencast": {
+        "label": "Allow screencast"
+      },
+      "allowDownload": {
+        "label": "Allow download"
+      },
+      "allowCookies": {
+        "label": "Allow cookies"
+      },
+      "allowUpload": {
+        "label": "Allow upload"
+      },
+      "allowNetworkIntercept": {
+        "label": "Allow network interception",
+        "description": "Lets agents install rules to abort or fulfill (mock) HTTP requests on a tab. When on, response forgery is FORBIDDEN on hosts in 'Allowed websites' below and PERMITTED elsewhere. Forging responses on hosts you've authorized the agent to use (e.g. your bank) is the highest-risk outcome — that's why allowlisted hosts are protected, not the reverse. OPTIONS preflights are skipped by default to avoid breaking CORS."
+      },
+      "allowFileScheme": {
+        "label": "Allow file:// navigation",
+        "description": "Lets agents open local file:// URLs. A file:// URL has no host, so it is NOT limited by 'Allowed websites' below and bypasses SSRF/private-IP protection — enabling it grants read access (via snapshot/screenshot/scrape) to any local file the server process can read. It stays blocked while a strict-mode allowlist is active. Enable only on trusted, single-tenant machines."
+      }
+    },
+    "idpi": {
+      "enabled": {
+        "label": "Enable IDPI",
+        "description": "Turn on indirect prompt injection defenses."
+      },
+      "strictMode": {
+        "label": "Strict mode",
+        "description": "Block disallowed domains and suspicious content instead of only warning."
+      },
+      "scanContent": {
+        "label": "Scan content",
+        "description": "Inspect extracted text and snapshots for prompt-injection patterns."
+      },
+      "wrapContent": {
+        "label": "Wrap content",
+        "description": "Mark returned page text as untrusted content for downstream consumers."
+      },
+      "customPatterns": {
+        "label": "Custom patterns",
+        "description": "Optional comma-separated phrases to treat as suspicious prompt-injection content.",
+        "placeholder": "ignore previous instructions, exfiltrate data"
+      },
+      "banner": {
+        "disabled": "IDPI is disabled. Browser content is not being filtered by website allowlist or content protections.",
+        "noDomains": "The website whitelist is not set to a restricted domain list. This is the main IDPI defense and should be configured.",
+        "wildcard": "The website whitelist contains '*', which effectively disables domain restriction.",
+        "enforcing": "IDPI is enforcing a specific website whitelist and content protections."
+      }
+    },
+    "security": {
+      "allowedDomains": {
+        "label": "Allowed websites",
+        "description": "Comma-separated domain allowlist for web content. Use exact hosts or patterns like *.example.com.",
+        "placeholder": "127.0.0.1, localhost, ::1"
+      },
+      "trustedProxyCIDRs": {
+        "label": "Trusted proxy CIDRs",
+        "description": "Comma-separated CIDRs or IPs whose browser-reported remote IP should be trusted during navigation. Use this only for known internal proxies."
+      },
+      "trustedResolveCIDRs": {
+        "label": "Trusted resolve CIDRs",
+        "description": "Comma-separated CIDRs or IPs that a hostname may resolve to during navigation preflight. This is intended for internal DNS or proxy setups.",
+        "placeholder": "198.18.0.0/15, 10.1.2.3",
+        "note": "This allows hostnames to resolve to non-public IPs. Keep the list narrow and only include infrastructure you control. Bare IP entries are treated as single hosts."
+      },
+      "allowedDomains": {
+        "label": "Allowed websites",
+        "description": "Comma-separated domain allowlist for web content. Use exact hosts or patterns like *.example.com.",
+        "placeholder": "127.0.0.1, localhost, ::1",
+        "note": "Keep this list narrow. Empty or wildcard entries weaken the main IDPI boundary. Allowing non-local or non-trusted sites increases browser attack surface even when IDPI is enabled."
+      },
+      "trustedProxyCIDRs": {
+        "label": "Trusted proxy CIDRs",
+        "description": "Comma-separated CIDRs or IPs whose browser-reported remote IP should be trusted during navigation. Use this only for known internal proxies.",
+        "placeholder": "10.1.2.3, 10.0.0.0/8",
+        "note": "This weakens navigation IP checks for matching remote IPs. Prefer specific proxy addresses over broad private ranges. Bare IP entries are treated as single hosts."
+      },
+      "banner": {
+        "risky": "One or more sensitive endpoint families are enabled. Features like script execution, downloads, uploads, and live capture can expose high-risk capabilities. Only enable them in trusted environments. You are responsible for securing network access, authentication, and downstream use.",
+        "warning": "These endpoint families can expose high-risk capabilities when enabled. Only turn them on in trusted environments, and only when you accept responsibility for network access, authentication, and downstream use."
+      }
+    },
+    "profiles": {
+      "baseDir": {
+        "label": "Profiles base directory",
+        "description": "Root directory where browser profiles are stored."
+      },
+      "defaultProfile": {
+        "label": "Default profile",
+        "description": "Profile name used when the server needs an implicit default."
+      }
+    },
+    "observability": {
+      "activityLogging": {
+        "label": "Activity logging",
+        "description": "Enable or disable activity event recording."
+      },
+      "retentionDays": {
+        "label": "Retention (days)",
+        "description": "How long to keep activity logs before automatic cleanup. Longer retention uses more disk space but provides better audit history."
+      },
+      "sessionIdleSec": {
+        "label": "Session idle timeout (seconds)",
+        "description": "Time before an inactive agent session is considered idle. Used for grouping activity by session."
+      }
+    },
+    "dashboard": {
+      "screencastFps": {
+        "label": "Screencast frame rate",
+        "description": "Controls how often live previews request new frames."
+      },
+      "screencastQuality": {
+        "label": "Screencast quality",
+        "description": "JPEG quality for tab preview streams."
+      },
+      "screencastMaxWidth": {
+        "label": "Screencast width",
+        "description": "Maximum preview width for live tiles."
+      },
+      "memoryMetrics": {
+        "label": "Memory metrics",
+        "description": "Poll every running instance for browser memory on each monitoring tick: RSS across the Chrome process tree plus JS heap and DOM counters read from each open tab over CDP. Measured cost: about a millisecond per open tab plus a few tens of milliseconds for the process-tree walk, per instance per tick."
+      },
+      "pollInterval": {
+        "label": "Polling interval",
+        "description": "How frequently the dashboard asks the backend for fresh metrics."
+      },
+      "reasoningOutput": {
+        "label": "Reasoning output",
+        "description": "Choose whether the live agent feed shows tool calls, progress updates, or both.",
+        "toolCallsOnly": "Tool calls only",
+        "progressOnly": "Progress only",
+        "both": "Both"
+      }
+    },
+    "orchestration": {
+      "strategy": {
+        "label": "Strategy",
+        "description": "Controls instance lifecycle and how shorthand routes are routed.",
+        "alwaysOn": "Always on",
+        "simple": "Simple",
+        "explicit": "Explicit",
+        "simpleAutorestart": "Simple autorestart",
+        "noInstance": "No instance (hub)"
+      },
+      "strategyHint": {
+        "alwaysOn": "Launches a default instance at boot and relaunches on crash.",
+        "simple": "Launches one instance on first request. No auto-restart.",
+        "explicit": "All instances managed via API. No automatic launches.",
+        "simpleAutorestart": "Launches on first request and relaunches on crash.",
+        "noInstance": "No local Chrome processes. Acts as a hub for remote bridges only."
+      },
+      "allocationPolicy": {
+        "label": "Allocation policy",
+        "description": "Determines how running instances are chosen for shorthand requests.",
+        "fcfs": "First available",
+        "roundRobin": "Round robin",
+        "random": "Random"
+      },
+      "instancePortStart": {
+        "label": "Instance port start",
+        "description": "Lower bound for auto-allocated instance ports."
+      },
+      "instancePortEnd": {
+        "label": "Instance port end",
+        "description": "Upper bound for auto-allocated instance ports."
+      },
+      "restart": {
+        "maxRestarts": {
+          "label": "Max restarts",
+          "description": "Maximum restart attempts. Use -1 for unlimited, 0 for no restarts."
+        },
+        "initBackoff": {
+          "label": "Initial backoff",
+          "description": "Delay in seconds before the first restart attempt."
+        },
+        "maxBackoff": {
+          "label": "Max backoff",
+          "description": "Upper bound in seconds for exponential restart backoff."
+        },
+        "stableAfter": {
+          "label": "Stable after",
+          "description": "Seconds the instance must stay healthy before the restart counter resets."
+        }
+      }
+    },
+    "panels": {
+      "defaults": {
+        "description": "These values are written to config and used for new managed instances. Existing running instances keep their current runtime."
+      },
+      "security": {
+        "description": "These controls define what risky capabilities PinchTab exposes."
+      },
+      "security-idpi": {
+        "description": "Indirect prompt injection controls restrict which websites are allowed and add protections around extracted content before it reaches downstream automation."
+      },
+      "timeouts": {
+        "description": "Runtime timing defaults written into new child configs. Existing running instances keep their current timeouts."
+      },
+      "observability": {
+        "description": "Activity logging tracks API requests for debugging and audit trails. Logs are stored locally and can be queried via the Activity page."
+      },
+      "profiles": {
+        "description": "Profile storage is host-level. Changing the base directory requires restart because the profile manager and orchestrator are created with it at boot."
+      },
+      "dashboard": {
+        "title": "Dashboard Preferences",
+        "description": "These controls affect this dashboard UI only. They are stored locally in your browser and do not require a backend restart."
+      },
+      "orchestration": {
+        "description": "Port range and allocation policy can be applied immediately for future launches. Strategy and restart-policy changes require a dashboard restart because strategy routes and lifecycle state are registered at startup."
+      },
+      "autosolver": {
+        "description": "These settings are saved into the PinchTab config file. External provider API keys stay write-only and must be set directly in that file."
+      },
+      "browser": {
+        "description": "These settings are written into the generated child config for new managed instances."
+      },
+      "network": {
+        "description": "Port and bind changes require a restart. API token management is handled outside the dashboard."
+      }
+    },
+    "instanceDefaultsHint": "Applies to newly launched managed instances.",
+    "autosolver": {
+      "configFile": {
+        "label": "Config file",
+        "description": "Dashboard edits are written back to this file. Set external provider keys under autoSolver.external in the same config file.",
+        "unavailable": "Config path unavailable"
+      },
+      "enable": {
+        "label": "Enable AutoSolver",
+        "description": "Turns on the autosolver runtime configuration for supported challenge flows."
+      },
+      "autoTrigger": {
+        "label": "Auto trigger",
+        "description": "Automatically run autosolver after supported navigation and action requests."
+      },
+      "triggerOnNavigate": {
+        "label": "Trigger on navigate",
+        "description": "Run autosolver checks after successful navigation calls."
+      },
+      "triggerOnAction": {
+        "label": "Trigger on action",
+        "description": "Run autosolver checks after successful action calls."
+      },
+      "maxAttempts": {
+        "label": "Max attempts",
+        "description": "Maximum autosolver retries before the pipeline gives up."
+      },
+      "solverTimeoutSec": {
+        "label": "Solver timeout (sec)",
+        "description": "Per-solver timeout for each attempt."
+      },
+      "retryBaseDelayMs": {
+        "label": "Retry base delay (ms)",
+        "description": "Base retry backoff delay between autosolver attempts."
+      },
+      "retryMaxDelayMs": {
+        "label": "Retry max delay (ms)",
+        "description": "Maximum retry backoff delay cap between autosolver attempts."
+      },
+      "solvers": {
+        "label": "Solvers",
+        "description": "Comma-separated ordered list of solver names to try. Use GET /solvers or GET /config/autosolver to confirm runtime-available names."
+      },
+      "llmProvider": {
+        "label": "LLM provider",
+        "description": "Optional provider name used when LLM fallback is enabled."
+      },
+      "llmFallback": {
+        "label": "LLM fallback",
+        "description": "Use an LLM as the last resort after registered solvers fail."
+      },
+      "externalKeys": {
+        "label": "External provider keys",
+        "description": "Capsolver and 2Captcha credentials are not shown in the dashboard and must be managed in the config file. Those providers appear in runtime solver lists only when keys are configured.",
+        "note": "Open the config file above and set <code>autoSolver.external.capsolverKey</code> and <code>autoSolver.external.twoCaptchaKey</code> there. The dashboard does not display or edit those values, and there are no environment variable overrides."
+      }
+    },
+    "browser": {
+      "provider": {
+        "label": "Provider",
+        "description": "Browser backend used for new managed instances.",
+        "chrome": "Chrome",
+        "cloak": "CloakBrowser",
+        "ghostChrome": "Ghost + Chrome"
+      },
+      "version": {
+        "label": "Browser version",
+        "description": "Version string used in generated UA/fingerprint defaults."
+      },
+      "binary": {
+        "label": "Browser binary",
+        "description": "Optional path override for the Chrome or CloakBrowser executable."
+      },
+      "cloak": {
+        "fingerprintSeed": {
+          "label": "Fingerprint seed",
+          "description": "Deterministic CloakBrowser identity seed. Leave blank for a fresh identity per launch."
+        },
+        "platform": {
+          "label": "Fingerprint platform",
+          "description": "Native platform fingerprint reported by CloakBrowser.",
+          "auto": "Auto",
+          "windows": "Windows",
+          "macos": "macOS",
+          "linux": "Linux"
+        },
+        "locale": {
+          "label": "Cloak locale",
+          "description": "Locale passed as --fingerprint-locale."
+        },
+        "timezone": {
+          "label": "Cloak timezone",
+          "description": "Timezone passed as --fingerprint-timezone."
+        },
+        "webrtcIP": {
+          "label": "WebRTC IP",
+          "description": "Explicit replacement IP or auto for CloakBrowser proxy exit-IP resolution."
+        },
+        "fontsDir": {
+          "label": "Fonts directory",
+          "description": "Directory containing target-platform fonts for CloakBrowser."
+        },
+        "storageQuota": {
+          "label": "Storage quota",
+          "description": "Storage quota in MB passed as --fingerprint-storage-quota."
+        },
+        "nativeStealthOnly": {
+          "label": "Native stealth only",
+          "description": "Disable PinchTab JS stealth overlays and automation-hiding launch flags.",
+          "toggle": "Use CloakBrowser native patches"
+        }
+      },
+      "extraFlags": {
+        "label": "Extra flags",
+        "description": "Additional Chrome flags appended when launching managed instances."
+      },
+      "extensionPaths": {
+        "label": "Extension paths",
+        "description": "Comma-separated extension directories to load. By default, PinchTab uses the local extensions/ folder under its state/config directory. Set custom paths here to override that default, or clear the field to disable extension loading."
+      }
+    },
+    "network": {
+      "serverPort": {
+        "label": "Server port",
+        "description": "HTTP port for the dashboard process."
+      },
+      "bindAddress": {
+        "label": "Bind address",
+        "description": "Network interface the dashboard process binds to. Keeping 127.0.0.1 or localhost limits direct reachability to the local machine.",
+        "nonLoopbackNote": "A non-loopback bind is a documented, non-default, security-reducing configuration change. It may expose the server beyond the local machine unless another network boundary still restricts access. Keep a token set and review proxy or port-publishing behavior explicitly.",
+        "loopbackNote": "Loopback bind keeps direct server reachability local. Moving to <code>0.0.0.0</code> or another non-local address widens the trust boundary."
+      },
+      "apiToken": {
+        "label": "API token",
+        "description": "Bearer token required by authenticated requests when set. The dashboard never returns it and does not manage it.",
+        "tokenConfigured": "Token configured. Manage rotation through the CLI or config file; the current value is never returned by the server. Run <code>pinchtab config token</code> to copy it to your clipboard.",
+        "noToken": "No token configured. Set one through the CLI or config file.",
+        "missingWarning": "No API token is set. Anyone who can reach this server can access exposed endpoints. Keep it on trusted local networks only, or configure a strong token through the CLI or config file. You are responsible for protecting access."
+      },
+      "stateDirectory": {
+        "label": "State directory",
+        "description": "Base state path used by managed child instances."
+      },
+      "trustProxyHeaders": {
+        "label": "Trust proxy headers",
+        "description": "Trust X-Forwarded-Proto, X-Forwarded-Host, and Forwarded headers for origin checks. Enable only when PinchTab runs behind a trusted reverse proxy (e.g. Caddy, nginx)."
+      },
+      "cookieSecure": {
+        "label": "Cookie Secure mode",
+        "description": "Controls whether dashboard session cookies require HTTPS. Auto enables Secure only on HTTPS. Force Secure is appropriate when TLS is in front of PinchTab.",
+        "auto": "Auto",
+        "forceSecure": "Force Secure",
+        "forceInsecure": "Force Insecure",
+        "note": "Force Secure blocks dashboard login on plain HTTP. Use it when PinchTab is served through HTTPS directly or behind a trusted proxy. If TLS terminates in front of PinchTab, enable <code>trustProxyHeaders</code> so forwarded HTTPS requests are recognized."
+      },
+      "persistSessions": {
+        "label": "Persist dashboard sessions",
+        "description": "Keep dashboard login sessions across server restarts. Disable this if you want every restart to force a fresh login."
+      },
+      "sessionIdleTimeout": {
+        "label": "Session idle timeout",
+        "description": "How long an unused dashboard session stays valid. This is stored in seconds in config."
+      },
+      "sessionMaxLifetime": {
+        "label": "Session max lifetime",
+        "description": "Absolute lifetime for a dashboard session before it must be re-created, even if active."
+      },
+      "requireElevation": {
+        "label": "Require elevation for config saves",
+        "description": "Ask for API token re-entry before saving backend config changes. Disabled by default."
+      },
+      "allowAttach": {
+        "label": "Allow attach",
+        "description": "Permit attaching PinchTab to externally managed Chrome sessions."
+      },
+      "allowHosts": {
+        "label": "Allowed attach hosts",
+        "description": "Comma-separated host allowlist for attach requests. Only include hosts you control and trust. Using \"*\" disables host allowlisting.",
+        "wildcardNote": "<code>allowHosts: [\"*\"]</code> is a documented, non-default, security-reducing override. It disables host allowlisting entirely and allows remote attach requests to any reachable host with an allowed scheme. Use it only on isolated, operator-controlled networks.",
+        "note": "Hosts in this allowlist may be used for remote attach requests. Broad or untrusted entries expand the trust boundary and can expose external Chrome sessions and browser contents."
+      },
+      "allowSchemes": {
+        "label": "Allowed attach schemes",
+        "description": "Comma-separated scheme allowlist, usually ws and wss."
+      }
+    },
+    "instanceDefaults": {
+      "mode": {
+        "label": "Mode",
+        "description": "Default browser mode for new launches.",
+        "headless": "Headless",
+        "headed": "Headed"
+      },
+      "stealthLevel": {
+        "label": "Stealth level",
+        "description": "Bot detection evasion profile. Higher levels may affect error monitoring and certain browser features.",
+        "light": "Light",
+        "medium": "Medium",
+        "full": "Full",
+        "lightLead": "<strong>Light:</strong> Default baseline stealth. Keeps the lowest-risk launch and JS contract while hiding basic automation markers.",
+        "lightOk1": "✓ Default product security baseline",
+        "lightOk2": "✓ No intentional API realism or security tradeoff",
+        "mediumLead": "<strong>Medium:</strong> Non-default risk mode. Adds Client Hints, `chrome.runtime` shims, iframe propagation, stack filtering, and native-looking function masking to improve anti-bot compatibility.",
+        "mediumWarn1": "⚠ Alters browser-visible APIs and error/stack behavior. Monitoring and debugging tools may see different results.",
+        "mediumWarn2": "⚠ Permissions and compatibility shims can return intentionally altered values. Do not use this as the default safety baseline.",
+        "mediumWarn3": "⚠ Reports that require explicitly enabling Medium should be treated as opt-in risk acceptance, not default-path behavior.",
+        "fullLead": "<strong>Full:</strong> Highest-risk non-default mode. Adds graphics, canvas, audio, system-color, and WebRTC alterations on top of Medium.",
+        "fullWarn1": "⚠ Browser output is intentionally less native and less stable. Rendering, media, and networking behavior may break or drift from real Chrome.",
+        "fullWarn2": "⚠ This mode is not an acceptable default security posture. Only enable it when you explicitly accept the tradeoff surface.",
+        "fullWarn3": "⚠ Reports that depend on enabling Full should be triaged as non-default operator risk unless a default-path bypass is shown.",
+        "fullWarn4": "⚠ WebRTC, WebGL, canvas, and audio behavior can all diverge from baseline Chrome."
+      },
+      "tabEvictionPolicy": {
+        "label": "Tab eviction policy",
+        "description": "How PinchTab behaves when a managed instance reaches its tab limit.",
+        "reject": "Reject new tabs",
+        "closeOldest": "Close oldest",
+        "closeLru": "Close least recently used"
+      },
+      "tabLifecycle": {
+        "label": "Tab lifecycle",
+        "description": "Close idle closes a tab after a /text, /snapshot, or /action response once the delay passes; /navigate cancels it. Freeze idle freezes any tab no request has touched for the delay and unfreezes it on its next request.",
+        "keep": "Keep (never auto-close)",
+        "closeIdle": "Close idle",
+        "freezeIdle": "Freeze idle"
+      },
+      "autoCloseDelay": {
+        "label": "Auto-close delay",
+        "description": "Seconds of idleness before an idle tab is closed or frozen. Only applies when lifecycle is 'Close idle' or 'Freeze idle'."
+      },
+      "restoreTabs": {
+        "label": "Restore tabs on startup",
+        "description": "When enabled, tabs open at shutdown are reopened on the next start. Off by default — closed tabs stay closed across restarts."
+      },
+      "maxTabs": {
+        "label": "Max tabs",
+        "description": "Maximum number of tabs per managed instance."
+      },
+      "maxParallelTabs": {
+        "label": "Max parallel tabs",
+        "description": "Set to 0 to auto-detect from CPU count."
+      },
+      "timezone": {
+        "label": "Timezone",
+        "description": "Optional timezone override for launched instances.",
+        "placeholder": "Europe/Rome"
+      },
+      "userAgent": {
+        "label": "User agent",
+        "description": "Optional override applied to new managed instances.",
+        "placeholder": "Custom user agent"
+      },
+      "blockImages": "Block images",
+      "blockMedia": "Block media",
+      "blockAds": "Block ads",
+      "noAnimations": "Disable CSS animations",
+      "noRestore": "Skip session restore"
+    },
+    "timeouts": {
+      "actionSec": {
+        "label": "Action timeout",
+        "description": "Maximum time for action requests."
+      },
+      "navigateSec": {
+        "label": "Navigate timeout",
+        "description": "Maximum time for navigation requests."
+      },
+      "shutdownSec": {
+        "label": "Shutdown timeout",
+        "description": "Grace period before force-closing a child process."
+      },
+      "waitNavMs": {
+        "label": "Wait-after-navigation delay",
+        "description": "Post-navigation stabilization delay in milliseconds."
+      }
+    }
+  }
+}

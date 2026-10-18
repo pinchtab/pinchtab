@@ -1,5 +1,6 @@
 import { Card, Badge, Button } from "../components/atoms";
 import type { Profile, Instance } from "../types";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   profile: Profile;
@@ -25,6 +26,7 @@ export default function ProfileCard({
   onStop,
   onDetails,
 }: Props) {
+  const { t } = useTranslation();
   const isRunning = instance?.status === "running";
   const isError = instance?.status === "error";
   const accountText = profile.accountEmail || profile.accountName || "—";
@@ -40,20 +42,20 @@ export default function ProfileCard({
         {isRunning ? (
           <Badge variant="success">:{instance.port}</Badge>
         ) : isError ? (
-          <Badge variant="danger">error</Badge>
+          <Badge variant="danger">{t("profiles.statusError")}</Badge>
         ) : (
-          <Badge>stopped</Badge>
+          <Badge>{t("profiles.statusStopped")}</Badge>
         )}
       </div>
 
       {/* Body */}
       <div className="flex flex-1 flex-col gap-2 px-4 py-4">
-        <InfoRow label="Size" value={sizeText} />
-        <InfoRow label="Account" value={accountText} />
+        <InfoRow label={t("profiles.size")} value={sizeText} />
+        <InfoRow label={t("profiles.account")} value={accountText} />
         {profile.useWhen && (
           <div className="mt-2 rounded-sm border border-border-subtle bg-[rgb(var(--brand-surface-code-rgb)/0.4)] p-3">
             <div className="dashboard-section-title text-[0.68rem]">
-              Use when
+              {t("profiles.useWhen")}
             </div>
             <div className="mt-1 line-clamp-2 text-xs leading-5 text-text-secondary">
               {profile.useWhen}
@@ -69,16 +71,16 @@ export default function ProfileCard({
       <div className="flex justify-end gap-2 border-t border-border-subtle bg-black/10 px-4 py-3">
         {onDetails && (
           <Button size="sm" variant="ghost" onClick={onDetails}>
-            Details
+            {t("profiles.details")}
           </Button>
         )}
         {isRunning ? (
           <Button size="sm" variant="danger" onClick={onStop}>
-            Stop
+            {t("profiles.stop")}
           </Button>
         ) : (
           <Button size="sm" variant="primary" onClick={onLaunch}>
-            Start
+            {t("profiles.start")}
           </Button>
         )}
       </div>

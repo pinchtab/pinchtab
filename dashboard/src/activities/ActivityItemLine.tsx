@@ -9,6 +9,8 @@ import {
   IconScreenShare,
 } from "../components/atoms/Icon";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { resumeTab } from "../services/api";
 import { activityStatusVariant } from "./helpers";
 import type { ActivityFilters, DashboardActivityEvent } from "./types";
@@ -39,55 +41,69 @@ function quoted(value: string): string {
   return `"${value}"`;
 }
 
-function eventDescription(event: DashboardActivityEvent): string {
+function eventDescription(event: DashboardActivityEvent, t: TFunction): string {
   if (event.channel === "progress" && event.message) {
     return event.message;
   }
   if (event.path.includes("/navigate")) {
-    return event.url ? `Navigate to ${event.url}` : "Navigate to page";
+    return event.url
+      ? t("activitySummary.navigateTo", { url: event.url })
+      : t("activitySummary.navigate");
   }
   if (event.path.includes("/snapshot")) {
-    return "Capture page snapshot";
+    return t("activitySummary.snapshot");
   }
   if (event.path.includes("/screencast")) {
-    return "Open screencast stream";
+    return t("activitySummary.screencast");
   }
   if (event.path.includes("/text")) {
-    return "Extract text from page";
+    return t("activitySummary.text");
   }
   if (event.path.includes("/screenshot")) {
-    return "Take screenshot";
+    return t("activitySummary.screenshot");
   }
   if (event.path.includes("/pdf")) {
-    return "Export page as PDF";
+    return t("activitySummary.pdf");
   }
   switch (event.action) {
     case "click":
-      return event.ref ? `Click ${quoted(event.ref)}` : "Click on page";
+      return event.ref
+        ? t("activitySummary.clickRef", { ref: quoted(event.ref) })
+        : t("activitySummary.click");
     case "dblclick":
       return event.ref
-        ? `Double-click ${quoted(event.ref)}`
-        : "Double-click on page";
+        ? t("activitySummary.dblclickRef", { ref: quoted(event.ref) })
+        : t("activitySummary.dblclick");
     case "type":
-      return event.ref ? `Type into ${quoted(event.ref)}` : "Type into page";
+      return event.ref
+        ? t("activitySummary.typeRef", { ref: quoted(event.ref) })
+        : t("activitySummary.type");
     case "hover":
-      return event.ref ? `Hover ${quoted(event.ref)}` : "Hover on page";
+      return event.ref
+        ? t("activitySummary.hoverRef", { ref: quoted(event.ref) })
+        : t("activitySummary.hover");
     case "fill":
-      return event.ref ? `Fill ${quoted(event.ref)}` : "Fill field";
+      return event.ref
+        ? t("activitySummary.fillRef", { ref: quoted(event.ref) })
+        : t("activitySummary.fill");
     case "select":
-      return event.ref ? `Select ${quoted(event.ref)}` : "Select option";
+      return event.ref
+        ? t("activitySummary.selectRef", { ref: quoted(event.ref) })
+        : t("activitySummary.select");
     case "scroll":
-      return "Scroll page";
+      return t("activitySummary.scroll");
     case "press":
-      return event.ref ? `Press key on ${quoted(event.ref)}` : "Press key";
+      return event.ref
+        ? t("activitySummary.pressRef", { ref: quoted(event.ref) })
+        : t("activitySummary.press");
     case "wait":
-      return "Wait for condition";
+      return t("activitySummary.wait");
     case "evaluate":
-      return "Evaluate JavaScript";
+      return t("activitySummary.evaluate");
     case "upload":
-      return "Upload file";
+      return t("activitySummary.upload");
     case "download":
-      return "Download file";
+      return t("activitySummary.download");
     default:
       if (event.action) {
         return `${event.action} ${event.ref ? quoted(event.ref) : ""}`.trim();
@@ -120,6 +136,7 @@ export default function ActivityItemLine({
   inHandoff = false,
   onFilterChange,
 }: Props) {
+  const { t } = useTranslation();
   const variant = activityStatusVariant(event.status);
   const [resuming, setResuming] = useState(false);
   const [resumeError, setResumeError] = useState("");
@@ -132,7 +149,9 @@ export default function ActivityItemLine({
     try {
       await resumeTab(event.tabId);
     } catch (err) {
-      setResumeError(err instanceof Error ? err.message : "Resume failed");
+      setResumeError(
+        err instanceof Error ? err.message : t("activityTimeline.resumeFailed"),
+      );
       setResuming(false);
     }
   };
@@ -149,14 +168,14 @@ export default function ActivityItemLine({
 
       {inHandoff && (
         <span
-          aria-label="tab paused for human handoff"
-          title="Tab is paused for human handoff"
+          aria-label={t("tabs.handoffDot")}
+          title={t("tabs.handoffDotTitle")}
           className="inline-block h-2 w-2 shrink-0 rounded-full bg-red-500 ring-2 ring-bg-surface"
         />
       )}
 
       <span className="min-w-0 flex-1 truncate text-text-primary">
-        {eventDescription(event)}
+        {eventDescription(event, t)}
       </span>
 
       {showResumeButton && (
@@ -164,12 +183,12 @@ export default function ActivityItemLine({
           type="button"
           onClick={handleResume}
           disabled={resuming}
-          title={
-            resumeError || "Resume automation after manual challenge solve"
-          }
+          title={resumeError || t("activityTimeline.resumeTitle")}
           className="shrink-0 rounded-sm border border-warning/40 bg-warning/10 px-2 py-0.5 text-[0.68rem] text-warning transition-colors hover:bg-warning/20 disabled:opacity-50"
         >
-          {resuming ? "Resuming…" : "Resolve challenge"}
+          {resuming
+            ? t("activityTimeline.resuming")
+            : t("activityTimeline.resolveChallenge")}
         </button>
       )}
 
@@ -187,9 +206,9 @@ export default function ActivityItemLine({
           {event.route.escalated && (
             <span
               className="rounded-sm bg-warning/10 px-1.5 py-0.5 text-[0.68rem] text-warning"
-              title={event.route.reason || "Browser was escalated"}
+              title={event.route.reason || t("activityTimeline.escalatedTitle")}
             >
-              {"↑"} escalated
+              {"↑"} {t("activityTimeline.escalated")}
               {event.route.reason ? `: ${event.route.reason}` : ""}
             </span>
           )}

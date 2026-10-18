@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import InstanceLogsPanel from "./InstanceLogsPanel";
 import ProfileMetaInfoPanel from "./ProfileMetaInfoPanel";
 import ProfileBasicInfoPanel from "./ProfileBasicInfoPanel";
@@ -33,6 +34,7 @@ export default function ProfileDetailsPanel({
   deleteError,
   deleteNotice,
 }: Props) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabId>("profile");
   // null is "the count is not known", which the badge must not render as 0: a
   // hard 0 beside a running instance reads as "idle, safe to stop" and Stop is
@@ -91,7 +93,7 @@ export default function ProfileDetailsPanel({
   if (!profile) {
     return (
       <div className="h-full min-h-112">
-        <EmptyView message="Select a profile to inspect its instance, live tabs, and logs." />
+        <EmptyView message={t("profilesPage.selectProfile")} />
       </div>
     );
   }
@@ -101,10 +103,17 @@ export default function ProfileDetailsPanel({
     formValues.useWhen !== (profile.useWhen || "");
 
   const profileTabs: { id: TabId; label: string; badge?: string | number }[] = [
-    { id: "profile", label: `Profile: ${profile.name}` },
-    { id: "live", label: "Live" },
-    { id: "tabs", label: "Tabs", badge: tabs === null ? "—" : tabs.length },
-    { id: "logs", label: "Logs" },
+    {
+      id: "profile",
+      label: t("profilesPage.profileTab", { name: profile.name }),
+    },
+    { id: "live", label: t("tabs.subTabs.live") },
+    {
+      id: "tabs",
+      label: t("tabs.telemetryTabs"),
+      badge: tabs === null ? "—" : tabs.length,
+    },
+    { id: "logs", label: t("tabs.subTabsLogs") },
   ];
 
   return (
@@ -156,7 +165,9 @@ export default function ProfileDetailsPanel({
                 instanceId={instance?.id}
                 handoffTabs={handoffTabs}
                 emptyMessage={
-                  isRunning ? "No tabs open." : "Instance not running."
+                  isRunning
+                    ? t("tabs.noTabsOpenFull")
+                    : t("profileMeta.instanceNotRunning")
                 }
               />
             </div>

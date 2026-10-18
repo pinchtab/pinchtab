@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import * as api from "../services/api";
 import type { ErrorLogEntry } from "../services/api";
 
@@ -15,6 +16,7 @@ function formatTime(ts: string): string {
 }
 
 export default function ErrorsPanel({ tabId }: Props) {
+  const { t } = useTranslation();
   const [errors, setErrors] = useState<ErrorLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
@@ -48,7 +50,7 @@ export default function ErrorsPanel({ tabId }: Props) {
   if (loading) {
     return (
       <div className="flex h-full flex-1 items-center justify-center text-sm text-text-muted">
-        Loading errors...
+        {t("errorsPanel.loading")}
       </div>
     );
   }
@@ -56,7 +58,7 @@ export default function ErrorsPanel({ tabId }: Props) {
   if (errors.length === 0) {
     return (
       <div className="flex h-full flex-1 items-center justify-center text-sm text-text-muted">
-        No errors yet
+        {t("errorsPanel.empty")}
       </div>
     );
   }

@@ -1,4 +1,7 @@
 import "@testing-library/jest-dom/vitest";
+// Initialises the shared i18next instance so components under test render the
+// same English copy the app renders.
+import "../i18n";
 
 class MemoryStorage implements Storage {
   private store = new Map<string, string>();

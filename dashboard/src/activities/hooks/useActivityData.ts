@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import * as api from "../../services/api";
 import type { ActivityEvent, InstanceTab } from "../../types";
 import { fetchActivity } from "../api";
@@ -35,6 +36,7 @@ export function useActivityData({
   threadAgentId,
   hydrateAgentEvents,
 }: UseActivityDataOptions): UseActivityDataResult {
+  const { t } = useTranslation();
   const [catalogEvents, setCatalogEvents] = useState<DashboardActivityEvent[]>(
     [],
   );
@@ -100,7 +102,7 @@ export function useActivityData({
           return;
         }
         setError(
-          err instanceof Error ? err.message : "Failed to load activity",
+          err instanceof Error ? err.message : t("activityExplorer.loadFailed"),
         );
       } finally {
         if (!cancelled) {
@@ -113,7 +115,7 @@ export function useActivityData({
     return () => {
       cancelled = true;
     };
-  }, [catalogQuery, catalogQueryKey, refreshNonce]);
+  }, [catalogQuery, catalogQueryKey, refreshNonce, t]);
 
   useEffect(() => {
     if (!usesAgentThreadView || !threadAgentId) {
@@ -143,7 +145,9 @@ export function useActivityData({
           return;
         }
         setError(
-          err instanceof Error ? err.message : "Failed to load agent activity",
+          err instanceof Error
+            ? err.message
+            : t("activityExplorer.loadAgentFailed"),
         );
       } finally {
         if (!cancelled) {
@@ -163,6 +167,7 @@ export function useActivityData({
     threadQuery,
     threadQueryKey,
     usesAgentThreadView,
+    t,
   ]);
 
   const refresh = () => setRefreshNonce((current) => current + 1);

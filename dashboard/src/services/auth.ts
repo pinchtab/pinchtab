@@ -1,8 +1,6 @@
 const AUTH_REQUIRED_EVENT = "pinchtab-auth-required";
 const AUTH_STATE_CHANGED_EVENT = "pinchtab-auth-state-changed";
 const SERVER_UNREACHABLE_EVENT = "pinchtab-server-unreachable";
-export const INSECURE_DASHBOARD_TRANSPORT_WARNING =
-  "Dashboard session is running over insecure HTTP; use HTTPS or localhost for stronger session protection.";
 
 export function dispatchAuthRequired(reason: string): void {
   window.dispatchEvent(

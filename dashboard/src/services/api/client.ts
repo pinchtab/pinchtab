@@ -1,4 +1,5 @@
 import type { Instance } from "../../generated/types";
+import i18n from "../../i18n";
 import type { DashboardServerInfo } from "../../types";
 import { normalizeDashboardServerInfo } from "../../types";
 import { dispatchAuthRequired, dispatchServerUnreachable } from "../auth";
@@ -73,7 +74,11 @@ export async function fetchOk(
     if (res.status === 401) {
       handleUnauthorized(meta, err.code);
     }
-    throw new ApiError(err.error || "Request failed", res.status, err.code);
+    throw new ApiError(
+      err.error || i18n.t("errors.requestFailed"),
+      res.status,
+      err.code,
+    );
   }
   return res;
 }
@@ -146,7 +151,7 @@ export async function probeBackendAuth(): Promise<{
     return { mode: "required" };
   }
 
-  throw new Error(err.error || "Request failed");
+  throw new Error(err.error || i18n.t("errors.requestFailed"));
 }
 
 // createEventStream opens an EventSource, wires realtime auth-failure handling

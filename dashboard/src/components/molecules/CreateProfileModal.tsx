@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button, Input, Modal } from "../atoms";
 import * as api from "../../services/api";
 
@@ -13,6 +14,7 @@ export default function CreateProfileModal({
   onClose,
   onCreated,
 }: Props) {
+  const { t } = useTranslation();
   const [createName, setCreateName] = useState("");
   const [createUseWhen, setCreateUseWhen] = useState("");
   const [createSource, setCreateSource] = useState("");
@@ -51,7 +53,7 @@ export default function CreateProfileModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="📁 New Profile"
+      title={t("createProfile.title")}
       wide
       actions={
         <>
@@ -60,7 +62,7 @@ export default function CreateProfileModal({
             disabled={createLoading}
             onClick={onClose}
           >
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             variant="primary"
@@ -68,27 +70,27 @@ export default function CreateProfileModal({
             disabled={!createName.trim()}
             loading={createLoading}
           >
-            Create
+            {t("createProfile.create")}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
         <Input
-          label="Name"
-          placeholder="e.g. personal, work, scraping"
+          label={t("createProfile.name")}
+          placeholder={t("createProfile.namePlaceholder")}
           value={createName}
           onChange={(e) => setCreateName(e.target.value)}
         />
         <Input
-          label="Use this profile when (helps agents pick the right profile)"
-          placeholder="e.g. I need to access Gmail for the team account"
+          label={t("createProfile.useWhen")}
+          placeholder={t("createProfile.useWhenPlaceholder")}
           value={createUseWhen}
           onChange={(e) => setCreateUseWhen(e.target.value)}
         />
         <Input
-          label="Import from (optional — Chrome user data path)"
-          placeholder="e.g. /Users/you/Library/Application Support/Google/Chrome"
+          label={t("createProfile.source")}
+          placeholder={t("createProfile.sourcePlaceholder")}
           value={createSource}
           onChange={(e) => setCreateSource(e.target.value)}
         />

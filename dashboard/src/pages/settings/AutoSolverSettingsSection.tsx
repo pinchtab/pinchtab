@@ -1,5 +1,6 @@
 import type { BackendConfig, BackendConfigState } from "../../types";
 import type { UpdateBackendSection } from "./settingsShared";
+import { Trans, useTranslation } from "react-i18next";
 import { csvToList, fieldClass, listToCsv } from "./settingsShared";
 import { SectionCard, SettingRow } from "./SettingsSharedComponents";
 
@@ -14,22 +15,27 @@ export function AutoSolverSettingsSection({
   backendState,
   updateBackendSection,
 }: AutoSolverSettingsSectionProps) {
+  const { t } = useTranslation();
+
   return (
     <SectionCard
-      title="AutoSolver"
-      description="These settings are saved into the PinchTab config file. External provider API keys stay write-only and must be set directly in that file."
+      title={t("settings.sections.autosolver.label")}
+      description={t("settings.panels.autosolver.description")}
     >
       <SettingRow
-        label="Config file"
-        description="Dashboard edits are written back to this file. Set external provider keys under autoSolver.external in the same config file."
+        label={t("settings.autosolver.configFile.label")}
+        description={t("settings.autosolver.configFile.description")}
       >
         <div className="rounded-sm border border-border-subtle bg-[rgb(var(--brand-surface-code-rgb)/0.72)] px-3 py-2 text-sm text-text-secondary">
-          <code>{backendState?.configPath || "Config path unavailable"}</code>
+          <code>
+            {backendState?.configPath ||
+              t("settings.autosolver.configFile.unavailable")}
+          </code>
         </div>
       </SettingRow>
       <SettingRow
-        label="Enable AutoSolver"
-        description="Turns on the autosolver runtime configuration for supported challenge flows."
+        label={t("settings.autosolver.enable.label")}
+        description={t("settings.autosolver.enable.description")}
       >
         <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
           <input
@@ -42,12 +48,14 @@ export function AutoSolverSettingsSection({
             }
             className="h-4 w-4"
           />
-          {backendConfig.autoSolver.enabled ? "Enabled" : "Disabled"}
+          {backendConfig.autoSolver.enabled
+            ? t("common.enabled")
+            : t("common.disabled")}
         </label>
       </SettingRow>
       <SettingRow
-        label="Auto trigger"
-        description="Automatically run autosolver after supported navigation and action requests."
+        label={t("settings.autosolver.autoTrigger.label")}
+        description={t("settings.autosolver.autoTrigger.description")}
       >
         <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
           <input
@@ -60,12 +68,14 @@ export function AutoSolverSettingsSection({
             }
             className="h-4 w-4"
           />
-          {backendConfig.autoSolver.autoTrigger ? "Enabled" : "Disabled"}
+          {backendConfig.autoSolver.autoTrigger
+            ? t("common.enabled")
+            : t("common.disabled")}
         </label>
       </SettingRow>
       <SettingRow
-        label="Trigger on navigate"
-        description="Run autosolver checks after successful navigation calls."
+        label={t("settings.autosolver.triggerOnNavigate.label")}
+        description={t("settings.autosolver.triggerOnNavigate.description")}
       >
         <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
           <input
@@ -78,12 +88,14 @@ export function AutoSolverSettingsSection({
             }
             className="h-4 w-4"
           />
-          {backendConfig.autoSolver.triggerOnNavigate ? "Enabled" : "Disabled"}
+          {backendConfig.autoSolver.triggerOnNavigate
+            ? t("common.enabled")
+            : t("common.disabled")}
         </label>
       </SettingRow>
       <SettingRow
-        label="Trigger on action"
-        description="Run autosolver checks after successful action calls."
+        label={t("settings.autosolver.triggerOnAction.label")}
+        description={t("settings.autosolver.triggerOnAction.description")}
       >
         <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
           <input
@@ -96,12 +108,14 @@ export function AutoSolverSettingsSection({
             }
             className="h-4 w-4"
           />
-          {backendConfig.autoSolver.triggerOnAction ? "Enabled" : "Disabled"}
+          {backendConfig.autoSolver.triggerOnAction
+            ? t("common.enabled")
+            : t("common.disabled")}
         </label>
       </SettingRow>
       <SettingRow
-        label="Max attempts"
-        description="Maximum autosolver retries before the pipeline gives up."
+        label={t("settings.autosolver.maxAttempts.label")}
+        description={t("settings.autosolver.maxAttempts.description")}
       >
         <input
           type="number"
@@ -116,8 +130,8 @@ export function AutoSolverSettingsSection({
         />
       </SettingRow>
       <SettingRow
-        label="Solver timeout (sec)"
-        description="Per-solver timeout for each attempt."
+        label={t("settings.autosolver.solverTimeoutSec.label")}
+        description={t("settings.autosolver.solverTimeoutSec.description")}
       >
         <input
           type="number"
@@ -132,8 +146,8 @@ export function AutoSolverSettingsSection({
         />
       </SettingRow>
       <SettingRow
-        label="Retry base delay (ms)"
-        description="Base retry backoff delay between autosolver attempts."
+        label={t("settings.autosolver.retryBaseDelayMs.label")}
+        description={t("settings.autosolver.retryBaseDelayMs.description")}
       >
         <input
           type="number"
@@ -148,8 +162,8 @@ export function AutoSolverSettingsSection({
         />
       </SettingRow>
       <SettingRow
-        label="Retry max delay (ms)"
-        description="Maximum retry backoff delay cap between autosolver attempts."
+        label={t("settings.autosolver.retryMaxDelayMs.label")}
+        description={t("settings.autosolver.retryMaxDelayMs.description")}
       >
         <input
           type="number"
@@ -164,8 +178,8 @@ export function AutoSolverSettingsSection({
         />
       </SettingRow>
       <SettingRow
-        label="Solvers"
-        description="Comma-separated ordered list of solver names to try. Use GET /solvers or GET /config/autosolver to confirm runtime-available names."
+        label={t("settings.autosolver.solvers.label")}
+        description={t("settings.autosolver.solvers.description")}
       >
         <input
           value={listToCsv(backendConfig.autoSolver.solvers)}
@@ -178,8 +192,8 @@ export function AutoSolverSettingsSection({
         />
       </SettingRow>
       <SettingRow
-        label="LLM provider"
-        description="Optional provider name used when LLM fallback is enabled."
+        label={t("settings.autosolver.llmProvider.label")}
+        description={t("settings.autosolver.llmProvider.description")}
       >
         <input
           value={backendConfig.autoSolver.llmProvider}
@@ -192,8 +206,8 @@ export function AutoSolverSettingsSection({
         />
       </SettingRow>
       <SettingRow
-        label="LLM fallback"
-        description="Use an LLM as the last resort after registered solvers fail."
+        label={t("settings.autosolver.llmFallback.label")}
+        description={t("settings.autosolver.llmFallback.description")}
       >
         <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
           <input
@@ -206,19 +220,20 @@ export function AutoSolverSettingsSection({
             }
             className="h-4 w-4"
           />
-          {backendConfig.autoSolver.llmFallback ? "Enabled" : "Disabled"}
+          {backendConfig.autoSolver.llmFallback
+            ? t("common.enabled")
+            : t("common.disabled")}
         </label>
       </SettingRow>
       <SettingRow
-        label="External provider keys"
-        description="Capsolver and 2Captcha credentials are not shown in the dashboard and must be managed in the config file. Those providers appear in runtime solver lists only when keys are configured."
+        label={t("settings.autosolver.externalKeys.label")}
+        description={t("settings.autosolver.externalKeys.description")}
       >
         <div className="rounded-sm border border-warning/25 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning">
-          Open the config file above and set{" "}
-          <code>autoSolver.external.capsolverKey</code> and{" "}
-          <code>autoSolver.external.twoCaptchaKey</code> there. The dashboard
-          does not display or edit those values, and there are no environment
-          variable overrides.
+          <Trans
+            i18nKey="settings.autosolver.externalKeys.note"
+            components={{ code: <code /> }}
+          />
         </div>
       </SettingRow>
     </SectionCard>
