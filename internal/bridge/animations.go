@@ -14,7 +14,16 @@ const DisableAnimationsCSS = `
   const style = document.createElement('style');
   style.setAttribute('data-pinchtab', 'no-animations');
   style.textContent = '*, *::before, *::after { animation: none !important; animation-duration: 0s !important; transition: none !important; transition-duration: 0s !important; scroll-behavior: auto !important; }';
-  (document.head || document.documentElement).appendChild(style);
+  // On a new document this runs before any element exists, so head and
+  // documentElement are both null: wait for the root, which arrives before the
+  // body is parsed, instead of throwing and leaving animations on.
+  const add = () => (document.head || document.documentElement).appendChild(style);
+  if (document.documentElement) { add(); return; }
+  new MutationObserver((_, observer) => {
+    if (!document.documentElement) return;
+    observer.disconnect();
+    add();
+  }).observe(document, { childList: true });
 })();
 `
 
