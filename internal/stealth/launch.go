@@ -32,7 +32,6 @@ func BuildLaunchContract(cfg *config.RuntimeConfig, level Level) LaunchContract 
 
 	args := []string{
 		"--disable-automation",
-		"--enable-automation=false",
 		"--disable-blink-features=AutomationControlled",
 		"--enable-network-information-downlink-max",
 	}
@@ -56,7 +55,6 @@ func BuildLaunchContract(cfg *config.RuntimeConfig, level Level) LaunchContract 
 
 	flags := map[string]bool{
 		"automationControlledDisabled": true,
-		"enableAutomationFalse":        true,
 		"downlinkMaxFlag":              true,
 		"globalUserAgent":              pinUA,
 		"globalLanguage":               persona.Language != "",
