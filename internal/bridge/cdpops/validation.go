@@ -42,11 +42,9 @@ const transparentRevealPoll = 50 * time.Millisecond
 // PointerPointForNode validates clickability assumptions and returns a
 // stable pointer coordinate for the backend node.
 func PointerPointForNode(ctx context.Context, backendNodeID int64, requireTopMost bool) (float64, float64, error) {
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+	scrollErr := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.scrollIntoViewIfNeeded", map[string]any{"backendNodeId": backendNodeID}, nil)
-	})); err != nil {
-		return 0, 0, fmt.Errorf("scroll into view: %w", err)
-	}
+	}))
 
 	objectID, err := IsolatedNodeObjectID(ctx, backendNodeID)
 	if err != nil {
@@ -176,6 +174,9 @@ func PointerPointForNode(ctx context.Context, backendNodeID int64, requireTopMos
 
 	if probe.Width <= 0 || probe.Height <= 0 || !probe.Visible || probe.TransparentAncestor {
 		return 0, 0, fmt.Errorf("%w: width=%.2f height=%.2f", ErrElementHidden, probe.Width, probe.Height)
+	}
+	if scrollErr != nil {
+		return 0, 0, fmt.Errorf("scroll into view: %w", scrollErr)
 	}
 	if !probe.InViewport {
 		return 0, 0, fmt.Errorf("%w: x=%.2f y=%.2f", ErrElementOffscreen, probe.X, probe.Y)
