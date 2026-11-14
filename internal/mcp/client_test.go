@@ -14,6 +14,23 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+func TestClientSessionAuthentication(t *testing.T) {
+	for _, session := range []string{"session-test", ""} {
+		t.Run(session, func(t *testing.T) {
+			t.Setenv("PINCHTAB_SESSION", session)
+			want := "Bearer admin-test"
+			if session != "" { want = "Session " + session }
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("Authorization") != want { t.Error("unexpected authentication scheme or credential") }
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
+			_, code, err := NewClient(srv.URL, "admin-test").Get(context.Background(), "/health", nil)
+			if err != nil || code != http.StatusOK { t.Fatalf("request failed: status=%d err=%v", code, err) }
+		})
+	}
+}
+
 func TestNewClient(t *testing.T) {
 	c := NewClient("http://localhost:9867", "tok123")
 	if c.BaseURL != "http://localhost:9867" {
