@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -47,6 +48,7 @@ func (v *vocabStore) get(tabKey string) string {
 
 // Client is an HTTP client for PinchTab's REST API.
 type Client struct {
+	SessionToken string
 	BaseURL    string
 	Token      string
 	HTTPClient *http.Client
@@ -56,6 +58,7 @@ type Client struct {
 // NewClient creates a Client for the given PinchTab base URL.
 func NewClient(baseURL, token string) *Client {
 	return &Client{
+		SessionToken: os.Getenv("PINCHTAB_SESSION"),
 		BaseURL: baseURL,
 		Token:   token,
 		HTTPClient: &http.Client{
@@ -94,7 +97,9 @@ func (c *Client) do(req *http.Request) ([]byte, int, error) {
 }
 
 func (c *Client) doWithHeaders(req *http.Request) ([]byte, int, http.Header, error) {
-	if c.Token != "" {
+	if c.SessionToken != "" {
+		req.Header.Set("Authorization", "Session "+c.SessionToken)
+	} else if c.Token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.Token)
 	}
 	req.Header.Set(activity.HeaderAgentID, "mcp")
