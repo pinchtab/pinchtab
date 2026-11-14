@@ -395,6 +395,29 @@ func finalizeProfileConfig(cfg *RuntimeConfig) {
 }
 
 func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) []LoadDiagnostic {
+	configPath, err := filepath.Abs(ConfigFilePath())
+	if err != nil {
+		return []LoadDiagnostic{{slog.LevelWarn, "failed to resolve config directory", []any{"error", err}}}
+	}
+	resolved := *fc
+	base := filepath.Dir(configPath)
+	resolved.Server.StateDir = resolveConfiguredPath(base, fc.Server.StateDir)
+	resolved.Browser.BrowserBinary = resolveConfiguredPath(base, fc.Browser.BrowserBinary)
+	resolved.Profiles.BaseDir = resolveConfiguredPath(base, fc.Profiles.BaseDir)
+	resolved.Browser.Cloak.FontsDir = resolveConfiguredPath(base, fc.Browser.Cloak.FontsDir)
+	resolved.Browser.Targets = cloneBrowserTargetsConfig(fc.Browser.Targets)
+	for name, target := range resolved.Browser.Targets {
+		target.Binary = resolveConfiguredPath(base, target.Binary)
+		target.Cloak.FontsDir = resolveConfiguredPath(base, target.Cloak.FontsDir)
+		resolved.Browser.Targets[name] = target
+	}
+	if fc.Browser.ExtensionPaths != nil {
+		resolved.Browser.ExtensionPaths = make([]string, len(fc.Browser.ExtensionPaths))
+		for index, path := range fc.Browser.ExtensionPaths {
+			resolved.Browser.ExtensionPaths[index] = resolveConfiguredPath(base, path)
+		}
+	}
+	fc = &resolved
 	applyServerConfig(cfg, fc.Server)
 	applySecurityConfig(cfg, fc.Security)
 	applyObservabilityConfig(cfg, fc.Observability)
@@ -407,6 +430,13 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) []LoadDiagnostic {
 	applySchedulerConfig(cfg, fc.Scheduler)
 	applyAutoSolverConfig(cfg, fc.AutoSolver)
 	return diags
+}
+
+func resolveConfiguredPath(base, path string) string {
+	if path == "" || filepath.IsAbs(path) || strings.HasPrefix(path, "/") {
+		return path
+	}
+	return filepath.Join(base, path)
 }
 
 func applyServerConfig(cfg *RuntimeConfig, s ServerConfig) {
