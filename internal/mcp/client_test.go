@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -19,15 +20,41 @@ func TestClientSessionAuthentication(t *testing.T) {
 		t.Run(session, func(t *testing.T) {
 			t.Setenv("PINCHTAB_SESSION", session)
 			want := "Bearer admin-test"
-			if session != "" { want = "Session " + session }
+			if session != "" {
+				want = "Session " + session
+			}
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Header.Get("Authorization") != want { t.Error("unexpected authentication scheme or credential") }
+				if r.Header.Get("Authorization") != want {
+					t.Error("unexpected authentication scheme or credential")
+				}
 				w.WriteHeader(http.StatusOK)
 			}))
 			defer srv.Close()
 			_, code, err := NewClient(srv.URL, "admin-test").Get(context.Background(), "/health", nil)
-			if err != nil || code != http.StatusOK { t.Fatalf("request failed: status=%d err=%v", code, err) }
+			if err != nil || code != http.StatusOK {
+				t.Fatalf("request failed: status=%d err=%v", code, err)
+			}
 		})
+	}
+}
+
+func TestClientRejectedSessionDoesNotRetryWithBearer(t *testing.T) {
+	t.Setenv("PINCHTAB_SESSION", "rejected-session")
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.Header.Get("Authorization") != "Session rejected-session" {
+			t.Error("session refusal escalated authentication")
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	_, code, err := NewClient(srv.URL, "admin-test").Get(context.Background(), "/health", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := requests.Load(); code != http.StatusUnauthorized || got != 1 {
+		t.Fatalf("code=%d requests=%d; want 401 and one request", code, got)
 	}
 }
 

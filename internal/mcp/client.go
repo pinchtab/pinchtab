@@ -49,18 +49,18 @@ func (v *vocabStore) get(tabKey string) string {
 // Client is an HTTP client for PinchTab's REST API.
 type Client struct {
 	SessionToken string
-	BaseURL    string
-	Token      string
-	HTTPClient *http.Client
-	vocab      *vocabStore
+	BaseURL      string
+	Token        string
+	HTTPClient   *http.Client
+	vocab        *vocabStore
 }
 
 // NewClient creates a Client for the given PinchTab base URL.
 func NewClient(baseURL, token string) *Client {
 	return &Client{
 		SessionToken: os.Getenv("PINCHTAB_SESSION"),
-		BaseURL: baseURL,
-		Token:   token,
+		BaseURL:      baseURL,
+		Token:        token,
 		HTTPClient: &http.Client{
 			Timeout: 120 * time.Second,
 		},
