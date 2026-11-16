@@ -95,6 +95,12 @@ func TestEverySettableConfigKeyReachesTheRuntime(t *testing.T) {
 		settable++
 
 		got := censusRuntimeValue(t, path, file)
+		switch path {
+		case "server.stateDir", "browser.binary", "browser.extensionPaths", "browser.cloak.fontsDir", "profiles.baseDir":
+			if want != "" && !filepath.IsAbs(want) {
+				want = filepath.Join(filepath.Dir(ConfigFilePath()), want)
+			}
+		}
 		reason, accounted := acceptedAndDropped[path]
 		switch {
 		case got == want && accounted:
