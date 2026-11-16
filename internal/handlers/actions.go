@@ -156,7 +156,7 @@ func actionFailureIsRetryable(err error, dispatchMayHaveLanded bool) bool {
 	if err == nil || dispatchMayHaveLanded {
 		return false
 	}
-	return !errors.Is(err, ErrTargetNotFound) && !errors.Is(err, bridge.ErrInvalidActionRequest)
+	return pointerFailureCode(err) == "" && !errors.Is(err, ErrTargetNotFound) && !errors.Is(err, bridge.ErrInvalidActionRequest)
 }
 
 func (h *Handlers) mapDialogBlockingError(err error, kind, tabID string) (string, *bridge.DialogState, bool) {
@@ -174,6 +174,9 @@ func (h *Handlers) mapDialogBlockingError(err error, kind, tabID string) (string
 func (h *Handlers) failedStep(index int, kind, tabID string, err error, fallback string) actionResult {
 	if message, _, ok := h.mapDialogBlockingError(err, kind, tabID); ok {
 		fallback = dialogBlockedStepError(message)
+	}
+	if code := pointerFailureCode(err); code != "" {
+		return actionResult{Index: index, Success: false, Error: fallback, Code: code, Details: pointerFailureDetails()}
 	}
 	return actionResult{Index: index, Success: false, Error: fallback}
 }
@@ -731,6 +734,10 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		var noOption *bridgecdpops.NoOptionMatchError
 		if errors.As(actionErr, &noOption) {
 			writeNoOptionMatch(w, req.Kind, actionErr, noOption)
+			return
+		}
+		if code := pointerFailureCode(actionErr); code != "" {
+			httpx.ErrorCode(w, http.StatusConflict, code, fmt.Sprintf("action %s: %v", req.Kind, actionErr), false, pointerFailureDetails())
 			return
 		}
 		dispatchMayHaveLanded := submitClick
