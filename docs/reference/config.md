@@ -838,6 +838,8 @@ Valid enum values:
 
 ## Notes
 
+- Relative filesystem paths in the config file are resolved against the directory containing that config file, not the process working directory. This covers state and profile directories, browser binaries, extension paths, CloakBrowser font directories, and per-browser target paths. Absolute paths remain unchanged; empty paths retain their existing default behavior.
+- Compatibility: if an existing relative path was intended to be relative to the launch directory, convert it to an absolute path or rewrite it relative to the config directory before upgrading.
 - `config show` reports effective runtime values, not just raw file contents.
 - `config get` reports the value in effect, including shipped defaults and values derived from another key. `config set` and `patch` write the file config model and do not carry transient runtime overrides.
 - the dashboard config API treats `server.token` as write-only; use the CLI or file editing to manage it.
